@@ -10,6 +10,7 @@ import { localDateStr } from '../lib/date';
 import { downloadCsv } from '../lib/csv';
 import { useAuth } from '../lib/AuthContext';
 import { usePermissions } from '../lib/usePermissions';
+import { IconMoney, IconOrders, IconReceipt, IconBan, IconKitchen, IconTruck, IconDownload } from '../components/icons/FrogIcons';
 
 const RANGE_DAYS = { today: 0, week: 7, month: 30 };
 
@@ -70,10 +71,10 @@ function computeReport(orders, from, to) {
 
   return {
     stats: [
-      { label: 'Doanh thu', value: `${revenue.toLocaleString('vi-VN')}đ`, tone: 'success', icon: '💰' },
-      { label: 'Đơn hàng', value: String(inRange.length), tone: 'neutral', icon: '📦' },
-      { label: 'Giá trị TB / đơn', value: `${avgOrder.toLocaleString('vi-VN')}đ`, tone: 'neutral', icon: '🧾' },
-      { label: 'Tỷ lệ hủy', value: `${cancelRate}%`, tone: cancelRate > 10 ? 'danger' : 'neutral', icon: '⛔' },
+      { label: 'Doanh thu', value: `${revenue.toLocaleString('vi-VN')}đ`, tone: 'success', icon: <IconMoney size={18} /> },
+      { label: 'Đơn hàng', value: String(inRange.length), tone: 'neutral', icon: <IconOrders size={18} /> },
+      { label: 'Giá trị TB / đơn', value: `${avgOrder.toLocaleString('vi-VN')}đ`, tone: 'neutral', icon: <IconReceipt size={18} /> },
+      { label: 'Tỷ lệ hủy', value: `${cancelRate}%`, tone: cancelRate > 10 ? 'danger' : 'neutral', icon: <IconBan size={18} /> },
     ],
     topProducts,
     channels,
@@ -154,7 +155,7 @@ export default function ReportsScreen() {
           <div style={{ font: 'var(--text-display-md)', color: 'var(--text-primary)' }}>Báo Cáo</div>
           <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Tổng quan doanh thu, sản phẩm bán chạy, kênh bán hàng và năng suất Bếp/Vận chuyển — tính trực tiếp từ dữ liệu đơn hàng</div>
         </div>
-        {!loading && <Button variant="secondary" size="sm" onClick={() => exportOrdersCsv(data.inRange)} disabled={data.inRange.length === 0}>⬇ Xuất CSV đơn hàng</Button>}
+        {!loading && <Button variant="secondary" size="sm" onClick={() => exportOrdersCsv(data.inRange)} disabled={data.inRange.length === 0} icon={<IconDownload size={16} />}>Xuất CSV đơn hàng</Button>}
       </div>
       <Tabs tabs={[{ key: 'today', label: 'Hôm nay' }, { key: 'week', label: '7 ngày qua' }, { key: 'month', label: '30 ngày qua' }, { key: 'custom', label: 'Tùy chỉnh ngày' }]} active={range} onChange={setRange} />
       {range === 'custom' && (
@@ -225,8 +226,8 @@ export default function ReportsScreen() {
           )}
           {canViewAllReports && (
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-              <StaffList title="Bếp — theo nhân viên" icon="👨‍🍳" items={data.kitchenStaff} unit="đơn nhận làm" />
-              <StaffList title="Vận chuyển — theo nhân viên" icon="🚚" items={data.shipperStaff} unit="đơn đã giao" />
+              <StaffList title="Bếp — theo nhân viên" icon={<IconKitchen size={18} />} items={data.kitchenStaff} unit="đơn nhận làm" />
+              <StaffList title="Vận chuyển — theo nhân viên" icon={<IconTruck size={18} />} items={data.shipperStaff} unit="đơn đã giao" />
             </div>
           )}
         </React.Fragment>

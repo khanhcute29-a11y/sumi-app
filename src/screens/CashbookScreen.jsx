@@ -10,6 +10,7 @@ import {
 } from '../lib/queries';
 import { useAuth } from '../lib/AuthContext';
 import { localDateStr } from '../lib/date';
+import { IconMoney, IconTrendDown, IconReceipt, IconOrders } from '../components/icons/FrogIcons';
 
 const HISTORY_DAYS = 30;
 
@@ -242,10 +243,10 @@ export default function CashbookScreen() {
       </div>
       {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>Lỗi tải sổ quỹ: {error}</div>}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        <StatCard label="Thu hôm nay" value={`${totalThuToday.toLocaleString('vi-VN')}đ`} tone="success" icon="💰" style={{ flex: 1, minWidth: 160 }} />
-        <StatCard label="Chi hôm nay" value={`${totalChiToday.toLocaleString('vi-VN')}đ`} tone="danger" icon="📉" style={{ flex: 1, minWidth: 160 }} />
-        <StatCard label="Khách còn nợ" value={`${totalDebt.toLocaleString('vi-VN')}đ`} tone={totalDebt > 0 ? 'danger' : 'neutral'} icon="🧾" style={{ flex: 1, minWidth: 160 }} />
-        <StatCard label="Tiệm nợ NCC" value={`${totalSupplierDebt.toLocaleString('vi-VN')}đ`} tone={totalSupplierDebt > 0 ? 'warning' : 'neutral'} icon="📦" style={{ flex: 1, minWidth: 160 }} />
+        <StatCard label="Thu hôm nay" value={`${totalThuToday.toLocaleString('vi-VN')}đ`} tone="success" icon={<IconMoney size={18} />} style={{ flex: 1, minWidth: 160 }} />
+        <StatCard label="Chi hôm nay" value={`${totalChiToday.toLocaleString('vi-VN')}đ`} tone="danger" icon={<IconTrendDown size={18} />} style={{ flex: 1, minWidth: 160 }} />
+        <StatCard label="Khách còn nợ" value={`${totalDebt.toLocaleString('vi-VN')}đ`} tone={totalDebt > 0 ? 'danger' : 'neutral'} icon={<IconReceipt size={18} />} style={{ flex: 1, minWidth: 160 }} />
+        <StatCard label="Tiệm nợ NCC" value={`${totalSupplierDebt.toLocaleString('vi-VN')}đ`} tone={totalSupplierDebt > 0 ? 'warning' : 'neutral'} icon={<IconOrders size={18} />} style={{ flex: 1, minWidth: 160 }} />
       </div>
       <Tabs tabs={[{ key: 'thu', label: 'THU' }, { key: 'chi', label: 'CHI' }, { key: 'no_khach', label: 'NỢ KHÁCH' }, { key: 'no_ncc', label: 'NỢ NCC' }, { key: 'pl', label: 'LÃI LỖ' }]} active={tab} onChange={setTab} />
 

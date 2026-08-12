@@ -3,6 +3,7 @@ import { fetchOrderNotes, addOrderNote, uploadPhoto } from '../lib/queries';
 import { Input } from './forms/Input';
 import { Button } from './forms/Button';
 import { useAuth } from '../lib/AuthContext';
+import { IconChat, IconCamera, IconImage, IconBell } from './icons/FrogIcons';
 
 const NOTE_ROLE_LABELS = { owner: 'Chủ', cashier: 'Thu ngân', kitchen: 'Bếp', shipper: 'Ship', admin: 'Admin', bakery: 'Bếp', sale: 'Bán hàng', accountant: 'Kế toán', warehouse: 'Kho' };
 
@@ -105,7 +106,7 @@ export function CommentSection({ order, profile }) {
 
   return (
     <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>💬 Bình Luận</div>
+      <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}><IconChat size={16} /> Bình Luận</div>
       {loading ? (
         <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Đang tải...</div>
       ) : (
@@ -154,7 +155,7 @@ export function CommentSection({ order, profile }) {
             font: 'var(--text-body-sm)', color: 'var(--text-primary)', opacity: uploading ? 0.6 : 1,
           }}
         >
-          📷
+          <IconCamera size={16} />
         </button>
         <button
           onClick={() => fileInputRef.current?.click()}
@@ -165,7 +166,7 @@ export function CommentSection({ order, profile }) {
             font: 'var(--text-body-sm)', color: 'var(--text-primary)', opacity: uploading ? 0.6 : 1,
           }}
         >
-          🖼
+          <IconImage size={16} />
         </button>
         <Input placeholder="Viết bình luận cho đơn này..." value={draft} onChange={(e) => setDraft(e.target.value)} style={{ flex: 1 }} />
         <Button variant="primary" size="sm" onClick={handleSend} disabled={sending || uploading || (!draft.trim() && photos.length === 0)}>
@@ -196,7 +197,7 @@ export function CommentSection({ order, profile }) {
       <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={(e) => handlePhotoSelect(e.target.files)} style={{ display: 'none' }} />
       <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={(e) => handlePhotoSelect(e.target.files)} style={{ display: 'none' }} />
 
-      <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>🔔 Có delay 3-4 giây và tiếng chuông thông báo cho mọi bình luận mới.</div>
+      <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconBell size={14} /> Có delay 3-4 giây và tiếng chuông thông báo cho mọi bình luận mới.</div>
     </div>
   );
 }

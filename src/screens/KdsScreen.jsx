@@ -9,12 +9,16 @@ import { fetchOrders, updateOrder, uploadPhoto, addOrderNote } from '../lib/quer
 import { useAuth } from '../lib/AuthContext';
 import { enqueue } from '../lib/offlineQueue';
 import { supabase } from '../lib/supabaseClient';
+import {
+  IconStationHot, IconStationCold, IconStationWorkshop, IconStationSparkle,
+  IconChat, IconWarning, IconPaperclip, IconClipboard, IconKitchen, IconCamera, IconSearch, IconClock,
+} from '../components/icons/FrogIcons';
 
 const STATIONS = {
-  nong: { label: 'Bếp Nóng', icon: '🔥', tag: 'NÓNG', desc: 'Bakery lẻ · Teabreak · Trường học...' },
-  lanh: { label: 'Bếp Lạnh', icon: '❄️', tag: 'LẠNH', desc: 'Kem · Lắp ráp · Trang trí · Bakery...' },
-  xuong42: { label: 'Xưởng 42', icon: '🏭', tag: 'BATCH', desc: 'Trường học · Teabreak · B2B đặt...' },
-  xuong41: { label: 'Xưởng 41', icon: '✨', tag: 'MACARON', desc: 'Macaron chuyên biệt · Thùng →...' },
+  nong: { label: 'Bếp Nóng', Icon: IconStationHot, tag: 'NÓNG', desc: 'Bakery lẻ · Teabreak · Trường học...' },
+  lanh: { label: 'Bếp Lạnh', Icon: IconStationCold, tag: 'LẠNH', desc: 'Kem · Lắp ráp · Trang trí · Bakery...' },
+  xuong42: { label: 'Xưởng 42', Icon: IconStationWorkshop, tag: 'BATCH', desc: 'Trường học · Teabreak · B2B đặt...' },
+  xuong41: { label: 'Xưởng 41', Icon: IconStationSparkle, tag: 'MACARON', desc: 'Macaron chuyên biệt · Thùng →...' },
 };
 const STATION_KEYS = ['xuong42', 'xuong41', 'nong', 'lanh'];
 const URGENT_MINUTES = 45;
@@ -41,7 +45,7 @@ function ElapsedBadge({ since }) {
   if (!since) return null;
   const minutes = Math.max(0, Math.floor((now - new Date(since).getTime()) / 60000));
   const tone = minutes >= 45 ? 'danger' : minutes >= 20 ? 'warning' : 'neutral';
-  return <Badge tone={tone}>⏱ {minutes < 60 ? `${minutes} phút` : `${Math.floor(minutes / 60)}h${minutes % 60}p`}</Badge>;
+  return <Badge tone={tone} icon={<IconClock size={13} />}>{minutes < 60 ? `${minutes} phút` : `${Math.floor(minutes / 60)}h${minutes % 60}p`}</Badge>;
 }
 
 const QUICK_QUESTIONS = [
@@ -73,7 +77,7 @@ function QuickAskButton({ orderId, orderCode }) {
 
   return (
     <div style={{ position: 'relative' }}>
-      <ActionChip icon="💬" label="Hỏi 1 chạm" tone="info" onClick={() => setOpen((v) => !v)} disabled={sending} />
+      <ActionChip icon={<IconChat size={16} />} label="Hỏi 1 chạm" tone="info" onClick={() => setOpen((v) => !v)} disabled={sending} />
       {open && (
         <div style={{ position: 'absolute', zIndex: 10, top: '100%', left: 0, marginTop: 4, background: 'var(--surface-card)', boxShadow: 'var(--shadow-lg)', borderRadius: 'var(--radius-md)', padding: 8, display: 'flex', flexDirection: 'column', gap: 4, width: 240 }}>
           {QUICK_QUESTIONS.map((q) => (
@@ -137,7 +141,7 @@ function CompactOrderRow({ order, onAccept, onReady, canAct }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>{order.customer?.name || 'Khách lẻ'}</span>
             {order.order_code && <span style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>{order.order_code}</span>}
-            {urgent && <Badge tone="danger">🚨 Khẩn cấp</Badge>}
+            {urgent && <Badge tone="danger" icon={<IconWarning size={14} />}>Khẩn cấp</Badge>}
           </div>
           <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{itemSummary}</div>
         </div>
@@ -149,7 +153,7 @@ function CompactOrderRow({ order, onAccept, onReady, canAct }) {
           <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', marginTop: 10 }}>{itemSummary}</div>
           {refPhotos.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>📎 Ảnh mẫu khách gửi:</div>
+              <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconPaperclip size={14} /> Ảnh mẫu khách gửi:</div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {refPhotos.map((it) => (
                   <a key={it.id} href={it.ref_photo_url} target="_blank" rel="noreferrer">
@@ -159,8 +163,8 @@ function CompactOrderRow({ order, onAccept, onReady, canAct }) {
               </div>
             </div>
           )}
-          {order.note && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '6px 8px' }}>📝 {order.note}</div>}
-          {order.kitchen_staff_name && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>👨‍🍳 Bếp: {order.kitchen_staff_name}</div>}
+          {order.note && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '6px 8px', display: 'flex', alignItems: 'center', gap: 4 }}><IconClipboard size={14} /> {order.note}</div>}
+          {order.kitchen_staff_name && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconKitchen size={14} /> Bếp: {order.kitchen_staff_name}</div>}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {order.status === 'moi' && <Button variant="primary" size="sm" onClick={handleAccept} disabled={busy || !canAct}>{busy ? 'Đang xử lý...' : 'Nhận đơn'}</Button>}
@@ -169,7 +173,7 @@ function CompactOrderRow({ order, onAccept, onReady, canAct }) {
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   <ElapsedBadge since={order.created_at} />
                 </div>
-                <Button variant="secondary" size="sm" icon="📷" onClick={() => setShowCamera(true)} disabled={busy || !canAct}>{busy ? 'Đang xử lý...' : 'Chụp ảnh & Sẵn sàng giao'}</Button>
+                <Button variant="secondary" size="sm" icon={<IconCamera size={16} />} onClick={() => setShowCamera(true)} disabled={busy || !canAct}>{busy ? 'Đang xử lý...' : 'Chụp ảnh & Sẵn sàng giao'}</Button>
                 {navigator.onLine === false && (
                   <Button variant="ghost" size="sm" onClick={handleReadySkipPhoto} disabled={busy || !canAct}>Mất mạng — bỏ qua ảnh, chuyển giao luôn</Button>
                 )}
@@ -178,8 +182,8 @@ function CompactOrderRow({ order, onAccept, onReady, canAct }) {
             {!canAct && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Chỉ Bếp hoặc Chủ sở hữu mới thao tác được ở đây.</div>}
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               <QuickAskButton orderId={order.id} orderCode={order.order_code} />
-              <ActionChip icon="⚠" label="Báo sự cố" tone="danger" onClick={() => setShowIncident(true)} />
-              <ActionChip icon="🔍" label="Xem đầy đủ" tone="neutral" onClick={() => setShowFullDetail(true)} />
+              <ActionChip icon={<IconWarning size={16} />} label="Báo sự cố" tone="danger" onClick={() => setShowIncident(true)} />
+              <ActionChip icon={<IconSearch size={16} />} label="Xem đầy đủ" tone="neutral" onClick={() => setShowFullDetail(true)} />
             </div>
           </div>
 
@@ -211,7 +215,7 @@ function StationOverviewCard({ stationKey, orders, active, onClick }) {
       display: 'flex', flexDirection: 'column', gap: 10, cursor: 'pointer',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ fontSize: 22 }}>{meta.icon}</span>
+        <meta.Icon size={22} />
         <span style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>{meta.label}</span>
         <Badge tone="neutral">{meta.tag}</Badge>
       </div>
@@ -219,7 +223,7 @@ function StationOverviewCard({ stationKey, orders, active, onClick }) {
       <div style={{ display: 'grid', gridTemplateColumns: urgent > 0 ? '1fr 1fr 1fr' : '1fr 1fr 1fr', gap: 8 }}>
         {urgent > 0 && (
           <div style={{ background: 'var(--status-danger)', color: '#fff', borderRadius: 'var(--radius-sm)', padding: '8px 10px', textAlign: 'center' }}>
-            <div style={{ font: 'var(--text-caption)' }}>🚨 Khẩn cấp</div>
+            <div style={{ font: 'var(--text-caption)', display: 'flex', alignItems: 'center', gap: 4 }}><IconWarning size={14} /> Khẩn cấp</div>
             <div style={{ font: 'var(--text-title)' }}>{urgent}</div>
           </div>
         )}
@@ -328,9 +332,9 @@ export default function KdsScreen({ initialStation }) {
             background: 'var(--surface-card)', color: 'var(--text-primary)', font: 'var(--text-body)', cursor: 'pointer', minWidth: 220,
           }}
         >
-          <option value="all">📋 Tất cả ({orders.length} đơn)</option>
+          <option value="all">Tất cả ({orders.length} đơn)</option>
           {STATION_KEYS.map((key) => (
-            <option key={key} value={key}>{STATIONS[key].icon} {STATIONS[key].label} ({byStation[key].length} đơn)</option>
+            <option key={key} value={key}>{STATIONS[key].label} ({byStation[key].length} đơn)</option>
           ))}
         </select>
       </div>

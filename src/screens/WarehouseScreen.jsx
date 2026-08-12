@@ -9,6 +9,7 @@ import { IncidentReportModal } from '../components/IncidentReportModal';
 import { fetchWarehouseStock, addWarehouseStock, updateWarehouseStock, uploadPhoto } from '../lib/queries';
 import { useVoiceInput } from '../lib/useVoiceInput';
 import { enqueue, getQueue } from '../lib/offlineQueue';
+import { IconMic, IconCamera, IconWarning, IconAdd } from '../components/icons/FrogIcons';
 
 const UNITS = ['g', 'kg', 'ml', 'lít', 'quả', 'cái', 'gói'];
 
@@ -68,7 +69,7 @@ function AddStockForm({ onAdded, onQueued, onClose }) {
       <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
         <Input label="Tên nguyên liệu" placeholder="VD: Bột mì số 8" value={name} onChange={(e) => setName(e.target.value)} style={{ flex: 1 }} />
         {voice.supported && (
-          <Button variant={voice.listening ? 'danger' : 'secondary'} size="sm" icon="🎙️" onClick={handleVoice}>
+          <Button variant={voice.listening ? 'danger' : 'secondary'} size="sm" icon={<IconMic size={16} />} onClick={handleVoice}>
             {voice.listening ? 'Đang nghe...' : 'Nói'}
           </Button>
         )}
@@ -83,7 +84,7 @@ function AddStockForm({ onAdded, onQueued, onClose }) {
       <Select label="Tình trạng" value={status} onChange={(e) => setStatus(e.target.value)}
         options={[{ value: 'fresh', label: 'Còn hạn' }, { value: 'soon', label: 'Sắp hết hạn' }, { value: 'expired', label: 'Quá hạn' }]} />
       <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-        <Button variant="secondary" size="sm" icon="📷" disabled={offline} onClick={() => setShowCamera(true)}>{photoBlob ? 'Chụp lại ảnh tem/bill' : 'Chụp ảnh tem/bill'}</Button>
+        <Button variant="secondary" size="sm" icon={<IconCamera size={16} />} disabled={offline} onClick={() => setShowCamera(true)}>{photoBlob ? 'Chụp lại ảnh tem/bill' : 'Chụp ảnh tem/bill'}</Button>
         {photoBlob && <img src={URL.createObjectURL(photoBlob)} alt="preview" style={{ width: 40, height: 40, borderRadius: 'var(--radius-sm)', objectFit: 'cover' }} />}
       </div>
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
@@ -171,16 +172,16 @@ export default function WarehouseScreen() {
           background: 'var(--status-danger-soft)', border: '1px solid var(--status-danger)',
           borderRadius: 'var(--radius-md)', padding: '14px 18px',
         }}>
-          <span style={{ font: '700 17px var(--font-body)', color: 'var(--status-danger)' }}>⚠ Cảnh báo tồn kho:</span>
+          <span style={{ font: '700 17px var(--font-body)', color: 'var(--status-danger)', display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconWarning size={18} /> Cảnh báo tồn kho:</span>
           {expiredCount > 0 && <Badge tone="danger">{expiredCount} nguyên liệu đã quá hạn</Badge>}
           {soonCount > 0 && <Badge tone="warning">{soonCount} nguyên liệu sắp hết hạn</Badge>}
         </div>
       )}
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-        <Button variant="primary" size="lg" icon="➕" style={{ flex: 1, minWidth: 220, padding: '24px', font: '700 18px var(--font-body)' }} onClick={() => setShowForm((v) => !v)}>
+        <Button variant="primary" size="lg" icon={<IconAdd size={18} />} style={{ flex: 1, minWidth: 220, padding: '24px', font: '700 18px var(--font-body)' }} onClick={() => setShowForm((v) => !v)}>
           {showForm ? 'Đóng form nhập kho' : 'Thêm nguyên liệu vào kho'}
         </Button>
-        <Button variant="danger" size="lg" icon="⚠" style={{ flex: 1, minWidth: 220, padding: '24px', font: '700 18px var(--font-body)' }} onClick={() => setShowIncident(true)}>
+        <Button variant="danger" size="lg" icon={<IconWarning size={18} />} style={{ flex: 1, minWidth: 220, padding: '24px', font: '700 18px var(--font-body)' }} onClick={() => setShowIncident(true)}>
           Báo sự cố kho
         </Button>
       </div>

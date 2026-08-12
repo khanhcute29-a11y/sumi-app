@@ -10,6 +10,7 @@ import { fetchOrders, updateOrder, uploadPhoto, fetchShopSettings } from '../lib
 import { useAuth } from '../lib/AuthContext';
 import { enqueue } from '../lib/offlineQueue';
 import { getCurrentPosition, haversineKm, estimateTrip } from '../lib/geo';
+import { IconOrders, IconHome, IconTruck, IconWarning, IconCamera, IconEdit, IconMapPin, IconClock } from '../components/icons/FrogIcons';
 import { supabase } from '../lib/supabaseClient';
 
 function Thumb({ url, label }) {
@@ -145,23 +146,23 @@ function DeliveryCard({ order, onPickup, onComplete, onSignedDoc, canAct, shopSe
           </div>
           {showDetail && <OrderDetailModal order={order} onClose={() => setShowDetail(false)} />}
           <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>Sản phẩm: {itemSummary}</div>
-          <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>📦 Số kiện hàng: {packageCount}</div>
+          <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconOrders size={14} /> Số kiện hàng: {packageCount}</div>
           {order.delivery_method === 'lay_tai_xuong' ? (
-            <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>🏠 Khách tự đến lấy tại xưởng</div>
+            <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconHome size={14} /> Khách tự đến lấy tại xưởng</div>
           ) : (
             <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Địa chỉ: {order.address || '—'}</div>
           )}
           <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Thời gian giao: {order.delivery_time || '—'}</div>
-          {order.shipper_staff_name && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>🚚 Người giao: {order.shipper_staff_name}</div>}
+          {order.shipper_staff_name && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconTruck size={14} /> Người giao: {order.shipper_staff_name}</div>}
         </div>
-        {order.flagged && <Badge tone="danger">⚠ Cần Lưu Ý</Badge>}
+        {order.flagged && <Badge tone="danger" icon={<IconWarning size={14} />}>Cần Lưu Ý</Badge>}
       </div>
 
       <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {order.status === 'cho_giao' && (
           <React.Fragment>
             <Badge tone="neutral" style={{ alignSelf: 'flex-start' }}>Chờ xuất bến</Badge>
-            <Button variant="primary" size="sm" icon="📷" disabled={busy || !canAct} onClick={() => setShowCamera(true)}>{busy ? 'Đang xử lý...' : 'Chụp xuất bến & Nhận giao'}</Button>
+            <Button variant="primary" size="sm" icon={<IconCamera size={16} />} disabled={busy || !canAct} onClick={() => setShowCamera(true)}>{busy ? 'Đang xử lý...' : 'Chụp xuất bến & Nhận giao'}</Button>
             {navigator.onLine === false && <Button variant="ghost" size="sm" onClick={skipPhoto} disabled={busy || !canAct}>Mất mạng — bỏ qua ảnh, nhận giao luôn</Button>}
           </React.Fragment>
         )}
@@ -169,13 +170,13 @@ function DeliveryCard({ order, onPickup, onComplete, onSignedDoc, canAct, shopSe
         {order.status === 'dang_giao' && (
           <React.Fragment>
             <Badge tone={isLate(order) ? 'danger' : 'warning'} style={{ alignSelf: 'flex-start' }}>
-              {isLate(order) ? '⚠ Đang trễ giờ giao' : order.delivery_method === 'lay_tai_xuong' ? 'Chờ khách đến lấy' : 'Đang giao'}
+              {isLate(order) ? 'Đang trễ giờ giao' : order.delivery_method === 'lay_tai_xuong' ? 'Chờ khách đến lấy' : 'Đang giao'}
             </Badge>
-            <Button variant="primary" size="sm" icon="📷" disabled={busy || !canAct} onClick={() => setShowCamera(true)}>
+            <Button variant="primary" size="sm" icon={<IconCamera size={16} />} disabled={busy || !canAct} onClick={() => setShowCamera(true)}>
               {busy ? 'Đang xử lý...' : order.delivery_method === 'lay_tai_xuong' ? 'Chụp đến nơi & Xác nhận khách đã lấy' : 'Chụp đến nơi & Hoàn thành'}
             </Button>
             {order.delivery_method !== 'lay_tai_xuong' && (
-              <Button variant="secondary" size="sm" icon="📝" disabled={busy || !canAct} onClick={() => setShowSignedDocCamera(true)}>
+              <Button variant="secondary" size="sm" icon={<IconEdit size={16} />} disabled={busy || !canAct} onClick={() => setShowSignedDocCamera(true)}>
                 {order.signed_doc_photo_url ? 'Chụp lại Biên Bản Ký Giấy' : 'Chụp Biên Bản Ký Giấy'}
               </Button>
             )}
@@ -190,15 +191,15 @@ function DeliveryCard({ order, onPickup, onComplete, onSignedDoc, canAct, shopSe
             </Badge>
             {order.late_reason && (
               <div style={{ font: 'var(--text-caption)', color: 'var(--status-danger)', background: 'var(--status-danger-soft)', borderRadius: 'var(--radius-sm)', padding: '6px 8px' }}>
-                ⚠ Giao trễ — lý do: {order.late_reason}
+                Giao trễ — lý do: {order.late_reason}
               </div>
             )}
             {formatDuration(order.created_at, order.completed_at) && (
-              <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>⏱ Thời gian xử lý: {formatDuration(order.created_at, order.completed_at)}</div>
+              <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconClock size={13} /> Thời gian xử lý: {formatDuration(order.created_at, order.completed_at)}</div>
             )}
             {trip && (
-              <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>
-                📍 Khoảng cách tiệm↔điểm giao: {trip.distanceKm.toFixed(1)}km (đi+về {trip.roundTripKm.toFixed(1)}km) · ~{trip.roundTripMinutes} phút đi về · Xăng ước tính: {trip.gasCost.toLocaleString('vi-VN')}đ
+              <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <IconMapPin size={14} /> Khoảng cách tiệm↔điểm giao: {trip.distanceKm.toFixed(1)}km (đi+về {trip.roundTripKm.toFixed(1)}km) · ~{trip.roundTripMinutes} phút đi về · Xăng ước tính: {trip.gasCost.toLocaleString('vi-VN')}đ
               </div>
             )}
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -211,7 +212,7 @@ function DeliveryCard({ order, onPickup, onComplete, onSignedDoc, canAct, shopSe
         )}
 
         {!canAct && order.status !== 'hoan_thanh' && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Chỉ Vận chuyển hoặc Chủ sở hữu mới thao tác được ở đây.</div>}
-        <ActionChip icon="⚠" label="Báo sự cố" tone="danger" onClick={() => setShowIncident(true)} />
+        <ActionChip icon={<IconWarning size={16} />} label="Báo sự cố" tone="danger" onClick={() => setShowIncident(true)} />
         {showCamera && <CameraCapture onClose={() => setShowCamera(false)} onCapture={order.status === 'cho_giao' ? handlePickupPhoto : handleCompletePhoto} />}
         {showSignedDocCamera && <CameraCapture onClose={() => setShowSignedDocCamera(false)} onCapture={handleSignedDocPhoto} />}
         {pendingComplete && <LateReasonPrompt busy={busy} onCancel={() => setPendingComplete(null)} onConfirm={confirmLateComplete} />}

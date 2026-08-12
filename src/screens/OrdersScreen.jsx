@@ -16,6 +16,7 @@ import { ActionChip } from '../components/ActionChip';
 import { supabase } from '../lib/supabaseClient';
 import { localDateStr } from '../lib/date';
 import { CAKE_SIZES_CM, CAKE_BASES, CAKE_FILLINGS, basePriceForSize, fillingSurchargeForSize, computeCakePrice } from '../lib/cakePricing';
+import { IconWarning, IconEye, IconMapPin, IconClock, IconClipboard, IconPaperclip, IconHome, IconTruck, IconBan, IconCheck, IconTrash, IconStar } from '../components/icons/FrogIcons';
 
 const STATUS_LABELS = {
   moi: 'Mới', dang_lam: 'Đang làm', cho_giao: 'Chờ giao', dang_giao: 'Đang giao',
@@ -83,7 +84,7 @@ function Column({ title, count, orders, onOpen }) {
               total={o.total} deliveryTime={o.delivery_time} paid={getPaidBadgeState(o)}
               onClick={() => onOpen(o)}
               badges={[
-                o.customer?.vip && <Badge tone="primary" icon="⭐" key="vip">VIP</Badge>,
+                o.customer?.vip && <Badge tone="primary" icon={<IconStar size={13} />} key="vip">VIP</Badge>,
               ].filter(Boolean)}
             />
           );
@@ -116,7 +117,7 @@ const BLANK_TB_ITEM = { mode: 'catalog', productId: '', name: '', qty: '', unit:
 const BLANK_MACARON_ITEM = { mode: 'catalog', productId: '', name: '', spec: '', qty: '', unit: 'khay', price: '', refPhotoUrl: '' };
 
 function productOptions(products) {
-  return [...products.map((p) => ({ value: p.id, label: `${p.name} (${Number(p.price).toLocaleString('vi-VN')}đ)` })), { value: MANUAL_OPTION, label: '✏️ Khác (nhập tay)' }];
+  return [...products.map((p) => ({ value: p.id, label: `${p.name} (${Number(p.price).toLocaleString('vi-VN')}đ)` })), { value: MANUAL_OPTION, label: 'Khác (nhập tay)' }];
 }
 
 function PriceInput({ label, value, onChange, style, placeholder, helpText, noDelete }) {
@@ -192,7 +193,7 @@ function TeabreakItemRow({ item, onChange, onRemove, canRemove, products }) {
         <Input label="ĐVT" value={item.unit} onChange={(e) => set('unit', e.target.value)} style={{ flex: '1 1 60px', minWidth: 0 }} />
         <PriceInput label="Đơn giá" value={item.price} onChange={(v) => set('price', v)} style={{ flex: '1 1 90px', minWidth: 0 }} />
         <div style={{ flex: '1 1 100px', font: 'var(--text-body-sm)', color: 'var(--text-secondary)', paddingBottom: 8, textAlign: 'right' }}>{total.toLocaleString('vi-VN')}đ</div>
-        {canRemove && <button onClick={onRemove} style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', paddingBottom: 8 }}>✕</button>}
+        {canRemove && <button onClick={onRemove} style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', paddingBottom: 8, display: 'inline-flex' }}><IconTrash size={16} /></button>}
       </div>
       <PhotoField url={item.refPhotoUrl} onChange={(url) => set('refPhotoUrl', url)} label="Ảnh mẫu / quy cách (nếu có)" prefix="teabreak" />
     </div>
@@ -304,7 +305,7 @@ function TeabreakOrderModal({ onClose, onCreated, onManualItems }) {
           </div>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '0 20px 20px' }}>
-          <ActionChip icon="⚠" label="Báo sự cố" tone="danger" onClick={() => setShowIncident(true)} />
+          <ActionChip icon={<IconWarning size={16} />} label="Báo sự cố" tone="danger" onClick={() => setShowIncident(true)} />
           <div style={{ display: 'flex', gap: 8 }}>
             <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>Hủy</Button>
             <Button variant="primary" size="sm" onClick={handleSubmit} disabled={saving}>{saving ? 'Đang lưu...' : 'Tạo đơn Teabreak'}</Button>
@@ -420,7 +421,7 @@ function EditTeabreakModal({ order, onClose, onSaved }) {
           </div>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '0 20px 20px' }}>
-          <ActionChip icon="⚠" label="Báo sự cố" tone="danger" onClick={() => setShowIncident(true)} />
+          <ActionChip icon={<IconWarning size={16} />} label="Báo sự cố" tone="danger" onClick={() => setShowIncident(true)} />
           <div style={{ display: 'flex', gap: 8 }}>
             <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>Hủy</Button>
             <Button variant="primary" size="sm" onClick={handleSubmit} disabled={saving}>{saving ? 'Đang lưu...' : 'Lưu thay đổi'}</Button>
@@ -461,7 +462,7 @@ function MacaronItemRow({ item, onChange, onRemove, canRemove, products }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>
         <span>Thành tiền</span><b>{total.toLocaleString('vi-VN')}đ</b>
       </div>
-      {canRemove && <Button variant="ghost" size="sm" onClick={onRemove} style={{ alignSelf: 'flex-end' }}>✕ Xoá hàng hóa</Button>}
+      {canRemove && <Button variant="ghost" size="sm" onClick={onRemove} style={{ alignSelf: 'flex-end' }} icon={<IconTrash size={14} />}>Xoá hàng hóa</Button>}
     </div>
   );
 }
@@ -594,7 +595,7 @@ function MacaronOrderModal({ onClose, onCreated, onManualItems }) {
           </div>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '0 20px 20px' }}>
-          <ActionChip icon="⚠" label="Báo sự cố" tone="danger" onClick={() => setShowIncident(true)} />
+          <ActionChip icon={<IconWarning size={16} />} label="Báo sự cố" tone="danger" onClick={() => setShowIncident(true)} />
           <div style={{ display: 'flex', gap: 8 }}>
             <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>Hủy</Button>
             <Button variant="primary" size="sm" onClick={handleSubmit} disabled={saving}>{saving ? 'Đang lưu...' : 'Tạo đơn Macaron Sỉ'}</Button>
@@ -724,7 +725,7 @@ function EditMacaronModal({ order, onClose, onSaved }) {
           </div>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '0 20px 20px' }}>
-          <ActionChip icon="⚠" label="Báo sự cố" tone="danger" onClick={() => setShowIncident(true)} />
+          <ActionChip icon={<IconWarning size={16} />} label="Báo sự cố" tone="danger" onClick={() => setShowIncident(true)} />
           <div style={{ display: 'flex', gap: 8 }}>
             <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>Hủy</Button>
             <Button variant="primary" size="sm" onClick={handleSubmit} disabled={saving}>{saving ? 'Đang lưu...' : 'Lưu thay đổi'}</Button>
@@ -788,7 +789,7 @@ function ProductRow({ item, onChange, onRemove, isKem, canRemove, products }) {
       )}
       <PhotoField url={item.refPhotoUrl} onChange={(url) => set('refPhotoUrl', url)} label="Ảnh mẫu khách muốn đặt (nếu có)" prefix="reference" />
       <PriceInput label="Đơn giá" placeholder="VD: 350000" value={item.price} onChange={(v) => set('price', v)} style={{ maxWidth: 160 }} />
-      {canRemove && <Button variant="ghost" size="sm" onClick={onRemove} style={{ alignSelf: 'flex-end' }}>✕ Xoá sản phẩm</Button>}
+      {canRemove && <Button variant="ghost" size="sm" onClick={onRemove} style={{ alignSelf: 'flex-end' }} icon={<IconTrash size={14} />}>Xoá sản phẩm</Button>}
     </div>
   );
 }
@@ -796,21 +797,21 @@ function ProductRow({ item, onChange, onRemove, isKem, canRemove, products }) {
 function OrderPreview({ custName, items, deliveryMethod, effectiveShipFee, total, deposit, note, address, deliveryDate, deliveryTime }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--surface-sunken)', borderRadius: 'var(--radius-md)', padding: 16 }}>
-      <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>👁 XEM TRƯỚC ĐƠN HÀNG</div>
+      <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconEye size={14} /> XEM TRƯỚC ĐƠN HÀNG</div>
       <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>{custName || 'Khách chưa đặt tên'}</div>
       <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>
         {items.length ? items.map((p) => p.note ? `${p.name} (${p.note})` : p.name).join(', ') : 'Chưa có sản phẩm nào'}
       </div>
       <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>
-        {deliveryMethod === 'giao_tan_noi' ? '🚚 Giao hàng tận nơi' : '🏠 Lấy tại xưởng'}
+        {deliveryMethod === 'giao_tan_noi' ? <><IconTruck size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Giao hàng tận nơi</> : <><IconHome size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Lấy tại xưởng</>}
         {deliveryMethod === 'giao_tan_noi' && ` · Ship: ${effectiveShipFee ? formatVnd(effectiveShipFee) : 'Miễn phí'}`}
       </div>
       {deliveryMethod === 'giao_tan_noi' && address && (
-        <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>📍 {address}</div>
+        <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}><IconMapPin size={14} /> {address}</div>
       )}
       {(deliveryDate || deliveryTime) && (
         <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>
-          🕒 {deliveryDate ? new Date(`${deliveryDate}T00:00:00+07:00`).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : ''}{deliveryDate && deliveryTime ? ' · ' : ''}{deliveryTime || ''}
+          <IconClock size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />{deliveryDate ? new Date(`${deliveryDate}T00:00:00+07:00`).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : ''}{deliveryDate && deliveryTime ? ' · ' : ''}{deliveryTime || ''}
         </div>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 6, borderTop: '1px solid var(--border-subtle)' }}>
@@ -823,7 +824,7 @@ function OrderPreview({ custName, items, deliveryMethod, effectiveShipFee, total
           </div>
         )}
       </div>
-      {note && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>📝 {note}</div>}
+      {note && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}><IconClipboard size={14} /> {note}</div>}
     </div>
   );
 }
@@ -977,7 +978,7 @@ function NewOrderModal({ onClose, onCreated, onManualItems }) {
           </div>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '0 20px 20px' }}>
-          <ActionChip icon="⚠" label="Báo sự cố" tone="danger" onClick={() => setShowIncident(true)} />
+          <ActionChip icon={<IconWarning size={16} />} label="Báo sự cố" tone="danger" onClick={() => setShowIncident(true)} />
           <div style={{ display: 'flex', gap: 8 }}>
             <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>Hủy</Button>
             <Button variant="primary" size="sm" onClick={handleSubmit} disabled={saving}>{saving ? 'Đang lưu...' : 'Chuyển Bếp & In Tem'}</Button>
@@ -1131,7 +1132,7 @@ function EditOrderModal({ order, onClose, onSaved }) {
           </div>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '0 20px 20px' }}>
-          <ActionChip icon="⚠" label="Báo sự cố" tone="danger" onClick={() => setShowIncident(true)} />
+          <ActionChip icon={<IconWarning size={16} />} label="Báo sự cố" tone="danger" onClick={() => setShowIncident(true)} />
           <div style={{ display: 'flex', gap: 8 }}>
             <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>Hủy</Button>
             <Button variant="primary" size="sm" onClick={handleSubmit} disabled={saving}>{saving ? 'Đang lưu...' : 'Lưu thay đổi'}</Button>
@@ -1299,7 +1300,7 @@ export default function OrdersScreen() {
         </div>
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <Input placeholder="🔍 Tra cứu đơn cũ theo tên, SĐT hoặc mã đơn (kể cả đã giao/đã huỷ)..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ flex: '2 1 260px' }} />
+        <Input placeholder="Tra cứu đơn cũ theo tên, SĐT hoặc mã đơn (kể cả đã giao/đã huỷ)..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ flex: '2 1 260px' }} />
         <Input label="Từ ngày" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={{ flex: '1 1 140px' }} />
         <Input label="Đến ngày" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={{ flex: '1 1 140px' }} />
         {(dateFrom || dateTo) && (
@@ -1355,7 +1356,7 @@ export default function OrdersScreen() {
             <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>{(modalOrder.order_items || []).map((it) => `${it.name} x${it.qty}`).join(', ') || 'Không có sản phẩm'}</div>
             {(modalOrder.order_items || []).some((it) => it.ref_photo_url) && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>📎 Ảnh mẫu khách gửi:</div>
+                <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconPaperclip size={14} /> Ảnh mẫu khách gửi:</div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {(modalOrder.order_items || []).filter((it) => it.ref_photo_url).map((it) => (
                     <a key={it.id} href={it.ref_photo_url} target="_blank" rel="noreferrer">
@@ -1366,7 +1367,7 @@ export default function OrdersScreen() {
               </div>
             )}
             <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>
-              Hình thức: {modalOrder.delivery_method === 'lay_tai_xuong' ? '🏠 Lấy tại xưởng' : '🚚 Giao hàng tận nơi'}
+              Hình thức: {modalOrder.delivery_method === 'lay_tai_xuong' ? <><IconHome size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Lấy tại xưởng</> : <><IconTruck size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Giao hàng tận nơi</>}
             </div>
             {modalOrder.delivery_method !== 'lay_tai_xuong' && (
               <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>Địa chỉ: {modalOrder.address || '—'}</div>
@@ -1377,7 +1378,7 @@ export default function OrdersScreen() {
             <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>Tổng tiền: {Number(modalOrder.total || 0).toLocaleString('vi-VN')}đ</div>
             {modalOrder.status === 'huy' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 10, background: 'var(--status-danger-soft)', borderRadius: 'var(--radius-sm)' }}>
-                <Badge tone="danger">❌ Đã huỷ</Badge>
+                <Badge tone="danger" icon={<IconBan size={13} />}>Đã huỷ</Badge>
                 <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>Lý do: {modalOrder.cancel_reason || 'Không ghi lý do'}</div>
                 {modalOrder.cancel_staff_name && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Người huỷ: {modalOrder.cancel_staff_name}</div>}
                 {modalOrder.cancel_photo_url && (
@@ -1389,7 +1390,7 @@ export default function OrdersScreen() {
             )}
             {modalOrder.status === 'hoan_thanh' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: 10, background: 'var(--status-success-soft)', borderRadius: 'var(--radius-sm)' }}>
-                <Badge tone="success">✓ Hoàn thành</Badge>
+                <Badge tone="success" icon={<IconCheck size={13} />}>Hoàn thành</Badge>
                 {modalOrder.completed_at && (
                   <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>
                     Lúc: {new Date(modalOrder.completed_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
@@ -1397,7 +1398,7 @@ export default function OrdersScreen() {
                 )}
                 {formatDuration(modalOrder.created_at, modalOrder.completed_at) && (
                   <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>
-                    ⏱ Thời gian xử lý: {formatDuration(modalOrder.created_at, modalOrder.completed_at)}
+                    <IconClock size={13} style={{ verticalAlign: '-2px', marginRight: 4 }} />Thời gian xử lý: {formatDuration(modalOrder.created_at, modalOrder.completed_at)}
                   </div>
                 )}
                 {modalOrder.late_reason && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>Lý do trễ: {modalOrder.late_reason}</div>}
@@ -1405,7 +1406,7 @@ export default function OrdersScreen() {
             )}
             <CommentSection order={modalOrder} profile={profile} />
             {actionError && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{actionError}</div>}
-            <ActionChip icon="⚠" label="Báo sự cố" tone="danger" onClick={() => setShowOrderIncident(true)} style={{ alignSelf: 'flex-start' }} />
+            <ActionChip icon={<IconWarning size={16} />} label="Báo sự cố" tone="danger" onClick={() => setShowOrderIncident(true)} style={{ alignSelf: 'flex-start' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 4 }}>
               {canManage ? (
                 <div style={{ display: 'flex', gap: 8 }}>

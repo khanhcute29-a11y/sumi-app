@@ -3,6 +3,7 @@ import { Button } from './forms/Button';
 import { Input } from './forms/Input';
 import { addIncidentReport, uploadPhoto } from '../lib/queries';
 import { useAuth } from '../lib/AuthContext';
+import { IconWarning, IconCamera, IconImage } from './icons/FrogIcons';
 
 const TAXONOMY = [
   { key: 'log', label: 'VẬN CHUYỂN (LOG)', items: [
@@ -81,7 +82,7 @@ export function IncidentReportModal({ orderId, orderCode, onClose, onSent }) {
     <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 70 }} onClick={onClose}>
       <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: 420, maxHeight: '86vh', overflowY: 'auto', boxShadow: 'var(--shadow-lg)' }} onClick={(e) => e.stopPropagation()}>
         <div style={{ padding: '16px 20px', background: 'var(--status-danger)', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0' }}>
-          <div style={{ font: 'var(--text-title)' }}>⚠ Báo Sự Cố 1-Chạm</div>
+          <div style={{ font: 'var(--text-title)', display: 'flex', alignItems: 'center', gap: 6 }}><IconWarning size={18} /> Báo Sự Cố 1-Chạm</div>
           <button onClick={onClose} style={{ border: 'none', background: 'none', color: '#fff', fontSize: 18, cursor: 'pointer' }}>✕</button>
         </div>
         {orderCode && <div style={{ padding: '8px 20px 0', font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Đơn: {orderCode}</div>}
@@ -119,9 +120,10 @@ export function IncidentReportModal({ orderId, orderCode, onClose, onSent }) {
                   flex: 1, padding: '10px 12px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)',
                   background: 'var(--surface-sunken)', cursor: uploading ? 'not-allowed' : 'pointer',
                   font: 'var(--text-body-sm)', color: 'var(--text-primary)', opacity: uploading ? 0.6 : 1,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                 }}
               >
-                📷 Camera
+                <IconCamera size={16} /> Camera
               </button>
               <button
                 onClick={() => fileInputRef.current?.click()}
@@ -130,9 +132,10 @@ export function IncidentReportModal({ orderId, orderCode, onClose, onSent }) {
                   flex: 1, padding: '10px 12px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)',
                   background: 'var(--surface-sunken)', cursor: uploading ? 'not-allowed' : 'pointer',
                   font: 'var(--text-body-sm)', color: 'var(--text-primary)', opacity: uploading ? 0.6 : 1,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                 }}
               >
-                🖼 Chọn ảnh
+                <IconImage size={16} /> Chọn ảnh
               </button>
             </div>
             <input

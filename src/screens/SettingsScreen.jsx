@@ -10,6 +10,7 @@ import { supabase } from '../lib/supabaseClient';
 import { fetchMyProfile, updateMyProfile, fetchShopSettings, updateShopSettings, fetchAuditLog, backupAllData } from '../lib/queries';
 import { translateAuthError } from '../lib/authErrors';
 import { getCurrentPosition } from '../lib/geo';
+import { IconMapPin, IconSettings, IconBell, IconDownload } from '../components/icons/FrogIcons';
 import { isPushSupported, getPushSubscriptionStatus, enablePush, disablePush } from '../lib/push';
 import { localDateStr } from '../lib/date';
 import { ROLE_META, ROLE_OPTIONS, ROLE_PERMISSIONS } from '../lib/roles';
@@ -114,7 +115,7 @@ function ShopLocationSection() {
         Vị trí tiệm: {settings?.shop_lat != null ? `${Number(settings.shop_lat).toFixed(5)}, ${Number(settings.shop_lng).toFixed(5)}` : 'Chưa thiết lập'}
       </div>
       <Button variant="secondary" size="sm" onClick={handleLocate} disabled={locating} style={{ alignSelf: 'flex-start' }}>
-        {locating ? 'Đang lấy vị trí...' : '📍 Lấy vị trí hiện tại làm vị trí tiệm'}
+        {locating ? 'Đang lấy vị trí...' : <><IconMapPin size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Lấy vị trí hiện tại làm vị trí tiệm</>}
       </Button>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <Input label="Giá xăng ước tính (đồng/km)" type="number" value={gasPrice} onChange={(e) => setGasPrice(e.target.value)} style={{ flex: 1, minWidth: 160 }} />
@@ -276,7 +277,7 @@ function BackupSection() {
       {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
       {lastBackup && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Lần sao lưu gần nhất: {lastBackup}</div>}
       <Button variant="primary" size="sm" onClick={handleBackup} disabled={busy} style={{ alignSelf: 'flex-start' }}>
-        {busy ? 'Đang xuất dữ liệu...' : '⬇ Tải file sao lưu'}
+        {busy ? 'Đang xuất dữ liệu...' : <><IconDownload size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Tải file sao lưu</>}
       </Button>
     </div>
   );
@@ -398,11 +399,11 @@ export default function SettingsScreen({ onSignOut }) {
       </Section>
 
       <Section title="Tùy chọn">
-        <Select label="🖥 Cỡ giao diện" value={uiScale} onChange={(e) => { setUiScale(e.target.value); setUiScaleState(e.target.value); }}
+        <Select label={<><IconSettings size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Cỡ giao diện</>} value={uiScale} onChange={(e) => { setUiScale(e.target.value); setUiScaleState(e.target.value); }}
           options={[{ value: 'small', label: 'Nhỏ' }, { value: 'normal', label: 'Vừa (mặc định)' }, { value: 'large', label: 'Lớn' }]} />
         <Switch label="Bật Offline-First (lưu đơn khi mất mạng)" checked={offlineFirst} onChange={setOfflineFirst} />
         <Switch label="Bắt buộc chốt ca cuối ngày (Z-Report)" checked={forceCloseShift} onChange={setForceCloseShift} />
-        <Switch label="🔔 Nhận thông báo đẩy trên thiết bị này (đơn mới, giao hàng xong)"
+        <Switch label={<><IconBell size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Nhận thông báo đẩy trên thiết bị này (đơn mới, giao hàng xong)</>}
           checked={pushStatus === 'subscribed'} onChange={handleTogglePush}
           disabled={pushBusy || pushStatus === 'unsupported'} />
         {pushStatus === 'unsupported' && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Trình duyệt này không hỗ trợ thông báo đẩy.</div>}

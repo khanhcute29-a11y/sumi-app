@@ -5,6 +5,7 @@ import { Badge } from '../components/feedback/Badge';
 import { TrustScoreBadge } from '../components/feedback/TrustScoreBadge';
 import { Card } from '../components/data/Card';
 import { fetchCustomers, fetchOrders } from '../lib/queries';
+import { IconStar } from '../components/icons/FrogIcons';
 
 function CustomerRow({ c }) {
   return (
@@ -12,7 +13,7 @@ function CustomerRow({ c }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 180 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>{c.name}</span>
-          {c.vip && <Badge tone="primary" icon="⭐">VIP</Badge>}
+          {c.vip && <Badge tone="primary" icon={<IconStar size={13} />}>VIP</Badge>}
         </div>
         <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>{c.phone || '—'} · {c.channel || '—'}</div>
       </div>

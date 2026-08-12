@@ -12,6 +12,7 @@ import {
 import { useAuth } from '../lib/AuthContext';
 import { enqueue } from '../lib/offlineQueue';
 import { localDateStr } from '../lib/date';
+import { IconClipboard, IconCheck, IconClock, IconQuestion } from '../components/icons/FrogIcons';
 
 const LATE_THRESHOLD_MIN = 15;
 const BRANCHES = ['Vĩnh Phú 42', 'Quốc lộ 13'];
@@ -265,7 +266,7 @@ function LogRow({ log }) {
       {log.checkin_time && (
         <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Chấm công lúc: {new Date(log.checkin_time).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</div>
       )}
-      {log.reason && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>📝 {log.reason}</div>}
+      {log.reason && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}><IconClipboard size={14} /> {log.reason}</div>}
       {log.photo_url && (
         <a href={log.photo_url} target="_blank" rel="noreferrer">
           <img src={log.photo_url} alt="Minh chứng" style={{ width: 56, height: 56, borderRadius: 'var(--radius-sm)', objectFit: 'cover' }} />
@@ -315,9 +316,9 @@ export default function ShiftsScreen() {
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <Input label="Xem ngày" type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ maxWidth: 200 }} />
         <Button variant="primary" onClick={() => setShowCheckin(true)} disabled={shiftConfigs.length === 0}>
-          {myCheckinToday ? '✓ Đã chấm công' : '⏰ Chấm công'}
+          {myCheckinToday ? <><IconCheck size={16} style={{ verticalAlign: '-3px', marginRight: 4 }} />Đã chấm công</> : <><IconClock size={16} style={{ verticalAlign: '-3px', marginRight: 4 }} />Chấm công</>}
         </Button>
-        <Button variant="warning" onClick={() => setShowLeave(true)} disabled={shiftConfigs.length === 0}>🙋 Xin nghỉ đột xuất</Button>
+        <Button variant="warning" onClick={() => setShowLeave(true)} disabled={shiftConfigs.length === 0} icon={<IconQuestion size={16} />}>Xin nghỉ đột xuất</Button>
       </div>
 
       <Tabs tabs={[{ key: 'all', label: 'Tất cả chi nhánh' }, ...BRANCHES.map((b) => ({ key: b, label: b }))]} active={branchFilter} onChange={setBranchFilter} />

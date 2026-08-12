@@ -7,6 +7,7 @@ import { Input } from '../components/forms/Input';
 import { fetchOrders, fetchWarehouseStock } from '../lib/queries';
 import { useAuth } from '../lib/AuthContext';
 import { localDateStr } from '../lib/date';
+import { IconOrders, IconKitchen, IconTruck, IconCheckCircle, IconMoney, IconReceipt, IconBan, IconWarning } from '../components/icons/FrogIcons';
 
 const RANGE_DAYS = { today: 0, week: 7, month: 30 };
 const STATUS_LABELS = { moi: 'Mới', dang_lam: 'Đang làm', cho_giao: 'Chờ giao', dang_giao: 'Đang giao', hoan_thanh: 'Hoàn thành', huy: 'Đã huỷ' };
@@ -25,10 +26,10 @@ function rangeFor(preset, customFrom, customTo) {
 }
 
 const OP_FILTERS = [
-  { key: 'all', label: 'Tất cả', icon: '📦', match: () => true },
-  { key: 'processing', label: 'Đang xử lý', icon: '🔥', match: (o) => o.status === 'moi' || o.status === 'dang_lam' },
-  { key: 'shipping', label: 'Đang giao', icon: '🚚', match: (o) => o.status === 'cho_giao' || o.status === 'dang_giao' },
-  { key: 'done', label: 'Hoàn thành', icon: '✅', match: (o) => o.status === 'hoan_thanh' },
+  { key: 'all', label: 'Tất cả', icon: <IconOrders size={18} />, match: () => true },
+  { key: 'processing', label: 'Đang xử lý', icon: <IconKitchen size={18} />, match: (o) => o.status === 'moi' || o.status === 'dang_lam' },
+  { key: 'shipping', label: 'Đang giao', icon: <IconTruck size={18} />, match: (o) => o.status === 'cho_giao' || o.status === 'dang_giao' },
+  { key: 'done', label: 'Hoàn thành', icon: <IconCheckCircle size={18} />, match: (o) => o.status === 'hoan_thanh' },
 ];
 
 function OrderRow({ order }) {
@@ -73,7 +74,7 @@ export default function DashboardScreen() {
 
   const expiringStock = stock.filter((s) => s.status === 'soon' || s.status === 'expired');
 
-  const opFilters = [...OP_FILTERS, { key: 'expiring', label: 'Sắp hết hạn', icon: '⚠', match: () => false }];
+  const opFilters = [...OP_FILTERS, { key: 'expiring', label: 'Sắp hết hạn', icon: <IconWarning size={18} />, match: () => false }];
   const opCounts = opFilters.map((f) => ({ ...f, count: f.key === 'expiring' ? expiringStock.length : inRange.filter(f.match).length }));
 
   const filteredOrders = activeFilter === 'expiring' ? [] : inRange.filter(opFilters.find((f) => f.key === activeFilter)?.match || (() => true));
@@ -103,10 +104,10 @@ export default function DashboardScreen() {
         <React.Fragment>
           {isOwner && (
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              <StatCard label="Doanh thu" value={`${revenue.toLocaleString('vi-VN')}đ`} tone="success" icon="💰" style={{ flex: 1, minWidth: 180 }} />
-              <StatCard label="Đơn hàng" value={String(inRange.length)} tone="neutral" icon="📦" style={{ flex: 1, minWidth: 180 }} />
-              <StatCard label="Giá trị TB / đơn" value={`${avgOrder.toLocaleString('vi-VN')}đ`} tone="neutral" icon="🧾" style={{ flex: 1, minWidth: 180 }} />
-              <StatCard label="Tỷ lệ hủy" value={`${cancelRate}%`} tone={cancelRate > 10 ? 'danger' : 'neutral'} icon="⛔" style={{ flex: 1, minWidth: 180 }} />
+              <StatCard label="Doanh thu" value={`${revenue.toLocaleString('vi-VN')}đ`} tone="success" icon={<IconMoney size={18} />} style={{ flex: 1, minWidth: 180 }} />
+              <StatCard label="Đơn hàng" value={String(inRange.length)} tone="neutral" icon={<IconOrders size={18} />} style={{ flex: 1, minWidth: 180 }} />
+              <StatCard label="Giá trị TB / đơn" value={`${avgOrder.toLocaleString('vi-VN')}đ`} tone="neutral" icon={<IconReceipt size={18} />} style={{ flex: 1, minWidth: 180 }} />
+              <StatCard label="Tỷ lệ hủy" value={`${cancelRate}%`} tone={cancelRate > 10 ? 'danger' : 'neutral'} icon={<IconBan size={18} />} style={{ flex: 1, minWidth: 180 }} />
             </div>
           )}
 

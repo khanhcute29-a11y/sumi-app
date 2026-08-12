@@ -1,5 +1,6 @@
 import React from 'react';
 import { Badge } from './feedback/Badge';
+import { IconPaperclip, IconHome, IconMapPin, IconClock, IconPhone, IconClipboard, IconKitchen, IconTruck } from './icons/FrogIcons';
 
 const STATUS_LABELS = {
   moi: 'Mới', dang_lam: 'Đang làm', cho_giao: 'Chờ giao', dang_giao: 'Đang giao',
@@ -53,7 +54,7 @@ export function OrderDetailModal({ order, onClose }) {
 
           {items.some((it) => it.ref_photo_url) && (
             <div>
-              <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', marginBottom: 6 }}>📎 Ảnh mẫu khách gửi</div>
+              <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}><IconPaperclip size={14} /> Ảnh mẫu khách gửi</div>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 {items.filter((it) => it.ref_photo_url).map((it) => <Thumb key={it.id} url={it.ref_photo_url} label={it.name} />)}
               </div>
@@ -62,12 +63,12 @@ export function OrderDetailModal({ order, onClose }) {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>
-              {order.delivery_method === 'lay_tai_xuong' ? '🏠 Khách tự đến lấy tại xưởng' : `📍 ${order.address || '—'}`}
+              {order.delivery_method === 'lay_tai_xuong' ? <><IconHome size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Khách tự đến lấy tại xưởng</> : <><IconMapPin size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />{order.address || '—'}</>}
             </div>
             <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>
-              🕒 {order.delivery_date || '—'} {order.delivery_time || ''}
+              <IconClock size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />{order.delivery_date || '—'} {order.delivery_time || ''}
             </div>
-            {order.customer?.phone && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>📞 {order.customer.phone}</div>}
+            {order.customer?.phone && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}><IconPhone size={14} /> {order.customer.phone}</div>}
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '10px 12px', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)' }}>
@@ -82,9 +83,9 @@ export function OrderDetailModal({ order, onClose }) {
             )}
           </div>
 
-          {order.note && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>📝 {order.note}</div>}
-          {order.kitchen_staff_name && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>👨‍🍳 Bếp: {order.kitchen_staff_name}</div>}
-          {order.shipper_staff_name && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>🚚 Người giao: {order.shipper_staff_name}</div>}
+          {order.note && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}><IconClipboard size={14} /> {order.note}</div>}
+          {order.kitchen_staff_name && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconKitchen size={14} /> Bếp: {order.kitchen_staff_name}</div>}
+          {order.shipper_staff_name && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconTruck size={14} /> Người giao: {order.shipper_staff_name}</div>}
 
           {(order.kitchen_photo_url || order.pickup_photo_url || order.delivery_photo_url || order.signed_doc_photo_url) && (
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>

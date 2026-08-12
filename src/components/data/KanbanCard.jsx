@@ -1,4 +1,5 @@
 import React from 'react';
+import { IconCheck, IconWarning } from '../icons/FrogIcons';
 
 export function KanbanCard({ customer, phone, item, note, channel, badges = [], thumbnail, total, deliveryTime, paid, onClick, style }) {
   return (
@@ -27,8 +28,8 @@ export function KanbanCard({ customer, phone, item, note, channel, badges = [], 
       )}
       {badges.length > 0 && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{badges}</div>}
       {paid != null && (
-        <div style={{ font: 'var(--text-caption)', color: paid ? 'var(--status-success)' : 'var(--status-danger)' }}>
-          {paid ? '✓ Đã thu đủ' : '⚠ Chưa thu đủ'}
+        <div style={{ font: 'var(--text-caption)', color: paid ? 'var(--status-success)' : 'var(--status-danger)', display: 'flex', alignItems: 'center', gap: 4 }}>
+          {paid ? <IconCheck size={13} /> : <IconWarning size={13} />} {paid ? 'Đã thu đủ' : 'Chưa thu đủ'}
         </div>
       )}
     </button>

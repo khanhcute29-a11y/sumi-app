@@ -1,10 +1,11 @@
 import React from 'react';
+import { IconCheck, IconBan, IconWarning, IconQuestion } from '../icons/FrogIcons';
 
 const tones = {
-  success: { bg: '#2f6b2f', icon: '✓' },
-  danger: { bg: '#a13c38', icon: '⛔' },
-  warning: { bg: '#95661a', icon: '!' },
-  info: { bg: 'var(--brand-brown)', icon: 'ⓘ' },
+  success: { bg: '#2f6b2f', Icon: IconCheck },
+  danger: { bg: '#a13c38', Icon: IconBan },
+  warning: { bg: '#95661a', Icon: IconWarning },
+  info: { bg: 'var(--brand-brown)', Icon: IconQuestion },
 };
 
 export function Toast({ tone = 'info', title, message, onClose, style }) {
@@ -14,7 +15,7 @@ export function Toast({ tone = 'info', title, message, onClose, style }) {
       display: 'flex', gap: 10, alignItems: 'flex-start', background: 'var(--neutral-800)', color: '#fff',
       padding: '12px 14px', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-lg)', maxWidth: 340, ...style,
     }}>
-      <span style={{ width: 22, height: 22, borderRadius: '50%', background: t.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, flexShrink: 0 }}>{t.icon}</span>
+      <span style={{ width: 22, height: 22, borderRadius: '50%', background: t.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#fff' }}><t.Icon size={13} /></span>
       <div style={{ flex: 1 }}>
         {title && <div style={{ font: 'var(--text-label)' }}>{title}</div>}
         {message && <div style={{ font: 'var(--text-body-sm)', color: 'var(--neutral-200)', marginTop: 2 }}>{message}</div>}

@@ -10,6 +10,7 @@ import {
   addProductVariant, deleteProductVariant,
   fetchProductRecipes, addRecipeItem, deleteRecipeItem, fetchWarehouseStock,
 } from '../lib/queries';
+import { IconTrash, IconRuler } from '../components/icons/FrogIcons';
 
 const CATEGORIES = [
   { value: 'banh_kem', label: 'Bánh Kem' },
@@ -198,12 +199,12 @@ function ProductRow({ product, ingredients, onChanged }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <Switch checked={product.active} onChange={(v) => { updateProduct(product.id, { active: v }); onChanged(); }} />
           <button onClick={async () => { if (confirm(`Xóa "${product.name}" khỏi danh mục?`)) { await deleteProduct(product.id); onChanged(); } }}
-            style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16 }}>🗑️</button>
+            style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16, display: 'inline-flex' }}><IconTrash size={16} /></button>
         </div>
       </div>
       {product.category === 'banh_kem' && <VariantRow product={product} onChanged={onChanged} />}
       <Button variant="ghost" size="sm" onClick={() => setShowRecipe((v) => !v)} style={{ alignSelf: 'flex-start' }}>
-        {showRecipe ? 'Ẩn công thức & giá vốn' : '📐 Công thức & giá vốn'}
+        {showRecipe ? 'Ẩn công thức & giá vốn' : <><IconRuler size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Công thức & giá vốn</>}
       </Button>
       {showRecipe && <RecipeEditor product={product} ingredients={ingredients} onCostChange={setCost} />}
     </Card>

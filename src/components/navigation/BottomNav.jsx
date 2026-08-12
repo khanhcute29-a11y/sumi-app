@@ -1,5 +1,5 @@
 import React from 'react';
-import { IconOrders, IconKitchen, IconWarehouse, IconCashbook } from '../icons/FrogIcons';
+import { IconOrders, IconKitchen, IconWarehouse, IconCashbook, IconMenu } from '../icons/FrogIcons';
 
 const core = [
   { key: 'orders', label: 'Đơn Hàng', Icon: IconOrders },
@@ -30,7 +30,7 @@ export function BottomNav({ active = 'orders', onSelect, onMore, style }) {
         flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
         border: 'none', background: 'none', cursor: 'pointer', font: 'var(--text-caption)', color: 'var(--text-muted)',
       }}>
-        <span style={{ fontSize: 24 }} aria-hidden="true">☰</span>Thêm
+        <IconMenu size={24} />Thêm
       </button>
     </nav>
   );

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { uploadPhoto } from '../lib/queries';
 import { toWebSafeImage } from '../lib/imageConvert';
+import { IconPaperclip } from './icons/FrogIcons';
 
 export function PhotoField({ url, onChange, label = 'Ảnh (nếu có)', prefix = 'misc' }) {
   const [uploading, setUploading] = useState(false);
@@ -38,7 +39,7 @@ export function PhotoField({ url, onChange, label = 'Ảnh (nếu có)', prefix 
         <label htmlFor={inputId} style={{ cursor: 'pointer' }}>
           <input id={inputId} type="file" accept="image/*" onChange={handleFile} style={{ display: 'none' }} disabled={uploading} />
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', font: 'var(--text-caption)', color: 'var(--text-secondary)' }}>
-            📎 {uploading ? 'Đang tải...' : url ? 'Đổi ảnh' : 'Thêm ảnh'}
+            <IconPaperclip size={14} /> {uploading ? 'Đang tải...' : url ? 'Đổi ảnh' : 'Thêm ảnh'}
           </span>
         </label>
       </div>
