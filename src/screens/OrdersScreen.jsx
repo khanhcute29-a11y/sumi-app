@@ -24,6 +24,18 @@ const STATUS_LABELS = {
 
 const NOTE_ROLE_LABELS = { owner: 'Chủ sở hữu', cashier: 'Thu ngân', kitchen: 'Bếp', shipper: 'Vận chuyển' };
 
+// Chỉ cảnh báo "Chưa thu đủ" khi bất thường (đã giao mà chưa thu, hoặc quá hạn giao chưa thu) —
+// đơn COD bình thường chưa giao thì chưa thu tiền là chuyện đương nhiên, không cần cảnh báo.
+function getPaidBadgeState(order) {
+  const total = Number(order.total || 0);
+  if (total <= 0) return null;
+  const paid = Number(order.paid_amount || 0) >= total;
+  if (paid) return true;
+  if (order.status === 'hoan_thanh') return false;
+  if (order.delivery_date && order.delivery_date < localDateStr()) return false;
+  return null;
+}
+
 function formatDuration(fromIso, toIso) {
   if (!fromIso || !toIso) return null;
   const ms = new Date(toIso).getTime() - new Date(fromIso).getTime();
@@ -33,73 +45,6 @@ function formatDuration(fromIso, toIso) {
   const hours = Math.floor(minutes / 60);
   const rem = minutes % 60;
   return rem ? `${hours} giờ ${rem} phút` : `${hours} giờ`;
-}
-
-function OrderNotesSection({ order, profile }) {
-  const [notes, setNotes] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [draft, setDraft] = useState('');
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchOrderNotes(order.id)
-      .then((data) => { if (!cancelled) setNotes(data); })
-      .catch((err) => { if (!cancelled) setError(err.message); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [order.id]);
-
-  const handleSend = async () => {
-    const message = draft.trim();
-    if (!message) return;
-    setSending(true);
-    setError('');
-    try {
-      await addOrderNote({
-        orderId: order.id, orderCode: order.order_code, authorId: profile?.id,
-        authorName: profile?.full_name, authorRole: profile?.role, message,
-      });
-      setNotes((prev) => [...prev, {
-        id: `local-${Date.now()}`, author_name: profile?.full_name, author_role: profile?.role,
-        message, created_at: new Date().toISOString(),
-      }]);
-      setDraft('');
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSending(false);
-    }
-  };
-
-  return (
-    <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>💬 Ghi chú đơn hàng</div>
-      {loading ? (
-        <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Đang tải...</div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 180, overflowY: 'auto' }}>
-          {notes.length === 0 && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Chưa có ghi chú nào.</div>}
-          {notes.map((n) => (
-            <div key={n.id} style={{ background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '6px 10px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, font: 'var(--text-caption)', color: 'var(--text-muted)' }}>
-                <span><b style={{ color: 'var(--text-primary)' }}>{n.author_name || 'Không rõ'}</b> {NOTE_ROLE_LABELS[n.author_role] ? `· ${NOTE_ROLE_LABELS[n.author_role]}` : ''}</span>
-                <span>{new Date(n.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' })}</span>
-              </div>
-              <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>{n.message}</div>
-            </div>
-          ))}
-        </div>
-      )}
-      {error && <div style={{ font: 'var(--text-caption)', color: 'var(--status-danger)' }}>{error}</div>}
-      <div style={{ display: 'flex', gap: 6 }}>
-        <Input placeholder="Viết ghi chú cho đơn này..." value={draft} onChange={(e) => setDraft(e.target.value)} style={{ flex: 1 }} />
-        <Button variant="primary" size="sm" onClick={handleSend} disabled={sending || !draft.trim()}>{sending ? '...' : 'Gửi'}</Button>
-      </div>
-      <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>🔔 Mọi người bật thông báo đẩy sẽ nhận được khi có ghi chú mới.</div>
-    </div>
-  );
 }
 
 function SearchResultRow({ o, onOpen }) {
@@ -135,7 +80,7 @@ function Column({ title, count, orders, onOpen }) {
           const itemSummary = (o.order_items || []).map((it) => it.name).join(' | ');
           return (
             <KanbanCard key={o.id} customer={o.customer?.name || 'Khách lẻ'} phone={o.customer?.phone} item={itemSummary} channel={o.channel}
-              total={o.total} deliveryTime={o.delivery_time} paid={Number(o.paid_amount || 0) >= Number(o.total || 0)}
+              total={o.total} deliveryTime={o.delivery_time} paid={getPaidBadgeState(o)}
               onClick={() => onOpen(o)}
               badges={[
                 o.customer?.vip && <Badge tone="primary" icon="⭐" key="vip">VIP</Badge>,
