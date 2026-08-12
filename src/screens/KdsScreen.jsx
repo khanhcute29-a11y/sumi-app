@@ -11,18 +11,25 @@ import { enqueue } from '../lib/offlineQueue';
 import { supabase } from '../lib/supabaseClient';
 
 const STATIONS = {
-  nong: { label: 'Bếp Nóng', icon: '🔥', desc: 'Bakery lẻ (bánh không phải bánh kem)' },
-  lanh: { label: 'Bếp Lạnh', icon: '❄️', desc: 'Bánh kem · Trang trí · Lắp ráp' },
-  xuong42: { label: 'Xưởng 42', icon: '🏭', desc: 'Teabreak · Trường học · B2B đặt' },
-  xuong41: { label: 'Xưởng 41', icon: '✨', desc: 'Macaron Sỉ chuyên biệt' },
+  nong: { label: 'Bếp Nóng', icon: '🔥', tag: 'NÓNG', desc: 'Bakery lẻ · Teabreak · Trường học...' },
+  lanh: { label: 'Bếp Lạnh', icon: '❄️', tag: 'LẠNH', desc: 'Kem · Lắp ráp · Trang trí · Bakery...' },
+  xuong42: { label: 'Xưởng 42', icon: '🏭', tag: 'BATCH', desc: 'Trường học · Teabreak · B2B đặt...' },
+  xuong41: { label: 'Xưởng 41', icon: '✨', tag: 'MACARON', desc: 'Macaron chuyên biệt · Thùng →...' },
 };
-const STATION_KEYS = ['nong', 'lanh', 'xuong42', 'xuong41'];
+const STATION_KEYS = ['xuong42', 'xuong41', 'nong', 'lanh'];
+const URGENT_MINUTES = 45;
 
 function getStation(order) {
   if (order.channel === 'Macaron Sỉ') return 'xuong41';
   if (order.channel === 'Teabreak') return 'xuong42';
   const hasKem = (order.order_items || []).some((it) => it.category === 'banh_kem');
   return hasKem ? 'lanh' : 'nong';
+}
+
+function isUrgent(order) {
+  if (order.status !== 'moi' && order.status !== 'dang_lam') return false;
+  const minutes = (Date.now() - new Date(order.created_at).getTime()) / 60000;
+  return minutes >= URGENT_MINUTES;
 }
 
 function ElapsedBadge({ since }) {
@@ -81,129 +88,152 @@ function QuickAskButton({ orderId, orderCode }) {
   );
 }
 
-function OrderTicket({ order, onAccept, onReady, canAct }) {
+const STATUS_LABELS = { moi: 'Chờ nhận', dang_lam: 'Đang làm', cho_giao: 'Hoàn thành', dang_giao: 'Đang giao', hoan_thanh: 'Đã giao' };
+const STATUS_TONES = { moi: 'neutral', dang_lam: 'warning', cho_giao: 'success', dang_giao: 'info', hoan_thanh: 'success' };
+
+function CompactOrderRow({ order, onAccept, onReady, canAct }) {
+  const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [showIncident, setShowIncident] = useState(false);
-  const [showDetail, setShowDetail] = useState(false);
+  const [showFullDetail, setShowFullDetail] = useState(false);
+
   const itemLine = (it) => {
     const details = [it.size && `Size ${it.size}`, it.cot && `Cốt ${it.cot}`, it.vi && `Vị ${it.vi}`].filter(Boolean).join(' · ');
     return `${it.name} x${it.qty}${details ? ` (${details})` : ''}`;
   };
   const itemSummary = (order.order_items || []).map(itemLine).join(', ') || 'Không có sản phẩm';
   const refPhotos = (order.order_items || []).filter((it) => it.ref_photo_url);
+  const urgent = isUrgent(order);
 
   const handleAccept = async () => {
     setBusy(true);
-    try {
-      await onAccept(order);
-    } finally {
-      setBusy(false);
-    }
+    try { await onAccept(order); } finally { setBusy(false); }
   };
-
   const handleReadyWithPhoto = async (blob) => {
     setShowCamera(false);
     setBusy(true);
     try {
       const photoUrl = await uploadPhoto(blob, 'kitchen');
       await onReady(order, photoUrl);
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   };
-
   const handleReadySkipPhoto = async () => {
     setBusy(true);
-    try {
-      await onReady(order, null);
-    } finally {
-      setBusy(false);
-    }
+    try { await onReady(order, null); } finally { setBusy(false); }
   };
 
   return (
-    <div onClick={() => setShowDetail(true)} style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', padding: 14, display: 'flex', flexDirection: 'column', gap: 6, cursor: 'pointer' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-        <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>{order.customer?.name || 'Khách lẻ'}</div>
-        {order.order_code && <Badge tone="neutral">{order.order_code}</Badge>}
-      </div>
-      {showDetail && <OrderDetailModal order={order} onClose={() => setShowDetail(false)} />}
-      <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>{itemSummary}</div>
-      {refPhotos.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }} onClick={(e) => e.stopPropagation()}>
-          <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>📎 Ảnh mẫu khách gửi:</div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {refPhotos.map((it) => (
-              <a key={it.id} href={it.ref_photo_url} target="_blank" rel="noreferrer">
-                <img src={it.ref_photo_url} alt={it.name} style={{ width: 48, height: 48, borderRadius: 'var(--radius-sm)', objectFit: 'cover' }} />
-              </a>
-            ))}
+    <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px',
+          border: 'none', background: urgent ? 'var(--status-danger-soft)' : 'transparent', cursor: 'pointer', textAlign: 'left',
+        }}
+      >
+        <span style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>▸</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>{order.customer?.name || 'Khách lẻ'}</span>
+            {order.order_code && <span style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>{order.order_code}</span>}
+            {urgent && <Badge tone="danger">🚨 Khẩn cấp</Badge>}
           </div>
+          <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{itemSummary}</div>
+        </div>
+        <Badge tone={STATUS_TONES[order.status] || 'neutral'}>{STATUS_LABELS[order.status] || order.status}</Badge>
+      </button>
+
+      {expanded && (
+        <div style={{ padding: '0 14px 14px', display: 'flex', flexDirection: 'column', gap: 10, borderTop: '1px solid var(--border-subtle)' }}>
+          <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', marginTop: 10 }}>{itemSummary}</div>
+          {refPhotos.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>📎 Ảnh mẫu khách gửi:</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {refPhotos.map((it) => (
+                  <a key={it.id} href={it.ref_photo_url} target="_blank" rel="noreferrer">
+                    <img src={it.ref_photo_url} alt={it.name} style={{ width: 48, height: 48, borderRadius: 'var(--radius-sm)', objectFit: 'cover' }} />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+          {order.note && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '6px 8px' }}>📝 {order.note}</div>}
+          {order.kitchen_staff_name && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>👨‍🍳 Bếp: {order.kitchen_staff_name}</div>}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {order.status === 'moi' && <Button variant="primary" size="sm" onClick={handleAccept} disabled={busy || !canAct}>{busy ? 'Đang xử lý...' : 'Nhận đơn'}</Button>}
+            {order.status === 'dang_lam' && (
+              <React.Fragment>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <ElapsedBadge since={order.created_at} />
+                </div>
+                <Button variant="secondary" size="sm" icon="📷" onClick={() => setShowCamera(true)} disabled={busy || !canAct}>{busy ? 'Đang xử lý...' : 'Chụp ảnh & Sẵn sàng giao'}</Button>
+                {navigator.onLine === false && (
+                  <Button variant="ghost" size="sm" onClick={handleReadySkipPhoto} disabled={busy || !canAct}>Mất mạng — bỏ qua ảnh, chuyển giao luôn</Button>
+                )}
+              </React.Fragment>
+            )}
+            {!canAct && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Chỉ Bếp hoặc Chủ sở hữu mới thao tác được ở đây.</div>}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <QuickAskButton orderId={order.id} orderCode={order.order_code} />
+              <ActionChip icon="⚠" label="Báo sự cố" tone="danger" onClick={() => setShowIncident(true)} />
+              <ActionChip icon="🔍" label="Xem đầy đủ" tone="neutral" onClick={() => setShowFullDetail(true)} />
+            </div>
+          </div>
+
+          {showCamera && <CameraCapture onClose={() => setShowCamera(false)} onCapture={handleReadyWithPhoto} />}
+          {showIncident && (
+            <IncidentReportModal
+              orderId={order.id}
+              orderCode={order.order_code}
+              onClose={() => setShowIncident(false)}
+              onSent={() => setShowIncident(false)}
+            />
+          )}
+          {showFullDetail && <OrderDetailModal order={order} onClose={() => setShowFullDetail(false)} />}
         </div>
       )}
-      {order.note && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '6px 8px' }}>📝 {order.note}</div>}
-      {order.kitchen_staff_name && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>👨‍🍳 Bếp: {order.kitchen_staff_name}</div>}
-      <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {order.status === 'moi' && <Button variant="primary" size="sm" onClick={handleAccept} disabled={busy || !canAct}>{busy ? 'Đang xử lý...' : 'Nhận đơn'}</Button>}
-        {order.status === 'dang_lam' && (
-          <React.Fragment>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              <Badge tone="warning">Đang làm</Badge>
-              <ElapsedBadge since={order.created_at} />
-            </div>
-            <Button variant="secondary" size="sm" icon="📷" onClick={() => setShowCamera(true)} disabled={busy || !canAct}>{busy ? 'Đang xử lý...' : 'Chụp ảnh & Sẵn sàng giao'}</Button>
-            {navigator.onLine === false && (
-              <Button variant="ghost" size="sm" onClick={handleReadySkipPhoto} disabled={busy || !canAct}>Mất mạng — bỏ qua ảnh, chuyển giao luôn</Button>
-            )}
-          </React.Fragment>
-        )}
-        {!canAct && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Chỉ Bếp hoặc Chủ sở hữu mới thao tác được ở đây.</div>}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <QuickAskButton orderId={order.id} orderCode={order.order_code} />
-          <ActionChip icon="⚠" label="Báo sự cố" tone="danger" onClick={() => setShowIncident(true)} />
-        </div>
-        {showCamera && <CameraCapture onClose={() => setShowCamera(false)} onCapture={handleReadyWithPhoto} />}
-        {showIncident && (
-          <IncidentReportModal
-            orderId={order.id}
-            orderCode={order.order_code}
-            onClose={() => setShowIncident(false)}
-            onSent={() => setShowIncident(false)}
-          />
-        )}
-      </div>
     </div>
   );
 }
 
-function StationSummaryCard({ stationKey, orders, active, onClick }) {
+function StationOverviewCard({ stationKey, orders, active, onClick }) {
   const meta = STATIONS[stationKey];
-  const moi = orders.filter((o) => o.status === 'moi').length;
-  const dangLam = orders.filter((o) => o.status === 'dang_lam').length;
+  const urgent = orders.filter(isUrgent).length;
+  const waiting = orders.filter((o) => o.status === 'moi').length;
+  const completed = orders.filter((o) => o.status === 'cho_giao').length;
   return (
     <button onClick={onClick} style={{
       textAlign: 'left', border: active ? '2px solid var(--action-primary)' : '1px solid var(--border-subtle)',
-      background: 'var(--surface-card)', borderRadius: 'var(--radius-md)', padding: 14,
-      display: 'flex', flexDirection: 'column', gap: 8, cursor: 'pointer',
+      background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', padding: 16,
+      display: 'flex', flexDirection: 'column', gap: 10, cursor: 'pointer',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 20 }}>{meta.icon}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: 22 }}>{meta.icon}</span>
         <span style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>{meta.label}</span>
+        <Badge tone="neutral">{meta.tag}</Badge>
       </div>
       <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>{meta.desc}</div>
-      <div style={{ display: 'flex', gap: 14 }}>
-        <div>
-          <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>{moi}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: urgent > 0 ? '1fr 1fr 1fr' : '1fr 1fr 1fr', gap: 8 }}>
+        {urgent > 0 && (
+          <div style={{ background: 'var(--status-danger)', color: '#fff', borderRadius: 'var(--radius-sm)', padding: '8px 10px', textAlign: 'center' }}>
+            <div style={{ font: 'var(--text-caption)' }}>🚨 Khẩn cấp</div>
+            <div style={{ font: 'var(--text-title)' }}>{urgent}</div>
+          </div>
+        )}
+        <div style={{ textAlign: 'center' }}>
           <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Đang chờ</div>
+          <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>{waiting}</div>
         </div>
-        <div>
-          <div style={{ font: 'var(--text-title)', color: 'var(--status-warning)' }}>{dangLam}</div>
-          <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Đang làm</div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Hoàn thành</div>
+          <div style={{ font: 'var(--text-title)', color: 'var(--status-success)' }}>{completed}</div>
         </div>
-        <div>
-          <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>{orders.length}</div>
+        <div style={{ textAlign: 'center' }}>
           <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Tổng</div>
+          <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>{orders.length}</div>
         </div>
       </div>
     </button>
@@ -212,26 +242,19 @@ function StationSummaryCard({ stationKey, orders, active, onClick }) {
 
 export default function KdsScreen({ initialStation }) {
   const { profile } = useAuth();
-  const canAct = profile?.role === 'kitchen' || profile?.role === 'owner';
+  const canAct = profile?.role === 'kitchen' || profile?.role === 'bakery' || profile?.role === 'owner' || profile?.role === 'admin';
   const [activeStation, setActiveStation] = useState(initialStation || 'all');
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   useEffect(() => {
     if (initialStation) setActiveStation(initialStation);
   }, [initialStation]);
 
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
-
   const load = () => {
     setLoading(true);
-    fetchOrders({ statuses: ['moi', 'dang_lam'] })
+    fetchOrders({ statuses: ['moi', 'dang_lam', 'cho_giao'] })
       .then((data) => { setOrders(data); setError(''); })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -282,56 +305,55 @@ export default function KdsScreen({ initialStation }) {
     return acc;
   }, {});
 
-  const stationsToShow = isMobile ? STATION_KEYS : (activeStation === 'all' ? STATION_KEYS : [activeStation]);
-  const visibleOrders = activeStation === 'all' ? [...orders].sort(byDeliveryTime) : byStation[activeStation] || [];
+  const activeOrders = orders.filter((o) => o.status !== 'cho_giao');
+  const visibleOrders = activeStation === 'all'
+    ? [...activeOrders].sort(byDeliveryTime)
+    : (byStation[activeStation] || []).filter((o) => o.status !== 'cho_giao');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div>
-        <div style={{ font: 'var(--text-display-md)', color: 'var(--text-primary)' }}>Bếp — Xưởng</div>
-        <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>4 luồng độc lập theo bộ phận</div>
+        <div style={{ font: 'var(--text-display-md)', color: 'var(--text-primary)' }}>Màn Hình Bếp (KDS)</div>
+        <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>4 luồng độc lập — mỗi luồng theo bộ phận tương ứng</div>
       </div>
+
+      {/* Dropdown chọn nhanh luồng bếp — không cần lướt xuống */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <label style={{ font: 'var(--text-label)', color: 'var(--text-secondary)' }}>Chọn luồng bếp:</label>
+        <select
+          value={activeStation}
+          onChange={(e) => setActiveStation(e.target.value)}
+          style={{
+            padding: '10px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)',
+            background: 'var(--surface-card)', color: 'var(--text-primary)', font: 'var(--text-body)', cursor: 'pointer', minWidth: 220,
+          }}
+        >
+          <option value="all">📋 Tất cả ({orders.length} đơn)</option>
+          {STATION_KEYS.map((key) => (
+            <option key={key} value={key}>{STATIONS[key].icon} {STATIONS[key].label} ({byStation[key].length} đơn)</option>
+          ))}
+        </select>
+      </div>
+
       {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>Lỗi tải đơn: {error}</div>}
 
-      {!isMobile && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12 }}>
-          <button onClick={() => setActiveStation('all')} style={{
-            textAlign: 'left', border: activeStation === 'all' ? '2px solid var(--action-primary)' : '1px solid var(--border-subtle)',
-            background: 'var(--surface-card)', borderRadius: 'var(--radius-md)', padding: 14,
-            display: 'flex', flexDirection: 'column', gap: 8, cursor: 'pointer', justifyContent: 'center',
-          }}>
-            <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>📋 Tất cả</div>
-            <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Xem gộp mọi bộ phận</div>
-            <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>{orders.length} đơn</div>
-          </button>
-          {STATION_KEYS.map((key) => (
-            <StationSummaryCard key={key} stationKey={key} orders={byStation[key]} active={activeStation === key} onClick={() => setActiveStation(key)} />
-          ))}
-        </div>
-      )}
+      {/* Cards tổng quan từng luồng bếp */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 12 }}>
+        {STATION_KEYS.map((key) => (
+          <StationOverviewCard key={key} stationKey={key} orders={byStation[key]} active={activeStation === key} onClick={() => setActiveStation(key)} />
+        ))}
+      </div>
 
+      {/* Danh sách đơn hàng dạng thu gọn — click để xem chi tiết */}
       {loading ? (
         <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Đang tải...</div>
-      ) : isMobile ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {stationsToShow.map((key) => (
-            <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>{STATIONS[key].icon} {STATIONS[key].label} <Badge tone="neutral">{byStation[key].length}</Badge></div>
-              {byStation[key].length === 0 ? (
-                <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Không có đơn.</div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {byStation[key].map((o) => <OrderTicket key={o.id} order={o} onAccept={handleAccept} onReady={handleReady} canAct={canAct} />)}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
       ) : visibleOrders.length === 0 ? (
         <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Không có đơn nào đang chờ xử lý.</div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 12 }}>
-          {visibleOrders.map((o) => <OrderTicket key={o.id} order={o} onAccept={handleAccept} onReady={handleReady} canAct={canAct} />)}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {visibleOrders.map((o) => (
+            <CompactOrderRow key={o.id} order={o} onAccept={handleAccept} onReady={handleReady} canAct={canAct} />
+          ))}
         </div>
       )}
     </div>

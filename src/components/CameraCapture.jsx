@@ -17,6 +17,12 @@ export function CameraCapture({ onCapture, onClose }) {
     return () => streamRef.current?.getTracks().forEach((t) => t.stop());
   }, []);
 
+  useEffect(() => {
+    if (!captured && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+    }
+  }, [captured]);
+
   const handleSnap = () => {
     const video = videoRef.current;
     const canvas = document.createElement('canvas');
