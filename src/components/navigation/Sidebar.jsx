@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   IconDashboard, IconOrders, IconKitchen, IconWarehouse, IconCashbook,
-  IconShipping, IconProducts, IconShifts, IconReports, IconCustomers,
+  IconShipping, IconProducts, IconShifts, IconReports, IconCustomers, IconStaff,
   IconSettings, IconStationHot, IconStationCold, IconStationWorkshop, IconStationSparkle,
 } from '../icons/FrogIcons';
 
@@ -16,6 +16,7 @@ const items = [
   { key: 'shifts', label: 'Ca Làm Việc', Icon: IconShifts },
   { key: 'reports', label: 'Báo Cáo', Icon: IconReports },
   { key: 'crm', label: 'Khách Hàng', Icon: IconCustomers },
+  { key: 'staff', label: 'Nhân Viên', Icon: IconStaff },
   { key: 'settings', label: 'Thiết Lập', Icon: IconSettings },
 ];
 
