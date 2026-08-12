@@ -1,0 +1,83 @@
+:root{
+/* base brand colors (from brand brief) */
+--brand-cream:#FAF6F0;
+--brand-white:#FFFFFF;
+--brand-caramel:#C88A4B;
+--brand-brown:#4A3225;
+--brand-red:#D9534F;
+--brand-green:#5CB85C;
+--brand-amber:#F0AD4E;
+--brand-info:#5B84A6;
+
+/* primary (caramel) scale */
+--primary-50:#FBF3E9;
+--primary-100:#F4E1C8;
+--primary-200:#E9C79A;
+--primary-300:#DDAC6E;
+--primary-400:#D29A57;
+--primary-500:#C88A4B;
+--primary-600:#AD7440;
+--primary-700:#8C5D34;
+--primary-800:#6B4728;
+--primary-900:#4A331D;
+
+/* neutral (brown-tinted) scale, warm not gray */
+--neutral-0:#FFFFFF;
+--neutral-50:#FAF6F0;
+--neutral-100:#F3EAE0;
+--neutral-200:#E8DACB;
+--neutral-300:#D8C4AE;
+--neutral-400:#B39C86;
+--neutral-500:#8C7362;
+--neutral-600:#6B5647;
+--neutral-700:#4A3225;
+--neutral-800:#38251B;
+--neutral-900:#241811;
+
+/* semantic surfaces */
+--surface-app:var(--brand-cream);
+--surface-card:var(--brand-white);
+--surface-sunken:var(--neutral-100);
+--surface-overlay:rgba(36,24,17,.48);
+--surface-primary-soft:var(--primary-50);
+
+/* semantic text */
+--text-primary:var(--neutral-700);
+--text-secondary:#7A6350;
+--text-muted:#A38F7C;
+--text-inverse:var(--brand-white);
+--text-on-primary:#FFFFFF;
+--text-link:var(--primary-700);
+--text-link-hover:var(--primary-800);
+
+/* semantic actions */
+--action-primary:var(--brand-caramel);
+--action-primary-hover:var(--primary-600);
+--action-primary-active:var(--primary-700);
+--action-primary-disabled:var(--neutral-200);
+
+/* semantic status */
+--status-success:var(--brand-green);
+--status-success-soft:#E7F5E7;
+--status-danger:var(--brand-red);
+--status-danger-soft:#FBEAE9;
+--status-warning:var(--brand-amber);
+--status-warning-soft:#FDF1DF;
+--status-info:var(--brand-info);
+--status-info-soft:#E9EFF3;
+
+/* fifo freshness (kho) */
+--fifo-fresh:var(--brand-green);
+--fifo-fresh-soft:#E7F5E7;
+--fifo-soon:var(--brand-amber);
+--fifo-soon-soft:#FDF1DF;
+--fifo-expired:var(--brand-red);
+--fifo-expired-soft:#FBEAE9;
+
+/* borders */
+--border-subtle:var(--neutral-200);
+--border-default:var(--neutral-300);
+--border-strong:var(--neutral-500);
+--border-primary:var(--brand-caramel);
+--focus-ring:#C88A4B66;
+}

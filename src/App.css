@@ -1,0 +1,17 @@
+* { box-sizing: border-box; margin: 0 }
+body { background: var(--surface-app); font-family: var(--font-body) }
+
+.sb-shell { container-type: inline-size; container-name: sb-shell; height: 100dvh; display: flex; flex-direction: column; overflow: hidden }
+.sb-body { flex: 1; display: flex; min-height: 0 }
+.sb-content { flex: 1; overflow-y: auto; padding: 24px }
+
+@container sb-shell (max-width: 860px) {
+  .sb-sidebar { display: none !important }
+  .sb-bottomnav { display: flex !important }
+  .sb-content { padding-bottom: 80px }
+}
+@container sb-shell (min-width: 861px) {
+  .sb-sidebar { display: block !important }
+  .sb-bottomnav { display: none !important }
+  .sb-more-sheet { display: none !important }
+}

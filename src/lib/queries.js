@@ -1,0 +1,518 @@
+import { supabase } from './supabaseClient';
+
+// ---- Profiles (tài khoản & phân quyền nhân viên) ----
+
+export async function fetchMyProfile() {
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  if (userErr) throw userErr;
+  const user = userData.user;
+  const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+  if (error) throw error;
+  return { ...data, email: user.email, phone: user.phone };
+}
+
+export async function fetchAllProfiles() {
+  const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
+export async function fetchAuditLog({ limit = 200, from, to } = {}) {
+  let q = supabase.from('audit_log').select('*').order('created_at', { ascending: false }).limit(limit);
+  if (from) q = q.gte('created_at', `${from}T00:00:00+07:00`);
+  if (to) q = q.lte('created_at', `${to}T23:59:59.999+07:00`);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data;
+}
+
+export async function updateMyProfile(fields) {
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  if (userErr) throw userErr;
+  const { error } = await supabase.from('profiles').update(fields).eq('id', userData.user.id);
+  if (error) throw error;
+}
+
+export async function updateProfileRole(id, role) {
+  const { error } = await supabase.from('profiles').update({ role }).eq('id', id);
+  if (error) throw error;
+}
+
+export async function approveStaff(id, role) {
+  const { error } = await supabase.from('profiles').update({ role, approved: true }).eq('id', id);
+  if (error) throw error;
+}
+
+// ---- Customers ----
+
+export async function fetchCustomers() {
+  const { data, error } = await supabase.from('customers').select('*').order('created_at', { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+export async function findOrCreateCustomer({ name, phone, channel }) {
+  if (phone) {
+    const { data: existing, error: findErr } = await supabase.from('customers').select('*').eq('phone', phone).maybeSingle();
+    if (findErr) throw findErr;
+    if (existing) return existing;
+  }
+  const { data, error } = await supabase.from('customers').insert({ name, phone, channel }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+// ---- Products (menu + giá) ----
+
+export async function fetchProducts({ activeOnly } = {}) {
+  let q = supabase.from('products').select('*, product_variants(*)').order('created_at', { ascending: true });
+  if (activeOnly) q = q.eq('active', true);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data;
+}
+
+export async function createProduct({ name, category, unit, price }) {
+  const { data, error } = await supabase.from('products').insert({ name, category, unit, price: price || 0 }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateProduct(id, fields) {
+  const { error } = await supabase.from('products').update(fields).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteProduct(id) {
+  const { error } = await supabase.from('products').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function addProductVariant(productId, { label, price }) {
+  const { error } = await supabase.from('product_variants').insert({ product_id: productId, label, price: price || 0 });
+  if (error) throw error;
+}
+
+export async function deleteProductVariant(id) {
+  const { error } = await supabase.from('product_variants').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ---- Orders ----
+
+const ORDER_SELECT = '*, customer:customers(id, name, phone, trust_score, vip, locked), order_items(*)';
+
+export async function fetchOrders({ statuses, from, to } = {}) {
+  let q = supabase.from('orders').select(ORDER_SELECT).order('created_at', { ascending: false });
+  if (statuses?.length) q = q.in('status', statuses);
+  if (from) q = q.gte('created_at', `${from}T00:00:00+07:00`);
+  if (to) q = q.lte('created_at', `${to}T23:59:59.999+07:00`);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data;
+}
+
+async function nextOrderCode() {
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+  const { count, error } = await supabase
+    .from('orders')
+    .select('id', { count: 'exact', head: true })
+    .gte('created_at', startOfDay);
+  if (error) throw error;
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const seq = String((count || 0) + 1).padStart(4, '0');
+  return `#${mm}${dd}-${seq}`;
+}
+
+export async function createOrder({ customer, channel, items, total, note, address, deliveryDate, deliveryTime, deposit, paymentMethod, deliveryMethod, shipFee }) {
+  const cust = await findOrCreateCustomer(customer);
+  const orderCode = await nextOrderCode();
+  const { data: order, error } = await supabase
+    .from('orders')
+    .insert({
+      customer_id: cust.id, channel, total: total || 0, note, address,
+      delivery_date: deliveryDate, delivery_time: deliveryTime,
+      delivery_method: deliveryMethod || 'giao_tan_noi', ship_fee: shipFee || 0,
+      order_code: orderCode,
+      deposit: deposit || 0, paid_amount: deposit || 0, payment_method: paymentMethod, status: 'moi',
+    })
+    .select(ORDER_SELECT)
+    .single();
+  if (error) throw error;
+  if (items?.length) {
+    const rows = items.filter((it) => it.name).map((it) => ({
+      order_id: order.id, product_id: it.productId || null, name: it.name, qty: Number(it.qty) || 1,
+      size: it.size || null, cot: it.cot || null, vi: it.vi || null, price: Number(it.price) || 0,
+      ref_photo_url: it.refPhotoUrl || null, category: it.category || null,
+    }));
+    if (rows.length) {
+      const { error: itemsErr } = await supabase.from('order_items').insert(rows);
+      if (itemsErr) throw itemsErr;
+    }
+  }
+  return order;
+}
+
+export async function updateOrderStatus(id, status) {
+  const { error } = await supabase.from('orders').update({ status }).eq('id', id);
+  if (error) throw error;
+}
+
+export async function updateOrder(id, fields) {
+  const { error } = await supabase.from('orders').update(fields).eq('id', id);
+  if (error) throw error;
+}
+
+export async function updateOrderFull(id, { customerName, customerPhone, address, deliveryDate, deliveryTime, deliveryMethod, shipFee, total, deposit, paymentMethod, note, items }) {
+  const { error } = await supabase.from('orders').update({
+    address, delivery_date: deliveryDate, delivery_time: deliveryTime, delivery_method: deliveryMethod || 'giao_tan_noi',
+    ship_fee: shipFee || 0, total: total || 0, deposit: deposit || 0, payment_method: paymentMethod, note,
+  }).eq('id', id);
+  if (error) throw error;
+
+  if (customerName != null) {
+    const { data: order, error: fetchErr } = await supabase.from('orders').select('customer_id').eq('id', id).single();
+    if (fetchErr) throw fetchErr;
+    if (order?.customer_id) {
+      const { error: custErr } = await supabase.from('customers').update({ name: customerName, phone: customerPhone || null }).eq('id', order.customer_id);
+      if (custErr) throw custErr;
+    }
+  }
+
+  if (items) {
+    const { error: delErr } = await supabase.from('order_items').delete().eq('order_id', id);
+    if (delErr) throw delErr;
+    const rows = items.filter((it) => it.name).map((it) => ({
+      order_id: id, product_id: it.productId || null, name: it.name, qty: Number(it.qty) || 1,
+      size: it.size || null, cot: it.cot || null, vi: it.vi || null, price: Number(it.price) || 0,
+      ref_photo_url: it.refPhotoUrl || null, category: it.category || null,
+    }));
+    if (rows.length) {
+      const { error: insErr } = await supabase.from('order_items').insert(rows);
+      if (insErr) throw insErr;
+    }
+  }
+}
+
+export async function cancelOrder(id, { reason, photoUrl, staffName } = {}) {
+  const { error } = await supabase.from('orders').update({
+    status: 'huy', cancel_reason: reason || null, cancel_photo_url: photoUrl || null, cancel_staff_name: staffName || null,
+  }).eq('id', id);
+  if (error) throw error;
+}
+
+export async function fetchIncidentReports({ status, limit = 100 } = {}) {
+  let q = supabase.from('incident_reports').select('*').order('created_at', { ascending: false }).limit(limit);
+  if (status) q = q.eq('status', status);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data;
+}
+
+export async function addIncidentReport({ orderId, orderCode, category, code, label, note, reporterId, reporterName, reporterRole }) {
+  const { error } = await supabase.from('incident_reports').insert({
+    order_id: orderId || null, order_code: orderCode || null, category, code, label, note: note || null,
+    reporter_id: reporterId || null, reporter_name: reporterName || null, reporter_role: reporterRole || null,
+  });
+  if (error) throw error;
+}
+
+export async function resolveIncidentReport(id) {
+  const { error } = await supabase.from('incident_reports').update({ status: 'resolved', resolved_at: new Date().toISOString() }).eq('id', id);
+  if (error) throw error;
+}
+
+export async function fetchOrderNotes(orderId) {
+  const { data, error } = await supabase.from('order_notes').select('*').eq('order_id', orderId).order('created_at', { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
+export async function addOrderNote({ orderId, orderCode, authorId, authorName, authorRole, message }) {
+  const { error } = await supabase.from('order_notes').insert({
+    order_id: orderId, order_code: orderCode || null, author_id: authorId || null,
+    author_name: authorName || null, author_role: authorRole || null, message,
+  });
+  if (error) throw error;
+}
+
+export async function deleteOrder(id, { reason, photoUrl, staffName, snapshot } = {}) {
+  const { error: logErr } = await supabase.from('order_deletion_log').insert({
+    order_code: snapshot?.orderCode || null,
+    customer_name: snapshot?.customerName || null,
+    items_summary: snapshot?.itemsSummary || null,
+    total: snapshot?.total || 0,
+    reason: reason || null,
+    photo_url: photoUrl || null,
+    deleted_by: staffName || null,
+  });
+  if (logErr) throw logErr;
+  const { error: itemsErr } = await supabase.from('order_items').delete().eq('order_id', id);
+  if (itemsErr) throw itemsErr;
+  const { error } = await supabase.from('orders').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function markOrderPaid(id, total) {
+  const { error } = await supabase.from('orders').update({ paid_amount: total }).eq('id', id);
+  if (error) throw error;
+}
+
+// ---- Storage (ảnh chụp: tem/bill kho, ảnh giao hàng) ----
+
+export async function uploadPhoto(blob, pathPrefix) {
+  const contentType = blob.type || 'image/jpeg';
+  const ext = contentType === 'image/png' ? 'png' : 'jpg';
+  const path = `${pathPrefix}/${Date.now()}.${ext}`;
+  const { error } = await supabase.storage.from('uploads').upload(path, blob, { contentType });
+  if (error) throw error;
+  const { data } = supabase.storage.from('uploads').getPublicUrl(path);
+  return data.publicUrl;
+}
+
+// ---- Warehouse ----
+
+export async function fetchWarehouseStock() {
+  const { data, error } = await supabase.from('warehouse_stock').select('*').order('created_at', { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+export async function addWarehouseStock({ name, qtyLabel, unit, qty, costPerUnit, status, expiryDate, photoUrl }) {
+  const { error } = await supabase.from('warehouse_stock').insert({
+    name, qty_label: qtyLabel, unit: unit || 'g', qty: qty || 0, cost_per_unit: costPerUnit || 0,
+    status, expiry_date: expiryDate || null, photo_url: photoUrl || null,
+  });
+  if (error) throw error;
+}
+
+export async function updateWarehouseStock(id, fields) {
+  const { error } = await supabase.from('warehouse_stock').update(fields).eq('id', id);
+  if (error) throw error;
+}
+
+// ---- Công thức sản phẩm (BOM) — tính giá vốn ----
+
+export async function fetchProductRecipes(productId) {
+  const { data, error } = await supabase
+    .from('product_recipes')
+    .select('*, ingredient:warehouse_stock(id, name, unit, cost_per_unit)')
+    .eq('product_id', productId);
+  if (error) throw error;
+  return data;
+}
+
+export async function addRecipeItem({ productId, ingredientId, qtyPerUnit }) {
+  const { error } = await supabase.from('product_recipes').insert({ product_id: productId, ingredient_id: ingredientId, qty_per_unit: qtyPerUnit || 0 });
+  if (error) throw error;
+}
+
+export async function deleteRecipeItem(id) {
+  const { error } = await supabase.from('product_recipes').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ---- Cashbook ----
+
+export async function fetchCashbookEntries({ since } = {}) {
+  let q = supabase.from('cashbook_entries').select('*').order('occurred_at', { ascending: false });
+  if (since) q = q.gte('occurred_at', since);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data;
+}
+
+export async function addCashbookEntry({ type, label, amount }) {
+  const { error } = await supabase.from('cashbook_entries').insert({ type, label, amount });
+  if (error) throw error;
+}
+
+// ---- Công nợ nhà cung cấp ----
+
+export async function fetchDebts() {
+  const { data, error } = await supabase.from('debts').select('*').order('due_date', { ascending: true, nullsFirst: false });
+  if (error) throw error;
+  return data;
+}
+
+export async function addDebt({ supplierName, amount, dueDate, note }) {
+  const { error } = await supabase.from('debts').insert({ supplier_name: supplierName, amount: amount || 0, due_date: dueDate || null, note: note || null });
+  if (error) throw error;
+}
+
+export async function markDebtPaid(id, { supplierName, amount }) {
+  const { error: e1 } = await supabase.from('debts').update({ status: 'da_tra', paid_at: new Date().toISOString() }).eq('id', id);
+  if (e1) throw e1;
+  const { error: e2 } = await supabase.from('cashbook_entries').insert({ type: 'chi', label: `Trả nợ NCC — ${supplierName}`, amount: amount || 0 });
+  if (e2) throw e2;
+}
+
+// ---- Chốt ca / đối chiếu tiền mặt cuối ngày ----
+
+export async function fetchCashReconciliations({ date } = {}) {
+  let q = supabase.from('cash_reconciliations').select('*').order('created_at', { ascending: false });
+  if (date) q = q.eq('work_date', date);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data;
+}
+
+export async function addCashReconciliation({ workDate, branch, expectedCash, actualCash, staffName, note }) {
+  const difference = (Number(actualCash) || 0) - (Number(expectedCash) || 0);
+  const { error } = await supabase.from('cash_reconciliations').insert({
+    work_date: workDate, branch: branch || null, expected_cash: expectedCash || 0, actual_cash: actualCash || 0,
+    difference, staff_name: staffName || null, note: note || null,
+  });
+  if (error) throw error;
+}
+
+// ---- Ca làm việc (chấm công / trễ giờ / xin nghỉ đột xuất) ----
+
+export async function fetchShiftConfigs() {
+  const { data, error } = await supabase.from('shift_configs').select('*').order('start_time', { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
+export async function addShiftConfig({ label, branch, startTime, wagePerShift }) {
+  const { error } = await supabase.from('shift_configs').insert({ label, branch: branch || null, start_time: startTime, wage_per_shift: wagePerShift || 0 });
+  if (error) throw error;
+}
+
+export async function deleteShiftConfig(id) {
+  const { error } = await supabase.from('shift_configs').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function fetchShiftLogs({ date } = {}) {
+  let q = supabase.from('shift_logs').select('*').order('created_at', { ascending: false });
+  if (date) q = q.eq('work_date', date);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data;
+}
+
+export async function fetchShiftLogsRange(fromDate, toDate) {
+  const { data, error } = await supabase
+    .from('shift_logs').select('*')
+    .gte('work_date', fromDate).lte('work_date', toDate)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+export async function addShiftCheckin({ staffId, staffName, workDate, shiftLabel, branch, expectedStart, lateMinutes, wageEarned, reason, photoUrl }) {
+  const { error } = await supabase.from('shift_logs').insert({
+    staff_id: staffId, staff_name: staffName, work_date: workDate, shift_label: shiftLabel, branch: branch || null,
+    expected_start: expectedStart, type: 'checkin', checkin_time: new Date().toISOString(),
+    late_minutes: lateMinutes || 0, wage_earned: wageEarned || 0, reason: reason || null, photo_url: photoUrl || null,
+  });
+  if (error) throw error;
+}
+
+export async function addLeaveRequest({ staffId, staffName, workDate, shiftLabel, branch, reason, photoUrl }) {
+  const { error } = await supabase.from('shift_logs').insert({
+    staff_id: staffId, staff_name: staffName, work_date: workDate, shift_label: shiftLabel, branch: branch || null,
+    type: 'leave_request', reason: reason || null, photo_url: photoUrl || null,
+  });
+  if (error) throw error;
+}
+
+// ---- Cấu hình tiệm (vị trí GPS, giá xăng, tốc độ trung bình) ----
+
+export async function fetchShopSettings() {
+  const { data, error } = await supabase.from('shop_settings').select('*').eq('id', 1).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateShopSettings(fields) {
+  const { error } = await supabase.from('shop_settings').update(fields).eq('id', 1);
+  if (error) throw error;
+}
+
+// ---- Sao lưu toàn bộ dữ liệu (owner) — xuất ra 1 file JSON để lưu trữ ngoài ----
+
+export async function backupAllData() {
+  const [orders, customers, products, warehouseStock, incidentReports, staff] = await Promise.all([
+    fetchOrders(),
+    fetchCustomers(),
+    fetchProducts(),
+    fetchWarehouseStock(),
+    fetchIncidentReports({ limit: 1000 }),
+    fetchAllProfiles(),
+  ]);
+  return {
+    exported_at: new Date().toISOString(),
+    orders, customers, products, warehouse_stock: warehouseStock, incident_reports: incidentReports, staff,
+  };
+}
+
+// ---- RBAC & Role-based access control ----
+
+export async function fetchReportsForUser(userId, userRole, { limit = 100, from, to } = {}) {
+  let q = supabase.from('reports').select('*, creator:profiles(id, name, role)').order('created_at', { ascending: false }).limit(limit);
+
+  // Role-based filtering
+  const roleLevel = { admin: 6, accountant: 5, warehouse: 4, sale: 3, bakery: 2, shipper: 1 }[userRole] || 0;
+
+  if (userRole === 'admin') {
+    // Admin sees all reports
+  } else if (['accountant', 'warehouse', 'sale', 'bakery'].includes(userRole)) {
+    // Managers see reports from own role and subordinates
+    const subordinateRoles = {
+      accountant: ['accountant', 'sale', 'bakery', 'shipper'],
+      warehouse: ['warehouse', 'bakery'],
+      sale: ['sale'],
+      bakery: ['bakery'],
+    }[userRole] || [userRole];
+    q = q.in('creator_role', subordinateRoles).or(`creator_id.eq.${userId}`);
+  } else {
+    // Staff only see own reports
+    q = q.eq('creator_id', userId);
+  }
+
+  if (from) q = q.gte('created_at', `${from}T00:00:00+07:00`);
+  if (to) q = q.lte('created_at', `${to}T23:59:59.999+07:00`);
+
+  const { data, error } = await q;
+  if (error) throw error;
+  return data;
+}
+
+export async function createReport({ creatorId, creatorName, creatorRole, title, content, reportType, relatedOrderId }) {
+  const { data, error } = await supabase.from('reports').insert({
+    creator_id: creatorId,
+    creator_name: creatorName,
+    creator_role: creatorRole,
+    title,
+    content,
+    report_type: reportType,
+    related_order_id: relatedOrderId,
+    created_at: new Date().toISOString(),
+  }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function fetchProfilesByRole(role) {
+  const { data, error } = await supabase.from('profiles').select('*').eq('role', role).order('created_at', { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
+export async function fetchSubordinates(userRole, managerId) {
+  const subordinateRoles = {
+    admin: ['admin', 'accountant', 'warehouse', 'sale', 'bakery', 'shipper'],
+    accountant: ['accountant', 'sale', 'bakery', 'shipper'],
+    warehouse: ['warehouse', 'bakery'],
+    sale: ['sale'],
+    bakery: ['bakery'],
+  }[userRole] || [userRole];
+
+  const { data, error } = await supabase.from('profiles').select('*').in('role', subordinateRoles).eq('manager_id', managerId).order('created_at', { ascending: true });
+  if (error) throw error;
+  return data;
+}
