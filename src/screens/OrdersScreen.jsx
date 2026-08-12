@@ -174,19 +174,29 @@ function productOptions(products) {
   return [...products.map((p) => ({ value: p.id, label: `${p.name} (${Number(p.price).toLocaleString('vi-VN')}đ)` })), { value: MANUAL_OPTION, label: '✏️ Khác (nhập tay)' }];
 }
 
-function PriceInput({ label, value, onChange, style, placeholder, helpText }) {
+function PriceInput({ label, value, onChange, style, placeholder, helpText, noDelete }) {
   const [focused, setFocused] = useState(false);
+  const handleChange = (e) => {
+    const digits = parseDigits(e.target.value);
+    if (noDelete && digits.length < String(value || '').length) return;
+    onChange(digits);
+  };
+  const handleKeyDown = (e) => {
+    if (!noDelete) return;
+    if (e.key === 'Backspace' || e.key === 'Delete') e.preventDefault();
+  };
   return (
     <Input
       label={label}
       type="text"
       inputMode="numeric"
       placeholder={placeholder}
-      helpText={helpText}
+      helpText={noDelete ? (helpText ? `${helpText} · Chỉ được thêm số, không xoá được.` : 'Chỉ được thêm số, không xoá được.') : helpText}
       value={focused ? value : formatVnd(value)}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
-      onChange={(e) => onChange(parseDigits(e.target.value))}
+      onChange={handleChange}
+      onKeyDown={handleKeyDown}
       style={style}
     />
   );
@@ -619,7 +629,7 @@ function MacaronOrderModal({ onClose, onCreated, onManualItems }) {
                 <Select label="Phí ship" value={hasShipFee} onChange={(e) => { setHasShipFee(e.target.value); if (e.target.value === 'no') setShipFee(''); }}
                   options={[{ value: 'no', label: 'Miễn phí' }, { value: 'yes', label: 'Có phí ship (nhập số tiền)' }]} />
                 {hasShipFee === 'yes' && (
-                  <PriceInput label="Số tiền ship" placeholder="VD: 115000" value={shipFee} onChange={setShipFee} />
+                  <PriceInput label="Số tiền ship" placeholder="VD: 115000" value={shipFee} onChange={setShipFee} noDelete />
                 )}
               </React.Fragment>
             )}
@@ -751,7 +761,7 @@ function EditMacaronModal({ order, onClose, onSaved }) {
                 <Select label="Phí ship" value={hasShipFee} onChange={(e) => { setHasShipFee(e.target.value); if (e.target.value === 'no') setShipFee(''); }}
                   options={[{ value: 'no', label: 'Miễn phí' }, { value: 'yes', label: 'Có phí ship (nhập số tiền)' }]} />
                 {hasShipFee === 'yes' && (
-                  <PriceInput label="Số tiền ship" value={shipFee} onChange={setShipFee} />
+                  <PriceInput label="Số tiền ship" value={shipFee} onChange={setShipFee} noDelete />
                 )}
               </React.Fragment>
             )}
@@ -1000,7 +1010,7 @@ function NewOrderModal({ onClose, onCreated, onManualItems }) {
                 <Select label="Phí ship" value={hasShipFee} onChange={(e) => { setHasShipFee(e.target.value); if (e.target.value === 'no') setShipFee(''); }}
                   options={[{ value: 'no', label: 'Miễn phí' }, { value: 'yes', label: 'Có phí ship (nhập số tiền)' }]} />
                 {hasShipFee === 'yes' && (
-                  <PriceInput label="Số tiền ship" placeholder="VD: 20000" value={shipFee} onChange={setShipFee} />
+                  <PriceInput label="Số tiền ship" placeholder="VD: 20000" value={shipFee} onChange={setShipFee} noDelete />
                 )}
               </React.Fragment>
             )}
@@ -1156,7 +1166,7 @@ function EditOrderModal({ order, onClose, onSaved }) {
                 <Select label="Phí ship" value={hasShipFee} onChange={(e) => { setHasShipFee(e.target.value); if (e.target.value === 'no') setShipFee(''); }}
                   options={[{ value: 'no', label: 'Miễn phí' }, { value: 'yes', label: 'Có phí ship (nhập số tiền)' }]} />
                 {hasShipFee === 'yes' && (
-                  <PriceInput label="Số tiền ship" value={shipFee} onChange={setShipFee} />
+                  <PriceInput label="Số tiền ship" value={shipFee} onChange={setShipFee} noDelete />
                 )}
               </React.Fragment>
             )}
