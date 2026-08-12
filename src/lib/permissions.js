@@ -1,7 +1,9 @@
 import { ROLE_META, ROLE_PERMISSIONS } from './roles';
+import { migrateOldRole } from './roleMigration';
 
 export function getPermissionsForRole(role) {
-  const rolePerms = ROLE_PERMISSIONS.find(r => r.role === role);
+  const resolvedRole = migrateOldRole(role);
+  const rolePerms = ROLE_PERMISSIONS.find(r => r.role === resolvedRole);
   return rolePerms?.permissions || [];
 }
 
@@ -21,7 +23,7 @@ export function hasAllPermissions(userRole, permissions) {
 }
 
 export function getRoleLevel(role) {
-  return ROLE_META[role]?.level || 0;
+  return ROLE_META[migrateOldRole(role)]?.level || 0;
 }
 
 export function canAccessRole(userRole, targetRole) {
