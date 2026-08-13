@@ -78,7 +78,10 @@ function Column({ title, count, orders, onOpen }) {
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {orders.map((o) => {
-          const itemSummary = (o.order_items || []).map((it) => it.name).join(' | ');
+          const itemSummary = (o.order_items || []).map((it) => {
+            const details = [it.size, it.cot, it.vi, it.note].filter(Boolean).join(' · ');
+            return details ? `${it.name} (${details})` : it.name;
+          }).join(' | ');
           return (
             <KanbanCard key={o.id} customer={o.customer?.name || 'Khách lẻ'} phone={o.customer?.phone} item={itemSummary} channel={o.channel}
               total={o.total} deliveryTime={o.delivery_time} paid={getPaidBadgeState(o)}

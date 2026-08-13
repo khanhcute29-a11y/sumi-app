@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { fetchOrderNotes, addOrderNote, uploadPhoto } from '../lib/queries';
+import { toWebSafeImage } from '../lib/imageConvert';
 import { Input } from './forms/Input';
 import { Button } from './forms/Button';
 import { useAuth } from '../lib/AuthContext';
@@ -59,7 +60,8 @@ export function CommentSection({ order, profile }) {
     try {
       const newPhotos = [];
       for (const file of Array.from(files)) {
-        const url = await uploadPhoto(file, `comment_${Date.now()}`);
+        const safeFile = await toWebSafeImage(file);
+        const url = await uploadPhoto(safeFile, `comment_${Date.now()}`);
         newPhotos.push(url);
       }
       setPhotos([...photos, ...newPhotos]);

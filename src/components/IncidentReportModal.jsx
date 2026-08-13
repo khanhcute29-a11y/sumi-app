@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Button } from './forms/Button';
 import { Input } from './forms/Input';
 import { addIncidentReport, uploadPhoto } from '../lib/queries';
+import { toWebSafeImage } from '../lib/imageConvert';
 import { useAuth } from '../lib/AuthContext';
 import { IconWarning, IconCamera, IconImage } from './icons/FrogIcons';
 
@@ -48,7 +49,8 @@ export function IncidentReportModal({ orderId, orderCode, onClose, onSent }) {
     try {
       const newPhotos = [];
       for (const file of Array.from(files)) {
-        const url = await uploadPhoto(file, `incident_${Date.now()}`);
+        const safeFile = await toWebSafeImage(file);
+        const url = await uploadPhoto(safeFile, `incident_${Date.now()}`);
         newPhotos.push(url);
       }
       setPhotos([...photos, ...newPhotos]);

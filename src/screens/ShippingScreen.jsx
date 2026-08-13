@@ -10,7 +10,7 @@ import { fetchOrders, updateOrder, uploadPhoto, fetchShopSettings } from '../lib
 import { useAuth } from '../lib/AuthContext';
 import { enqueue } from '../lib/offlineQueue';
 import { getCurrentPosition, haversineKm, estimateTrip } from '../lib/geo';
-import { IconOrders, IconHome, IconTruck, IconWarning, IconCamera, IconEdit, IconMapPin, IconClock, IconPhone, IconClipboard } from '../components/icons/FrogIcons';
+import { IconOrders, IconHome, IconTruck, IconWarning, IconCamera, IconEdit, IconMapPin, IconClock, IconPhone, IconClipboard, IconMoney } from '../components/icons/FrogIcons';
 import { supabase } from '../lib/supabaseClient';
 
 function Thumb({ url, label }) {
@@ -66,7 +66,7 @@ function DeliveryCard({ order, onPickup, onComplete, onSignedDoc, canAct, shopSe
   const [showIncident, setShowIncident] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
   const itemLine = (it) => {
-    const details = [it.size, it.cot, it.vi].filter(Boolean).join(' · ');
+    const details = [it.size, it.cot, it.vi, it.note].filter(Boolean).join(' · ');
     return details ? `${it.name} (${details})` : it.name;
   };
   const itemSummary = (order.order_items || []).map(itemLine).join(', ') || 'Không có sản phẩm';
@@ -161,6 +161,11 @@ function DeliveryCard({ order, onPickup, onComplete, onSignedDoc, canAct, shopSe
             <IconClock size={14} />Ngày giao: {order.delivery_date ? new Date(`${order.delivery_date}T00:00:00+07:00`).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '—'}{order.delivery_time ? ` · ${order.delivery_time}` : ''}
           </div>
           {order.note && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconClipboard size={14} /> {order.note}</div>}
+          <div style={{ font: 'var(--text-caption)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <IconMoney size={14} />
+            {order.payment_method === 'bank' ? 'Đã chuyển khoản' : `Thu COD: ${(Number(order.total || 0) - Number(order.paid_amount || 0)).toLocaleString('vi-VN')}đ`}
+            {Number(order.deposit || 0) > 0 ? ` · Đã cọc: ${Number(order.deposit).toLocaleString('vi-VN')}đ` : ''}
+          </div>
           {order.shipper_staff_name && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconTruck size={14} /> Người giao: {order.shipper_staff_name}</div>}
         </div>
         {order.flagged && <Badge tone="danger" icon={<IconWarning size={14} />}>Cần Lưu Ý</Badge>}

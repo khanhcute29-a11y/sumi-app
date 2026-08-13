@@ -12,6 +12,7 @@ import { supabase } from '../lib/supabaseClient';
 import {
   IconStationHot, IconStationCold, IconStationWorkshop, IconStationSparkle,
   IconChat, IconWarning, IconPaperclip, IconClipboard, IconKitchen, IconCamera, IconSearch, IconClock,
+  IconPhone, IconHome, IconMapPin,
 } from '../components/icons/FrogIcons';
 
 const STATIONS = {
@@ -103,7 +104,7 @@ function CompactOrderRow({ order, onAccept, onReady, canAct }) {
   const [showFullDetail, setShowFullDetail] = useState(false);
 
   const itemLine = (it) => {
-    const details = [it.size && `Size ${it.size}`, it.cot && `Cốt ${it.cot}`, it.vi && `Vị ${it.vi}`].filter(Boolean).join(' · ');
+    const details = [it.size && `Size ${it.size}`, it.cot && `Cốt ${it.cot}`, it.vi && `Vị ${it.vi}`, it.note].filter(Boolean).join(' · ');
     return `${it.name} x${it.qty}${details ? ` (${details})` : ''}`;
   };
   const itemSummary = (order.order_items || []).map(itemLine).join(', ') || 'Không có sản phẩm';
@@ -151,6 +152,15 @@ function CompactOrderRow({ order, onAccept, onReady, canAct }) {
       {expanded && (
         <div style={{ padding: '0 14px 14px', display: 'flex', flexDirection: 'column', gap: 10, borderTop: '1px solid var(--border-subtle)' }}>
           <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', marginTop: 10 }}>{itemSummary}</div>
+          {order.customer?.phone && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconPhone size={14} /> {order.customer.phone}</div>}
+          <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <IconClock size={14} />Ngày giao: {order.delivery_date ? new Date(`${order.delivery_date}T00:00:00+07:00`).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '—'}{order.delivery_time ? ` · ${order.delivery_time}` : ''}
+          </div>
+          {order.delivery_method === 'lay_tai_xuong' ? (
+            <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconHome size={14} /> Khách tự đến lấy tại xưởng</div>
+          ) : order.address ? (
+            <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconMapPin size={14} /> {order.address}</div>
+          ) : null}
           {refPhotos.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconPaperclip size={14} /> Ảnh mẫu khách gửi:</div>
