@@ -1,7 +1,11 @@
 import React from 'react';
 import { IconCheck, IconWarning } from '../icons/FrogIcons';
 
-export function KanbanCard({ customer, phone, item, note, channel, badges = [], thumbnail, total, deliveryTime, paid, onClick, style }) {
+export function KanbanCard({ customer, phone, item, note, channel, orderCode, badges = [], thumbnail, total, deliveryDate, deliveryTime, paid, onClick, style }) {
+  const deliveryLabel = [
+    deliveryDate ? new Date(`${deliveryDate}T00:00:00+07:00`).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }) : '',
+    deliveryTime || '',
+  ].filter(Boolean).join(' · ');
   return (
     <button onClick={onClick} style={{
       display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left', width: '100%',
@@ -15,14 +19,17 @@ export function KanbanCard({ customer, phone, item, note, channel, badges = [], 
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{customer}</span>
             {channel && <span style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>{channel}</span>}
           </div>
-          {phone && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>{phone}</div>}
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
+            {phone && <span style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>{phone}</span>}
+            {orderCode && <span style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>{orderCode}</span>}
+          </div>
         </div>
       </div>
       {item && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>{item}</div>}
       {note && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>{note}</div>}
-      {(total != null || deliveryTime) && (
+      {(total != null || deliveryLabel) && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', font: 'var(--text-caption)', color: 'var(--text-muted)' }}>
-          <span>{deliveryTime ? `Giao lúc ${deliveryTime}` : ''}</span>
+          <span>{deliveryLabel ? `Giao ${deliveryLabel}` : ''}</span>
           <span style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>{total != null ? `${Number(total).toLocaleString('vi-VN')}đ` : ''}</span>
         </div>
       )}

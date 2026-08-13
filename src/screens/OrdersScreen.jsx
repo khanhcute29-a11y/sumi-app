@@ -83,8 +83,8 @@ function Column({ title, count, orders, onOpen }) {
             return details ? `${it.name} (${details})` : it.name;
           }).join(' | ');
           return (
-            <KanbanCard key={o.id} customer={o.customer?.name || 'Khách lẻ'} phone={o.customer?.phone} item={itemSummary} channel={o.channel}
-              total={o.total} deliveryTime={o.delivery_time} paid={getPaidBadgeState(o)}
+            <KanbanCard key={o.id} customer={o.customer?.name || 'Khách lẻ'} phone={o.customer?.phone} item={itemSummary} note={o.note} channel={o.channel}
+              orderCode={o.order_code} total={o.total} deliveryDate={o.delivery_date} deliveryTime={o.delivery_time} paid={getPaidBadgeState(o)}
               onClick={() => onOpen(o)}
               badges={[
                 o.customer?.vip && <Badge tone="primary" icon={<IconStar size={13} />} key="vip">VIP</Badge>,
@@ -1391,7 +1391,13 @@ export default function OrdersScreen() {
               {modalOrder.order_code && <Badge tone="neutral">{modalOrder.order_code}</Badge>}
             </div>
             {modalOrder.customer && <TrustScoreBadge score={modalOrder.customer.trust_score} locked={modalOrder.customer.locked} />}
-            <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>{(modalOrder.order_items || []).map((it) => `${it.name} x${it.qty}`).join(', ') || 'Không có sản phẩm'}</div>
+            {modalOrder.customer?.phone && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}><IconPhone size={14} /> {modalOrder.customer.phone}</div>}
+            <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>
+              {(modalOrder.order_items || []).map((it) => {
+                const details = [it.size, it.cot, it.vi, it.note].filter(Boolean).join(' · ');
+                return `${it.name} x${it.qty}${details ? ` (${details})` : ''}`;
+              }).join(', ') || 'Không có sản phẩm'}
+            </div>
             {(modalOrder.order_items || []).some((it) => it.ref_photo_url) && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconPaperclip size={14} /> Ảnh mẫu khách gửi:</div>
@@ -1413,7 +1419,12 @@ export default function OrdersScreen() {
             {modalOrder.delivery_method !== 'lay_tai_xuong' && (
               <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>Ship: {Number(modalOrder.ship_fee) ? `${Number(modalOrder.ship_fee).toLocaleString('vi-VN')}đ` : 'Miễn phí'}</div>
             )}
+            <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <IconClock size={14} />Ngày giao: {modalOrder.delivery_date ? new Date(`${modalOrder.delivery_date}T00:00:00+07:00`).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '—'}{modalOrder.delivery_time ? ` · ${modalOrder.delivery_time}` : ''}
+            </div>
             <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>Tổng tiền: {Number(modalOrder.total || 0).toLocaleString('vi-VN')}đ</div>
+            <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>Thanh toán: {modalOrder.payment_method === 'bank' ? 'Chuyển khoản' : 'COD'}{Number(modalOrder.deposit) > 0 ? ` · Đã cọc: ${Number(modalOrder.deposit).toLocaleString('vi-VN')}đ` : ''}</div>
+            {modalOrder.note && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}><IconClipboard size={14} /> {modalOrder.note}</div>}
             {modalOrder.status === 'huy' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 10, background: 'var(--status-danger-soft)', borderRadius: 'var(--radius-sm)' }}>
                 <Badge tone="danger" icon={<IconBan size={13} />}>Đã huỷ</Badge>
