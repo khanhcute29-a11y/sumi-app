@@ -15,8 +15,8 @@ import { IncidentReportModal } from '../components/IncidentReportModal';
 import { ActionChip } from '../components/ActionChip';
 import { supabase } from '../lib/supabaseClient';
 import { localDateStr } from '../lib/date';
-import { CAKE_SIZES_CM, CAKE_BASES, CAKE_FILLINGS, basePriceForSize, fillingSurchargeForSize, computeCakePrice } from '../lib/cakePricing';
-import { IconWarning, IconEye, IconMapPin, IconClock, IconClipboard, IconPaperclip, IconHome, IconTruck, IconBan, IconCheck, IconTrash, IconStar } from '../components/icons/FrogIcons';
+import { CAKE_SIZES_CM, CAKE_BASES, CAKE_FILLINGS, basePriceForSize, fillingSurchargeForSize, computeCakePrice, baseSurcharge } from '../lib/cakePricing';
+import { IconWarning, IconEye, IconMapPin, IconClock, IconClipboard, IconPaperclip, IconHome, IconTruck, IconBan, IconCheck, IconTrash, IconStar, IconPhone } from '../components/icons/FrogIcons';
 
 const STATUS_LABELS = {
   moi: 'Mới', dang_lam: 'Đang làm', cho_giao: 'Chờ giao', dang_giao: 'Đang giao',
@@ -299,7 +299,7 @@ function TeabreakOrderModal({ onClose, onCreated, onManualItems }) {
 
           <div style={{ flex: '1 1 320px', minWidth: 0 }}>
             <div style={{ position: isMobile ? 'static' : 'sticky', top: 0 }}>
-              <OrderPreview custName={customer.name} items={previewItems} deliveryMethod="giao_tan_noi"
+              <OrderPreview custName={customer.name} custPhone={customer.phone} items={previewItems} deliveryMethod="giao_tan_noi"
                 effectiveShipFee={0} total={subtotal + vat} note={note} address={customer.address} deliveryDate={date} deliveryTime={time} />
             </div>
           </div>
@@ -415,7 +415,7 @@ function EditTeabreakModal({ order, onClose, onSaved }) {
 
           <div style={{ flex: '1 1 320px', minWidth: 0 }}>
             <div style={{ position: isMobile ? 'static' : 'sticky', top: 0 }}>
-              <OrderPreview custName={custName} items={previewItems} deliveryMethod="giao_tan_noi"
+              <OrderPreview custName={custName} custPhone={custPhone} items={previewItems} deliveryMethod="giao_tan_noi"
                 effectiveShipFee={0} total={subtotal + vat} note={note} address={address} deliveryDate={date} deliveryTime={time} />
             </div>
           </div>
@@ -571,13 +571,13 @@ function MacaronOrderModal({ onClose, onCreated, onManualItems }) {
 
             <div style={{ font: 'var(--text-label)', paddingTop: 6, borderTop: '1px solid var(--border-subtle)' }}>Thanh toán</div>
             {deliveryMethod === 'giao_tan_noi' && (
-              <React.Fragment>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <Select label="Phí ship" value={hasShipFee} onChange={(e) => { setHasShipFee(e.target.value); if (e.target.value === 'no') setShipFee(''); }}
-                  options={[{ value: 'no', label: 'Miễn phí' }, { value: 'yes', label: 'Có phí ship (nhập số tiền)' }]} />
+                  options={[{ value: 'no', label: 'Miễn phí' }, { value: 'yes', label: 'Có phí' }]} style={{ flex: '1 1 120px' }} />
                 {hasShipFee === 'yes' && (
-                  <PriceInput label="Số tiền ship" placeholder="VD: 115000" value={shipFee} onChange={setShipFee} noDelete />
+                  <PriceInput label="Số tiền ship" placeholder="VD: 115000" value={shipFee} onChange={setShipFee} noDelete style={{ flex: '1 1 140px' }} />
                 )}
-              </React.Fragment>
+              </div>
             )}
             <PriceInput label="Tổng tiền" placeholder="VD: 2167000" value={total}
               onChange={(v) => { setTotal(v); setTotalTouched(true); }}
@@ -589,7 +589,7 @@ function MacaronOrderModal({ onClose, onCreated, onManualItems }) {
 
           <div style={{ flex: '1 1 320px', minWidth: 0 }}>
             <div style={{ position: isMobile ? 'static' : 'sticky', top: 0 }}>
-              <OrderPreview custName={custName} items={previewItems} deliveryMethod={deliveryMethod}
+              <OrderPreview custName={custName} custPhone={custPhone} items={previewItems} deliveryMethod={deliveryMethod}
                 effectiveShipFee={effectiveShipFee} total={total} note={note} address={address} deliveryDate={deliveryDate} deliveryTime={deliveryTime} />
             </div>
           </div>
@@ -703,13 +703,13 @@ function EditMacaronModal({ order, onClose, onSaved }) {
 
             <div style={{ font: 'var(--text-label)', paddingTop: 6, borderTop: '1px solid var(--border-subtle)' }}>Thanh toán</div>
             {deliveryMethod === 'giao_tan_noi' && (
-              <React.Fragment>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <Select label="Phí ship" value={hasShipFee} onChange={(e) => { setHasShipFee(e.target.value); if (e.target.value === 'no') setShipFee(''); }}
-                  options={[{ value: 'no', label: 'Miễn phí' }, { value: 'yes', label: 'Có phí ship (nhập số tiền)' }]} />
+                  options={[{ value: 'no', label: 'Miễn phí' }, { value: 'yes', label: 'Có phí' }]} style={{ flex: '1 1 120px' }} />
                 {hasShipFee === 'yes' && (
-                  <PriceInput label="Số tiền ship" value={shipFee} onChange={setShipFee} noDelete />
+                  <PriceInput label="Số tiền ship" value={shipFee} onChange={setShipFee} noDelete style={{ flex: '1 1 140px' }} />
                 )}
-              </React.Fragment>
+              </div>
             )}
             <PriceInput label="Tổng tiền" value={total} onChange={setTotal} />
 
@@ -719,7 +719,7 @@ function EditMacaronModal({ order, onClose, onSaved }) {
 
           <div style={{ flex: '1 1 320px', minWidth: 0 }}>
             <div style={{ position: isMobile ? 'static' : 'sticky', top: 0 }}>
-              <OrderPreview custName={custName} items={previewItems} deliveryMethod={deliveryMethod}
+              <OrderPreview custName={custName} custPhone={custPhone} items={previewItems} deliveryMethod={deliveryMethod}
                 effectiveShipFee={effectiveShipFee} total={total} note={note} address={address} deliveryDate={deliveryDate} deliveryTime={deliveryTime} />
             </div>
           </div>
@@ -770,15 +770,18 @@ function ProductRow({ item, onChange, onRemove, isKem, canRemove, products }) {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
             <Select label="Kích thước" value={sizeCm ? String(sizeCm) : ''} onChange={(e) => {
               const newSize = e.target.value;
-              const price = newSize && item.fillingValue ? computeCakePrice(newSize, item.fillingValue) : item.price;
+              const price = newSize && item.fillingValue ? computeCakePrice(newSize, item.fillingValue, item.cot) : item.price;
               onChange({ ...item, size: newSize ? `${newSize}cm` : '', price });
             }} options={[{ value: '', label: 'Chọn size...' }, ...CAKE_SIZES_CM.map((s) => ({ value: String(s), label: `${s}cm (${basePriceForSize(s).toLocaleString('vi-VN')}đ)` }))]} style={{ flex: '1 1 170px', minWidth: 0 }} />
-            <Select label="Cốt bánh" value={item.cot || ''} onChange={(e) => set('cot', e.target.value)}
-              options={[{ value: '', label: 'Chọn cốt...' }, ...CAKE_BASES.map((b) => ({ value: b, label: b }))]} style={{ flex: '1 1 130px', minWidth: 0 }} />
+            <Select label="Cốt bánh" value={item.cot || ''} onChange={(e) => {
+              const cot = e.target.value;
+              const price = sizeCm && item.fillingValue ? computeCakePrice(sizeCm, item.fillingValue, cot) : item.price;
+              onChange({ ...item, cot, price });
+            }} options={[{ value: '', label: 'Chọn cốt...' }, ...CAKE_BASES.map((b) => ({ value: b, label: baseSurcharge(b) ? `${b} (+${baseSurcharge(b).toLocaleString('vi-VN')}đ)` : b }))]} style={{ flex: '1 1 150px', minWidth: 0 }} />
             <Select label="Nhân" value={item.fillingValue || ''} onChange={(e) => {
               const fillingValue = e.target.value;
               const filling = CAKE_FILLINGS.find((f) => f.value === fillingValue);
-              const price = sizeCm && fillingValue ? computeCakePrice(sizeCm, fillingValue) : item.price;
+              const price = sizeCm && fillingValue ? computeCakePrice(sizeCm, fillingValue, item.cot) : item.price;
               onChange({ ...item, fillingValue, vi: filling?.label || '', price });
             }} options={fillingOptions} style={{ flex: '1 1 220px', minWidth: 0 }} />
           </div>
@@ -794,13 +797,18 @@ function ProductRow({ item, onChange, onRemove, isKem, canRemove, products }) {
   );
 }
 
-function OrderPreview({ custName, items, deliveryMethod, effectiveShipFee, total, deposit, note, address, deliveryDate, deliveryTime }) {
+function OrderPreview({ custName, custPhone, items, deliveryMethod, effectiveShipFee, total, deposit, note, address, deliveryDate, deliveryTime }) {
+  const itemLine = (p) => {
+    const details = [p.size, p.cot, p.vi, p.note].filter(Boolean).join(' · ');
+    return details ? `${p.name} (${details})` : p.name;
+  };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--surface-sunken)', borderRadius: 'var(--radius-md)', padding: 16 }}>
       <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconEye size={14} /> XEM TRƯỚC ĐƠN HÀNG</div>
       <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>{custName || 'Khách chưa đặt tên'}</div>
+      {custPhone && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}><IconPhone size={14} /> {custPhone}</div>}
       <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>
-        {items.length ? items.map((p) => p.note ? `${p.name} (${p.note})` : p.name).join(', ') : 'Chưa có sản phẩm nào'}
+        {items.length ? items.map(itemLine).join(', ') : 'Chưa có sản phẩm nào'}
       </div>
       <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>
         {deliveryMethod === 'giao_tan_noi' ? <><IconTruck size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Giao hàng tận nơi</> : <><IconHome size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Lấy tại xưởng</>}
@@ -952,19 +960,21 @@ function NewOrderModal({ onClose, onCreated, onManualItems }) {
 
             <div style={{ font: 'var(--text-label)', paddingTop: 6, borderTop: '1px solid var(--border-subtle)' }}>Thanh toán</div>
             {deliveryMethod === 'giao_tan_noi' && (
-              <React.Fragment>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <Select label="Phí ship" value={hasShipFee} onChange={(e) => { setHasShipFee(e.target.value); if (e.target.value === 'no') setShipFee(''); }}
-                  options={[{ value: 'no', label: 'Miễn phí' }, { value: 'yes', label: 'Có phí ship (nhập số tiền)' }]} />
+                  options={[{ value: 'no', label: 'Miễn phí' }, { value: 'yes', label: 'Có phí' }]} style={{ flex: '1 1 120px' }} />
                 {hasShipFee === 'yes' && (
-                  <PriceInput label="Số tiền ship" placeholder="VD: 20000" value={shipFee} onChange={setShipFee} noDelete />
+                  <PriceInput label="Số tiền ship" placeholder="VD: 20000" value={shipFee} onChange={setShipFee} noDelete style={{ flex: '1 1 140px' }} />
                 )}
-              </React.Fragment>
+              </div>
             )}
             <PriceInput label="Tổng tiền" placeholder="VD: 580000" value={total}
               onChange={(v) => { setTotal(v); setTotalTouched(true); }}
               helpText="Tự tính từ Tiền hàng + Phí ship — có thể chỉnh tay (VD: giảm giá VIP)." />
-            <Select label="Phương thức thanh toán" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} options={[{ value: 'cod', label: 'COD' }, { value: 'bank', label: 'Chuyển khoản Ngân hàng' }]} />
-            <PriceInput label="Đặt cọc" placeholder="VD: 100000" value={deposit} onChange={setDeposit} />
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <Select label="Phương thức thanh toán" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} options={[{ value: 'cod', label: 'COD' }, { value: 'bank', label: 'Chuyển khoản Ngân hàng' }]} style={{ flex: '1 1 160px' }} />
+              <PriceInput label="Đặt cọc" placeholder="VD: 100000" value={deposit} onChange={setDeposit} style={{ flex: '1 1 140px' }} />
+            </div>
 
             <div style={{ font: 'var(--text-label)', paddingTop: 6, borderTop: '1px solid var(--border-subtle)' }}>Ghi chú</div>
             <Input label="Ghi chú đơn hàng" placeholder="Yêu cầu riêng của khách, lưu ý giao hàng..." value={note} onChange={(e) => setNote(e.target.value)} />
@@ -972,7 +982,7 @@ function NewOrderModal({ onClose, onCreated, onManualItems }) {
 
           <div style={{ flex: '1 1 320px', minWidth: 0 }}>
             <div style={{ position: isMobile ? 'static' : 'sticky', top: 0 }}>
-              <OrderPreview custName={custName} items={previewItems} deliveryMethod={deliveryMethod}
+              <OrderPreview custName={custName} custPhone={custPhone} items={previewItems} deliveryMethod={deliveryMethod}
                 effectiveShipFee={effectiveShipFee} total={total} deposit={deposit} note={note} address={address} deliveryDate={deliveryDate} deliveryTime={deliveryTime} />
             </div>
           </div>
@@ -1108,17 +1118,19 @@ function EditOrderModal({ order, onClose, onSaved }) {
 
             <div style={{ font: 'var(--text-label)', paddingTop: 6, borderTop: '1px solid var(--border-subtle)' }}>Thanh toán</div>
             {deliveryMethod === 'giao_tan_noi' && (
-              <React.Fragment>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <Select label="Phí ship" value={hasShipFee} onChange={(e) => { setHasShipFee(e.target.value); if (e.target.value === 'no') setShipFee(''); }}
-                  options={[{ value: 'no', label: 'Miễn phí' }, { value: 'yes', label: 'Có phí ship (nhập số tiền)' }]} />
+                  options={[{ value: 'no', label: 'Miễn phí' }, { value: 'yes', label: 'Có phí' }]} style={{ flex: '1 1 120px' }} />
                 {hasShipFee === 'yes' && (
-                  <PriceInput label="Số tiền ship" value={shipFee} onChange={setShipFee} noDelete />
+                  <PriceInput label="Số tiền ship" value={shipFee} onChange={setShipFee} noDelete style={{ flex: '1 1 140px' }} />
                 )}
-              </React.Fragment>
+              </div>
             )}
             <PriceInput label="Tổng tiền" value={total} onChange={setTotal} />
-            <Select label="Phương thức thanh toán" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} options={[{ value: 'cod', label: 'COD' }, { value: 'bank', label: 'Chuyển khoản Ngân hàng' }]} />
-            <PriceInput label="Đặt cọc" value={deposit} onChange={setDeposit} />
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <Select label="Phương thức thanh toán" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} options={[{ value: 'cod', label: 'COD' }, { value: 'bank', label: 'Chuyển khoản Ngân hàng' }]} style={{ flex: '1 1 160px' }} />
+              <PriceInput label="Đặt cọc" value={deposit} onChange={setDeposit} style={{ flex: '1 1 140px' }} />
+            </div>
 
             <div style={{ font: 'var(--text-label)', paddingTop: 6, borderTop: '1px solid var(--border-subtle)' }}>Ghi chú</div>
             <Input label="Ghi chú đơn hàng" value={note} onChange={(e) => setNote(e.target.value)} />
@@ -1126,7 +1138,7 @@ function EditOrderModal({ order, onClose, onSaved }) {
 
           <div style={{ flex: '1 1 320px', minWidth: 0 }}>
             <div style={{ position: isMobile ? 'static' : 'sticky', top: 0 }}>
-              <OrderPreview custName={custName} items={previewItems} deliveryMethod={deliveryMethod}
+              <OrderPreview custName={custName} custPhone={custPhone} items={previewItems} deliveryMethod={deliveryMethod}
                 effectiveShipFee={effectiveShipFee} total={total} deposit={deposit} note={note} address={address} deliveryDate={deliveryDate} deliveryTime={deliveryTime} />
             </div>
           </div>
@@ -1152,7 +1164,8 @@ function vipOnly(orders, filter) {
 
 export default function OrdersScreen() {
   const { profile } = useAuth();
-  const canManage = profile?.role === 'owner' || profile?.role === 'cashier';
+  const canManage = profile?.role === 'owner' || profile?.role === 'admin';
+  const canRequestChange = profile?.role === 'cashier' || profile?.role === 'sale';
   const [orders, setOrders] = useState([]);
   const [cancelledOrders, setCancelledOrders] = useState([]);
   const [completedOrders, setCompletedOrders] = useState([]);
@@ -1166,6 +1179,8 @@ export default function OrdersScreen() {
   const [actionBusy, setActionBusy] = useState(false);
   const [actionError, setActionError] = useState('');
   const [reasonAction, setReasonAction] = useState(null);
+  const [requestAction, setRequestAction] = useState(null);
+  const [requestSent, setRequestSent] = useState(false);
   const [pendingCatalogItems, setPendingCatalogItems] = useState(null);
   const [savingCatalog, setSavingCatalog] = useState(false);
   const [catalogError, setCatalogError] = useState('');
@@ -1226,6 +1241,26 @@ export default function OrdersScreen() {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
+
+  const handleRequestChange = async ({ reason, photoUrl }) => {
+    setActionBusy(true);
+    setActionError('');
+    try {
+      const kindLabel = requestAction === 'edit' ? 'SỬA ĐƠN' : requestAction === 'cancel' ? 'HỦY ĐƠN' : 'XOÁ ĐƠN';
+      const message = `🔒 YÊU CẦU ${kindLabel} — chờ sếp duyệt${photoUrl ? `\n[PHOTOS: ![image](${photoUrl})]` : ''}\nLý do: ${reason}`;
+      await addOrderNote({
+        orderId: modalOrder.id, orderCode: modalOrder.order_code, authorId: profile?.id,
+        authorName: profile?.full_name, authorRole: profile?.role, message,
+      });
+      setRequestAction(null);
+      setRequestSent(true);
+      setTimeout(() => setRequestSent(false), 4000);
+    } catch (err) {
+      setActionError(err.message);
+    } finally {
+      setActionBusy(false);
+    }
+  };
 
   const handleConfirmReason = async ({ reason, photoUrl }) => {
     setActionBusy(true);
@@ -1407,6 +1442,7 @@ export default function OrdersScreen() {
             <CommentSection order={modalOrder} profile={profile} />
             {actionError && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{actionError}</div>}
             <ActionChip icon={<IconWarning size={16} />} label="Báo sự cố" tone="danger" onClick={() => setShowOrderIncident(true)} style={{ alignSelf: 'flex-start' }} />
+            {requestSent && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-success)' }}>Đã gửi yêu cầu — chờ sếp duyệt trong phần bình luận của đơn.</div>}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 4 }}>
               {canManage ? (
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -1419,6 +1455,11 @@ export default function OrdersScreen() {
                   {modalOrder.status !== 'huy' && (
                     <Button variant="danger" size="sm" onClick={() => { setActionError(''); setReasonAction('delete'); }} disabled={actionBusy}>Xoá đơn</Button>
                   )}
+                </div>
+              ) : canRequestChange && modalOrder.status !== 'huy' && modalOrder.status !== 'hoan_thanh' ? (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Button variant="secondary" size="sm" onClick={() => { setActionError(''); setRequestAction('edit'); }} disabled={actionBusy}>Yêu cầu sửa đơn</Button>
+                  <Button variant="warning" size="sm" onClick={() => { setActionError(''); setRequestAction('cancel'); }} disabled={actionBusy}>Yêu cầu hủy đơn</Button>
                 </div>
               ) : <div />}
               <Button variant="secondary" size="sm" onClick={() => setModalOrder(null)} disabled={actionBusy}>Đóng</Button>
@@ -1447,6 +1488,17 @@ export default function OrdersScreen() {
           error={actionError}
           onClose={() => { if (!actionBusy) setReasonAction(null); }}
           onConfirm={handleConfirmReason}
+        />
+      )}
+      {requestAction && (
+        <ReasonModal
+          title={requestAction === 'edit' ? 'Yêu cầu sửa đơn — lý do?' : 'Yêu cầu hủy đơn — lý do?'}
+          confirmLabel="Gửi yêu cầu cho sếp"
+          confirmVariant="primary"
+          busy={actionBusy}
+          error={actionError}
+          onClose={() => { if (!actionBusy) setRequestAction(null); }}
+          onConfirm={handleRequestChange}
         />
       )}
       {showNew && <NewOrderModal onClose={() => setShowNew(false)} onCreated={load} onManualItems={handleManualItemsDetected} />}

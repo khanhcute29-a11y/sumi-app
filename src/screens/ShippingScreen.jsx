@@ -10,7 +10,7 @@ import { fetchOrders, updateOrder, uploadPhoto, fetchShopSettings } from '../lib
 import { useAuth } from '../lib/AuthContext';
 import { enqueue } from '../lib/offlineQueue';
 import { getCurrentPosition, haversineKm, estimateTrip } from '../lib/geo';
-import { IconOrders, IconHome, IconTruck, IconWarning, IconCamera, IconEdit, IconMapPin, IconClock } from '../components/icons/FrogIcons';
+import { IconOrders, IconHome, IconTruck, IconWarning, IconCamera, IconEdit, IconMapPin, IconClock, IconPhone, IconClipboard } from '../components/icons/FrogIcons';
 import { supabase } from '../lib/supabaseClient';
 
 function Thumb({ url, label }) {
@@ -65,7 +65,11 @@ function DeliveryCard({ order, onPickup, onComplete, onSignedDoc, canAct, shopSe
   const [pendingComplete, setPendingComplete] = useState(null);
   const [showIncident, setShowIncident] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
-  const itemSummary = (order.order_items || []).map((it) => it.name).join(', ') || 'Không có sản phẩm';
+  const itemLine = (it) => {
+    const details = [it.size, it.cot, it.vi].filter(Boolean).join(' · ');
+    return details ? `${it.name} (${details})` : it.name;
+  };
+  const itemSummary = (order.order_items || []).map(itemLine).join(', ') || 'Không có sản phẩm';
   const packageCount = (order.order_items || []).reduce((s, it) => s + (Number(it.qty) || 0), 0);
 
   const handlePickupPhoto = async (blob) => {
@@ -145,6 +149,7 @@ function DeliveryCard({ order, onPickup, onComplete, onSignedDoc, canAct, shopSe
             {order.order_code && <Badge tone="neutral">{order.order_code}</Badge>}
           </div>
           {showDetail && <OrderDetailModal order={order} onClose={() => setShowDetail(false)} />}
+          {order.customer?.phone && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconPhone size={14} /> {order.customer.phone}</div>}
           <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>Sản phẩm: {itemSummary}</div>
           <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconOrders size={14} /> Số kiện hàng: {packageCount}</div>
           {order.delivery_method === 'lay_tai_xuong' ? (
@@ -152,7 +157,10 @@ function DeliveryCard({ order, onPickup, onComplete, onSignedDoc, canAct, shopSe
           ) : (
             <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Địa chỉ: {order.address || '—'}</div>
           )}
-          <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Thời gian giao: {order.delivery_time || '—'}</div>
+          <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <IconClock size={14} />Ngày giao: {order.delivery_date ? new Date(`${order.delivery_date}T00:00:00+07:00`).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '—'}{order.delivery_time ? ` · ${order.delivery_time}` : ''}
+          </div>
+          {order.note && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconClipboard size={14} /> {order.note}</div>}
           {order.shipper_staff_name && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconTruck size={14} /> Người giao: {order.shipper_staff_name}</div>}
         </div>
         {order.flagged && <Badge tone="danger" icon={<IconWarning size={14} />}>Cần Lưu Ý</Badge>}

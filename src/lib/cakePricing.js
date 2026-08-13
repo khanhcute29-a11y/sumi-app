@@ -3,6 +3,12 @@ export const CAKE_SIZES_CM = [12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36
 
 export const CAKE_BASES = ['Matcha', 'Choco', 'Bông lan'];
 
+const CAKE_BASE_SURCHARGE = { Matcha: 30000, Choco: 30000 };
+
+export function baseSurcharge(base) {
+  return CAKE_BASE_SURCHARGE[base] || 0;
+}
+
 const BASE_PRICE_BY_SIZE = {
   12: 150000, 14: 180000, 16: 220000, 18: 260000, 20: 300000,
   22: 360000, 24: 420000, 26: 480000, 28: 600000, 30: 700000,
@@ -46,8 +52,8 @@ export function fillingSurchargeForSize(fillingValue, size) {
   return filling.surcharge[Number(size)] || 0;
 }
 
-export function computeCakePrice(size, fillingValue) {
-  return basePriceForSize(size) + fillingSurchargeForSize(fillingValue, size);
+export function computeCakePrice(size, fillingValue, base) {
+  return basePriceForSize(size) + fillingSurchargeForSize(fillingValue, size) + baseSurcharge(base);
 }
 
 export function fillingLabel(fillingValue) {

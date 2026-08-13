@@ -289,7 +289,15 @@ export default function KdsScreen({ initialStation }) {
   };
 
   const handleAccept = async (order) => {
-    applyFields(order, { status: 'dang_lam', kitchen_staff_name: profile?.full_name || null });
+    const staffName = profile?.full_name || null;
+    applyFields(order, { status: 'dang_lam', kitchen_staff_name: staffName });
+    if (isUrgent(order) && staffName) {
+      addOrderNote({
+        orderId: order.id, orderCode: order.order_code, authorId: profile?.id,
+        authorName: staffName, authorRole: profile?.role,
+        message: `🚨 Đơn khẩn cấp — @${staffName} đang làm gấp`,
+      }).catch(() => {});
+    }
   };
 
   const handleReady = async (order, photoUrl) => {
