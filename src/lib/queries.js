@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { isSyntheticPhoneEmail } from './authPhone';
 
 // ---- Profiles (tài khoản & phân quyền nhân viên) ----
 
@@ -8,7 +9,8 @@ export async function fetchMyProfile() {
   const user = userData.user;
   const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
   if (error) throw error;
-  return { ...data, email: user.email, phone: user.phone };
+  const realEmail = isSyntheticPhoneEmail(user.email) ? null : user.email;
+  return { ...data, email: realEmail, phone: data?.phone || user.phone };
 }
 
 export async function fetchAllProfiles() {

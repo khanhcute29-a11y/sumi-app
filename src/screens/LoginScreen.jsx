@@ -2,11 +2,7 @@ import React, { useState } from 'react';
 import { Input } from '../components/forms/Input';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { translateAuthError } from '../lib/authErrors';
-
-function toAuthField(identifier) {
-  const trimmed = identifier.trim();
-  return trimmed.includes('@') ? { email: trimmed } : { phone: trimmed };
-}
+import { toAuthField, normalizePhoneDigits } from '../lib/authPhone';
 
 export default function LoginScreen() {
   const [mode, setMode] = useState('login');
@@ -34,15 +30,19 @@ export default function LoginScreen() {
   const handleRegister = async () => {
     setError('');
     if (!regName || !regPhone || !regPw) { setError('Nhập đầy đủ thông tin đăng ký.'); return; }
+    const isEmail = regPhone.trim().includes('@');
+    if (!isEmail && normalizePhoneDigits(regPhone).length < 9) { setError('Số điện thoại không hợp lệ.'); return; }
     setLoading(true);
     const { error: err } = await supabase.auth.signUp({
       ...toAuthField(regPhone),
       password: regPw,
-      options: { data: { full_name: regName } },
+      options: { data: { full_name: regName, phone: isEmail ? null : normalizePhoneDigits(regPhone) } },
     });
     setLoading(false);
     if (err) { setError(translateAuthError(err.message)); return; }
-    setNotice('Đăng ký thành công! Kiểm tra email để xác nhận rồi đăng nhập (hoặc đăng nhập ngay nếu đã tắt xác nhận email).');
+    setNotice(isEmail
+      ? 'Đăng ký thành công! Kiểm tra email để xác nhận rồi đăng nhập (hoặc đăng nhập ngay nếu đã tắt xác nhận email).'
+      : 'Đăng ký thành công! Đăng nhập ngay bằng số điện thoại và mật khẩu vừa tạo.');
     setMode('login');
   };
 

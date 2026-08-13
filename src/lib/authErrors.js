@@ -1,5 +1,4 @@
 const RULES = [
-  [/phone logins are disabled/i, 'Đăng nhập bằng số điện thoại hiện chưa được bật (cần dịch vụ SMS trả phí) — vui lòng dùng Gmail/email để đăng nhập.'],
   [/invalid login credentials/i, 'Sai số điện thoại/email hoặc mật khẩu.'],
   [/email not confirmed/i, 'Tài khoản chưa được xác nhận — liên hệ quản trị viên để kích hoạt, hoặc kiểm tra cài đặt "Confirm email" trong Supabase.'],
   [/user already registered/i, 'Tài khoản này đã tồn tại — hãy bấm "Đăng nhập" thay vì đăng ký.'],
