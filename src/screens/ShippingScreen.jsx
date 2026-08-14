@@ -46,8 +46,8 @@ function isLate(order) {
 function LateReasonPrompt({ onCancel, onConfirm, busy }) {
   const [reason, setReason] = useState('');
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60 }} onClick={onCancel}>
-      <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: 340, padding: 20, boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 12 }} onClick={(e) => e.stopPropagation()}>
+    <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 16 }} onClick={onCancel}>
+      <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: 340, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto', padding: 20, boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 12 }} onClick={(e) => e.stopPropagation()}>
         <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>Đơn này đang giao trễ — lý do?</div>
         <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Bắt buộc nhập lý do trước khi xác nhận hoàn thành.</div>
         <Input label="Lý do giao trễ" placeholder="VD: Kẹt xe, chờ khách, khách đổi địa chỉ..." value={reason} onChange={(e) => setReason(e.target.value)} />

@@ -153,8 +153,8 @@ function ReasonModal({ title, confirmLabel, confirmVariant, onClose, onConfirm, 
   const [photoUrl, setPhotoUrl] = useState('');
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60 }} onClick={onClose}>
-      <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: 380, padding: 20, boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 12 }} onClick={(e) => e.stopPropagation()}>
+    <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 16 }} onClick={onClose}>
+      <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: 380, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto', padding: 20, boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 12 }} onClick={(e) => e.stopPropagation()}>
         <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>{title}</div>
         <Input label="Lý do" placeholder="VD: Khách đổi ý, nhập sai thông tin, hết nguyên liệu..." value={reason} onChange={(e) => setReason(e.target.value)} />
         <PhotoField url={photoUrl} onChange={setPhotoUrl} label="Ảnh bằng chứng (nếu có)" prefix="cancel" />
