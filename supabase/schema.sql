@@ -5,7 +5,7 @@
 create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   full_name text,
-  role text not null default 'cashier' check (role in ('owner','cashier','kitchen','shipper','admin','accountant','warehouse','sale','bakery','kitchen_lead','kitchen_deputy')),
+  role text not null default 'cashier' check (role in ('owner','cashier','kitchen','shipper','admin','accountant','warehouse','sale','bakery','kitchen_lead','kitchen_deputy','kho_bakery','kho_xuong41','kho_xuong42')),
   approved boolean not null default true,
   created_at timestamptz not null default now()
 );
@@ -129,6 +129,7 @@ create table if not exists warehouse_stock (
   status text not null default 'fresh' check (status in ('fresh','soon','expired')),
   expiry_date date,
   photo_url text,
+  branch text not null default 'bakery' check (branch in ('bakery', 'xuong41', 'xuong42')),
   created_at timestamptz not null default now()
 );
 

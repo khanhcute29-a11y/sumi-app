@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   IconDashboard, IconOrders, IconKitchen, IconWarehouse, IconCashbook,
   IconShipping, IconProducts, IconShifts, IconReports, IconCustomers, IconStaff,
-  IconSettings, IconStationHot, IconStationCold, IconStationWorkshop, IconStationSparkle, IconCheck,
+  IconSettings, IconStationHot, IconStationCold, IconStationWorkshop, IconStationSparkle, IconCheck, IconWarning,
 } from '../icons/FrogIcons';
 
 const items = [
@@ -15,6 +15,7 @@ const items = [
   { key: 'products', label: 'Sản Phẩm', Icon: IconProducts },
   { key: 'shifts', label: 'Ca Làm Việc', Icon: IconShifts },
   { key: 'approvals', label: 'Yêu Cầu Duyệt', Icon: IconCheck },
+  { key: 'incidents', label: 'Báo Cáo Sự Cố', Icon: IconWarning },
   { key: 'reports', label: 'Báo Cáo', Icon: IconReports },
   { key: 'crm', label: 'Khách Hàng', Icon: IconCustomers },
   { key: 'staff', label: 'Nhân Viên', Icon: IconStaff },
@@ -28,8 +29,23 @@ const KDS_STATIONS = [
   { key: 'xuong41', label: 'Xưởng 41', Icon: IconStationSparkle },
 ];
 
-export function Sidebar({ active = 'orders', activeStation, onSelect, onSelectStation, brand = 'Sumi Bakery', style }) {
-  const [kdsOpen, setKdsOpen] = useState(active === 'kds');
+const WAREHOUSE_BRANCHES = [
+  { key: 'bakery', label: 'Kho Bakery', Icon: IconWarehouse },
+  { key: 'xuong42', label: 'Kho Xưởng 42', Icon: IconStationWorkshop },
+  { key: 'xuong41', label: 'Kho Xưởng 41', Icon: IconStationSparkle },
+];
+
+// Mục có submenu: key nav -> { subs, activeSub, onSelectSub }
+function useSubmenus({ activeStation, onSelectStation, activeBranch, onSelectBranch }) {
+  return {
+    kds: { subs: KDS_STATIONS, activeSub: activeStation, onSelectSub: onSelectStation },
+    warehouse: { subs: WAREHOUSE_BRANCHES, activeSub: activeBranch, onSelectSub: onSelectBranch },
+  };
+}
+
+export function Sidebar({ active = 'orders', activeStation, onSelectStation, activeBranch, onSelectBranch, onSelect, brand = 'Sumi Bakery', style }) {
+  const [openKeys, setOpenKeys] = useState({ [active]: true });
+  const submenus = useSubmenus({ activeStation, onSelectStation, activeBranch, onSelectBranch });
 
   return (
     <nav style={{
@@ -41,7 +57,8 @@ export function Sidebar({ active = 'orders', activeStation, onSelect, onSelectSt
         {items.map((it) => {
           const isActive = it.key === active;
           const iconColor = isActive ? 'var(--primary-700)' : 'var(--text-primary)';
-          if (it.key !== 'kds') {
+          const submenu = submenus[it.key];
+          if (!submenu) {
             return (
               <button key={it.key} onClick={() => onSelect && onSelect(it.key)} style={{
                 display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 'var(--radius-sm)',
@@ -53,9 +70,10 @@ export function Sidebar({ active = 'orders', activeStation, onSelect, onSelectSt
               </button>
             );
           }
+          const isOpen = !!openKeys[it.key];
           return (
             <div key={it.key}>
-              <button onClick={() => { onSelect && onSelect(it.key); onSelectStation && onSelectStation('all'); setKdsOpen(true); }} style={{
+              <button onClick={() => { onSelect && onSelect(it.key); submenu.onSelectSub && submenu.onSelectSub('all'); setOpenKeys((prev) => ({ ...prev, [it.key]: true })); }} style={{
                 width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 'var(--radius-sm)',
                 border: 'none', cursor: 'pointer', textAlign: 'left', font: 'var(--text-body)',
                 background: isActive ? 'var(--surface-primary-soft)' : 'transparent',
@@ -63,21 +81,21 @@ export function Sidebar({ active = 'orders', activeStation, onSelect, onSelectSt
               }}>
                 <it.Icon size={20} style={{ color: iconColor }} />
                 <span style={{ flex: 1 }}>{it.label}</span>
-                <span aria-hidden="true" style={{ color: 'var(--text-muted)', font: 'var(--text-caption)' }}>{kdsOpen ? '▾' : '▸'}</span>
+                <span aria-hidden="true" style={{ color: 'var(--text-muted)', font: 'var(--text-caption)' }}>{isOpen ? '▾' : '▸'}</span>
               </button>
-              {kdsOpen && (
+              {isOpen && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 1, paddingLeft: 14 }}>
-                  {KDS_STATIONS.map((s) => {
-                    const stationActive = isActive && activeStation === s.key;
-                    const stationIconColor = stationActive ? 'var(--primary-700)' : 'var(--text-secondary)';
+                  {submenu.subs.map((s) => {
+                    const subActive = isActive && submenu.activeSub === s.key;
+                    const subIconColor = subActive ? 'var(--primary-700)' : 'var(--text-secondary)';
                     return (
-                      <button key={s.key} onClick={() => { onSelect && onSelect('kds'); onSelectStation && onSelectStation(s.key); }} style={{
+                      <button key={s.key} onClick={() => { onSelect && onSelect(it.key); submenu.onSelectSub && submenu.onSelectSub(s.key); }} style={{
                         display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 'var(--radius-sm)',
                         border: 'none', cursor: 'pointer', textAlign: 'left', font: 'var(--text-body-sm)',
-                        background: stationActive ? 'var(--surface-primary-soft)' : 'transparent',
-                        color: stationActive ? 'var(--primary-700)' : 'var(--text-secondary)', fontWeight: stationActive ? 600 : 400,
+                        background: subActive ? 'var(--surface-primary-soft)' : 'transparent',
+                        color: subActive ? 'var(--primary-700)' : 'var(--text-secondary)', fontWeight: subActive ? 600 : 400,
                       }}>
-                        <s.Icon size={18} style={{ color: stationIconColor }} />{s.label}
+                        <s.Icon size={18} style={{ color: subIconColor }} />{s.label}
                       </button>
                     );
                   })}

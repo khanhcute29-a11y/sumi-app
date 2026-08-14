@@ -13,14 +13,21 @@ import { enqueue, getQueue } from '../lib/offlineQueue';
 import { IconMic, IconCamera, IconWarning, IconAdd, IconDownload } from '../components/icons/FrogIcons';
 
 const UNITS = ['g', 'kg', 'ml', 'lít', 'quả', 'cái', 'gói'];
+const BRANCHES = [
+  { value: 'bakery', label: 'Kho Bakery' },
+  { value: 'xuong41', label: 'Kho Xưởng 41' },
+  { value: 'xuong42', label: 'Kho Xưởng 42' },
+];
+const branchLabel = (v) => BRANCHES.find((b) => b.value === v)?.label || v;
 
-function AddStockForm({ onAdded, onQueued, onClose }) {
+function AddStockForm({ onAdded, onQueued, onClose, defaultBranch, lockedBranch }) {
   const [name, setName] = useState('');
   const [qty, setQty] = useState('');
   const [unit, setUnit] = useState('kg');
   const [costPerUnit, setCostPerUnit] = useState('');
   const [status, setStatus] = useState('fresh');
   const [expiryDate, setExpiryDate] = useState('');
+  const [branch, setBranch] = useState(lockedBranch || defaultBranch || 'bakery');
   const [photoBlob, setPhotoBlob] = useState(null);
   const [showCamera, setShowCamera] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -34,9 +41,9 @@ function AddStockForm({ onAdded, onQueued, onClose }) {
   };
 
   const queueOffline = () => {
-    const payload = { name, qtyLabel, unit, qty: Number(qty) || 0, costPerUnit: Number(costPerUnit) || 0, status, expiryDate, photoUrl: null };
+    const payload = { name, qtyLabel, unit, qty: Number(qty) || 0, costPerUnit: Number(costPerUnit) || 0, status, expiryDate, photoUrl: null, branch };
     const queued = enqueue('addWarehouseStock', payload);
-    onQueued({ id: queued.id, name, qty_label: qtyLabel, status, expiry_date: expiryDate || null, pendingSync: true });
+    onQueued({ id: queued.id, name, qty_label: qtyLabel, status, expiry_date: expiryDate || null, branch, pendingSync: true });
   };
 
   const handleSubmit = async () => {
@@ -52,7 +59,7 @@ function AddStockForm({ onAdded, onQueued, onClose }) {
     try {
       let photoUrl = null;
       if (photoBlob) photoUrl = await uploadPhoto(photoBlob, 'warehouse');
-      await addWarehouseStock({ name, qtyLabel, unit, qty: Number(qty) || 0, costPerUnit: Number(costPerUnit) || 0, status, expiryDate, photoUrl });
+      await addWarehouseStock({ name, qtyLabel, unit, qty: Number(qty) || 0, costPerUnit: Number(costPerUnit) || 0, status, expiryDate, photoUrl, branch });
       onAdded();
       onClose();
     } catch (err) {
@@ -67,6 +74,11 @@ function AddStockForm({ onAdded, onQueued, onClose }) {
     <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
       {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
       {offline && <div style={{ font: 'var(--text-caption)', color: 'var(--status-warning)' }}>Đang mất mạng — sẽ lưu tạm và tự đồng bộ khi có mạng lại (ảnh chụp sẽ không đính kèm được lúc offline).</div>}
+      {lockedBranch ? (
+        <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Thêm vào: <b>{branchLabel(lockedBranch)}</b></div>
+      ) : (
+        <Select label="Thuộc kho" value={branch} onChange={(e) => setBranch(e.target.value)} options={BRANCHES} />
+      )}
       <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
         <Input label="Tên nguyên liệu" placeholder="VD: Bột mì số 8" value={name} onChange={(e) => setName(e.target.value)} style={{ flex: 1 }} />
         {voice.supported && (
@@ -181,8 +193,12 @@ function EditCostForm({ item, onSaved, onClose }) {
   );
 }
 
-export default function WarehouseScreen() {
+const BRANCH_ROLE_MAP = { kho_bakery: 'bakery', kho_xuong41: 'xuong41', kho_xuong42: 'xuong42' };
+
+export default function WarehouseScreen({ branch: viewBranch = 'all', onBranchChange }) {
   const { profile } = useAuth();
+  const lockedBranch = BRANCH_ROLE_MAP[profile?.role] || null;
+  const effectiveBranch = lockedBranch || viewBranch;
   const [stock, setStock] = useState([]);
   const [pendingItems, setPendingItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -212,16 +228,35 @@ export default function WarehouseScreen() {
   }, []);
 
   const statusRank = { expired: 0, soon: 1, fresh: 2 };
-  const allItems = [...pendingItems, ...stock].sort((a, b) => (statusRank[a.status] ?? 2) - (statusRank[b.status] ?? 2));
+  const combined = [...pendingItems, ...stock].sort((a, b) => (statusRank[a.status] ?? 2) - (statusRank[b.status] ?? 2));
+  const allItems = effectiveBranch === 'all' ? combined : combined.filter((s) => (s.branch || 'bakery') === effectiveBranch);
   const expiredCount = allItems.filter((s) => s.status === 'expired').length;
   const soonCount = allItems.filter((s) => s.status === 'soon').length;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div>
-        <div style={{ font: 'var(--text-display-md)', color: 'var(--text-primary)' }}>Kho Hàng — Bà Tám</div>
+        <div style={{ font: 'var(--text-display-md)', color: 'var(--text-primary)' }}>Kho Hàng — Bà Tám{effectiveBranch !== 'all' ? ` · ${branchLabel(effectiveBranch)}` : ''}</div>
         <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Layout siêu to, dành cho thao tác nhanh tại kho</div>
       </div>
+      {!lockedBranch && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <label style={{ font: 'var(--text-label)', color: 'var(--text-secondary)' }}>Chọn kho:</label>
+          <select
+            value={viewBranch}
+            onChange={(e) => onBranchChange && onBranchChange(e.target.value)}
+            style={{
+              padding: '10px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)',
+              background: 'var(--surface-card)', color: 'var(--text-primary)', font: 'var(--text-body)', cursor: 'pointer', minWidth: 200,
+            }}
+          >
+            <option value="all">Tất cả ({combined.length})</option>
+            {BRANCHES.map((b) => (
+              <option key={b.value} value={b.value}>{b.label} ({combined.filter((s) => (s.branch || 'bakery') === b.value).length})</option>
+            ))}
+          </select>
+        </div>
+      )}
       {(expiredCount > 0 || soonCount > 0) && (
         <div style={{
           display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center',
@@ -244,8 +279,14 @@ export default function WarehouseScreen() {
           Báo sự cố kho
         </Button>
       </div>
-      {showForm && <AddStockForm onAdded={load} onQueued={(item) => setPendingItems((prev) => [item, ...prev])} onClose={() => setShowForm(false)} />}
-      {showStockOut && <StockOutForm stock={stock} staffName={profile?.full_name} onDone={load} onClose={() => setShowStockOut(false)} />}
+      {showForm && (
+        <AddStockForm onAdded={load} onQueued={(item) => setPendingItems((prev) => [item, ...prev])} onClose={() => setShowForm(false)}
+          defaultBranch={effectiveBranch === 'all' ? 'bakery' : effectiveBranch} lockedBranch={lockedBranch} />
+      )}
+      {showStockOut && (
+        <StockOutForm stock={effectiveBranch === 'all' ? stock : stock.filter((s) => (s.branch || 'bakery') === effectiveBranch)}
+          staffName={profile?.full_name} onDone={load} onClose={() => setShowStockOut(false)} />
+      )}
       {showIncident && <IncidentReportModal onClose={() => setShowIncident(false)} onSent={() => setShowIncident(false)} />}
       {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>Lỗi tải kho: {error}</div>}
       {loading ? (
@@ -263,6 +304,7 @@ export default function WarehouseScreen() {
                     <div style={{ font: '700 17px var(--font-body)', color: 'var(--text-primary)' }}>{s.name}</div>
                     <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>
                       Tồn: {s.qty_label}{s.cost_per_unit ? ` · ${Number(s.cost_per_unit).toLocaleString('vi-VN')}đ/${s.unit}` : ''}
+                      {effectiveBranch === 'all' && ` · ${branchLabel(s.branch || 'bakery')}`}
                     </div>
                   </div>
                 </div>

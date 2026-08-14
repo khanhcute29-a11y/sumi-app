@@ -24,8 +24,9 @@ import ShiftsScreen from './screens/ShiftsScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import StaffScreen from './screens/StaffScreen';
 import ApprovalRequestsScreen from './screens/ApprovalRequestsScreen';
+import IncidentsScreen from './screens/IncidentsScreen';
 import { applyUiScale, getUiScale } from './lib/uiScale';
-import { IconDashboard, IconShipping, IconProducts, IconShifts, IconReports, IconCustomers, IconStaff, IconSettings, IconCheck } from './components/icons/FrogIcons';
+import { IconDashboard, IconShipping, IconProducts, IconShifts, IconReports, IconCustomers, IconStaff, IconSettings, IconCheck, IconWarning } from './components/icons/FrogIcons';
 
 const MORE_ITEMS = [
   { key: 'dashboard', label: 'Tổng Quan', Icon: IconDashboard },
@@ -33,6 +34,7 @@ const MORE_ITEMS = [
   { key: 'products', label: 'Sản Phẩm', Icon: IconProducts },
   { key: 'shifts', label: 'Ca Làm Việc', Icon: IconShifts },
   { key: 'approvals', label: 'Yêu Cầu Duyệt', Icon: IconCheck },
+  { key: 'incidents', label: 'Báo Cáo Sự Cố', Icon: IconWarning },
   { key: 'reports', label: 'Báo Cáo', Icon: IconReports },
   { key: 'crm', label: 'Khách Hàng', Icon: IconCustomers },
   { key: 'staff', label: 'Nhân Viên', Icon: IconStaff },
@@ -67,6 +69,7 @@ function OpsApp({ onSignOut }) {
   const [tab, setTab] = useState('orders');
   const [showMore, setShowMore] = useState(false);
   const [kdsStation, setKdsStation] = useState('all');
+  const [warehouseBranch, setWarehouseBranch] = useState('all');
 
   useOrderNotifications();
 
@@ -77,15 +80,15 @@ function OpsApp({ onSignOut }) {
   }, []);
 
   const screens = {
-    dashboard: <DashboardScreen />, orders: <OrdersScreen />, kds: <KdsScreen initialStation={kdsStation} />, warehouse: <WarehouseScreen />, cashbook: <CashbookScreen />,
-    shipping: <ShippingScreen />, products: <ProductsScreen />, shifts: <ShiftsScreen />, approvals: <ApprovalRequestsScreen />, reports: <ReportsScreen />, crm: <CustomersScreen />, staff: <StaffScreen />, settings: <SettingsScreen onSignOut={onSignOut} />,
+    dashboard: <DashboardScreen />, orders: <OrdersScreen />, kds: <KdsScreen initialStation={kdsStation} />, warehouse: <WarehouseScreen branch={warehouseBranch} onBranchChange={setWarehouseBranch} />, cashbook: <CashbookScreen />,
+    shipping: <ShippingScreen />, products: <ProductsScreen />, shifts: <ShiftsScreen />, approvals: <ApprovalRequestsScreen />, incidents: <IncidentsScreen />, reports: <ReportsScreen />, crm: <CustomersScreen />, staff: <StaffScreen />, settings: <SettingsScreen onSignOut={onSignOut} />,
   };
   const isBottomKey = (k) => ['orders', 'kds', 'warehouse', 'cashbook'].includes(k);
   return (
     <div className="sb-shell">
       <ConnectivityBanner />
       <div className="sb-body">
-        <div className="sb-sidebar"><Sidebar active={tab} activeStation={kdsStation} onSelect={setTab} onSelectStation={setKdsStation} /></div>
+        <div className="sb-sidebar"><Sidebar active={tab} activeStation={kdsStation} onSelectStation={setKdsStation} activeBranch={warehouseBranch} onSelectBranch={setWarehouseBranch} onSelect={setTab} /></div>
         <div className="sb-content">
           {screens[tab]}
         </div>

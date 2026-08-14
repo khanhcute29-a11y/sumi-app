@@ -6,6 +6,9 @@ export const ROLE_META = {
   kitchen_lead: { label: 'Bếp Trưởng', tone: 'warning', level: 3 },
   kitchen_deputy: { label: 'Bếp Phó', tone: 'warning', level: 2 },
   bakery: { label: 'Thợ Làm Bánh', tone: 'warning', level: 2 },
+  kho_bakery: { label: 'Nhân Viên Kho Bakery', tone: 'info', level: 2 },
+  kho_xuong41: { label: 'Nhân Viên Kho Xưởng 41', tone: 'info', level: 2 },
+  kho_xuong42: { label: 'Nhân Viên Kho Xưởng 42', tone: 'info', level: 2 },
   shipper: { label: 'Vận Chuyển', tone: 'success', level: 1 },
 };
 
@@ -52,6 +55,21 @@ export const ROLE_PERMISSIONS = [
       'view_product_inventory', 'view_prices', 'apply_discount',
       'view_own_reports', 'create_report'
     ]
+  },
+  {
+    role: 'kho_bakery',
+    desc: 'Nhân viên Kho Bakery — chỉ xem/thao tác nguyên liệu thuộc Kho Bakery.',
+    permissions: ['view_inventory', 'edit_inventory']
+  },
+  {
+    role: 'kho_xuong41',
+    desc: 'Nhân viên Kho Xưởng 41 — chỉ xem/thao tác nguyên liệu thuộc Kho Xưởng 41.',
+    permissions: ['view_inventory', 'edit_inventory']
+  },
+  {
+    role: 'kho_xuong42',
+    desc: 'Nhân viên Kho Xưởng 42 — chỉ xem/thao tác nguyên liệu thuộc Kho Xưởng 42.',
+    permissions: ['view_inventory', 'edit_inventory']
   },
   {
     role: 'kitchen_lead',

@@ -288,10 +288,10 @@ export async function fetchWarehouseStock() {
   return data;
 }
 
-export async function addWarehouseStock({ name, qtyLabel, unit, qty, costPerUnit, status, expiryDate, photoUrl }) {
+export async function addWarehouseStock({ name, qtyLabel, unit, qty, costPerUnit, status, expiryDate, photoUrl, branch }) {
   const { error } = await supabase.from('warehouse_stock').insert({
     name, qty_label: qtyLabel, unit: unit || 'g', qty: qty || 0, cost_per_unit: costPerUnit || 0,
-    status, expiry_date: expiryDate || null, photo_url: photoUrl || null,
+    status, expiry_date: expiryDate || null, photo_url: photoUrl || null, branch: branch || 'bakery',
   });
   if (error) throw error;
 }
