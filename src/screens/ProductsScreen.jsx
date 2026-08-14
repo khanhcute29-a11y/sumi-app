@@ -12,6 +12,7 @@ import {
 } from '../lib/queries';
 import { IconTrash, IconRuler } from '../components/icons/FrogIcons';
 import { useAuth } from '../lib/AuthContext';
+import { hasRole } from '../lib/roles';
 
 const CATEGORIES = [
   { value: 'banh_kem', label: 'Bánh Kem' },
@@ -223,7 +224,7 @@ function ProductRow({ product, ingredients, canEdit, onChanged }) {
 
 export default function ProductsScreen() {
   const { profile } = useAuth();
-  const isOwner = profile?.role === 'owner';
+  const isOwner = hasRole(profile, 'owner');
   const [products, setProducts] = useState([]);
   const [ingredients, setIngredients] = useState([]);
   const [loading, setLoading] = useState(true);

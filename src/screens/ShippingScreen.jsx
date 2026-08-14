@@ -8,6 +8,7 @@ import { ActionChip } from '../components/ActionChip';
 import { OrderDetailModal } from '../components/OrderDetailModal';
 import { fetchOrders, updateOrder, uploadPhoto, fetchShopSettings } from '../lib/queries';
 import { useAuth } from '../lib/AuthContext';
+import { hasAnyRole } from '../lib/roles';
 import { enqueue } from '../lib/offlineQueue';
 import { getCurrentPosition, haversineKm, estimateTrip } from '../lib/geo';
 import { IconOrders, IconHome, IconTruck, IconWarning, IconCamera, IconEdit, IconMapPin, IconClock, IconPhone, IconClipboard, IconMoney } from '../components/icons/FrogIcons';
@@ -243,7 +244,7 @@ function DeliveryCard({ order, onPickup, onComplete, onSignedDoc, canAct, shopSe
 
 export default function ShippingScreen() {
   const { profile } = useAuth();
-  const canAct = profile?.role === 'shipper' || profile?.role === 'owner' || profile?.role === 'admin';
+  const canAct = hasAnyRole(profile, ['shipper', 'owner', 'admin']);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');

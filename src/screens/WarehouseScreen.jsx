@@ -9,6 +9,7 @@ import { IncidentReportModal } from '../components/IncidentReportModal';
 import { fetchWarehouseStock, addWarehouseStock, updateWarehouseStock, deductWarehouseStock, uploadPhoto } from '../lib/queries';
 import { useVoiceInput } from '../lib/useVoiceInput';
 import { useAuth } from '../lib/AuthContext';
+import { hasAnyRole } from '../lib/roles';
 import { enqueue, getQueue } from '../lib/offlineQueue';
 import { IconMic, IconCamera, IconWarning, IconAdd, IconDownload } from '../components/icons/FrogIcons';
 
@@ -194,11 +195,14 @@ function EditCostForm({ item, onSaved, onClose }) {
 }
 
 const BRANCH_ROLE_MAP = { kho_bakery: 'bakery', kho_xuong41: 'xuong41', kho_xuong42: 'xuong42' };
+const WAREHOUSE_FULL_ACCESS_ROLES = ['owner', 'admin', 'warehouse'];
 
 export default function WarehouseScreen({ branch: viewBranch = 'all', onBranchChange }) {
   const { profile } = useAuth();
-  const lockedBranch = BRANCH_ROLE_MAP[profile?.role] || null;
-  const effectiveBranch = lockedBranch || viewBranch;
+  const hasFullAccess = hasAnyRole(profile, WAREHOUSE_FULL_ACCESS_ROLES);
+  const myBranches = hasFullAccess ? [] : [...new Set([profile?.role, ...(profile?.extra_roles || [])].map((r) => BRANCH_ROLE_MAP[r]).filter(Boolean))];
+  const lockedBranch = !hasFullAccess && myBranches.length === 1 ? myBranches[0] : null;
+  const effectiveBranch = lockedBranch || (myBranches.length > 1 && !myBranches.includes(viewBranch) ? myBranches[0] : viewBranch);
   const [stock, setStock] = useState([]);
   const [pendingItems, setPendingItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -243,15 +247,15 @@ export default function WarehouseScreen({ branch: viewBranch = 'all', onBranchCh
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <label style={{ font: 'var(--text-label)', color: 'var(--text-secondary)' }}>Chọn kho:</label>
           <select
-            value={viewBranch}
+            value={effectiveBranch}
             onChange={(e) => onBranchChange && onBranchChange(e.target.value)}
             style={{
               padding: '10px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)',
               background: 'var(--surface-card)', color: 'var(--text-primary)', font: 'var(--text-body)', cursor: 'pointer', minWidth: 200,
             }}
           >
-            <option value="all">Tất cả ({combined.length})</option>
-            {BRANCHES.map((b) => (
+            {hasFullAccess && <option value="all">Tất cả ({combined.length})</option>}
+            {BRANCHES.filter((b) => hasFullAccess || myBranches.includes(b.value)).map((b) => (
               <option key={b.value} value={b.value}>{b.label} ({combined.filter((s) => (s.branch || 'bakery') === b.value).length})</option>
             ))}
           </select>

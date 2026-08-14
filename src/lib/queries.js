@@ -40,6 +40,11 @@ export async function updateProfileRole(id, role) {
   if (error) throw error;
 }
 
+export async function updateProfileExtraRoles(id, extraRoles) {
+  const { error } = await supabase.from('profiles').update({ extra_roles: extraRoles }).eq('id', id);
+  if (error) throw error;
+}
+
 export async function approveStaff(id, role) {
   const { error } = await supabase.from('profiles').update({ role, approved: true }).eq('id', id);
   if (error) throw error;

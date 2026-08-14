@@ -6,6 +6,7 @@ import { Badge } from '../components/feedback/Badge';
 import { Input } from '../components/forms/Input';
 import { fetchOrders, fetchWarehouseStock } from '../lib/queries';
 import { useAuth } from '../lib/AuthContext';
+import { hasAnyRole } from '../lib/roles';
 import { localDateStr } from '../lib/date';
 import { IconOrders, IconKitchen, IconTruck, IconCheckCircle, IconMoney, IconReceipt, IconBan, IconWarning } from '../components/icons/FrogIcons';
 
@@ -46,7 +47,7 @@ function OrderRow({ order }) {
 
 export default function DashboardScreen() {
   const { profile } = useAuth();
-  const isOwner = profile?.role === 'owner' || profile?.role === 'admin';
+  const isOwner = hasAnyRole(profile, ['owner', 'admin']);
   const [range, setRange] = useState('today');
   const today = localDateStr();
   const [customFrom, setCustomFrom] = useState(today);

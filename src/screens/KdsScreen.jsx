@@ -9,6 +9,7 @@ import { ActionChip } from '../components/ActionChip';
 import { OrderDetailModal } from '../components/OrderDetailModal';
 import { fetchOrders, updateOrder, uploadPhoto, addOrderNote } from '../lib/queries';
 import { useAuth } from '../lib/AuthContext';
+import { hasAnyRole } from '../lib/roles';
 import { enqueue } from '../lib/offlineQueue';
 import { supabase } from '../lib/supabaseClient';
 import {
@@ -254,7 +255,7 @@ function StationOverviewCard({ stationKey, orders, active, onClick }) {
 
 export default function KdsScreen({ initialStation }) {
   const { profile } = useAuth();
-  const canAct = ['kitchen', 'bakery', 'kitchen_lead', 'kitchen_deputy', 'owner', 'admin'].includes(profile?.role);
+  const canAct = hasAnyRole(profile, ['kitchen', 'bakery', 'kitchen_lead', 'kitchen_deputy', 'owner', 'admin']);
   const [activeStation, setActiveStation] = useState(initialStation || 'all');
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);

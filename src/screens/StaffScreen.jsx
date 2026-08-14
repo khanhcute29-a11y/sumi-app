@@ -3,8 +3,8 @@ import { Card } from '../components/data/Card';
 import { Badge } from '../components/feedback/Badge';
 import { Button } from '../components/forms/Button';
 import { Select } from '../components/forms/Select';
-import { fetchMyProfile, fetchAllProfiles, updateProfileRole, approveStaff } from '../lib/queries';
-import { ROLE_META, ROLE_OPTIONS, ROLE_PERMISSIONS } from '../lib/roles';
+import { fetchMyProfile, fetchAllProfiles, updateProfileRole, updateProfileExtraRoles, approveStaff } from '../lib/queries';
+import { ROLE_META, ROLE_OPTIONS, ROLE_PERMISSIONS, hasAnyRole } from '../lib/roles';
 
 function PendingStaffRow({ s, onApprove }) {
   const [role, setRole] = useState(s.role);
@@ -27,8 +27,17 @@ function PendingStaffRow({ s, onApprove }) {
   );
 }
 
-function StaffRow({ s, isOwner, isMe, onChangeRole, expanded, onToggle }) {
+function StaffRow({ s, isOwner, isMe, onChangeRole, onChangeExtraRoles, expanded, onToggle }) {
   const perm = ROLE_PERMISSIONS.find((p) => p.role === s.role);
+  const extraRoles = s.extra_roles || [];
+  const [savingExtra, setSavingExtra] = useState(false);
+
+  const toggleExtraRole = async (role) => {
+    const next = extraRoles.includes(role) ? extraRoles.filter((r) => r !== role) : [...extraRoles, role];
+    setSavingExtra(true);
+    try { await onChangeExtraRoles(s.id, next); } finally { setSavingExtra(false); }
+  };
+
   return (
     <div style={{ borderBottom: '1px solid var(--border-subtle)' }}>
       <button onClick={onToggle} style={{
@@ -36,8 +45,9 @@ function StaffRow({ s, isOwner, isMe, onChangeRole, expanded, onToggle }) {
         padding: '10px 0', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left',
       }}>
         <span style={{ font: 'var(--text-body)', color: 'var(--text-primary)' }}>{s.full_name || '(chưa đặt tên)'}</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <Badge tone={ROLE_META[s.role]?.tone || 'neutral'}>{ROLE_META[s.role]?.label || s.role}</Badge>
+          {extraRoles.map((r) => <Badge key={r} tone="neutral">+{ROLE_META[r]?.label || r}</Badge>)}
           <span style={{ color: 'var(--text-muted)' }}>{expanded ? '▲' : '▼'}</span>
         </div>
       </button>
@@ -50,10 +60,31 @@ function StaffRow({ s, isOwner, isMe, onChangeRole, expanded, onToggle }) {
           )}
           {perm && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '8px 10px' }}>{perm.desc}</div>}
           {isOwner && !isMe && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Đổi vai trò:</span>
-              <Select value={s.role} onChange={(e) => onChangeRole(s.id, e.target.value)} options={ROLE_OPTIONS} style={{ width: 160 }} />
-            </div>
+            <React.Fragment>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Đổi vai trò:</span>
+                <Select value={s.role} onChange={(e) => onChangeRole(s.id, e.target.value)} options={ROLE_OPTIONS} style={{ width: 160 }} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Kiêm nhiệm thêm (tuỳ chọn):</span>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {ROLE_OPTIONS.filter((o) => o.value !== s.role).map((o) => {
+                    const checked = extraRoles.includes(o.value);
+                    return (
+                      <label key={o.value} style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 8px', borderRadius: 'var(--radius-pill)',
+                        border: `1px solid ${checked ? 'var(--action-primary)' : 'var(--border-subtle)'}`,
+                        background: checked ? 'var(--surface-primary-soft)' : 'transparent',
+                        font: 'var(--text-caption)', color: checked ? 'var(--primary-700)' : 'var(--text-secondary)', cursor: savingExtra ? 'default' : 'pointer',
+                      }}>
+                        <input type="checkbox" checked={checked} disabled={savingExtra} onChange={() => toggleExtraRole(o.value)} style={{ margin: 0 }} />
+                        {o.label}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            </React.Fragment>
           )}
         </div>
       )}
@@ -78,7 +109,7 @@ export default function StaffScreen() {
 
   useEffect(load, []);
 
-  const isOwner = me?.role === 'owner' || me?.role === 'admin';
+  const isOwner = hasAnyRole(me, ['owner', 'admin']);
   const pending = staff.filter((s) => s.approved === false);
   const approved = staff.filter((s) => s.approved !== false);
 
@@ -89,6 +120,11 @@ export default function StaffScreen() {
 
   const handleChangeRole = async (id, role) => {
     await updateProfileRole(id, role);
+    load();
+  };
+
+  const handleChangeExtraRoles = async (id, extraRoles) => {
+    await updateProfileExtraRoles(id, extraRoles);
     load();
   };
 
@@ -121,7 +157,7 @@ export default function StaffScreen() {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 {approved.map((s) => (
-                  <StaffRow key={s.id} s={s} isOwner={isOwner} isMe={s.id === me?.id} onChangeRole={handleChangeRole}
+                  <StaffRow key={s.id} s={s} isOwner={isOwner} isMe={s.id === me?.id} onChangeRole={handleChangeRole} onChangeExtraRoles={handleChangeExtraRoles}
                     expanded={expandedId === s.id} onToggle={() => setExpandedId(expandedId === s.id ? null : s.id)} />
                 ))}
               </div>

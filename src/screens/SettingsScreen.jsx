@@ -9,6 +9,7 @@ import { Badge } from '../components/feedback/Badge';
 import { supabase } from '../lib/supabaseClient';
 import { fetchMyProfile, updateMyProfile, fetchShopSettings, updateShopSettings, fetchAuditLog, backupAllData } from '../lib/queries';
 import { translateAuthError } from '../lib/authErrors';
+import { hasAnyRole } from '../lib/roles';
 import { getCurrentPosition } from '../lib/geo';
 import { IconMapPin, IconSettings, IconBell, IconDownload } from '../components/icons/FrogIcons';
 import { isPushSupported, getPushSubscriptionStatus, enablePush, disablePush } from '../lib/push';
@@ -340,7 +341,7 @@ export default function SettingsScreen({ onSignOut }) {
 
   useEffect(load, []);
 
-  const isOwner = me?.role === 'owner' || me?.role === 'admin';
+  const isOwner = hasAnyRole(me, ['owner', 'admin']);
 
   const handleSaveName = async () => {
     setSavingName(true);

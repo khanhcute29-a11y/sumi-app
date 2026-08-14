@@ -115,3 +115,13 @@ export function canViewReports(userRole, targetUserRole) {
   const targetLevel = ROLE_META[targetUserRole]?.level || 0;
   return userLevel >= targetLevel;
 }
+
+// Kiêm nhiệm — kiểm tra vai trò chính HOẶC vai trò phụ do Chủ sở hữu gán thêm.
+export function hasRole(profile, role) {
+  if (!profile) return false;
+  return profile.role === role || (profile.extra_roles || []).includes(role);
+}
+
+export function hasAnyRole(profile, roles) {
+  return roles.some((r) => hasRole(profile, r));
+}

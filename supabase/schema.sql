@@ -6,6 +6,7 @@ create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   full_name text,
   role text not null default 'cashier' check (role in ('owner','cashier','kitchen','shipper','admin','accountant','warehouse','sale','bakery','kitchen_lead','kitchen_deputy','kho_bakery','kho_xuong41','kho_xuong42')),
+  extra_roles text[] not null default '{}',
   approved boolean not null default true,
   created_at timestamptz not null default now()
 );
@@ -493,7 +494,7 @@ select 'Ca chiều', '13:00' where not exists (select 1 from shift_configs where
 create or replace function public.prevent_self_role_change()
 returns trigger as $$
 begin
-  if new.role is distinct from old.role then
+  if (new.role is distinct from old.role or new.extra_roles is distinct from old.extra_roles) then
     if not exists (select 1 from profiles where id = auth.uid() and role = 'owner') then
       raise exception 'Không thể tự đổi vai trò — chỉ Chủ sở hữu mới có quyền này.';
     end if;

@@ -7,6 +7,7 @@ import {
   cancelOrder, deleteOrder, fetchOrderById, deleteShiftLog,
 } from '../lib/queries';
 import { useAuth } from '../lib/AuthContext';
+import { hasAnyRole } from '../lib/roles';
 import { IconCheck, IconBan, IconClock } from '../components/icons/FrogIcons';
 
 const TYPE_LABELS = {
@@ -94,7 +95,7 @@ function RequestRow({ req, canResolve, onResolved }) {
 
 export default function ApprovalRequestsScreen() {
   const { profile } = useAuth();
-  const canResolve = profile?.role === 'owner' || profile?.role === 'admin';
+  const canResolve = hasAnyRole(profile, ['owner', 'admin']);
   const [tab, setTab] = useState('pending');
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);

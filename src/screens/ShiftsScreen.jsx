@@ -12,6 +12,7 @@ import {
   createApprovalRequest,
 } from '../lib/queries';
 import { useAuth } from '../lib/AuthContext';
+import { hasAnyRole } from '../lib/roles';
 import { enqueue } from '../lib/offlineQueue';
 import { localDateStr } from '../lib/date';
 import { IconClipboard, IconCheck, IconClock, IconQuestion } from '../components/icons/FrogIcons';
@@ -378,7 +379,7 @@ function LogRow({ log }) {
 
 export default function ShiftsScreen() {
   const { profile } = useAuth();
-  const isOwner = profile?.role === 'owner' || profile?.role === 'admin';
+  const isOwner = hasAnyRole(profile, ['owner', 'admin']);
   const [date, setDate] = useState(localDateStr());
   const [shiftConfigs, setShiftConfigs] = useState([]);
   const [logs, setLogs] = useState([]);

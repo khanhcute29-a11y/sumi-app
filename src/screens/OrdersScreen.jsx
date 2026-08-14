@@ -10,6 +10,7 @@ import { fetchOrders, createOrder, fetchProducts, createProduct, cancelOrder, de
 import { CommentSection } from '../components/CommentSection';
 import { formatVnd, parseDigits } from '../lib/currency';
 import { useAuth } from '../lib/AuthContext';
+import { hasRole, hasAnyRole } from '../lib/roles';
 import { PhotoField } from '../components/PhotoField';
 import { IncidentReportModal } from '../components/IncidentReportModal';
 import { ActionChip } from '../components/ActionChip';
@@ -1168,8 +1169,8 @@ function vipOnly(orders, filter) {
 
 export default function OrdersScreen() {
   const { profile } = useAuth();
-  const canManage = profile?.role === 'owner' || profile?.role === 'admin';
-  const canRequestChange = profile?.role === 'cashier' || profile?.role === 'sale';
+  const canManage = hasAnyRole(profile, ['owner', 'admin']);
+  const canRequestChange = hasAnyRole(profile, ['cashier', 'sale']);
   const [orders, setOrders] = useState([]);
   const [cancelledOrders, setCancelledOrders] = useState([]);
   const [completedOrders, setCompletedOrders] = useState([]);
@@ -1564,7 +1565,7 @@ export default function OrdersScreen() {
                     <Button variant="warning" size="sm" icon={<IconBan size={14} />} onClick={() => { setActionError(''); setReasonAction('cancel'); }} disabled={actionBusy}>Khách hủy đơn</Button>
                   )}
                   {modalOrder.status !== 'huy' && (
-                    <Button variant="danger" size="sm" icon={<IconTrash size={14} />} onClick={() => { setActionError(''); profile?.role === 'owner' ? handleDirectDelete() : setReasonAction('delete'); }} disabled={actionBusy}>Xoá đơn</Button>
+                    <Button variant="danger" size="sm" icon={<IconTrash size={14} />} onClick={() => { setActionError(''); hasRole(profile, 'owner') ? handleDirectDelete() : setReasonAction('delete'); }} disabled={actionBusy}>Xoá đơn</Button>
                   )}
                 </div>
               ) : canRequestChange && modalOrder.status !== 'huy' && modalOrder.status !== 'hoan_thanh' ? (
