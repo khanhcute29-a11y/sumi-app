@@ -1516,7 +1516,9 @@ export default function OrdersScreen() {
             <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>Tổng tiền: {Number(modalOrder.total || 0).toLocaleString('vi-VN')}đ</div>
             <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>Thanh toán: {modalOrder.payment_method === 'bank' ? 'Chuyển khoản' : 'COD'}{Number(modalOrder.deposit) > 0 ? ` · Đã cọc: ${Number(modalOrder.deposit).toLocaleString('vi-VN')}đ` : ''}</div>
             {modalOrder.note && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}><IconClipboard size={14} /> {modalOrder.note}</div>}
-            <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Người tạo đơn: {modalOrder.created_by_name || '—'}</div>
+            <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>
+              Ngày đặt đơn: {modalOrder.created_at ? new Date(modalOrder.created_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '—'} · Người tạo đơn: {modalOrder.created_by_name || '—'}
+            </div>
             {modalOrder.status === 'huy' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 10, background: 'var(--status-danger-soft)', borderRadius: 'var(--radius-sm)' }}>
                 <Badge tone="danger" icon={<IconBan size={13} />}>Đã huỷ</Badge>
