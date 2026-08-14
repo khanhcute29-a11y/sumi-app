@@ -1,8 +1,8 @@
 import React from 'react';
 
-export function Card({ children, padding = 16, style }) {
+export function Card({ children, padding = 16, style, onClick }) {
   return (
-    <div style={{
+    <div onClick={onClick} style={{
       background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-sm)',
       padding, ...style,
     }}>
