@@ -56,13 +56,16 @@ function CheckinModal({ shiftConfigs, staffName, staffId, onClose, onDone }) {
       setSaving(false);
       onDone();
     } catch (err) {
-      if (err.message === 'offline') {
+      if (err.message === 'offline' || err instanceof TypeError) {
         enqueue('addShiftCheckin', payload);
         setSaving(false);
         onDone();
+      } else if (err.code === '23505') {
+        setSaving(false);
+        setError('Bạn đã bắt đầu ca hôm nay rồi — không thể chấm 2 lần. Nếu bấm nhầm, dùng nút "Bấm nhầm? Yêu cầu chấm lại" bên dưới.');
       } else {
         setSaving(false);
-        setError(err.message || 'Không chấm công được — có thể bạn đã bắt đầu ca hôm nay rồi.');
+        setError(err.message || 'Không chấm công được, thử lại sau.');
       }
     }
   };
@@ -133,13 +136,16 @@ function CheckoutModal({ shiftConfigs, staffName, staffId, onClose, onDone }) {
       setSaving(false);
       onDone();
     } catch (err) {
-      if (err.message === 'offline') {
+      if (err.message === 'offline' || err instanceof TypeError) {
         enqueue('addShiftCheckout', payload);
         setSaving(false);
         onDone();
+      } else if (err.code === '23505') {
+        setSaving(false);
+        setError('Bạn đã kết thúc ca hôm nay rồi — không thể chấm 2 lần. Nếu bấm nhầm, dùng nút "Bấm nhầm? Yêu cầu chấm lại" bên dưới.');
       } else {
         setSaving(false);
-        setError(err.message || 'Không chấm công được — có thể bạn đã kết thúc ca hôm nay rồi.');
+        setError(err.message || 'Không chấm công được, thử lại sau.');
       }
     }
   };
