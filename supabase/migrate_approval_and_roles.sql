@@ -8,6 +8,16 @@ alter table shift_logs drop constraint if exists shift_logs_type_check;
 alter table shift_logs add constraint shift_logs_type_check
   check (type in ('checkin','checkout','leave_request'));
 
+-- Dọn các lần chấm công trùng ngày có sẵn trước khi khoá (giữ lại lần chấm mới nhất mỗi ngày).
+delete from shift_logs a using shift_logs b
+  where a.type = 'checkin' and b.type = 'checkin'
+    and a.staff_id = b.staff_id and a.work_date = b.work_date
+    and a.created_at < b.created_at;
+delete from shift_logs a using shift_logs b
+  where a.type = 'checkout' and b.type = 'checkout'
+    and a.staff_id = b.staff_id and a.work_date = b.work_date
+    and a.created_at < b.created_at;
+
 create unique index if not exists uniq_shift_checkin_per_day on shift_logs(staff_id, work_date) where type = 'checkin';
 create unique index if not exists uniq_shift_checkout_per_day on shift_logs(staff_id, work_date) where type = 'checkout';
 
