@@ -1,6 +1,12 @@
 import { supabase } from './supabaseClient';
 import { isSyntheticPhoneEmail } from './authPhone';
 
+// Báo cho App.jsx biết cần đếm lại chấm đỏ thông báo ngay — không chờ Supabase Realtime
+// (bảng mới có thể chưa bật Realtime replication, khiến chấm đỏ bị kẹt tới khi tải lại trang).
+function notifyBadgesChanged() {
+  window.dispatchEvent(new Event('sumi-badges-changed'));
+}
+
 // ---- Profiles (tài khoản & phân quyền nhân viên) ----
 
 export async function fetchMyProfile() {
@@ -165,17 +171,20 @@ export async function createOrder({ customer, channel, items, total, note, addre
       if (itemsErr) throw itemsErr;
     }
   }
+  notifyBadgesChanged();
   return order;
 }
 
 export async function updateOrderStatus(id, status) {
   const { error } = await supabase.from('orders').update({ status }).eq('id', id);
   if (error) throw error;
+  notifyBadgesChanged();
 }
 
 export async function updateOrder(id, fields) {
   const { error } = await supabase.from('orders').update(fields).eq('id', id);
   if (error) throw error;
+  notifyBadgesChanged();
 }
 
 export async function updateOrderFull(id, { customerName, customerPhone, address, deliveryDate, deliveryTime, deliveryMethod, shipFee, total, deposit, paymentMethod, note, items }) {
@@ -214,6 +223,7 @@ export async function cancelOrder(id, { reason, photoUrl, staffName } = {}) {
     status: 'huy', cancel_reason: reason || null, cancel_photo_url: photoUrl || null, cancel_staff_name: staffName || null,
   }).eq('id', id);
   if (error) throw error;
+  notifyBadgesChanged();
 }
 
 export async function fetchIncidentReports({ status, limit = 100 } = {}) {
@@ -230,11 +240,13 @@ export async function addIncidentReport({ orderId, orderCode, category, code, la
     reporter_id: reporterId || null, reporter_name: reporterName || null, reporter_role: reporterRole || null,
   });
   if (error) throw error;
+  notifyBadgesChanged();
 }
 
 export async function resolveIncidentReport(id) {
   const { error } = await supabase.from('incident_reports').update({ status: 'resolved', resolved_at: new Date().toISOString() }).eq('id', id);
   if (error) throw error;
+  notifyBadgesChanged();
 }
 
 export async function fetchOrderNotes(orderId) {
@@ -266,6 +278,7 @@ export async function deleteOrder(id, { reason, photoUrl, staffName, snapshot } 
   if (itemsErr) throw itemsErr;
   const { error } = await supabase.from('orders').delete().eq('id', id);
   if (error) throw error;
+  notifyBadgesChanged();
 }
 
 export async function markOrderPaid(id, total) {
@@ -470,6 +483,7 @@ export async function createApprovalRequest({ type, orderId, orderCode, shiftLog
     reason: reason || null, photo_url: photoUrl || null,
   });
   if (error) throw error;
+  notifyBadgesChanged();
 }
 
 export async function fetchApprovalRequests({ status } = {}) {
@@ -517,6 +531,7 @@ export async function resolveApprovalRequest(id, { status, resolvedBy }) {
     status, resolved_by: resolvedBy || null, resolved_at: new Date().toISOString(),
   }).eq('id', id);
   if (error) throw error;
+  notifyBadgesChanged();
 }
 
 // ---- Cấu hình tiệm (vị trí GPS, giá xăng, tốc độ trung bình) ----

@@ -97,13 +97,14 @@ function OpsApp({ onSignOut }) {
       ]).then(([orders, kds, approvals, incidents]) => setBadgeCounts({ orders, kds, approvals, incidents })).catch(() => {});
     };
     loadBadges();
+    window.addEventListener('sumi-badges-changed', loadBadges);
     const channel = supabase
       .channel('nav-badges-live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, loadBadges)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'approval_requests' }, loadBadges)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'incident_reports' }, loadBadges)
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { window.removeEventListener('sumi-badges-changed', loadBadges); supabase.removeChannel(channel); };
   }, [profile?.role, profile?.extra_roles]);
 
   const screens = {
