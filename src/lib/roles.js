@@ -3,6 +3,8 @@ export const ROLE_META = {
   accountant: { label: 'Kế Toán', tone: 'info', level: 5 },
   warehouse: { label: 'Thủ Kho', tone: 'info', level: 4 },
   sale: { label: 'Nhân Viên Bán Hàng', tone: 'success', level: 3 },
+  kitchen_lead: { label: 'Bếp Trưởng', tone: 'warning', level: 3 },
+  kitchen_deputy: { label: 'Bếp Phó', tone: 'warning', level: 2 },
   bakery: { label: 'Thợ Làm Bánh', tone: 'warning', level: 2 },
   shipper: { label: 'Vận Chuyển', tone: 'success', level: 1 },
 };
@@ -49,6 +51,24 @@ export const ROLE_PERMISSIONS = [
       'view_own_customers', 'create_customer', 'edit_customer',
       'view_product_inventory', 'view_prices', 'apply_discount',
       'view_own_reports', 'create_report'
+    ]
+  },
+  {
+    role: 'kitchen_lead',
+    desc: 'Bếp trưởng — như Thợ Làm Bánh, cộng thêm quyền chỉ đạo bếp phó & nhân viên bếp cấp dưới, can thiệp mọi đơn ở khu bếp.',
+    permissions: [
+      'view_kitchen_orders', 'update_order_status', 'manage_kitchen_staff', 'intervene_kitchen_orders',
+      'view_finished_inventory', 'report_inventory',
+      'request_ingredient_export', 'view_ingredient_inventory'
+    ]
+  },
+  {
+    role: 'kitchen_deputy',
+    desc: 'Bếp phó — như Thợ Làm Bánh, cộng thêm quyền can thiệp đơn ở khu bếp khi bếp trưởng vắng mặt.',
+    permissions: [
+      'view_kitchen_orders', 'update_order_status', 'intervene_kitchen_orders',
+      'view_finished_inventory', 'report_inventory',
+      'request_ingredient_export', 'view_ingredient_inventory'
     ]
   },
   {

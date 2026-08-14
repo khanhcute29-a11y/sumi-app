@@ -11,6 +11,7 @@ import {
   fetchProductRecipes, addRecipeItem, deleteRecipeItem, fetchWarehouseStock,
 } from '../lib/queries';
 import { IconTrash, IconRuler } from '../components/icons/FrogIcons';
+import { useAuth } from '../lib/AuthContext';
 
 const CATEGORIES = [
   { value: 'banh_kem', label: 'Bánh Kem' },
@@ -62,7 +63,7 @@ function AddProductForm({ onAdded, onClose }) {
   );
 }
 
-function VariantRow({ product, onChanged }) {
+function VariantRow({ product, canEdit, onChanged }) {
   const [adding, setAdding] = useState(false);
   const [label, setLabel] = useState('');
   const [price, setPrice] = useState('');
@@ -88,12 +89,14 @@ function VariantRow({ product, onChanged }) {
           <span>{v.label}</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>{Number(v.price).toLocaleString('vi-VN')}đ</span>
-            <button onClick={async () => { await deleteProductVariant(v.id); onChanged(); }}
-              style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>✕</button>
+            {canEdit && (
+              <button onClick={async () => { await deleteProductVariant(v.id); onChanged(); }}
+                style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>✕</button>
+            )}
           </div>
         </div>
       ))}
-      {adding ? (
+      {canEdit && (adding ? (
         <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
           <Input label="Size" placeholder="VD: 22cm" value={label} onChange={(e) => setLabel(e.target.value)} style={{ flex: 1 }} />
           <Input label="Giá" type="number" placeholder="VD: 450000" value={price} onChange={(e) => setPrice(e.target.value)} style={{ flex: 1 }} />
@@ -101,7 +104,7 @@ function VariantRow({ product, onChanged }) {
         </div>
       ) : (
         <Button variant="ghost" size="sm" onClick={() => setAdding(true)} style={{ alignSelf: 'flex-start' }}>+ Thêm mức giá theo size</Button>
-      )}
+      ))}
     </div>
   );
 }
@@ -171,7 +174,7 @@ function RecipeEditor({ product, ingredients, onCostChange }) {
   );
 }
 
-function ProductRow({ product, ingredients, onChanged }) {
+function ProductRow({ product, ingredients, canEdit, onChanged }) {
   const variants = product.product_variants || [];
   const [showRecipe, setShowRecipe] = useState(false);
   const [cost, setCost] = useState(null);
@@ -189,29 +192,38 @@ function ProductRow({ product, ingredients, onChanged }) {
             <span style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>
               {variants.length > 0 ? `${variants.length} mức giá` : `${Number(product.price).toLocaleString('vi-VN')}đ / ${product.unit}`}
             </span>
-            {cost != null && cost > 0 && (
+            {canEdit && cost != null && cost > 0 && (
               <Badge tone={margin >= 0 ? 'success' : 'danger'}>
                 Giá vốn {cost.toLocaleString('vi-VN')}đ · Lãi gộp {margin.toLocaleString('vi-VN')}đ ({marginPct}%)
               </Badge>
             )}
+            {!product.active && <Badge tone="neutral">Ngừng bán</Badge>}
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Switch checked={product.active} onChange={(v) => { updateProduct(product.id, { active: v }); onChanged(); }} />
-          <button onClick={async () => { if (confirm(`Xóa "${product.name}" khỏi danh mục?`)) { await deleteProduct(product.id); onChanged(); } }}
-            style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16, display: 'inline-flex' }}><IconTrash size={16} /></button>
-        </div>
+        {canEdit && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Switch checked={product.active} onChange={(v) => { updateProduct(product.id, { active: v }); onChanged(); }} />
+            <button onClick={async () => { if (confirm(`Xóa "${product.name}" khỏi danh mục?`)) { await deleteProduct(product.id); onChanged(); } }}
+              style={{ border: 'none', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16, display: 'inline-flex' }}><IconTrash size={16} /></button>
+          </div>
+        )}
       </div>
-      {product.category === 'banh_kem' && <VariantRow product={product} onChanged={onChanged} />}
-      <Button variant="ghost" size="sm" onClick={() => setShowRecipe((v) => !v)} style={{ alignSelf: 'flex-start' }}>
-        {showRecipe ? 'Ẩn công thức & giá vốn' : <><IconRuler size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Công thức & giá vốn</>}
-      </Button>
-      {showRecipe && <RecipeEditor product={product} ingredients={ingredients} onCostChange={setCost} />}
+      {product.category === 'banh_kem' && <VariantRow product={product} canEdit={canEdit} onChanged={onChanged} />}
+      {canEdit && (
+        <React.Fragment>
+          <Button variant="ghost" size="sm" onClick={() => setShowRecipe((v) => !v)} style={{ alignSelf: 'flex-start' }}>
+            {showRecipe ? 'Ẩn công thức & giá vốn' : <><IconRuler size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Công thức & giá vốn</>}
+          </Button>
+          {showRecipe && <RecipeEditor product={product} ingredients={ingredients} onCostChange={setCost} />}
+        </React.Fragment>
+      )}
     </Card>
   );
 }
 
 export default function ProductsScreen() {
+  const { profile } = useAuth();
+  const isOwner = profile?.role === 'owner';
   const [products, setProducts] = useState([]);
   const [ingredients, setIngredients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -238,9 +250,9 @@ export default function ProductsScreen() {
           <div style={{ font: 'var(--text-display-md)', color: 'var(--text-primary)' }}>Sản Phẩm</div>
           <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Danh mục &amp; giá — dùng để tự động điền giá khi tạo đơn</div>
         </div>
-        <Button variant="primary" onClick={() => setShowForm((v) => !v)}>{showForm ? 'Đóng' : '+ Thêm sản phẩm'}</Button>
+        {isOwner && <Button variant="primary" onClick={() => setShowForm((v) => !v)}>{showForm ? 'Đóng' : '+ Thêm sản phẩm'}</Button>}
       </div>
-      {showForm && <AddProductForm onAdded={load} onClose={() => setShowForm(false)} />}
+      {isOwner && showForm && <AddProductForm onAdded={load} onClose={() => setShowForm(false)} />}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {[{ value: 'all', label: 'Tất cả' }, ...CATEGORIES].map((c) => (
           <Button key={c.value} variant={filter === c.value ? 'primary' : 'secondary'} size="sm" onClick={() => setFilter(c.value)}>{c.label}</Button>
@@ -253,7 +265,7 @@ export default function ProductsScreen() {
         <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Chưa có sản phẩm nào — bấm "+ Thêm sản phẩm" để bắt đầu nhập menu.</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {filtered.map((p) => <ProductRow key={p.id} product={p} ingredients={ingredients} onChanged={load} />)}
+          {filtered.map((p) => <ProductRow key={p.id} product={p} ingredients={ingredients} canEdit={isOwner} onChanged={load} />)}
         </div>
       )}
     </div>

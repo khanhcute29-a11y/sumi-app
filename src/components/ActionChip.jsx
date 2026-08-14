@@ -3,6 +3,7 @@ import React from 'react';
 const TONES = {
   danger: { border: 'var(--status-danger)', bg: 'var(--status-danger-soft)', color: 'var(--status-danger)' },
   info: { border: 'var(--action-primary)', bg: 'var(--surface-primary-soft)', color: 'var(--action-primary)' },
+  success: { border: 'var(--status-success)', bg: 'var(--status-success-soft)', color: 'var(--status-success)' },
 };
 
 export function ActionChip({ icon, label, tone = 'info', onClick, disabled, style }) {

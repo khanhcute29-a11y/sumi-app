@@ -254,7 +254,7 @@ function StationOverviewCard({ stationKey, orders, active, onClick }) {
 
 export default function KdsScreen({ initialStation }) {
   const { profile } = useAuth();
-  const canAct = profile?.role === 'kitchen' || profile?.role === 'bakery' || profile?.role === 'owner' || profile?.role === 'admin';
+  const canAct = ['kitchen', 'bakery', 'kitchen_lead', 'kitchen_deputy', 'owner', 'admin'].includes(profile?.role);
   const [activeStation, setActiveStation] = useState(initialStation || 'all');
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -314,11 +314,15 @@ export default function KdsScreen({ initialStation }) {
     applyFields(order, fields);
   };
 
+  // Ưu tiên khách đặt trước (created_at sớm hơn) lên đầu trong cùng ngày giao, kể cả khi giờ giao ghi trễ hơn.
   const byDeliveryTime = (a, b) => {
-    if (!a.delivery_time && !b.delivery_time) return 0;
-    if (!a.delivery_time) return 1;
-    if (!b.delivery_time) return -1;
-    return a.delivery_time.localeCompare(b.delivery_time);
+    const ad = a.delivery_date || '', bd = b.delivery_date || '';
+    if (ad !== bd) {
+      if (!ad) return 1;
+      if (!bd) return -1;
+      return ad.localeCompare(bd);
+    }
+    return new Date(a.created_at) - new Date(b.created_at);
   };
   const byStation = STATION_KEYS.reduce((acc, key) => {
     acc[key] = orders.filter((o) => getStation(o) === key).sort(byDeliveryTime);

@@ -5,9 +5,11 @@ import { Input } from '../components/forms/Input';
 import { Select } from '../components/forms/Select';
 import { Tabs } from '../components/navigation/Tabs';
 import { PhotoField } from '../components/PhotoField';
+import { CameraPhotoField } from '../components/CameraPhotoField';
 import {
   fetchShiftConfigs, addShiftConfig, deleteShiftConfig,
-  fetchShiftLogs, fetchShiftLogsRange, addShiftCheckin, addLeaveRequest,
+  fetchShiftLogs, fetchShiftLogsRange, addShiftCheckin, addShiftCheckout, addLeaveRequest,
+  createApprovalRequest,
 } from '../lib/queries';
 import { useAuth } from '../lib/AuthContext';
 import { enqueue } from '../lib/offlineQueue';
@@ -50,11 +52,17 @@ function CheckinModal({ shiftConfigs, staffName, staffId, onClose, onDone }) {
     try {
       if (!navigator.onLine) throw new Error('offline');
       await addShiftCheckin(payload);
-    } catch (err) {
-      enqueue('addShiftCheckin', payload);
-    } finally {
       setSaving(false);
       onDone();
+    } catch (err) {
+      if (err.message === 'offline') {
+        enqueue('addShiftCheckin', payload);
+        setSaving(false);
+        onDone();
+      } else {
+        setSaving(false);
+        setError(err.message || 'Không chấm công được — có thể bạn đã bắt đầu ca hôm nay rồi.');
+      }
     }
   };
 
@@ -73,7 +81,8 @@ function CheckinModal({ shiftConfigs, staffName, staffId, onClose, onDone }) {
       <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: 380, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto', padding: 20, boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 12 }} onClick={(e) => e.stopPropagation()}>
         {step === 'pick' ? (
           <React.Fragment>
-            <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>Chấm công</div>
+            <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>Bắt đầu ca</div>
+            <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Chỉ bấm được 1 lần mỗi ngày — bấm nhầm phải gửi "Yêu cầu chấm công lại" cho sếp.</div>
             <Select label="Ca làm việc" value={shiftId} onChange={(e) => setShiftId(e.target.value)}
               options={shiftConfigs.map((s) => ({ value: s.id, label: shiftOptionLabel(s) }))} />
             {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
@@ -89,17 +98,106 @@ function CheckinModal({ shiftConfigs, staffName, staffId, onClose, onDone }) {
               Trễ {minutesLate(selected.start_time, localDateStr())} phút so với giờ bắt đầu {selected.label} ({selected.start_time.slice(0, 5)}).
             </div>
             <Input label="Lý do đi trễ" placeholder="VD: Kẹt xe, xe hỏng, việc gia đình đột xuất..." value={reason} onChange={(e) => setReason(e.target.value)} />
-            <PhotoField url={photoUrl} onChange={setPhotoUrl} label="Ảnh minh chứng (có ảnh càng tốt, không bắt buộc)" prefix="shift" />
+            <CameraPhotoField url={photoUrl} onChange={setPhotoUrl} label="Ảnh minh chứng (chụp trực tiếp, có ảnh càng tốt)" prefix="shift" />
             {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               <Button variant="secondary" size="sm" onClick={() => setStep('pick')} disabled={saving}>Quay lại</Button>
               <Button variant="warning" size="sm" disabled={saving || !reason.trim()}
                 onClick={() => submit({ lateMinutes: minutesLate(selected.start_time, localDateStr()), needReason: true })}>
-                {saving ? 'Đang lưu...' : 'Xác nhận chấm công'}
+                {saving ? 'Đang lưu...' : 'Xác nhận bắt đầu ca'}
               </Button>
             </div>
           </React.Fragment>
         )}
+      </div>
+    </div>
+  );
+}
+
+function CheckoutModal({ shiftConfigs, staffName, staffId, onClose, onDone }) {
+  const [shiftId, setShiftId] = useState(shiftConfigs[0]?.id || '');
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const selected = shiftConfigs.find((s) => s.id === shiftId);
+
+  const submit = async () => {
+    if (!selected) { setError('Chọn ca làm việc.'); return; }
+    setSaving(true);
+    setError('');
+    const payload = { staffId, staffName, workDate: localDateStr(), shiftLabel: selected.label, branch: selected.branch || null, photoUrl: photoUrl || null };
+    try {
+      if (!navigator.onLine) throw new Error('offline');
+      await addShiftCheckout(payload);
+      setSaving(false);
+      onDone();
+    } catch (err) {
+      if (err.message === 'offline') {
+        enqueue('addShiftCheckout', payload);
+        setSaving(false);
+        onDone();
+      } else {
+        setSaving(false);
+        setError(err.message || 'Không chấm công được — có thể bạn đã kết thúc ca hôm nay rồi.');
+      }
+    }
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 16 }} onClick={onClose}>
+      <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: 380, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto', padding: 20, boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 12 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>Kết thúc ca</div>
+        <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Chỉ bấm được 1 lần mỗi ngày — bấm nhầm phải gửi "Yêu cầu chấm công lại" cho sếp.</div>
+        <Select label="Ca làm việc" value={shiftId} onChange={(e) => setShiftId(e.target.value)}
+          options={shiftConfigs.map((s) => ({ value: s.id, label: shiftOptionLabel(s) }))} />
+        <CameraPhotoField url={photoUrl} onChange={setPhotoUrl} label="Ảnh minh chứng (chụp trực tiếp, không bắt buộc)" prefix="shift" />
+        {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>Huỷ</Button>
+          <Button variant="primary" size="sm" onClick={submit} disabled={saving}>{saving ? 'Đang lưu...' : 'Xác nhận kết thúc ca'}</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RecheckRequestModal({ options, staffId, staffName, staffRole, onClose, onDone }) {
+  const [logId, setLogId] = useState(options[0]?.value || '');
+  const [reason, setReason] = useState('');
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const submit = async () => {
+    if (!logId || !reason.trim()) { setError('Chọn mục cần chấm lại và nhập lý do.'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      await createApprovalRequest({
+        type: 'shift_recheck', shiftLogId: logId, requesterId: staffId, requesterName: staffName, requesterRole: staffRole,
+        reason, photoUrl,
+      });
+      onDone();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 16 }} onClick={onClose}>
+      <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: 380, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto', padding: 20, boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 12 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>Yêu cầu chấm công lại</div>
+        <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Gửi cho sếp duyệt — nếu đồng ý, mục đã chấm sẽ bị mở khoá để bạn chấm lại.</div>
+        <Select label="Mục cần chấm lại" value={logId} onChange={(e) => setLogId(e.target.value)} options={options} />
+        <Input label="Lý do" placeholder="VD: Bấm nhầm Bắt đầu ca thay vì Kết thúc ca" value={reason} onChange={(e) => setReason(e.target.value)} />
+        <CameraPhotoField url={photoUrl} onChange={setPhotoUrl} label="Ảnh minh chứng (chụp trực tiếp, không bắt buộc)" prefix="shift-recheck" />
+        {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>Huỷ</Button>
+          <Button variant="primary" size="sm" onClick={submit} disabled={saving}>{saving ? 'Đang gửi...' : 'Gửi yêu cầu'}</Button>
+        </div>
       </div>
     </div>
   );
@@ -257,6 +355,8 @@ function LogRow({ log }) {
         </div>
         {isLeave ? (
           <Badge tone="danger">Xin nghỉ</Badge>
+        ) : log.type === 'checkout' ? (
+          <Badge tone="success">Kết thúc ca</Badge>
         ) : log.late_minutes > 0 ? (
           <Badge tone="warning">Trễ {log.late_minutes} phút</Badge>
         ) : (
@@ -264,7 +364,7 @@ function LogRow({ log }) {
         )}
       </div>
       {log.checkin_time && (
-        <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Chấm công lúc: {new Date(log.checkin_time).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</div>
+        <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>{log.type === 'checkout' ? 'Kết thúc ca lúc' : 'Bắt đầu ca lúc'}: {new Date(log.checkin_time).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</div>
       )}
       {log.reason && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}><IconClipboard size={14} /> {log.reason}</div>}
       {log.photo_url && (
@@ -285,9 +385,12 @@ export default function ShiftsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showCheckin, setShowCheckin] = useState(false);
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [showRecheck, setShowRecheck] = useState(false);
   const [showLeave, setShowLeave] = useState(false);
   const [branchFilter, setBranchFilter] = useState('all');
   const [payrollRefreshKey, setPayrollRefreshKey] = useState(0);
+  const [myTodayLogs, setMyTodayLogs] = useState([]);
 
   const loadConfigs = () => { fetchShiftConfigs().then(setShiftConfigs).catch(() => {}); };
   const loadLogs = () => {
@@ -297,13 +400,26 @@ export default function ShiftsScreen() {
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   };
+  const loadMyToday = () => {
+    fetchShiftLogs({ date: localDateStr() })
+      .then((data) => setMyTodayLogs(data.filter((l) => l.staff_id === profile?.id)))
+      .catch(() => {});
+  };
 
   useEffect(loadConfigs, []);
   useEffect(loadLogs, [date]);
+  useEffect(loadMyToday, [profile?.id]);
 
-  const myCheckinToday = logs.find((l) => l.type === 'checkin' && l.staff_id === profile?.id);
+  const refreshAfterAction = () => { loadLogs(); loadMyToday(); setPayrollRefreshKey((k) => k + 1); };
+
+  const myCheckinToday = myTodayLogs.find((l) => l.type === 'checkin');
+  const myCheckoutToday = myTodayLogs.find((l) => l.type === 'checkout');
+  const recheckOptions = myTodayLogs.filter((l) => l.type === 'checkin' || l.type === 'checkout').map((l) => ({
+    value: l.id, label: l.type === 'checkin' ? `Bắt đầu ca — đã chấm lúc ${new Date(l.checkin_time).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}` : `Kết thúc ca — đã chấm lúc ${new Date(l.checkin_time).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`,
+  }));
   const byBranch = (l) => branchFilter === 'all' || l.branch === branchFilter;
   const checkins = logs.filter((l) => l.type === 'checkin' && byBranch(l));
+  const checkouts = logs.filter((l) => l.type === 'checkout' && byBranch(l));
   const leaves = logs.filter((l) => l.type === 'leave_request' && byBranch(l));
 
   return (
@@ -315,10 +431,16 @@ export default function ShiftsScreen() {
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <Input label="Xem ngày" type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ maxWidth: 200 }} />
-        <Button variant="primary" onClick={() => setShowCheckin(true)} disabled={shiftConfigs.length === 0}>
-          {myCheckinToday ? <><IconCheck size={16} style={{ verticalAlign: '-3px', marginRight: 4 }} />Đã chấm công</> : <><IconClock size={16} style={{ verticalAlign: '-3px', marginRight: 4 }} />Chấm công</>}
+        <Button variant="primary" onClick={() => setShowCheckin(true)} disabled={shiftConfigs.length === 0 || !!myCheckinToday}>
+          {myCheckinToday ? <><IconCheck size={16} style={{ verticalAlign: '-3px', marginRight: 4 }} />Đã bắt đầu ca</> : <><IconClock size={16} style={{ verticalAlign: '-3px', marginRight: 4 }} />Bắt đầu ca</>}
+        </Button>
+        <Button variant="secondary" onClick={() => setShowCheckout(true)} disabled={shiftConfigs.length === 0 || !myCheckinToday || !!myCheckoutToday}>
+          {myCheckoutToday ? <><IconCheck size={16} style={{ verticalAlign: '-3px', marginRight: 4 }} />Đã kết thúc ca</> : <><IconClock size={16} style={{ verticalAlign: '-3px', marginRight: 4 }} />Kết thúc ca</>}
         </Button>
         <Button variant="warning" onClick={() => setShowLeave(true)} disabled={shiftConfigs.length === 0} icon={<IconQuestion size={16} />}>Xin nghỉ đột xuất</Button>
+        {recheckOptions.length > 0 && (
+          <Button variant="ghost" size="sm" onClick={() => setShowRecheck(true)}>Bấm nhầm? Yêu cầu chấm lại</Button>
+        )}
       </div>
 
       <Tabs tabs={[{ key: 'all', label: 'Tất cả chi nhánh' }, ...BRANCHES.map((b) => ({ key: b, label: b }))]} active={branchFilter} onChange={setBranchFilter} />
@@ -334,10 +456,16 @@ export default function ShiftsScreen() {
       ) : (
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
           <div style={{ flex: '1 1 320px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ font: 'var(--text-label)', color: 'var(--text-secondary)' }}>Chấm công ({checkins.length})</div>
+            <div style={{ font: 'var(--text-label)', color: 'var(--text-secondary)' }}>Bắt đầu ca ({checkins.length})</div>
             {checkins.length === 0 ? (
               <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Chưa có ai chấm công ngày này.</div>
             ) : checkins.map((l) => <LogRow key={l.id} log={l} />)}
+          </div>
+          <div style={{ flex: '1 1 320px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ font: 'var(--text-label)', color: 'var(--text-secondary)' }}>Kết thúc ca ({checkouts.length})</div>
+            {checkouts.length === 0 ? (
+              <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Chưa có ai kết thúc ca ngày này.</div>
+            ) : checkouts.map((l) => <LogRow key={l.id} log={l} />)}
           </div>
           <div style={{ flex: '1 1 320px', display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ font: 'var(--text-label)', color: 'var(--text-secondary)' }}>Xin nghỉ đột xuất ({leaves.length})</div>
@@ -353,11 +481,19 @@ export default function ShiftsScreen() {
 
       {showCheckin && (
         <CheckinModal shiftConfigs={shiftConfigs} staffId={profile?.id} staffName={profile?.full_name}
-          onClose={() => setShowCheckin(false)} onDone={() => { setShowCheckin(false); loadLogs(); setPayrollRefreshKey((k) => k + 1); }} />
+          onClose={() => setShowCheckin(false)} onDone={() => { setShowCheckin(false); refreshAfterAction(); }} />
+      )}
+      {showCheckout && (
+        <CheckoutModal shiftConfigs={shiftConfigs} staffId={profile?.id} staffName={profile?.full_name}
+          onClose={() => setShowCheckout(false)} onDone={() => { setShowCheckout(false); refreshAfterAction(); }} />
+      )}
+      {showRecheck && (
+        <RecheckRequestModal options={recheckOptions} staffId={profile?.id} staffName={profile?.full_name} staffRole={profile?.role}
+          onClose={() => setShowRecheck(false)} onDone={() => { setShowRecheck(false); refreshAfterAction(); }} />
       )}
       {showLeave && (
         <LeaveModal shiftConfigs={shiftConfigs} staffId={profile?.id} staffName={profile?.full_name}
-          onClose={() => setShowLeave(false)} onDone={() => { setShowLeave(false); loadLogs(); setPayrollRefreshKey((k) => k + 1); }} />
+          onClose={() => setShowLeave(false)} onDone={() => { setShowLeave(false); refreshAfterAction(); }} />
       )}
     </div>
   );

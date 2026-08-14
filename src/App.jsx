@@ -3,7 +3,7 @@ import { Sidebar } from './components/navigation/Sidebar';
 import { BottomNav } from './components/navigation/BottomNav';
 import { supabase } from './lib/supabaseClient';
 import { initOfflineSync } from './lib/offlineQueue';
-import { updateOrderStatus, updateOrder, addWarehouseStock, addShiftCheckin, addLeaveRequest } from './lib/queries';
+import { updateOrderStatus, updateOrder, addWarehouseStock, addShiftCheckin, addShiftCheckout, addLeaveRequest } from './lib/queries';
 import { initAudioUnlock } from './lib/sound';
 import { useOrderNotifications } from './lib/useOrderNotifications';
 import { ConnectivityBanner } from './components/ConnectivityBanner';
@@ -23,14 +23,16 @@ import ProductsScreen from './screens/ProductsScreen';
 import ShiftsScreen from './screens/ShiftsScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import StaffScreen from './screens/StaffScreen';
+import ApprovalRequestsScreen from './screens/ApprovalRequestsScreen';
 import { applyUiScale, getUiScale } from './lib/uiScale';
-import { IconDashboard, IconShipping, IconProducts, IconShifts, IconReports, IconCustomers, IconStaff, IconSettings } from './components/icons/FrogIcons';
+import { IconDashboard, IconShipping, IconProducts, IconShifts, IconReports, IconCustomers, IconStaff, IconSettings, IconCheck } from './components/icons/FrogIcons';
 
 const MORE_ITEMS = [
   { key: 'dashboard', label: 'Tổng Quan', Icon: IconDashboard },
   { key: 'shipping', label: 'Vận Chuyển', Icon: IconShipping },
   { key: 'products', label: 'Sản Phẩm', Icon: IconProducts },
   { key: 'shifts', label: 'Ca Làm Việc', Icon: IconShifts },
+  { key: 'approvals', label: 'Yêu Cầu Duyệt', Icon: IconCheck },
   { key: 'reports', label: 'Báo Cáo', Icon: IconReports },
   { key: 'crm', label: 'Khách Hàng', Icon: IconCustomers },
   { key: 'staff', label: 'Nhân Viên', Icon: IconStaff },
@@ -57,6 +59,7 @@ const OFFLINE_HANDLERS = {
   updateOrder: ({ id, fields }) => updateOrder(id, fields),
   addWarehouseStock: (payload) => addWarehouseStock(payload),
   addShiftCheckin: (payload) => addShiftCheckin(payload),
+  addShiftCheckout: (payload) => addShiftCheckout(payload),
   addLeaveRequest: (payload) => addLeaveRequest(payload),
 };
 
@@ -75,7 +78,7 @@ function OpsApp({ onSignOut }) {
 
   const screens = {
     dashboard: <DashboardScreen />, orders: <OrdersScreen />, kds: <KdsScreen initialStation={kdsStation} />, warehouse: <WarehouseScreen />, cashbook: <CashbookScreen />,
-    shipping: <ShippingScreen />, products: <ProductsScreen />, shifts: <ShiftsScreen />, reports: <ReportsScreen />, crm: <CustomersScreen />, staff: <StaffScreen />, settings: <SettingsScreen onSignOut={onSignOut} />,
+    shipping: <ShippingScreen />, products: <ProductsScreen />, shifts: <ShiftsScreen />, approvals: <ApprovalRequestsScreen />, reports: <ReportsScreen />, crm: <CustomersScreen />, staff: <StaffScreen />, settings: <SettingsScreen onSignOut={onSignOut} />,
   };
   const isBottomKey = (k) => ['orders', 'kds', 'warehouse', 'cashbook'].includes(k);
   return (

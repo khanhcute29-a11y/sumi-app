@@ -5,7 +5,7 @@
 create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   full_name text,
-  role text not null default 'cashier' check (role in ('owner','cashier','kitchen','shipper')),
+  role text not null default 'cashier' check (role in ('owner','cashier','kitchen','shipper','admin','accountant','warehouse','sale','bakery','kitchen_lead','kitchen_deputy')),
   approved boolean not null default true,
   created_at timestamptz not null default now()
 );
@@ -66,6 +66,7 @@ create table if not exists orders (
   cancel_reason text,
   cancel_photo_url text,
   cancel_staff_name text,
+  created_by_name text,
   created_at timestamptz not null default now()
 );
 
@@ -206,12 +207,32 @@ create table if not exists shift_logs (
   shift_label text,
   branch text,
   expected_start time,
-  type text not null check (type in ('checkin','leave_request')),
+  type text not null check (type in ('checkin','checkout','leave_request')),
   checkin_time timestamptz,
   late_minutes int not null default 0,
   wage_earned numeric(12,0) not null default 0,
   reason text,
   photo_url text,
+  created_at timestamptz not null default now()
+);
+create unique index if not exists uniq_shift_checkin_per_day on shift_logs(staff_id, work_date) where type = 'checkin';
+create unique index if not exists uniq_shift_checkout_per_day on shift_logs(staff_id, work_date) where type = 'checkout';
+
+-- 7c. Yêu cầu duyệt hợp nhất (sửa/hủy/xoá đơn, chấm công lại) — sếp duyệt/từ chối tại 1 chỗ
+create table if not exists approval_requests (
+  id uuid primary key default gen_random_uuid(),
+  type text not null check (type in ('order_edit','order_cancel','order_delete','shift_recheck')),
+  order_id uuid references orders(id) on delete set null,
+  order_code text,
+  shift_log_id uuid references shift_logs(id) on delete set null,
+  requester_id uuid references profiles(id) on delete set null,
+  requester_name text,
+  requester_role text,
+  reason text,
+  photo_url text,
+  status text not null default 'pending' check (status in ('pending','approved','rejected')),
+  resolved_by text,
+  resolved_at timestamptz,
   created_at timestamptz not null default now()
 );
 
@@ -254,6 +275,7 @@ alter table push_subscriptions enable row level security;
 alter table product_recipes enable row level security;
 alter table debts enable row level security;
 alter table cash_reconciliations enable row level security;
+alter table approval_requests enable row level security;
 
 create policy "staff read all profiles" on profiles for select using (auth.role() = 'authenticated');
 -- Nhân viên tự sửa hồ sơ của mình; Chủ sở hữu sửa được hồ sơ bất kỳ ai (cần để đổi vai trò nhân viên khác ở Thiết Lập).
@@ -295,6 +317,11 @@ create policy "insert shift_logs" on shift_logs for insert with check (auth.role
 create policy "update shift_logs" on shift_logs for update using (exists (select 1 from profiles where id = auth.uid() and role = 'owner'));
 create policy "delete shift_logs" on shift_logs for delete using (exists (select 1 from profiles where id = auth.uid() and role = 'owner'));
 
+-- approval_requests: đọc mở (ai cũng xem được trạng thái yêu cầu), tạo mở; chỉ Chủ sở hữu/Admin duyệt.
+create policy "read approval_requests" on approval_requests for select using (auth.role() = 'authenticated' and public.is_approved());
+create policy "insert approval_requests" on approval_requests for insert with check (auth.role() = 'authenticated');
+create policy "update approval_requests" on approval_requests for update using (exists (select 1 from profiles where id = auth.uid() and role in ('owner','admin')));
+
 -- Đơn hàng: đọc/tạo mở cho mọi nhân viên; SỬA thì mở ở tầng RLS nhưng bị khoá chi tiết theo vai trò
 -- bằng trigger enforce_order_update_permissions() bên dưới (Bếp/Vận chuyển chỉ đụng đúng field/bước
 -- việc của mình, không đổi được tiền bạc hay tự huỷ đơn); riêng XOÁ chỉ Chủ sở hữu/Thu ngân.
@@ -314,11 +341,11 @@ declare
 begin
   select role into my_role from profiles where id = auth.uid();
 
-  if my_role in ('owner', 'cashier') then
+  if my_role in ('owner', 'cashier', 'admin', 'sale') then
     return new;
   end if;
 
-  if my_role = 'kitchen' then
+  if my_role in ('kitchen', 'bakery', 'kitchen_lead', 'kitchen_deputy') then
     if not (old.status in ('moi', 'dang_lam') and new.status in ('moi', 'dang_lam', 'cho_giao')) then
       raise exception 'Bếp chỉ được thao tác đơn ở bước Mới / Đang làm / chuyển sang Chờ giao.';
     end if;
@@ -407,19 +434,19 @@ create policy "delete order_items" on order_items for delete using (exists (sele
 
 -- Menu & giá: ai cũng xem được, chỉ Chủ sở hữu/Thu ngân sửa được (tránh Bếp/Vận chuyển lỡ tay đổi giá).
 create policy "read products" on products for select using (auth.role() = 'authenticated' and public.is_approved());
-create policy "write products" on products for insert with check (exists (select 1 from profiles where id = auth.uid() and role in ('owner','cashier')));
-create policy "update products" on products for update using (exists (select 1 from profiles where id = auth.uid() and role in ('owner','cashier')));
-create policy "delete products" on products for delete using (exists (select 1 from profiles where id = auth.uid() and role in ('owner','cashier')));
+create policy "write products" on products for insert with check (exists (select 1 from profiles where id = auth.uid() and role = 'owner'));
+create policy "update products" on products for update using (exists (select 1 from profiles where id = auth.uid() and role = 'owner'));
+create policy "delete products" on products for delete using (exists (select 1 from profiles where id = auth.uid() and role = 'owner'));
 
 create policy "read product_variants" on product_variants for select using (auth.role() = 'authenticated' and public.is_approved());
-create policy "write product_variants" on product_variants for insert with check (exists (select 1 from profiles where id = auth.uid() and role in ('owner','cashier')));
-create policy "update product_variants" on product_variants for update using (exists (select 1 from profiles where id = auth.uid() and role in ('owner','cashier')));
-create policy "delete product_variants" on product_variants for delete using (exists (select 1 from profiles where id = auth.uid() and role in ('owner','cashier')));
+create policy "write product_variants" on product_variants for insert with check (exists (select 1 from profiles where id = auth.uid() and role = 'owner'));
+create policy "update product_variants" on product_variants for update using (exists (select 1 from profiles where id = auth.uid() and role = 'owner'));
+create policy "delete product_variants" on product_variants for delete using (exists (select 1 from profiles where id = auth.uid() and role = 'owner'));
 
 create policy "read product_recipes" on product_recipes for select using (auth.role() = 'authenticated' and public.is_approved());
-create policy "write product_recipes" on product_recipes for insert with check (exists (select 1 from profiles where id = auth.uid() and role in ('owner','cashier')));
-create policy "update product_recipes" on product_recipes for update using (exists (select 1 from profiles where id = auth.uid() and role in ('owner','cashier')));
-create policy "delete product_recipes" on product_recipes for delete using (exists (select 1 from profiles where id = auth.uid() and role in ('owner','cashier')));
+create policy "write product_recipes" on product_recipes for insert with check (exists (select 1 from profiles where id = auth.uid() and role = 'owner'));
+create policy "update product_recipes" on product_recipes for update using (exists (select 1 from profiles where id = auth.uid() and role = 'owner'));
+create policy "delete product_recipes" on product_recipes for delete using (exists (select 1 from profiles where id = auth.uid() and role = 'owner'));
 
 -- Sổ quỹ & công nợ: chỉ Chủ sở hữu/Thu ngân được ghi sổ (nhân viên khác không có nghiệp vụ này).
 create policy "read cashbook_entries" on cashbook_entries for select using (auth.role() = 'authenticated' and public.is_approved());

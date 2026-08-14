@@ -5,11 +5,63 @@ import { Badge } from '../components/feedback/Badge';
 import { TrustScoreBadge } from '../components/feedback/TrustScoreBadge';
 import { Card } from '../components/data/Card';
 import { fetchCustomers, fetchOrders } from '../lib/queries';
-import { IconStar } from '../components/icons/FrogIcons';
+import { formatOrderItemLine } from '../lib/cakePricing';
+import { formatDeliveryDateTime } from '../lib/date';
+import { IconStar, IconClock } from '../components/icons/FrogIcons';
 
-function CustomerRow({ c }) {
+const STATUS_LABELS = { moi: 'Mới', dang_lam: 'Đang làm', cho_giao: 'Chờ giao', dang_giao: 'Đang giao', hoan_thanh: 'Hoàn thành', huy: 'Đã huỷ' };
+
+function CustomerDetailModal({ customer, orders, onClose }) {
   return (
-    <Card style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }} padding={14}>
+    <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 16 }} onClick={onClose}>
+      <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: 480, maxWidth: '100%', maxHeight: '86vh', overflowY: 'auto', padding: 20, boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 12 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+          <div>
+            <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              {customer.name}{customer.vip && <Badge tone="primary" icon={<IconStar size={13} />}>VIP</Badge>}
+            </div>
+            <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>{customer.phone || '—'} · {customer.channel || '—'}</div>
+          </div>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', color: 'var(--text-muted)', fontSize: 18, cursor: 'pointer' }}>✕</button>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <TrustScoreBadge score={customer.trust_score} locked={customer.locked} noData={orders.length === 0} />
+          {customer.locked && <Badge tone="danger">Khoá COD</Badge>}
+        </div>
+        {customer.note && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '8px 10px' }}>Ghi chú: {customer.note}</div>}
+        <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)', paddingTop: 4, borderTop: '1px solid var(--border-subtle)' }}>
+          Lịch sử đơn hàng ({orders.length})
+        </div>
+        {orders.length === 0 ? (
+          <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Khách chưa có đơn hàng nào.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {orders.map((o) => (
+              <div key={o.id} style={{ background: 'var(--surface-sunken)', borderRadius: 'var(--radius-md)', padding: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                  <span style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>{o.order_code}</span>
+                  <Badge tone={o.status === 'huy' ? 'danger' : o.status === 'hoan_thanh' ? 'success' : 'neutral'}>{STATUS_LABELS[o.status] || o.status}</Badge>
+                </div>
+                <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>
+                  {(o.order_items || []).map((it) => formatOrderItemLine(it, { withQty: true })).join(', ') || 'Không có sản phẩm'}
+                </div>
+                <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <IconClock size={12} />{formatDeliveryDateTime(o.delivery_date, o.delivery_time) || '—'}
+                  {o.address ? ` · ${o.address}` : ''}
+                </div>
+                <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-primary)', fontWeight: 700 }}>{Number(o.total || 0).toLocaleString('vi-VN')}đ</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CustomerRow({ c, onOpen }) {
+  return (
+    <Card style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', cursor: 'pointer' }} padding={14} onClick={() => onOpen(c)}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 180 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>{c.name}</span>
@@ -36,8 +88,10 @@ export default function CustomersScreen() {
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [customers, setCustomers] = useState([]);
+  const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selected, setSelected] = useState(null);
 
   useEffect(() => {
     setLoading(true);
@@ -50,6 +104,7 @@ export default function CustomersScreen() {
           return { ...c, orderCount: own.length, spent, lastOrder };
         });
         setCustomers(merged);
+        setOrders(orderRows);
         setError('');
       })
       .catch((err) => setError(err.message))
@@ -73,9 +128,12 @@ export default function CustomersScreen() {
         <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Đang tải...</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {filtered.map((c) => <CustomerRow key={c.id} c={c} />)}
+          {filtered.map((c) => <CustomerRow key={c.id} c={c} onOpen={setSelected} />)}
           {filtered.length === 0 && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)', padding: 16 }}>Không tìm thấy khách hàng phù hợp.</div>}
         </div>
+      )}
+      {selected && (
+        <CustomerDetailModal customer={selected} orders={orders.filter((o) => o.customer_id === selected.id)} onClose={() => setSelected(null)} />
       )}
     </div>
   );

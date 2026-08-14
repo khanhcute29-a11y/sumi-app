@@ -6,7 +6,7 @@ import { Button } from '../components/forms/Button';
 import { Input } from '../components/forms/Input';
 import { Select } from '../components/forms/Select';
 import { Tabs } from '../components/navigation/Tabs';
-import { fetchOrders, createOrder, fetchProducts, createProduct, cancelOrder, deleteOrder, fetchOrderNotes, addOrderNote, updateOrderFull } from '../lib/queries';
+import { fetchOrders, createOrder, fetchProducts, createProduct, cancelOrder, deleteOrder, updateOrderFull, createApprovalRequest } from '../lib/queries';
 import { CommentSection } from '../components/CommentSection';
 import { formatVnd, parseDigits } from '../lib/currency';
 import { useAuth } from '../lib/AuthContext';
@@ -17,7 +17,7 @@ import { supabase } from '../lib/supabaseClient';
 import { localDateStr, formatDeliveryDateTime } from '../lib/date';
 import { downloadCsv } from '../lib/exportCsv';
 import { CAKE_SIZES_CM, CAKE_BASES, CAKE_FILLINGS, basePriceForSize, fillingSurchargeForSize, computeCakePrice, baseSurcharge, formatOrderItemLine } from '../lib/cakePricing';
-import { IconWarning, IconEye, IconMapPin, IconClock, IconClipboard, IconPaperclip, IconHome, IconTruck, IconBan, IconCheck, IconTrash, IconStar, IconPhone, IconDownload } from '../components/icons/FrogIcons';
+import { IconWarning, IconEye, IconMapPin, IconClock, IconClipboard, IconPaperclip, IconHome, IconTruck, IconBan, IconCheck, IconTrash, IconStar, IconPhone, IconDownload, IconEdit } from '../components/icons/FrogIcons';
 
 const STATUS_LABELS = {
   moi: 'Mới', dang_lam: 'Đang làm', cho_giao: 'Chờ giao', dang_giao: 'Đang giao',
@@ -202,6 +202,7 @@ function TeabreakItemRow({ item, onChange, onRemove, canRemove, products }) {
 }
 
 function TeabreakOrderModal({ onClose, onCreated, onManualItems }) {
+  const { profile } = useAuth();
   const [isMobile, setIsMobile] = useState(window.innerWidth < 860);
   const [showIncident, setShowIncident] = useState(false);
   const [customer, setCustomer] = useState({ name: '', mst: '', email: '', address: '', phone: '' });
@@ -244,6 +245,7 @@ function TeabreakOrderModal({ onClose, onCreated, onManualItems }) {
         note: [note, guestCount && `Số khách: ${guestCount}`].filter(Boolean).join(' · '),
         total: subtotal + vat,
         items: items.map((it) => ({ productId: it.productId || null, name: `${it.name}${it.unit ? ` (${it.unit})` : ''}`, qty: it.qty, price: it.price, refPhotoUrl: it.refPhotoUrl })),
+        createdByName: profile?.full_name,
       });
       onManualItems?.(extractManualItems(items, 'teabreak'));
       onCreated();
@@ -469,6 +471,7 @@ function MacaronItemRow({ item, onChange, onRemove, canRemove, products }) {
 }
 
 function MacaronOrderModal({ onClose, onCreated, onManualItems }) {
+  const { profile } = useAuth();
   const [isMobile, setIsMobile] = useState(window.innerWidth < 860);
   const [showIncident, setShowIncident] = useState(false);
   const [custName, setCustName] = useState('');
@@ -523,6 +526,7 @@ function MacaronOrderModal({ onClose, onCreated, onManualItems }) {
           name: it.spec ? `${it.name} — ${it.spec}` : it.name,
           qty: it.qty, price: it.price, refPhotoUrl: it.refPhotoUrl,
         })),
+        createdByName: profile?.full_name,
       });
       onManualItems?.(extractManualItems(items, 'macaron'));
       onCreated();
@@ -836,6 +840,7 @@ function OrderPreview({ custName, custPhone, items, deliveryMethod, effectiveShi
 }
 
 function NewOrderModal({ onClose, onCreated, onManualItems }) {
+  const { profile } = useAuth();
   const [isMobile, setIsMobile] = useState(window.innerWidth < 860);
   const [showIncident, setShowIncident] = useState(false);
   const [cakeType, setCakeType] = useState('kem');
@@ -902,6 +907,7 @@ function NewOrderModal({ onClose, onCreated, onManualItems }) {
           ...it,
           name: it.note ? `${it.name} (${it.note})` : it.name,
         })),
+        createdByName: profile?.full_name,
       });
       onManualItems?.([
         ...extractManualItems(kemProducts, 'banh_kem'),
@@ -1252,11 +1258,11 @@ export default function OrdersScreen() {
     setActionBusy(true);
     setActionError('');
     try {
-      const kindLabel = requestAction === 'edit' ? 'SỬA ĐƠN' : requestAction === 'cancel' ? 'HỦY ĐƠN' : 'XOÁ ĐƠN';
-      const message = `🔒 YÊU CẦU ${kindLabel} — chờ sếp duyệt${photoUrl ? `\n[PHOTOS: ![image](${photoUrl})]` : ''}\nLý do: ${reason}`;
-      await addOrderNote({
-        orderId: modalOrder.id, orderCode: modalOrder.order_code, authorId: profile?.id,
-        authorName: profile?.full_name, authorRole: profile?.role, message,
+      const type = requestAction === 'edit' ? 'order_edit' : requestAction === 'cancel' ? 'order_cancel' : 'order_delete';
+      await createApprovalRequest({
+        type, orderId: modalOrder.id, orderCode: modalOrder.order_code,
+        requesterId: profile?.id, requesterName: profile?.full_name, requesterRole: profile?.role,
+        reason, photoUrl,
       });
       setRequestAction(null);
       setRequestSent(true);
@@ -1312,11 +1318,15 @@ export default function OrdersScreen() {
     }
   };
 
+  // Ưu tiên khách đặt trước (created_at sớm hơn) lên đầu trong cùng ngày giao, kể cả khi giờ giao ghi trễ hơn.
   const byDeliveryTime = (a, b) => {
-    if (!a.delivery_time && !b.delivery_time) return 0;
-    if (!a.delivery_time) return 1;
-    if (!b.delivery_time) return -1;
-    return a.delivery_time.localeCompare(b.delivery_time);
+    const ad = a.delivery_date || '', bd = b.delivery_date || '';
+    if (ad !== bd) {
+      if (!ad) return 1;
+      if (!bd) return -1;
+      return ad.localeCompare(bd);
+    }
+    return new Date(a.created_at) - new Date(b.created_at);
   };
   const moi = orders.filter((o) => o.status === 'moi').sort(byDeliveryTime);
   const dangLam = orders.filter((o) => o.status === 'dang_lam').sort(byDeliveryTime);
@@ -1344,6 +1354,27 @@ export default function OrdersScreen() {
       setCatalogError(err.message);
     } finally {
       setSavingCatalog(false);
+    }
+  };
+
+  const [copyDone, setCopyDone] = useState(false);
+  const handleCopyOrder = async () => {
+    if (!modalOrder) return;
+    const lines = [
+      `Đơn hàng ${modalOrder.order_code || ''} — Sumi Bakery`,
+      `Khách: ${modalOrder.customer?.name || ''}${modalOrder.customer?.phone ? ` — ${modalOrder.customer.phone}` : ''}`,
+      ...(modalOrder.order_items || []).map((it) => `- ${formatOrderItemLine(it)}`),
+      modalOrder.delivery_method === 'lay_tai_xuong' ? 'Hình thức: Lấy tại xưởng' : `Giao đến: ${modalOrder.address || '—'}`,
+      `Ngày giao: ${formatDeliveryDateTime(modalOrder.delivery_date, modalOrder.delivery_time) || '—'}`,
+      `Tổng tiền: ${Number(modalOrder.total || 0).toLocaleString('vi-VN')}đ`,
+      modalOrder.note ? `Ghi chú: ${modalOrder.note}` : null,
+    ].filter(Boolean);
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+      setCopyDone(true);
+      setTimeout(() => setCopyDone(false), 2500);
+    } catch {
+      setActionError('Không copy được — trình duyệt chặn quyền truy cập clipboard.');
     }
   };
 
@@ -1485,6 +1516,7 @@ export default function OrdersScreen() {
             <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>Tổng tiền: {Number(modalOrder.total || 0).toLocaleString('vi-VN')}đ</div>
             <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>Thanh toán: {modalOrder.payment_method === 'bank' ? 'Chuyển khoản' : 'COD'}{Number(modalOrder.deposit) > 0 ? ` · Đã cọc: ${Number(modalOrder.deposit).toLocaleString('vi-VN')}đ` : ''}</div>
             {modalOrder.note && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}><IconClipboard size={14} /> {modalOrder.note}</div>}
+            <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Người tạo đơn: {modalOrder.created_by_name || '—'}</div>
             {modalOrder.status === 'huy' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 10, background: 'var(--status-danger-soft)', borderRadius: 'var(--radius-sm)' }}>
                 <Badge tone="danger" icon={<IconBan size={13} />}>Đã huỷ</Badge>
@@ -1516,27 +1548,30 @@ export default function OrdersScreen() {
             <CommentSection order={modalOrder} profile={profile} />
             {actionError && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{actionError}</div>}
             <ActionChip icon={<IconWarning size={16} />} label="Báo sự cố" tone="danger" onClick={() => setShowOrderIncident(true)} style={{ alignSelf: 'flex-start' }} />
-            {requestSent && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-success)' }}>Đã gửi yêu cầu — chờ sếp duyệt trong phần bình luận của đơn.</div>}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 4 }}>
+            {requestSent && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-success)' }}>Đã gửi yêu cầu — vào mục "Yêu Cầu Duyệt" để xem sếp đã duyệt chưa.</div>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 8, borderTop: '1px solid var(--border-subtle)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <ActionChip icon={<IconClipboard size={16} />} label={copyDone ? 'Đã copy!' : 'Copy đơn hàng'} tone={copyDone ? 'success' : 'info'} onClick={handleCopyOrder} />
+                <Button variant="secondary" size="sm" onClick={() => setModalOrder(null)} disabled={actionBusy}>Đóng</Button>
+              </div>
               {canManage ? (
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {modalOrder.status !== 'huy' && modalOrder.status !== 'hoan_thanh' && (
-                    <Button variant="secondary" size="sm" onClick={() => setShowEditOrder(true)} disabled={actionBusy}>Sửa đơn</Button>
+                    <Button variant="secondary" size="sm" icon={<IconEdit size={14} />} onClick={() => setShowEditOrder(true)} disabled={actionBusy}>Sửa đơn</Button>
                   )}
                   {modalOrder.status !== 'huy' && modalOrder.status !== 'hoan_thanh' && (
-                    <Button variant="warning" size="sm" onClick={() => { setActionError(''); setReasonAction('cancel'); }} disabled={actionBusy}>Khách hủy đơn</Button>
+                    <Button variant="warning" size="sm" icon={<IconBan size={14} />} onClick={() => { setActionError(''); setReasonAction('cancel'); }} disabled={actionBusy}>Khách hủy đơn</Button>
                   )}
                   {modalOrder.status !== 'huy' && (
-                    <Button variant="danger" size="sm" onClick={() => { setActionError(''); profile?.role === 'owner' ? handleDirectDelete() : setReasonAction('delete'); }} disabled={actionBusy}>Xoá đơn</Button>
+                    <Button variant="danger" size="sm" icon={<IconTrash size={14} />} onClick={() => { setActionError(''); profile?.role === 'owner' ? handleDirectDelete() : setReasonAction('delete'); }} disabled={actionBusy}>Xoá đơn</Button>
                   )}
                 </div>
               ) : canRequestChange && modalOrder.status !== 'huy' && modalOrder.status !== 'hoan_thanh' ? (
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <Button variant="secondary" size="sm" onClick={() => { setActionError(''); setRequestAction('edit'); }} disabled={actionBusy}>Yêu cầu sửa đơn</Button>
-                  <Button variant="warning" size="sm" onClick={() => { setActionError(''); setRequestAction('cancel'); }} disabled={actionBusy}>Yêu cầu hủy đơn</Button>
+                  <Button variant="secondary" size="sm" icon={<IconEdit size={14} />} onClick={() => { setActionError(''); setRequestAction('edit'); }} disabled={actionBusy}>Yêu cầu sửa đơn</Button>
+                  <Button variant="warning" size="sm" icon={<IconBan size={14} />} onClick={() => { setActionError(''); setRequestAction('cancel'); }} disabled={actionBusy}>Yêu cầu hủy đơn</Button>
                 </div>
-              ) : <div />}
-              <Button variant="secondary" size="sm" onClick={() => setModalOrder(null)} disabled={actionBusy}>Đóng</Button>
+              ) : null}
             </div>
           </div>
         </div>

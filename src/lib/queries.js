@@ -114,6 +114,12 @@ export async function fetchOrders({ statuses, from, to } = {}) {
   return data;
 }
 
+export async function fetchOrderById(id) {
+  const { data, error } = await supabase.from('orders').select(ORDER_SELECT).eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 async function nextOrderCode() {
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
@@ -128,7 +134,7 @@ async function nextOrderCode() {
   return `#${mm}${dd}-${seq}`;
 }
 
-export async function createOrder({ customer, channel, items, total, note, address, deliveryDate, deliveryTime, deposit, paymentMethod, deliveryMethod, shipFee }) {
+export async function createOrder({ customer, channel, items, total, note, address, deliveryDate, deliveryTime, deposit, paymentMethod, deliveryMethod, shipFee, createdByName }) {
   const cust = await findOrCreateCustomer(customer);
   const orderCode = await nextOrderCode();
   const { data: order, error } = await supabase
@@ -137,7 +143,7 @@ export async function createOrder({ customer, channel, items, total, note, addre
       customer_id: cust.id, channel, total: total || 0, note, address,
       delivery_date: deliveryDate, delivery_time: deliveryTime,
       delivery_method: deliveryMethod || 'giao_tan_noi', ship_fee: shipFee || 0,
-      order_code: orderCode,
+      order_code: orderCode, created_by_name: createdByName || null,
       deposit: deposit || 0, paid_amount: deposit || 0, payment_method: paymentMethod, status: 'moi',
     })
     .select(ORDER_SELECT)
@@ -434,6 +440,45 @@ export async function addLeaveRequest({ staffId, staffName, workDate, shiftLabel
     staff_id: staffId, staff_name: staffName, work_date: workDate, shift_label: shiftLabel, branch: branch || null,
     type: 'leave_request', reason: reason || null, photo_url: photoUrl || null,
   });
+  if (error) throw error;
+}
+
+export async function addShiftCheckout({ staffId, staffName, workDate, shiftLabel, branch, photoUrl }) {
+  const { error } = await supabase.from('shift_logs').insert({
+    staff_id: staffId, staff_name: staffName, work_date: workDate, shift_label: shiftLabel, branch: branch || null,
+    type: 'checkout', checkin_time: new Date().toISOString(), photo_url: photoUrl || null,
+  });
+  if (error) throw error;
+}
+
+export async function deleteShiftLog(id) {
+  const { error } = await supabase.from('shift_logs').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ---- Yêu cầu duyệt hợp nhất (sửa/hủy/xoá đơn, chấm công lại) ----
+
+export async function createApprovalRequest({ type, orderId, orderCode, shiftLogId, requesterId, requesterName, requesterRole, reason, photoUrl }) {
+  const { error } = await supabase.from('approval_requests').insert({
+    type, order_id: orderId || null, order_code: orderCode || null, shift_log_id: shiftLogId || null,
+    requester_id: requesterId || null, requester_name: requesterName || null, requester_role: requesterRole || null,
+    reason: reason || null, photo_url: photoUrl || null,
+  });
+  if (error) throw error;
+}
+
+export async function fetchApprovalRequests({ status } = {}) {
+  let q = supabase.from('approval_requests').select('*').order('created_at', { ascending: false });
+  if (status) q = q.eq('status', status);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data;
+}
+
+export async function resolveApprovalRequest(id, { status, resolvedBy }) {
+  const { error } = await supabase.from('approval_requests').update({
+    status, resolved_by: resolvedBy || null, resolved_at: new Date().toISOString(),
+  }).eq('id', id);
   if (error) throw error;
 }
 
