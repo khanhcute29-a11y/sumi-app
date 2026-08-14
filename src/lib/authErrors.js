@@ -11,8 +11,12 @@ const RULES = [
   [/rate limit/i, 'Thao tác quá nhanh — vui lòng thử lại sau ít phút.'],
 ];
 
+const FALLBACK = 'Đã có lỗi xảy ra, vui lòng thử lại. Nếu vẫn lỗi, thử đổi mạng (wifi/4G) hoặc mở bằng trình duyệt Chrome/Safari thay vì trong ứng dụng chat.';
+
 export function translateAuthError(message) {
-  if (!message) return 'Đã có lỗi xảy ra, vui lòng thử lại.';
+  if (typeof message !== 'string' || !message.trim() || message.trim() === '{}' || message.trim() === '[object Object]') {
+    return FALLBACK;
+  }
   const rule = RULES.find(([pattern]) => pattern.test(message));
   return rule ? rule[1] : message;
 }

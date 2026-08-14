@@ -24,7 +24,7 @@ export default function LoginScreen() {
     setLoading(true);
     const { error: err } = await supabase.auth.signInWithPassword({ ...toAuthField(phone), password: pw });
     setLoading(false);
-    if (err) setError(translateAuthError(err.message));
+    if (err) { console.error('Đăng nhập lỗi:', err); setError(translateAuthError(err.message)); }
   };
 
   const handleRegister = async () => {
@@ -39,7 +39,7 @@ export default function LoginScreen() {
       options: { data: { full_name: regName, phone: isEmail ? null : normalizePhoneDigits(regPhone) } },
     });
     setLoading(false);
-    if (err) { setError(translateAuthError(err.message)); return; }
+    if (err) { console.error('Đăng ký lỗi:', err); setError(translateAuthError(err.message)); return; }
     setNotice(isEmail
       ? 'Đăng ký thành công! Kiểm tra email để xác nhận rồi đăng nhập (hoặc đăng nhập ngay nếu đã tắt xác nhận email).'
       : 'Đăng ký thành công! Đăng nhập ngay bằng số điện thoại và mật khẩu vừa tạo.');
