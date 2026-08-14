@@ -1453,7 +1453,7 @@ export default function OrdersScreen() {
         const active = mobileColumns.find((c) => c.key === mobileStatusTab) || mobileColumns[0];
         return (
           <React.Fragment>
-            <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
+            <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, position: 'relative', zIndex: 1, background: 'var(--surface-app)' }}>
               {mobileColumns.map((c) => (
                 <button key={c.key} onClick={() => setMobileStatusTab(c.key)} style={{
                   flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px',
