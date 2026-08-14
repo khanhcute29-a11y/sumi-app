@@ -15,8 +15,9 @@ import { IncidentReportModal } from '../components/IncidentReportModal';
 import { ActionChip } from '../components/ActionChip';
 import { supabase } from '../lib/supabaseClient';
 import { localDateStr, formatDeliveryDateTime } from '../lib/date';
+import { downloadCsv } from '../lib/exportCsv';
 import { CAKE_SIZES_CM, CAKE_BASES, CAKE_FILLINGS, basePriceForSize, fillingSurchargeForSize, computeCakePrice, baseSurcharge, formatOrderItemLine } from '../lib/cakePricing';
-import { IconWarning, IconEye, IconMapPin, IconClock, IconClipboard, IconPaperclip, IconHome, IconTruck, IconBan, IconCheck, IconTrash, IconStar, IconPhone } from '../components/icons/FrogIcons';
+import { IconWarning, IconEye, IconMapPin, IconClock, IconClipboard, IconPaperclip, IconHome, IconTruck, IconBan, IconCheck, IconTrash, IconStar, IconPhone, IconDownload } from '../components/icons/FrogIcons';
 
 const STATUS_LABELS = {
   moi: 'Mới', dang_lam: 'Đang làm', cho_giao: 'Chờ giao', dang_giao: 'Đang giao',
@@ -1267,6 +1268,26 @@ export default function OrdersScreen() {
     }
   };
 
+  const handleDirectDelete = async () => {
+    if (!window.confirm(`Xoá hẳn đơn ${modalOrder.order_code}? Không thể hoàn tác.`)) return;
+    setActionBusy(true);
+    setActionError('');
+    try {
+      const itemsSummary = (modalOrder.order_items || []).map((it) => `${it.name} x${it.qty}`).join(', ');
+      await deleteOrder(modalOrder.id, {
+        reason: null, photoUrl: null, staffName: profile?.full_name,
+        snapshot: { orderCode: modalOrder.order_code, customerName: modalOrder.customer?.name, itemsSummary, total: modalOrder.total },
+      });
+      setModalOrder(null);
+      load();
+      loadCancelled();
+    } catch (err) {
+      setActionError(err.message);
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
   const handleConfirmReason = async ({ reason, photoUrl }) => {
     setActionBusy(true);
     setActionError('');
@@ -1326,6 +1347,18 @@ export default function OrdersScreen() {
     }
   };
 
+  const handleExportOrders = () => {
+    const list = searchResults !== null ? searchResults : orders;
+    const headers = ['Mã đơn', 'Khách hàng', 'SĐT', 'Sản phẩm', 'Tổng tiền', 'Đã thu', 'Trạng thái', 'Ngày giao', 'Giờ giao', 'Kênh', 'Ghi chú'];
+    const rows = list.map((o) => [
+      o.order_code || '', o.customer?.name || '', o.customer?.phone || '',
+      (o.order_items || []).map((it) => formatOrderItemLine(it, { withQty: true })).join(' | '),
+      Number(o.total || 0), Number(o.paid_amount || 0), STATUS_LABELS[o.status] || o.status,
+      o.delivery_date || '', o.delivery_time || '', o.channel || '', o.note || '',
+    ]);
+    downloadCsv(`don-hang_${localDateStr()}.csv`, headers, rows);
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
@@ -1337,6 +1370,7 @@ export default function OrdersScreen() {
           <Button variant="primary" onClick={() => setShowNew(true)}>+ TẠO ĐƠN MỚI</Button>
           <Button variant="secondary" onClick={() => setShowTeabreak(true)}>+ Tạo đơn Teabreak</Button>
           <Button variant="secondary" onClick={() => setShowMacaron(true)}>+ Tạo đơn Macaron Sỉ</Button>
+          <Button variant="secondary" icon={<IconDownload size={16} />} onClick={handleExportOrders}>Xuất danh sách</Button>
         </div>
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -1493,7 +1527,7 @@ export default function OrdersScreen() {
                     <Button variant="warning" size="sm" onClick={() => { setActionError(''); setReasonAction('cancel'); }} disabled={actionBusy}>Khách hủy đơn</Button>
                   )}
                   {modalOrder.status !== 'huy' && (
-                    <Button variant="danger" size="sm" onClick={() => { setActionError(''); setReasonAction('delete'); }} disabled={actionBusy}>Xoá đơn</Button>
+                    <Button variant="danger" size="sm" onClick={() => { setActionError(''); profile?.role === 'owner' ? handleDirectDelete() : setReasonAction('delete'); }} disabled={actionBusy}>Xoá đơn</Button>
                   )}
                 </div>
               ) : canRequestChange && modalOrder.status !== 'huy' && modalOrder.status !== 'hoan_thanh' ? (

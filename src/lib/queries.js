@@ -295,6 +295,21 @@ export async function updateWarehouseStock(id, fields) {
   if (error) throw error;
 }
 
+export async function deductWarehouseStock({ stockId, name, qty, unit, remainingQty, orderCode, note, staffName }) {
+  const { error: logErr } = await supabase.from('warehouse_stock_out_log').insert({
+    stock_id: stockId, name, qty, unit: unit || 'g', order_code: orderCode || null, note: note || null, staff_name: staffName || null,
+  });
+  if (logErr) throw logErr;
+  const { error } = await supabase.from('warehouse_stock').update({ qty: remainingQty, qty_label: `${remainingQty} ${unit}` }).eq('id', stockId);
+  if (error) throw error;
+}
+
+export async function fetchWarehouseStockOutLog(limit = 100) {
+  const { data, error } = await supabase.from('warehouse_stock_out_log').select('*').order('created_at', { ascending: false }).limit(limit);
+  if (error) throw error;
+  return data;
+}
+
 // ---- Công thức sản phẩm (BOM) — tính giá vốn ----
 
 export async function fetchProductRecipes(productId) {

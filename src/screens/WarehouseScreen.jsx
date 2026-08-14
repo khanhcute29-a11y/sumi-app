@@ -6,10 +6,11 @@ import { Input } from '../components/forms/Input';
 import { Select } from '../components/forms/Select';
 import { CameraCapture } from '../components/CameraCapture';
 import { IncidentReportModal } from '../components/IncidentReportModal';
-import { fetchWarehouseStock, addWarehouseStock, updateWarehouseStock, uploadPhoto } from '../lib/queries';
+import { fetchWarehouseStock, addWarehouseStock, updateWarehouseStock, deductWarehouseStock, uploadPhoto } from '../lib/queries';
 import { useVoiceInput } from '../lib/useVoiceInput';
+import { useAuth } from '../lib/AuthContext';
 import { enqueue, getQueue } from '../lib/offlineQueue';
-import { IconMic, IconCamera, IconWarning, IconAdd } from '../components/icons/FrogIcons';
+import { IconMic, IconCamera, IconWarning, IconAdd, IconDownload } from '../components/icons/FrogIcons';
 
 const UNITS = ['g', 'kg', 'ml', 'lít', 'quả', 'cái', 'gói'];
 
@@ -96,6 +97,59 @@ function AddStockForm({ onAdded, onQueued, onClose }) {
   );
 }
 
+function StockOutForm({ stock, staffName, onDone, onClose }) {
+  const [stockId, setStockId] = useState(stock[0]?.id || '');
+  const [qty, setQty] = useState('');
+  const [orderCode, setOrderCode] = useState('');
+  const [note, setNote] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const item = stock.find((s) => s.id === stockId);
+
+  const handleSubmit = async () => {
+    const qtyNum = Number(qty);
+    if (!item || !qtyNum || qtyNum <= 0) { setError('Chọn nguyên liệu và nhập số lượng xuất hợp lệ.'); return; }
+    if (qtyNum > Number(item.qty)) { setError(`Kho chỉ còn ${item.qty_label}, không đủ để xuất.`); return; }
+    setSaving(true);
+    setError('');
+    try {
+      await deductWarehouseStock({
+        stockId: item.id, name: item.name, qty: qtyNum, unit: item.unit,
+        remainingQty: Number(item.qty) - qtyNum, orderCode, note, staffName,
+      });
+      onDone();
+      onClose();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
+      {stock.length === 0 ? (
+        <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Kho chưa có nguyên liệu nào để xuất.</div>
+      ) : (
+        <React.Fragment>
+          <Select label="Nguyên liệu" value={stockId} onChange={(e) => setStockId(e.target.value)}
+            options={stock.map((s) => ({ value: s.id, label: `${s.name} (còn ${s.qty_label})` }))} />
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <Input label={`Số lượng xuất (${item?.unit || ''})`} type="number" placeholder="VD: 2" value={qty} onChange={(e) => setQty(e.target.value)} style={{ flex: '1 1 140px' }} />
+            <Input label="Mã đơn hàng (nếu có)" placeholder="VD: DH-0231" value={orderCode} onChange={(e) => setOrderCode(e.target.value)} style={{ flex: '1 1 160px' }} />
+          </div>
+          <Input label="Ghi chú (nếu có)" placeholder="VD: Làm bánh kem sinh nhật" value={note} onChange={(e) => setNote(e.target.value)} />
+        </React.Fragment>
+      )}
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>Hủy</Button>
+        <Button variant="primary" size="sm" onClick={handleSubmit} disabled={saving || stock.length === 0}>{saving ? 'Đang lưu...' : 'Xác nhận xuất kho'}</Button>
+      </div>
+    </div>
+  );
+}
+
 function EditCostForm({ item, onSaved, onClose }) {
   const [qty, setQty] = useState(String(item.qty ?? ''));
   const [unit, setUnit] = useState(item.unit || 'kg');
@@ -128,11 +182,13 @@ function EditCostForm({ item, onSaved, onClose }) {
 }
 
 export default function WarehouseScreen() {
+  const { profile } = useAuth();
   const [stock, setStock] = useState([]);
   const [pendingItems, setPendingItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [showStockOut, setShowStockOut] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [showIncident, setShowIncident] = useState(false);
 
@@ -178,14 +234,18 @@ export default function WarehouseScreen() {
         </div>
       )}
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-        <Button variant="primary" size="lg" icon={<IconAdd size={18} />} style={{ flex: 1, minWidth: 220, padding: '24px', font: '700 18px var(--font-body)' }} onClick={() => setShowForm((v) => !v)}>
+        <Button variant="primary" size="lg" icon={<IconAdd size={18} />} style={{ flex: 1, minWidth: 220, padding: '24px', font: '700 18px var(--font-body)' }} onClick={() => { setShowForm((v) => !v); setShowStockOut(false); }}>
           {showForm ? 'Đóng form nhập kho' : 'Thêm nguyên liệu vào kho'}
+        </Button>
+        <Button variant="secondary" size="lg" icon={<IconDownload size={18} />} style={{ flex: 1, minWidth: 220, padding: '24px', font: '700 18px var(--font-body)' }} onClick={() => { setShowStockOut((v) => !v); setShowForm(false); }}>
+          {showStockOut ? 'Đóng form xuất kho' : 'Xuất kho theo đơn hàng'}
         </Button>
         <Button variant="danger" size="lg" icon={<IconWarning size={18} />} style={{ flex: 1, minWidth: 220, padding: '24px', font: '700 18px var(--font-body)' }} onClick={() => setShowIncident(true)}>
           Báo sự cố kho
         </Button>
       </div>
       {showForm && <AddStockForm onAdded={load} onQueued={(item) => setPendingItems((prev) => [item, ...prev])} onClose={() => setShowForm(false)} />}
+      {showStockOut && <StockOutForm stock={stock} staffName={profile?.full_name} onDone={load} onClose={() => setShowStockOut(false)} />}
       {showIncident && <IncidentReportModal onClose={() => setShowIncident(false)} onSent={() => setShowIncident(false)} />}
       {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>Lỗi tải kho: {error}</div>}
       {loading ? (
