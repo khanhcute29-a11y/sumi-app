@@ -147,6 +147,20 @@ create table if not exists warehouse_stock_out_log (
   created_at timestamptz not null default now()
 );
 
+-- Nhật ký nhập kho theo từng lần — nhập thêm nguyên liệu đã có sẽ cộng dồn vào dòng
+-- cũ (không tạo dòng trùng), mỗi lần nhập ghi log riêng ở đây.
+create table if not exists warehouse_stock_in_log (
+  id uuid primary key default gen_random_uuid(),
+  stock_id uuid references warehouse_stock(id) on delete set null,
+  name text not null,
+  qty numeric(12,3) not null default 0,
+  unit text not null default 'g',
+  cost_per_unit numeric(12,2) not null default 0,
+  photo_url text,
+  staff_name text,
+  created_at timestamptz not null default now()
+);
+
 -- 5b. Công thức (BOM) — nguyên liệu cần cho 1 sản phẩm, dùng để tính giá vốn
 create table if not exists product_recipes (
   id uuid primary key default gen_random_uuid(),
@@ -268,6 +282,7 @@ alter table products enable row level security;
 alter table product_variants enable row level security;
 alter table warehouse_stock enable row level security;
 alter table warehouse_stock_out_log enable row level security;
+alter table warehouse_stock_in_log enable row level security;
 alter table cashbook_entries enable row level security;
 alter table order_deletion_log enable row level security;
 alter table shift_configs enable row level security;
@@ -311,6 +326,8 @@ create policy "delete warehouse_stock" on warehouse_stock for delete using (exis
 -- warehouse_stock_out_log: đọc mở, tạo mở (ai xuất kho cũng ghi log được).
 create policy "read warehouse_stock_out_log" on warehouse_stock_out_log for select using (auth.role() = 'authenticated' and public.is_approved());
 create policy "insert warehouse_stock_out_log" on warehouse_stock_out_log for insert with check (auth.role() = 'authenticated');
+create policy "read warehouse_stock_in_log" on warehouse_stock_in_log for select using (auth.role() = 'authenticated' and public.is_approved());
+create policy "insert warehouse_stock_in_log" on warehouse_stock_in_log for insert with check (auth.role() = 'authenticated');
 
 -- shift_logs: đọc/tạo mở (ai cũng tự chấm công/xin nghỉ được); SỬA/XOÁ (chỉnh giờ chấm công,
 -- lương đã tính) chỉ Chủ sở hữu — dữ liệu công/lương không giao cho nhân viên khác chỉnh sửa.

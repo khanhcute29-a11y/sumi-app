@@ -6,7 +6,7 @@ import { Input } from '../components/forms/Input';
 import { Select } from '../components/forms/Select';
 import { CameraCapture } from '../components/CameraCapture';
 import { IncidentReportModal } from '../components/IncidentReportModal';
-import { fetchWarehouseStock, addWarehouseStock, updateWarehouseStock, deductWarehouseStock, uploadPhoto } from '../lib/queries';
+import { fetchWarehouseStock, addWarehouseStock, updateWarehouseStock, deductWarehouseStock, uploadPhoto, fetchWarehouseStockInLog, fetchWarehouseStockOutLog } from '../lib/queries';
 import { useVoiceInput } from '../lib/useVoiceInput';
 import { useAuth } from '../lib/AuthContext';
 import { hasAnyRole } from '../lib/roles';
@@ -21,7 +21,7 @@ const BRANCHES = [
 ];
 const branchLabel = (v) => BRANCHES.find((b) => b.value === v)?.label || v;
 
-function AddStockForm({ onAdded, onQueued, onClose, defaultBranch, lockedBranch }) {
+function AddStockForm({ onAdded, onQueued, onClose, defaultBranch, lockedBranch, staffName }) {
   const [name, setName] = useState('');
   const [qty, setQty] = useState('');
   const [unit, setUnit] = useState('kg');
@@ -42,7 +42,7 @@ function AddStockForm({ onAdded, onQueued, onClose, defaultBranch, lockedBranch 
   };
 
   const queueOffline = () => {
-    const payload = { name, qtyLabel, unit, qty: Number(qty) || 0, costPerUnit: Number(costPerUnit) || 0, status, expiryDate, photoUrl: null, branch };
+    const payload = { name, qtyLabel, unit, qty: Number(qty) || 0, costPerUnit: Number(costPerUnit) || 0, status, expiryDate, photoUrl: null, branch, staffName };
     const queued = enqueue('addWarehouseStock', payload);
     onQueued({ id: queued.id, name, qty_label: qtyLabel, status, expiry_date: expiryDate || null, branch, pendingSync: true });
   };
@@ -60,7 +60,7 @@ function AddStockForm({ onAdded, onQueued, onClose, defaultBranch, lockedBranch 
     try {
       let photoUrl = null;
       if (photoBlob) photoUrl = await uploadPhoto(photoBlob, 'warehouse');
-      await addWarehouseStock({ name, qtyLabel, unit, qty: Number(qty) || 0, costPerUnit: Number(costPerUnit) || 0, status, expiryDate, photoUrl, branch });
+      await addWarehouseStock({ name, qtyLabel, unit, qty: Number(qty) || 0, costPerUnit: Number(costPerUnit) || 0, status, expiryDate, photoUrl, branch, staffName });
       onAdded();
       onClose();
     } catch (err) {
@@ -111,13 +111,20 @@ function AddStockForm({ onAdded, onQueued, onClose, defaultBranch, lockedBranch 
 }
 
 function StockOutForm({ stock, staffName, onDone, onClose }) {
+  const [search, setSearch] = useState('');
+  const filteredStock = search.trim() ? stock.filter((s) => s.name.toLowerCase().includes(search.trim().toLowerCase())) : stock;
   const [stockId, setStockId] = useState(stock[0]?.id || '');
   const [qty, setQty] = useState('');
   const [orderCode, setOrderCode] = useState('');
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const voice = useVoiceInput();
   const item = stock.find((s) => s.id === stockId);
+
+  useEffect(() => {
+    if (!filteredStock.some((s) => s.id === stockId)) setStockId(filteredStock[0]?.id || '');
+  }, [search]);
 
   const handleSubmit = async () => {
     const qtyNum = Number(qty);
@@ -146,8 +153,16 @@ function StockOutForm({ stock, staffName, onDone, onClose }) {
         <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Kho chưa có nguyên liệu nào để xuất.</div>
       ) : (
         <React.Fragment>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <Input label="Tìm nguyên liệu" placeholder="Gõ hoặc nói tên nguyên liệu..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ flex: 1 }} />
+            {voice.supported && (
+              <Button variant={voice.listening ? 'danger' : 'secondary'} size="sm" icon={<IconMic size={16} />} onClick={() => voice.start((t) => setSearch(t))}>
+                {voice.listening ? 'Đang nghe...' : 'Nói'}
+              </Button>
+            )}
+          </div>
           <Select label="Nguyên liệu" value={stockId} onChange={(e) => setStockId(e.target.value)}
-            options={stock.map((s) => ({ value: s.id, label: `${s.name} (còn ${s.qty_label})` }))} />
+            options={filteredStock.map((s) => ({ value: s.id, label: `${s.name} (còn ${s.qty_label})` }))} />
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <Input label={`Số lượng xuất (${item?.unit || ''})`} type="number" placeholder="VD: 2" value={qty} onChange={(e) => setQty(e.target.value)} style={{ flex: '1 1 140px' }} />
             <Input label="Mã đơn hàng (nếu có)" placeholder="VD: DH-0231" value={orderCode} onChange={(e) => setOrderCode(e.target.value)} style={{ flex: '1 1 160px' }} />
@@ -194,6 +209,59 @@ function EditCostForm({ item, onSaved, onClose }) {
   );
 }
 
+function HistorySection({ stock, effectiveBranch, onClose }) {
+  const [entries, setEntries] = useState(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    Promise.all([fetchWarehouseStockInLog(200), fetchWarehouseStockOutLog(200)])
+      .then(([inLog, outLog]) => {
+        const merged = [
+          ...inLog.map((l) => ({ ...l, kind: 'in' })),
+          ...outLog.map((l) => ({ ...l, kind: 'out' })),
+        ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        setEntries(merged);
+      })
+      .catch((err) => setError(err.message));
+  }, []);
+
+  const branchOf = (stockId) => stock.find((s) => s.id === stockId)?.branch || null;
+  const filtered = entries?.filter((e) => effectiveBranch === 'all' || branchOf(e.stock_id) === effectiveBranch || branchOf(e.stock_id) == null) || [];
+
+  return (
+    <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>Lịch sử Nhập/Xuất</div>
+        <Button variant="ghost" size="sm" onClick={onClose}>Đóng</Button>
+      </div>
+      {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
+      {entries === null ? (
+        <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Đang tải...</div>
+      ) : filtered.length === 0 ? (
+        <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Chưa có lịch sử nhập/xuất nào.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 420, overflowY: 'auto' }}>
+          {filtered.map((e) => (
+            <div key={`${e.kind}-${e.id}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+              <div>
+                <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-primary)' }}>
+                  <Badge tone={e.kind === 'in' ? 'success' : 'warning'}>{e.kind === 'in' ? 'Nhập' : 'Xuất'}</Badge> {e.name} — {e.qty} {e.unit}
+                </div>
+                <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>
+                  {e.staff_name || 'Không rõ'}{e.kind === 'out' && e.order_code ? ` · Đơn: ${e.order_code}` : ''}{e.note ? ` · ${e.note}` : ''}
+                </div>
+              </div>
+              <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', flexShrink: 0, textAlign: 'right' }}>
+                {new Date(e.created_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const BRANCH_ROLE_MAP = { kho_bakery: 'bakery', kho_xuong41: 'xuong41', kho_xuong42: 'xuong42' };
 const WAREHOUSE_FULL_ACCESS_ROLES = ['owner', 'admin', 'warehouse'];
 
@@ -209,6 +277,7 @@ export default function WarehouseScreen({ branch: viewBranch = 'all', onBranchCh
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [showStockOut, setShowStockOut] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [showIncident, setShowIncident] = useState(false);
 
@@ -283,9 +352,13 @@ export default function WarehouseScreen({ branch: viewBranch = 'all', onBranchCh
           Báo sự cố kho
         </Button>
       </div>
+      <Button variant="ghost" size="sm" onClick={() => setShowHistory((v) => !v)} style={{ alignSelf: 'flex-start' }}>
+        {showHistory ? 'Ẩn lịch sử Nhập/Xuất' : 'Xem lịch sử Nhập/Xuất'}
+      </Button>
+      {showHistory && <HistorySection stock={stock} effectiveBranch={effectiveBranch} onClose={() => setShowHistory(false)} />}
       {showForm && (
         <AddStockForm onAdded={load} onQueued={(item) => setPendingItems((prev) => [item, ...prev])} onClose={() => setShowForm(false)}
-          defaultBranch={effectiveBranch === 'all' ? 'bakery' : effectiveBranch} lockedBranch={lockedBranch} />
+          defaultBranch={effectiveBranch === 'all' ? 'bakery' : effectiveBranch} lockedBranch={lockedBranch} staffName={profile?.full_name} />
       )}
       {showStockOut && (
         <StockOutForm stock={effectiveBranch === 'all' ? stock : stock.filter((s) => (s.branch || 'bakery') === effectiveBranch)}

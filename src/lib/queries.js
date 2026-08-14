@@ -306,12 +306,39 @@ export async function fetchWarehouseStock() {
   return data;
 }
 
-export async function addWarehouseStock({ name, qtyLabel, unit, qty, costPerUnit, status, expiryDate, photoUrl, branch }) {
-  const { error } = await supabase.from('warehouse_stock').insert({
-    name, qty_label: qtyLabel, unit: unit || 'g', qty: qty || 0, cost_per_unit: costPerUnit || 0,
-    status, expiry_date: expiryDate || null, photo_url: photoUrl || null, branch: branch || 'bakery',
+export async function addWarehouseStock({ name, qtyLabel, unit, qty, costPerUnit, status, expiryDate, photoUrl, branch, staffName }) {
+  const trimmedName = (name || '').trim();
+  const targetBranch = branch || 'bakery';
+  const { data: existing, error: findErr } = await supabase
+    .from('warehouse_stock').select('*').eq('branch', targetBranch).ilike('name', trimmedName).maybeSingle();
+  if (findErr) throw findErr;
+
+  let stockId;
+  if (existing) {
+    const newQty = Number(existing.qty || 0) + Number(qty || 0);
+    const { error: updErr } = await supabase.from('warehouse_stock').update({
+      qty: newQty, qty_label: `${newQty} ${unit || existing.unit}`,
+      cost_per_unit: costPerUnit || existing.cost_per_unit,
+      status: status || existing.status, expiry_date: expiryDate || existing.expiry_date,
+      photo_url: photoUrl || existing.photo_url,
+    }).eq('id', existing.id);
+    if (updErr) throw updErr;
+    stockId = existing.id;
+  } else {
+    const { data: created, error: insErr } = await supabase.from('warehouse_stock').insert({
+      name: trimmedName, qty_label: qtyLabel, unit: unit || 'g', qty: qty || 0, cost_per_unit: costPerUnit || 0,
+      status, expiry_date: expiryDate || null, photo_url: photoUrl || null, branch: targetBranch,
+    }).select('id').single();
+    if (insErr) throw insErr;
+    stockId = created.id;
+  }
+
+  const { error: logErr } = await supabase.from('warehouse_stock_in_log').insert({
+    stock_id: stockId, name: trimmedName, qty: qty || 0, unit: unit || 'g', cost_per_unit: costPerUnit || 0,
+    photo_url: photoUrl || null, staff_name: staffName || null,
   });
-  if (error) throw error;
+  if (logErr) throw logErr;
+  notifyBadgesChanged();
 }
 
 export async function updateWarehouseStock(id, fields) {
@@ -330,6 +357,12 @@ export async function deductWarehouseStock({ stockId, name, qty, unit, remaining
 
 export async function fetchWarehouseStockOutLog(limit = 100) {
   const { data, error } = await supabase.from('warehouse_stock_out_log').select('*').order('created_at', { ascending: false }).limit(limit);
+  if (error) throw error;
+  return data;
+}
+
+export async function fetchWarehouseStockInLog(limit = 100) {
+  const { data, error } = await supabase.from('warehouse_stock_in_log').select('*').order('created_at', { ascending: false }).limit(limit);
   if (error) throw error;
   return data;
 }
