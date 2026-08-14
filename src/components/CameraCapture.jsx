@@ -34,7 +34,7 @@ export function CameraCapture({ onCapture, onClose }) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60 }} onClick={onClose}>
-      <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', padding: 16, display: 'flex', flexDirection: 'column', gap: 10, width: 360 }} onClick={(e) => e.stopPropagation()}>
+      <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', padding: 16, display: 'flex', flexDirection: 'column', gap: 10, width: 360, maxWidth: '100%', boxSizing: 'border-box' }} onClick={(e) => e.stopPropagation()}>
         <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>Chụp ảnh</div>
         {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
         {!captured ? (

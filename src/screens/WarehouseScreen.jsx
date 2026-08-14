@@ -74,10 +74,10 @@ function AddStockForm({ onAdded, onQueued, onClose }) {
           </Button>
         )}
       </div>
-      <div style={{ display: 'flex', gap: 10 }}>
-        <Input label="Số lượng nhập" type="number" placeholder="VD: 40" value={qty} onChange={(e) => setQty(e.target.value)} style={{ flex: 1 }} />
-        <Select label="Đơn vị" value={unit} onChange={(e) => setUnit(e.target.value)} options={UNITS.map((u) => ({ value: u, label: u }))} style={{ flex: 1 }} />
-        <Input label="Hạn dùng" type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} style={{ flex: 1 }} />
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <Input label="Số lượng nhập" type="number" placeholder="VD: 40" value={qty} onChange={(e) => setQty(e.target.value)} style={{ flex: '1 1 100px' }} />
+        <Select label="Đơn vị" value={unit} onChange={(e) => setUnit(e.target.value)} options={UNITS.map((u) => ({ value: u, label: u }))} style={{ flex: '1 1 100px' }} />
+        <Input label="Hạn dùng" type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} style={{ flex: '1 1 150px' }} />
       </div>
       <Input label={`Giá nhập / ${unit}`} type="number" placeholder="VD: 25000" value={costPerUnit} onChange={(e) => setCostPerUnit(e.target.value)}
         helpText="Dùng để tính giá vốn sản phẩm ở màn Sản Phẩm." />

@@ -22,8 +22,8 @@ export default function ResetPasswordScreen({ onDone }) {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface-app)', fontFamily: 'var(--font-body)' }}>
-      <div style={{ width: 380, display: 'flex', flexDirection: 'column', gap: 20, alignItems: 'center' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface-app)', fontFamily: 'var(--font-body)', padding: 16, boxSizing: 'border-box' }}>
+      <div style={{ width: 380, maxWidth: '100%', display: 'flex', flexDirection: 'column', gap: 20, alignItems: 'center' }}>
         <div style={{ width: 64, height: 64, borderRadius: 'var(--radius-lg)', background: accent, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--shadow-md)' }}>
           <span style={{ font: '700 30px var(--font-display)', color: '#FFFFFF' }}>S</span>
         </div>

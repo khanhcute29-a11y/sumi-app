@@ -1545,8 +1545,8 @@ export default function OrdersScreen() {
       {showTeabreak && <TeabreakOrderModal onClose={() => setShowTeabreak(false)} onCreated={load} onManualItems={handleManualItemsDetected} />}
       {showMacaron && <MacaronOrderModal onClose={() => setShowMacaron(false)} onCreated={load} onManualItems={handleManualItemsDetected} />}
       {pendingCatalogItems && (
-        <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60 }} onClick={() => setPendingCatalogItems(null)}>
-          <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: 380, padding: 20, boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 12 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 16 }} onClick={() => setPendingCatalogItems(null)}>
+          <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: 380, maxWidth: '100%', padding: 20, boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 12 }} onClick={(e) => e.stopPropagation()}>
             <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>Lưu vào danh mục sản phẩm?</div>
             <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>
               {pendingCatalogItems.length} món vừa nhập tay chưa có trong danh mục. Lưu lại để lần sau chọn từ danh sách, tự động điền giá:

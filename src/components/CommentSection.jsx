@@ -145,12 +145,12 @@ export function CommentSection({ order, profile }) {
       {error && <div style={{ font: 'var(--text-caption)', color: 'var(--status-danger)' }}>{error}</div>}
 
       {/* Photo upload buttons */}
-      <div style={{ display: 'flex', gap: 6 }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         <button
           onClick={() => cameraInputRef.current?.click()}
           disabled={uploading || sending}
           style={{
-            padding: '8px 10px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)',
+            flexShrink: 0, padding: '8px 10px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)',
             background: 'var(--surface-sunken)', cursor: uploading ? 'not-allowed' : 'pointer',
             font: 'var(--text-body-sm)', color: 'var(--text-primary)', opacity: uploading ? 0.6 : 1,
           }}
@@ -161,14 +161,14 @@ export function CommentSection({ order, profile }) {
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading || sending}
           style={{
-            padding: '8px 10px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)',
+            flexShrink: 0, padding: '8px 10px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)',
             background: 'var(--surface-sunken)', cursor: uploading ? 'not-allowed' : 'pointer',
             font: 'var(--text-body-sm)', color: 'var(--text-primary)', opacity: uploading ? 0.6 : 1,
           }}
         >
           <IconImage size={16} />
         </button>
-        <Input placeholder="Viết bình luận cho đơn này..." value={draft} onChange={(e) => setDraft(e.target.value)} style={{ flex: 1 }} />
+        <Input placeholder="Viết bình luận cho đơn này..." value={draft} onChange={(e) => setDraft(e.target.value)} style={{ flex: '1 1 160px', minWidth: 0 }} />
         <Button variant="primary" size="sm" onClick={handleSend} disabled={sending || uploading || (!draft.trim() && photos.length === 0)}>
           {uploading ? 'Tải...' : sending ? '...' : 'Gửi'}
         </Button>
