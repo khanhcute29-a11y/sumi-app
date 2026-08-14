@@ -1378,8 +1378,8 @@ export default function OrdersScreen() {
         </div>
       )}
       {modalOrder && (
-        <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={() => setModalOrder(null)}>
-          <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: 420, padding: 20, boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 10 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }} onClick={() => setModalOrder(null)}>
+          <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: 420, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto', padding: 20, boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 10 }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>{modalOrder.customer?.name || 'Khách lẻ'}</div>
               {modalOrder.order_code && <Badge tone="neutral">{modalOrder.order_code}</Badge>}
