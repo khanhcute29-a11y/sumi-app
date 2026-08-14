@@ -127,7 +127,7 @@ function CompactOrderRow({ order, onAccept, onReady, canAct }) {
   };
 
   return (
-    <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
+    <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)' }}>
       <button
         onClick={() => setExpanded((v) => !v)}
         style={{
