@@ -278,7 +278,7 @@ function LogRow({ log }) {
 
 export default function ShiftsScreen() {
   const { profile } = useAuth();
-  const isOwner = profile?.role === 'owner';
+  const isOwner = profile?.role === 'owner' || profile?.role === 'admin';
   const [date, setDate] = useState(localDateStr());
   const [shiftConfigs, setShiftConfigs] = useState([]);
   const [logs, setLogs] = useState([]);

@@ -46,7 +46,7 @@ function OrderRow({ order }) {
 
 export default function DashboardScreen() {
   const { profile } = useAuth();
-  const isOwner = profile?.role === 'owner';
+  const isOwner = profile?.role === 'owner' || profile?.role === 'admin';
   const [range, setRange] = useState('today');
   const today = localDateStr();
   const [customFrom, setCustomFrom] = useState(today);

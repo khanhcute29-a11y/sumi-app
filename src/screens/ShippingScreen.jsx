@@ -12,6 +12,8 @@ import { enqueue } from '../lib/offlineQueue';
 import { getCurrentPosition, haversineKm, estimateTrip } from '../lib/geo';
 import { IconOrders, IconHome, IconTruck, IconWarning, IconCamera, IconEdit, IconMapPin, IconClock, IconPhone, IconClipboard, IconMoney } from '../components/icons/FrogIcons';
 import { supabase } from '../lib/supabaseClient';
+import { formatOrderItemLine } from '../lib/cakePricing';
+import { formatDeliveryDateTime } from '../lib/date';
 
 function Thumb({ url, label }) {
   if (!url) return null;
@@ -65,10 +67,7 @@ function DeliveryCard({ order, onPickup, onComplete, onSignedDoc, canAct, shopSe
   const [pendingComplete, setPendingComplete] = useState(null);
   const [showIncident, setShowIncident] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
-  const itemLine = (it) => {
-    const details = [it.size, it.cot, it.vi, it.note].filter(Boolean).join(' · ');
-    return details ? `${it.name} (${details})` : it.name;
-  };
+  const itemLine = (it) => formatOrderItemLine(it, { withQty: false });
   const itemSummary = (order.order_items || []).map(itemLine).join(', ') || 'Không có sản phẩm';
   const packageCount = (order.order_items || []).reduce((s, it) => s + (Number(it.qty) || 0), 0);
 
@@ -158,7 +157,7 @@ function DeliveryCard({ order, onPickup, onComplete, onSignedDoc, canAct, shopSe
             <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Địa chỉ: {order.address || '—'}</div>
           )}
           <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <IconClock size={14} />Ngày giao: {order.delivery_date ? new Date(`${order.delivery_date}T00:00:00+07:00`).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '—'}{order.delivery_time ? ` · ${order.delivery_time}` : ''}
+            <IconClock size={14} />Ngày giao: {formatDeliveryDateTime(order.delivery_date, order.delivery_time) || '—'}
           </div>
           {order.note && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconClipboard size={14} /> {order.note}</div>}
           <div style={{ font: 'var(--text-caption)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -244,7 +243,7 @@ function DeliveryCard({ order, onPickup, onComplete, onSignedDoc, canAct, shopSe
 
 export default function ShippingScreen() {
   const { profile } = useAuth();
-  const canAct = profile?.role === 'shipper' || profile?.role === 'owner';
+  const canAct = profile?.role === 'shipper' || profile?.role === 'owner' || profile?.role === 'admin';
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');

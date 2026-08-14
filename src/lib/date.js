@@ -7,3 +7,13 @@ export function localDateStr(d = new Date()) {
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
+
+// Format ngày giao (YYYY-MM-DD) + giờ giao (HH:mm) thành "dd/mm/yyyy · HH:mm" theo giờ VN —
+// dùng chung cho OrdersScreen/KdsScreen/ShippingScreen/KanbanCard thay vì lặp lại
+// new Date(...).toLocaleDateString(...) ở từng nơi.
+export function formatDeliveryDateTime(deliveryDate, deliveryTime) {
+  const datePart = deliveryDate
+    ? new Date(`${deliveryDate}T00:00:00+07:00`).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
+    : '';
+  return [datePart, deliveryTime].filter(Boolean).join(' · ');
+}

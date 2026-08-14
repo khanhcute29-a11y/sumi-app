@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Badge } from '../components/feedback/Badge';
 import { Button } from '../components/forms/Button';
+import { formatOrderItemLine } from '../lib/cakePricing';
+import { formatDeliveryDateTime } from '../lib/date';
 import { CameraCapture } from '../components/CameraCapture';
 import { IncidentReportModal } from '../components/IncidentReportModal';
 import { ActionChip } from '../components/ActionChip';
@@ -103,11 +105,7 @@ function CompactOrderRow({ order, onAccept, onReady, canAct }) {
   const [showIncident, setShowIncident] = useState(false);
   const [showFullDetail, setShowFullDetail] = useState(false);
 
-  const itemLine = (it) => {
-    const details = [it.size && `Size ${it.size}`, it.cot && `Cốt ${it.cot}`, it.vi && `Vị ${it.vi}`, it.note].filter(Boolean).join(' · ');
-    return `${it.name} x${it.qty}${details ? ` (${details})` : ''}`;
-  };
-  const itemSummary = (order.order_items || []).map(itemLine).join(', ') || 'Không có sản phẩm';
+  const itemSummary = (order.order_items || []).map((it) => formatOrderItemLine(it)).join(', ') || 'Không có sản phẩm';
   const refPhotos = (order.order_items || []).filter((it) => it.ref_photo_url);
   const urgent = isUrgent(order);
 
@@ -154,7 +152,7 @@ function CompactOrderRow({ order, onAccept, onReady, canAct }) {
           <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', marginTop: 10 }}>{itemSummary}</div>
           {order.customer?.phone && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconPhone size={14} /> {order.customer.phone}</div>}
           <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <IconClock size={14} />Ngày giao: {order.delivery_date ? new Date(`${order.delivery_date}T00:00:00+07:00`).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '—'}{order.delivery_time ? ` · ${order.delivery_time}` : ''}
+            <IconClock size={14} />Ngày giao: {formatDeliveryDateTime(order.delivery_date, order.delivery_time) || '—'}
           </div>
           {order.delivery_method === 'lay_tai_xuong' ? (
             <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconHome size={14} /> Khách tự đến lấy tại xưởng</div>

@@ -340,7 +340,7 @@ export default function SettingsScreen({ onSignOut }) {
 
   useEffect(load, []);
 
-  const isOwner = me?.role === 'owner';
+  const isOwner = me?.role === 'owner' || me?.role === 'admin';
 
   const handleSaveName = async () => {
     setSavingName(true);

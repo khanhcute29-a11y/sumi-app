@@ -78,7 +78,7 @@ export default function StaffScreen() {
 
   useEffect(load, []);
 
-  const isOwner = me?.role === 'owner';
+  const isOwner = me?.role === 'owner' || me?.role === 'admin';
   const pending = staff.filter((s) => s.approved === false);
   const approved = staff.filter((s) => s.approved !== false);
 

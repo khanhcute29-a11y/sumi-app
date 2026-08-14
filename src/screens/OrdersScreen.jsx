@@ -14,8 +14,8 @@ import { PhotoField } from '../components/PhotoField';
 import { IncidentReportModal } from '../components/IncidentReportModal';
 import { ActionChip } from '../components/ActionChip';
 import { supabase } from '../lib/supabaseClient';
-import { localDateStr } from '../lib/date';
-import { CAKE_SIZES_CM, CAKE_BASES, CAKE_FILLINGS, basePriceForSize, fillingSurchargeForSize, computeCakePrice, baseSurcharge } from '../lib/cakePricing';
+import { localDateStr, formatDeliveryDateTime } from '../lib/date';
+import { CAKE_SIZES_CM, CAKE_BASES, CAKE_FILLINGS, basePriceForSize, fillingSurchargeForSize, computeCakePrice, baseSurcharge, formatOrderItemLine } from '../lib/cakePricing';
 import { IconWarning, IconEye, IconMapPin, IconClock, IconClipboard, IconPaperclip, IconHome, IconTruck, IconBan, IconCheck, IconTrash, IconStar, IconPhone } from '../components/icons/FrogIcons';
 
 const STATUS_LABELS = {
@@ -78,10 +78,7 @@ function Column({ title, count, orders, onOpen }) {
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {orders.map((o) => {
-          const itemSummary = (o.order_items || []).map((it) => {
-            const details = [it.size, it.cot, it.vi, it.note].filter(Boolean).join(' · ');
-            return details ? `${it.name} (${details})` : it.name;
-          }).join(' | ');
+          const itemSummary = (o.order_items || []).map((it) => formatOrderItemLine(it, { withQty: false })).join(' | ');
           return (
             <KanbanCard key={o.id} customer={o.customer?.name || 'Khách lẻ'} phone={o.customer?.phone} item={itemSummary} note={o.note} channel={o.channel}
               orderCode={o.order_code} total={o.total} deliveryDate={o.delivery_date} deliveryTime={o.delivery_time} paid={getPaidBadgeState(o)}
@@ -778,7 +775,7 @@ function ProductRow({ item, onChange, onRemove, isKem, canRemove, products }) {
             }} options={[{ value: '', label: 'Chọn size...' }, ...CAKE_SIZES_CM.map((s) => ({ value: String(s), label: `${s}cm (${basePriceForSize(s).toLocaleString('vi-VN')}đ)` }))]} style={{ flex: '1 1 170px', minWidth: 0 }} />
             <Select label="Cốt bánh" value={item.cot || ''} onChange={(e) => {
               const cot = e.target.value;
-              const price = sizeCm && item.fillingValue ? computeCakePrice(sizeCm, item.fillingValue, cot) : item.price;
+              const price = sizeCm && item.fillingValue ? computeCakePrice(sizeCm, item.fillingValue, cot) : (sizeCm && !item.fillingValue ? basePriceForSize(sizeCm) + baseSurcharge(cot) : item.price);
               onChange({ ...item, cot, price });
             }} options={[{ value: '', label: 'Chọn cốt...' }, ...CAKE_BASES.map((b) => ({ value: b, label: baseSurcharge(b) ? `${b} (+${baseSurcharge(b).toLocaleString('vi-VN')}đ)` : b }))]} style={{ flex: '1 1 150px', minWidth: 0 }} />
             <Select label="Nhân" value={item.fillingValue || ''} onChange={(e) => {
@@ -801,10 +798,7 @@ function ProductRow({ item, onChange, onRemove, isKem, canRemove, products }) {
 }
 
 function OrderPreview({ custName, custPhone, items, deliveryMethod, effectiveShipFee, total, deposit, note, address, deliveryDate, deliveryTime }) {
-  const itemLine = (p) => {
-    const details = [p.size, p.cot, p.vi, p.note].filter(Boolean).join(' · ');
-    return details ? `${p.name} (${details})` : p.name;
-  };
+  const itemLine = (p) => formatOrderItemLine(p, { withQty: false });
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--surface-sunken)', borderRadius: 'var(--radius-md)', padding: 16 }}>
       <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconEye size={14} /> XEM TRƯỚC ĐƠN HÀNG</div>
@@ -822,7 +816,7 @@ function OrderPreview({ custName, custPhone, items, deliveryMethod, effectiveShi
       )}
       {(deliveryDate || deliveryTime) && (
         <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>
-          <IconClock size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />{deliveryDate ? new Date(`${deliveryDate}T00:00:00+07:00`).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : ''}{deliveryDate && deliveryTime ? ' · ' : ''}{deliveryTime || ''}
+          <IconClock size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />{formatDeliveryDateTime(deliveryDate, deliveryTime)}
         </div>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 6, borderTop: '1px solid var(--border-subtle)' }}>
@@ -1393,10 +1387,7 @@ export default function OrdersScreen() {
             {modalOrder.customer && <TrustScoreBadge score={modalOrder.customer.trust_score} locked={modalOrder.customer.locked} />}
             {modalOrder.customer?.phone && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}><IconPhone size={14} /> {modalOrder.customer.phone}</div>}
             <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>
-              {(modalOrder.order_items || []).map((it) => {
-                const details = [it.size, it.cot, it.vi, it.note].filter(Boolean).join(' · ');
-                return `${it.name} x${it.qty}${details ? ` (${details})` : ''}`;
-              }).join(', ') || 'Không có sản phẩm'}
+              {(modalOrder.order_items || []).map((it) => formatOrderItemLine(it)).join(', ') || 'Không có sản phẩm'}
             </div>
             {(modalOrder.order_items || []).some((it) => it.ref_photo_url) && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -1420,7 +1411,7 @@ export default function OrdersScreen() {
               <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>Ship: {Number(modalOrder.ship_fee) ? `${Number(modalOrder.ship_fee).toLocaleString('vi-VN')}đ` : 'Miễn phí'}</div>
             )}
             <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
-              <IconClock size={14} />Ngày giao: {modalOrder.delivery_date ? new Date(`${modalOrder.delivery_date}T00:00:00+07:00`).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '—'}{modalOrder.delivery_time ? ` · ${modalOrder.delivery_time}` : ''}
+              <IconClock size={14} />Ngày giao: {formatDeliveryDateTime(modalOrder.delivery_date, modalOrder.delivery_time) || '—'}
             </div>
             <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>Tổng tiền: {Number(modalOrder.total || 0).toLocaleString('vi-VN')}đ</div>
             <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>Thanh toán: {modalOrder.payment_method === 'bank' ? 'Chuyển khoản' : 'COD'}{Number(modalOrder.deposit) > 0 ? ` · Đã cọc: ${Number(modalOrder.deposit).toLocaleString('vi-VN')}đ` : ''}</div>

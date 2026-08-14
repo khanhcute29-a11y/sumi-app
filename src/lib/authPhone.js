@@ -4,8 +4,13 @@
 // (miễn phí, không cần OTP) — số điện thoại thật vẫn được lưu ở cột profiles.phone.
 export const PHONE_EMAIL_DOMAIN = 'phone.sumibakery.internal';
 
+// Chuẩn hoá về dạng bắt đầu bằng số 0 (VD: +84912345678, 84912345678, 0912345678
+// đều phải cho ra cùng 1 tài khoản — nếu không, đăng ký bằng "0912..." rồi đăng
+// nhập lại bằng "+84912..." sẽ tạo ra 2 tài khoản khác nhau / báo sai mật khẩu).
 export function normalizePhoneDigits(raw) {
-  return (raw || '').replace(/\D/g, '');
+  const digits = (raw || '').replace(/\D/g, '');
+  if (digits.startsWith('84') && digits.length === 11) return `0${digits.slice(2)}`;
+  return digits;
 }
 
 export function phoneToSyntheticEmail(raw) {

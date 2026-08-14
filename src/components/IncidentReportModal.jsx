@@ -47,12 +47,10 @@ export function IncidentReportModal({ orderId, orderCode, onClose, onSent }) {
     setUploading(true);
     setError('');
     try {
-      const newPhotos = [];
-      for (const file of Array.from(files)) {
+      const newPhotos = await Promise.all(Array.from(files).map(async (file, i) => {
         const safeFile = await toWebSafeImage(file);
-        const url = await uploadPhoto(safeFile, `incident_${Date.now()}`);
-        newPhotos.push(url);
-      }
+        return uploadPhoto(safeFile, `incident_${Date.now()}_${i}`);
+      }));
       setPhotos([...photos, ...newPhotos]);
     } catch (err) {
       setError(err.message);

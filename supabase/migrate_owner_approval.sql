@@ -10,8 +10,9 @@ drop policy if exists "delete orders" on orders;
 create policy "delete orders" on orders for delete
   using (status <> 'huy' and exists (select 1 from profiles where id = auth.uid() and role in ('owner','admin')));
 
--- 2. Sửa/huỷ đơn (UPDATE orders nói chung): chặn cashier/sale ở tầng trigger,
---    giữ nguyên quyền cho kitchen/bakery/shipper/owner/admin.
+-- 2. Sửa/huỷ đơn (UPDATE orders nói chung): chặn cashier/sale sửa MỌI trường trừ
+--    paid_amount (đánh dấu đã thu COD — thao tác hàng ngày ở Sổ Quỹ, không phải "sửa đơn").
+--    Bếp/Vận chuyển vẫn giữ nguyên quyền cập nhật status/staff_name/photo như cũ.
 create or replace function public.enforce_order_update_rules()
 returns trigger as $$
 declare
@@ -20,7 +21,9 @@ begin
   select role into actor_role from profiles where id = auth.uid();
 
   if actor_role in ('cashier','sale') then
-    raise exception 'Vai trò này không được sửa/huỷ đơn trực tiếp — gửi yêu cầu cho sếp qua bình luận đơn hàng.';
+    if (to_jsonb(new) - 'paid_amount') is distinct from (to_jsonb(old) - 'paid_amount') then
+      raise exception 'Vai trò này chỉ được cập nhật số tiền đã thu — mọi thay đổi khác (sửa/huỷ đơn) cần gửi yêu cầu cho sếp qua bình luận đơn hàng.';
+    end if;
   end if;
 
   if (new.paid_amount < old.paid_amount or new.deposit < old.deposit)
