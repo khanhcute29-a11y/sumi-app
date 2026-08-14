@@ -16,12 +16,18 @@ import { hasRole } from '../lib/roles';
 
 const CATEGORIES = [
   { value: 'banh_kem', label: 'Bánh Kem' },
+  { value: 'banh_kem_bap_choco', label: 'Bánh Kem Bắp / Chocolate' },
+  { value: 'mousse_tiramisu', label: 'Mousse & Tiramisu' },
+  { value: 'set_mousse', label: 'Set Mousse Ly' },
+  { value: 'banh_su', label: 'Bánh Su Singapore' },
+  { value: 'cupcake', label: 'Cupcake' },
   { value: 'banh_man_ngot', label: 'Bánh Mặn Ngọt' },
   { value: 'teabreak', label: 'Teabreak' },
   { value: 'macaron', label: 'Macaron' },
   { value: 'khac', label: 'Khác' },
 ];
 const categoryLabel = (v) => CATEGORIES.find((c) => c.value === v)?.label || v;
+const VARIANT_CATEGORIES = ['banh_kem', 'banh_kem_bap_choco', 'mousse_tiramisu'];
 
 function AddProductForm({ onAdded, onClose }) {
   const [name, setName] = useState('');
@@ -209,7 +215,7 @@ function ProductRow({ product, ingredients, canEdit, onChanged }) {
           </div>
         )}
       </div>
-      {product.category === 'banh_kem' && <VariantRow product={product} canEdit={canEdit} onChanged={onChanged} />}
+      {VARIANT_CATEGORIES.includes(product.category) && <VariantRow product={product} canEdit={canEdit} onChanged={onChanged} />}
       {canEdit && (
         <React.Fragment>
           <Button variant="ghost" size="sm" onClick={() => setShowRecipe((v) => !v)} style={{ alignSelf: 'flex-start' }}>
