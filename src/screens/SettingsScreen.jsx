@@ -7,10 +7,10 @@ import { Tabs } from '../components/navigation/Tabs';
 import { Button } from '../components/forms/Button';
 import { Badge } from '../components/feedback/Badge';
 import { supabase } from '../lib/supabaseClient';
-import { fetchMyProfile, updateMyProfile, fetchShopSettings, updateShopSettings, fetchAuditLog, backupAllData } from '../lib/queries';
+import { fetchMyProfile, updateMyProfile, fetchShopSettings, updateShopSettings, fetchAuditLog, backupAllData, fetchIncidentReports, resolveIncidentReport } from '../lib/queries';
 import { translateAuthError } from '../lib/authErrors';
 import { getCurrentPosition } from '../lib/geo';
-import { IconMapPin, IconSettings, IconBell, IconDownload } from '../components/icons/FrogIcons';
+import { IconMapPin, IconSettings, IconBell, IconDownload, IconWarning, IconCheck } from '../components/icons/FrogIcons';
 import { isPushSupported, getPushSubscriptionStatus, enablePush, disablePush } from '../lib/push';
 import { localDateStr } from '../lib/date';
 import { ROLE_META, ROLE_OPTIONS, ROLE_PERMISSIONS } from '../lib/roles';
@@ -238,8 +238,77 @@ function AuditLogSection() {
   );
 }
 
+const INCIDENT_CATEGORY_LABELS = { log: 'Vận chuyển', kit: 'Bếp', inv: 'Kho' };
+
+function IncidentRow({ report, onResolved }) {
+  const [busy, setBusy] = useState(false);
+  const handleResolve = async () => {
+    setBusy(true);
+    try { await resolveIncidentReport(report.id); onResolved(); } finally { setBusy(false); }
+  };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '10px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <Badge tone="danger">{INCIDENT_CATEGORY_LABELS[report.category] || report.category}</Badge>
+          <b style={{ font: 'var(--text-body)', color: 'var(--text-primary)' }}>{report.code}</b>
+          <span style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>{report.label}</span>
+        </div>
+        <span style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>{new Date(report.created_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</span>
+      </div>
+      {report.order_code && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Đơn: {report.order_code}</div>}
+      {report.note && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>{report.note}</div>}
+      <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Người báo: {report.reporter_name || 'Không rõ'} {report.reporter_role ? `· ${report.reporter_role}` : ''}</div>
+      <div>
+        {report.status === 'resolved' ? (
+          <Badge tone="success" icon={<IconCheck size={13} />}>Đã xử lý{report.resolved_at ? ` lúc ${new Date(report.resolved_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}` : ''}</Badge>
+        ) : (
+          <Button variant="secondary" size="sm" onClick={handleResolve} disabled={busy}>{busy ? 'Đang lưu...' : 'Đánh dấu đã xử lý'}</Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function IncidentsSection() {
+  const [status, setStatus] = useState('open');
+  const [reports, setReports] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const load = () => {
+    setLoading(true);
+    fetchIncidentReports({ status: status === 'all' ? undefined : status, limit: 200 })
+      .then((data) => { setReports(data); setError(''); })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(load, [status]);
+
+  return (
+    <React.Fragment>
+      <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>
+        Toàn bộ sự cố nhân viên báo qua nút "Báo sự cố" — nhấn "Đánh dấu đã xử lý" khi giải quyết xong.
+      </div>
+      <Tabs tabs={[{ key: 'open', label: 'Đang mở' }, { key: 'resolved', label: 'Đã xử lý' }, { key: 'all', label: 'Tất cả' }]} active={status} onChange={setStatus} />
+      {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>Lỗi tải sự cố: {error}</div>}
+      {loading ? (
+        <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Đang tải...</div>
+      ) : reports.length === 0 ? (
+        <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Không có sự cố nào.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 500, overflowY: 'auto' }}>
+          {reports.map((r) => <IncidentRow key={r.id} report={r} onResolved={load} />)}
+        </div>
+      )}
+    </React.Fragment>
+  );
+}
+
 const ADMIN_TABS = [
   { key: 'location', label: 'Vị trí & chi phí giao hàng' },
+  { key: 'incidents', label: 'Báo cáo sự cố' },
   { key: 'audit', label: 'Nhật ký hoạt động' },
   { key: 'backup', label: 'Sao lưu dữ liệu' },
 ];
@@ -289,6 +358,7 @@ function AdminSection() {
     <Section title="Quản trị (Chủ sở hữu)">
       <Tabs tabs={ADMIN_TABS} active={tab} onChange={setTab} />
       {tab === 'location' && <ShopLocationSection />}
+      {tab === 'incidents' && <IncidentsSection />}
       {tab === 'audit' && <AuditLogSection />}
       {tab === 'backup' && <BackupSection />}
     </Section>

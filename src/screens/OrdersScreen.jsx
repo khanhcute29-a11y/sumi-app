@@ -262,7 +262,7 @@ function TeabreakOrderModal({ onClose, onCreated, onManualItems }) {
           <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-muted)' }}>✕</button>
         </div>
         <div style={{ padding: 20, display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 20 }}>
-          <div style={{ flex: '1 1 480px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ flex: isMobile ? '1 1 auto' : '1 1 480px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
             {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)', background: 'var(--status-danger-soft)', borderRadius: 'var(--radius-sm)', padding: '8px 10px' }}>{error}</div>}
             <div style={{ font: 'var(--text-label)' }}>Thông tin đơn vị đặt hàng</div>
             <Input label="Tên công ty / khách" placeholder="VD: Công ty Cổ phần Bệnh viện ĐHQT Hồng Bàng" value={customer.name} onChange={(e) => setC('name', e.target.value)} />
@@ -297,7 +297,7 @@ function TeabreakOrderModal({ onClose, onCreated, onManualItems }) {
             <Input label="Ghi chú" placeholder="Đơn giá chưa gồm VAT, thời gian đặt hàng, thanh toán..." value={note} onChange={(e) => setNote(e.target.value)} />
           </div>
 
-          <div style={{ flex: '1 1 320px', minWidth: 0 }}>
+          <div style={{ flex: isMobile ? '0 1 auto' : '1 1 320px', minWidth: 0 }}>
             <div style={{ position: isMobile ? 'static' : 'sticky', top: 0 }}>
               <OrderPreview custName={customer.name} custPhone={customer.phone} items={previewItems} deliveryMethod="giao_tan_noi"
                 effectiveShipFee={0} total={subtotal + vat} note={note} address={customer.address} deliveryDate={date} deliveryTime={time} />
@@ -382,7 +382,7 @@ function EditTeabreakModal({ order, onClose, onSaved }) {
           <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-muted)' }}>✕</button>
         </div>
         <div style={{ padding: 20, display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 20 }}>
-          <div style={{ flex: '1 1 480px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ flex: isMobile ? '1 1 auto' : '1 1 480px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
             {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)', background: 'var(--status-danger-soft)', borderRadius: 'var(--radius-sm)', padding: '8px 10px' }}>{error}</div>}
 
             <div style={{ font: 'var(--text-label)' }}>Thông tin đơn vị đặt hàng</div>
@@ -413,7 +413,7 @@ function EditTeabreakModal({ order, onClose, onSaved }) {
             <Input label="Ghi chú" value={note} onChange={(e) => setNote(e.target.value)} />
           </div>
 
-          <div style={{ flex: '1 1 320px', minWidth: 0 }}>
+          <div style={{ flex: isMobile ? '0 1 auto' : '1 1 320px', minWidth: 0 }}>
             <div style={{ position: isMobile ? 'static' : 'sticky', top: 0 }}>
               <OrderPreview custName={custName} custPhone={custPhone} items={previewItems} deliveryMethod="giao_tan_noi"
                 effectiveShipFee={0} total={subtotal + vat} note={note} address={address} deliveryDate={date} deliveryTime={time} />
@@ -544,7 +544,7 @@ function MacaronOrderModal({ onClose, onCreated, onManualItems }) {
           <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-muted)' }}>✕</button>
         </div>
         <div style={{ padding: 20, display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 20 }}>
-          <div style={{ flex: '1 1 480px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ flex: isMobile ? '1 1 auto' : '1 1 480px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
             {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)', background: 'var(--status-danger-soft)', borderRadius: 'var(--radius-sm)', padding: '8px 10px' }}>{error}</div>}
 
             <div style={{ font: 'var(--text-label)' }}>Thông tin khách/đơn vị đặt hàng</div>
@@ -587,7 +587,7 @@ function MacaronOrderModal({ onClose, onCreated, onManualItems }) {
             <Input label="Ghi chú" placeholder="Yêu cầu riêng, thời gian đặt hàng, thanh toán..." value={note} onChange={(e) => setNote(e.target.value)} />
           </div>
 
-          <div style={{ flex: '1 1 320px', minWidth: 0 }}>
+          <div style={{ flex: isMobile ? '0 1 auto' : '1 1 320px', minWidth: 0 }}>
             <div style={{ position: isMobile ? 'static' : 'sticky', top: 0 }}>
               <OrderPreview custName={custName} custPhone={custPhone} items={previewItems} deliveryMethod={deliveryMethod}
                 effectiveShipFee={effectiveShipFee} total={total} note={note} address={address} deliveryDate={deliveryDate} deliveryTime={deliveryTime} />
@@ -676,7 +676,7 @@ function EditMacaronModal({ order, onClose, onSaved }) {
           <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-muted)' }}>✕</button>
         </div>
         <div style={{ padding: 20, display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 20 }}>
-          <div style={{ flex: '1 1 480px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ flex: isMobile ? '1 1 auto' : '1 1 480px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
             {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)', background: 'var(--status-danger-soft)', borderRadius: 'var(--radius-sm)', padding: '8px 10px' }}>{error}</div>}
 
             <div style={{ font: 'var(--text-label)' }}>Thông tin khách/đơn vị đặt hàng</div>
@@ -717,7 +717,7 @@ function EditMacaronModal({ order, onClose, onSaved }) {
             <Input label="Ghi chú" value={note} onChange={(e) => setNote(e.target.value)} />
           </div>
 
-          <div style={{ flex: '1 1 320px', minWidth: 0 }}>
+          <div style={{ flex: isMobile ? '0 1 auto' : '1 1 320px', minWidth: 0 }}>
             <div style={{ position: isMobile ? 'static' : 'sticky', top: 0 }}>
               <OrderPreview custName={custName} custPhone={custPhone} items={previewItems} deliveryMethod={deliveryMethod}
                 effectiveShipFee={effectiveShipFee} total={total} note={note} address={address} deliveryDate={deliveryDate} deliveryTime={deliveryTime} />
@@ -928,7 +928,7 @@ function NewOrderModal({ onClose, onCreated, onManualItems }) {
           <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-muted)' }}>✕</button>
         </div>
         <div style={{ padding: 20, display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 20 }}>
-          <div style={{ flex: '1 1 480px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ flex: isMobile ? '1 1 auto' : '1 1 480px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
             {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)', background: 'var(--status-danger-soft)', borderRadius: 'var(--radius-sm)', padding: '8px 10px' }}>{error}</div>}
 
             <div style={{ font: 'var(--text-label)' }}>Thông tin sản phẩm</div>
@@ -977,7 +977,7 @@ function NewOrderModal({ onClose, onCreated, onManualItems }) {
             <Input label="Ghi chú đơn hàng" placeholder="Yêu cầu riêng của khách, lưu ý giao hàng..." value={note} onChange={(e) => setNote(e.target.value)} />
           </div>
 
-          <div style={{ flex: '1 1 320px', minWidth: 0 }}>
+          <div style={{ flex: isMobile ? '0 1 auto' : '1 1 320px', minWidth: 0 }}>
             <div style={{ position: isMobile ? 'static' : 'sticky', top: 0 }}>
               <OrderPreview custName={custName} custPhone={custPhone} items={previewItems} deliveryMethod={deliveryMethod}
                 effectiveShipFee={effectiveShipFee} total={total} deposit={deposit} note={note} address={address} deliveryDate={deliveryDate} deliveryTime={deliveryTime} />
@@ -1087,7 +1087,7 @@ function EditOrderModal({ order, onClose, onSaved }) {
           <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--text-muted)' }}>✕</button>
         </div>
         <div style={{ padding: 20, display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 20 }}>
-          <div style={{ flex: '1 1 480px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ flex: isMobile ? '1 1 auto' : '1 1 480px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
             {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)', background: 'var(--status-danger-soft)', borderRadius: 'var(--radius-sm)', padding: '8px 10px' }}>{error}</div>}
 
             <div style={{ font: 'var(--text-label)' }}>Thông tin sản phẩm</div>
@@ -1133,7 +1133,7 @@ function EditOrderModal({ order, onClose, onSaved }) {
             <Input label="Ghi chú đơn hàng" value={note} onChange={(e) => setNote(e.target.value)} />
           </div>
 
-          <div style={{ flex: '1 1 320px', minWidth: 0 }}>
+          <div style={{ flex: isMobile ? '0 1 auto' : '1 1 320px', minWidth: 0 }}>
             <div style={{ position: isMobile ? 'static' : 'sticky', top: 0 }}>
               <OrderPreview custName={custName} custPhone={custPhone} items={previewItems} deliveryMethod={deliveryMethod}
                 effectiveShipFee={effectiveShipFee} total={total} deposit={deposit} note={note} address={address} deliveryDate={deliveryDate} deliveryTime={deliveryTime} />
@@ -1188,6 +1188,14 @@ export default function OrdersScreen() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [showOrderIncident, setShowOrderIncident] = useState(false);
   const [showEditOrder, setShowEditOrder] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 860);
+  const [mobileStatusTab, setMobileStatusTab] = useState('moi');
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 860);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   useEffect(() => {
     const q = search.trim().toLowerCase();
@@ -1325,7 +1333,7 @@ export default function OrdersScreen() {
           <div style={{ font: 'var(--text-display-md)', color: 'var(--text-primary)' }}>Đơn Hàng Đến</div>
           <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Theo dõi đơn hàng theo từng bước xử lý</div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Button variant="primary" onClick={() => setShowNew(true)}>+ TẠO ĐƠN MỚI</Button>
           <Button variant="secondary" onClick={() => setShowTeabreak(true)}>+ Tạo đơn Teabreak</Button>
           <Button variant="secondary" onClick={() => setShowMacaron(true)}>+ Tạo đơn Macaron Sỉ</Button>
@@ -1368,7 +1376,34 @@ export default function OrdersScreen() {
         </div>
       ) : loading ? (
         <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Đang tải...</div>
-      ) : (
+      ) : isMobile ? (() => {
+        const mobileColumns = [
+          { key: 'moi', title: 'Mới', orders: vipOnly(moi, filter) },
+          { key: 'dang_lam', title: 'Đang làm', orders: vipOnly(dangLam, filter) },
+          { key: 'cho_giao', title: 'Chờ giao', orders: vipOnly(choGiao, filter) },
+          { key: 'dang_giao', title: 'Đang giao', orders: vipOnly(dangGiao, filter) },
+          { key: 'hoan_thanh', title: 'Hoàn thành hôm nay', orders: vipOnly(completedOrders, filter) },
+        ];
+        const active = mobileColumns.find((c) => c.key === mobileStatusTab) || mobileColumns[0];
+        return (
+          <React.Fragment>
+            <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
+              {mobileColumns.map((c) => (
+                <button key={c.key} onClick={() => setMobileStatusTab(c.key)} style={{
+                  flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px',
+                  borderRadius: 'var(--radius-pill)', border: c.key === active.key ? '2px solid var(--action-primary)' : '1px solid var(--border-subtle)',
+                  background: c.key === active.key ? 'var(--surface-primary-soft)' : 'var(--surface-card)',
+                  color: c.key === active.key ? 'var(--primary-700)' : 'var(--text-secondary)',
+                  font: 'var(--text-body-sm)', fontWeight: c.key === active.key ? 600 : 400, cursor: 'pointer',
+                }}>
+                  {c.title}<Badge tone={c.key === active.key ? 'primary' : 'neutral'}>{c.orders.length}</Badge>
+                </button>
+              ))}
+            </div>
+            <Column title={active.title} count={active.orders.length} orders={active.orders} onOpen={openModal} />
+          </React.Fragment>
+        );
+      })() : (
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', flex: 1 }}>
           <Column title="Mới" count={vipOnly(moi, filter).length} orders={vipOnly(moi, filter)} onOpen={openModal} />
           <Column title="Đang làm" count={vipOnly(dangLam, filter).length} orders={vipOnly(dangLam, filter)} onOpen={openModal} />
@@ -1450,7 +1485,7 @@ export default function OrdersScreen() {
             {requestSent && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-success)' }}>Đã gửi yêu cầu — chờ sếp duyệt trong phần bình luận của đơn.</div>}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 4 }}>
               {canManage ? (
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {modalOrder.status !== 'huy' && modalOrder.status !== 'hoan_thanh' && (
                     <Button variant="secondary" size="sm" onClick={() => setShowEditOrder(true)} disabled={actionBusy}>Sửa đơn</Button>
                   )}
@@ -1462,7 +1497,7 @@ export default function OrdersScreen() {
                   )}
                 </div>
               ) : canRequestChange && modalOrder.status !== 'huy' && modalOrder.status !== 'hoan_thanh' ? (
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <Button variant="secondary" size="sm" onClick={() => { setActionError(''); setRequestAction('edit'); }} disabled={actionBusy}>Yêu cầu sửa đơn</Button>
                   <Button variant="warning" size="sm" onClick={() => { setActionError(''); setRequestAction('cancel'); }} disabled={actionBusy}>Yêu cầu hủy đơn</Button>
                 </div>
