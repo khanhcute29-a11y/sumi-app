@@ -1,7 +1,7 @@
 import React from 'react';
 import { IconCheck, IconWarning } from '../icons/FrogIcons';
 
-export function KanbanCard({ customer, phone, item, note, channel, orderCode, badges = [], thumbnail, total, deliveryDate, deliveryTime, paid, onClick, style }) {
+export function KanbanCard({ customer, phone, item, note, channel, orderCode, badges = [], thumbnail, total, deliveryDate, deliveryTime, paid, hasIncident, onClick, style }) {
   const deliveryLabel = [
     deliveryDate ? new Date(`${deliveryDate}T00:00:00+07:00`).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }) : '',
     deliveryTime || '',
@@ -10,8 +10,13 @@ export function KanbanCard({ customer, phone, item, note, channel, orderCode, ba
     <button onClick={onClick} style={{
       display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left', width: '100%',
       background: 'var(--surface-card)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)',
-      padding: 12, border: 'none', cursor: 'pointer', ...style,
+      padding: 12, border: hasIncident ? '2px solid var(--status-danger)' : 'none', cursor: 'pointer', ...style,
     }}>
+      {hasIncident && (
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, alignSelf: 'flex-start', padding: '2px 8px', borderRadius: 'var(--radius-pill)', background: 'var(--status-danger-soft)', color: 'var(--status-danger)', font: '700 11px var(--font-body)' }}>
+          <IconWarning size={12} /> Có báo sự cố
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 10 }}>
         {thumbnail && <img src={thumbnail} alt="" style={{ width: 48, height: 48, borderRadius: 'var(--radius-sm)', objectFit: 'cover', flexShrink: 0 }} />}
         <div style={{ flex: 1, minWidth: 0 }}>

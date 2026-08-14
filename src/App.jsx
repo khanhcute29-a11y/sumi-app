@@ -3,7 +3,11 @@ import { Sidebar } from './components/navigation/Sidebar';
 import { BottomNav } from './components/navigation/BottomNav';
 import { supabase } from './lib/supabaseClient';
 import { initOfflineSync } from './lib/offlineQueue';
-import { updateOrderStatus, updateOrder, addWarehouseStock, addShiftCheckin, addShiftCheckout, addLeaveRequest } from './lib/queries';
+import {
+  updateOrderStatus, updateOrder, addWarehouseStock, addShiftCheckin, addShiftCheckout, addLeaveRequest,
+  countNewOrders, countKitchenActiveOrders, countPendingApprovals, countOpenIncidents,
+} from './lib/queries';
+import { navBadgeVisibility } from './lib/roles';
 import { initAudioUnlock } from './lib/sound';
 import { useOrderNotifications } from './lib/useOrderNotifications';
 import { ConnectivityBanner } from './components/ConnectivityBanner';
@@ -26,6 +30,7 @@ import StaffScreen from './screens/StaffScreen';
 import ApprovalRequestsScreen from './screens/ApprovalRequestsScreen';
 import IncidentsScreen from './screens/IncidentsScreen';
 import { applyUiScale, getUiScale } from './lib/uiScale';
+import { NavBadge } from './components/navigation/NavBadge';
 import { IconDashboard, IconShipping, IconProducts, IconShifts, IconReports, IconCustomers, IconStaff, IconSettings, IconCheck, IconWarning } from './components/icons/FrogIcons';
 
 const MORE_ITEMS = [
@@ -41,14 +46,14 @@ const MORE_ITEMS = [
   { key: 'settings', label: 'Thiết lập', Icon: IconSettings },
 ];
 
-function MoreSheet({ onClose, onSelect }) {
+function MoreSheet({ onClose, onSelect, badges = {} }) {
   return (
     <div className="sb-more-sheet" style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', zIndex: 60, display: 'flex', alignItems: 'flex-end' }} onClick={onClose}>
       <div style={{ background: 'var(--surface-card)', width: '100%', borderRadius: '20px 20px 0 0', padding: '20px', display: 'flex', flexDirection: 'column', gap: 4 }} onClick={(e) => e.stopPropagation()}>
         <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)', marginBottom: 8 }}>Thêm</div>
         {MORE_ITEMS.map((it) => (
           <button key={it.key} onClick={() => { onSelect(it.key); onClose(); }} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 6px', border: 'none', background: 'none', textAlign: 'left', font: 'var(--text-body-lg)', color: 'var(--text-primary)', cursor: 'pointer' }}>
-            <it.Icon size={20} style={{ color: 'var(--text-primary)' }} />{it.label}
+            <it.Icon size={20} style={{ color: 'var(--text-primary)' }} /><span style={{ flex: 1 }}>{it.label}</span><NavBadge count={badges[it.key]} />
           </button>
         ))}
       </div>
@@ -66,10 +71,12 @@ const OFFLINE_HANDLERS = {
 };
 
 function OpsApp({ onSignOut }) {
+  const { profile } = useAuth();
   const [tab, setTab] = useState('orders');
   const [showMore, setShowMore] = useState(false);
   const [kdsStation, setKdsStation] = useState('all');
   const [warehouseBranch, setWarehouseBranch] = useState('all');
+  const [badgeCounts, setBadgeCounts] = useState({ orders: 0, kds: 0, approvals: 0, incidents: 0 });
 
   useOrderNotifications();
 
@@ -78,6 +85,26 @@ function OpsApp({ onSignOut }) {
     initOfflineSync(OFFLINE_HANDLERS, () => window.dispatchEvent(new Event('sumi-queue-changed')));
     applyUiScale(getUiScale());
   }, []);
+
+  useEffect(() => {
+    const vis = navBadgeVisibility(profile);
+    const loadBadges = () => {
+      Promise.all([
+        vis.orders ? countNewOrders() : 0,
+        vis.kds ? countKitchenActiveOrders() : 0,
+        vis.approvals ? countPendingApprovals() : 0,
+        vis.incidents ? countOpenIncidents(vis.incidentCategories ? { categories: vis.incidentCategories } : {}) : 0,
+      ]).then(([orders, kds, approvals, incidents]) => setBadgeCounts({ orders, kds, approvals, incidents })).catch(() => {});
+    };
+    loadBadges();
+    const channel = supabase
+      .channel('nav-badges-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, loadBadges)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'approval_requests' }, loadBadges)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'incident_reports' }, loadBadges)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [profile?.role, profile?.extra_roles]);
 
   const screens = {
     dashboard: <DashboardScreen />, orders: <OrdersScreen />, kds: <KdsScreen initialStation={kdsStation} />, warehouse: <WarehouseScreen branch={warehouseBranch} onBranchChange={setWarehouseBranch} />, cashbook: <CashbookScreen />,
@@ -88,16 +115,16 @@ function OpsApp({ onSignOut }) {
     <div className="sb-shell">
       <ConnectivityBanner />
       <div className="sb-body">
-        <div className="sb-sidebar"><Sidebar active={tab} activeStation={kdsStation} onSelectStation={setKdsStation} activeBranch={warehouseBranch} onSelectBranch={setWarehouseBranch} onSelect={setTab} /></div>
+        <div className="sb-sidebar"><Sidebar active={tab} activeStation={kdsStation} onSelectStation={setKdsStation} activeBranch={warehouseBranch} onSelectBranch={setWarehouseBranch} onSelect={setTab} badges={badgeCounts} /></div>
         <div className="sb-content">
           {screens[tab]}
         </div>
       </div>
       <div className="sb-bottomnav">
-        <BottomNav active={isBottomKey(tab) ? tab : ''} onSelect={setTab} onMore={() => setShowMore(true)}
+        <BottomNav active={isBottomKey(tab) ? tab : ''} onSelect={setTab} onMore={() => setShowMore(true)} badges={badgeCounts}
           style={{ position: 'static', left: 'auto', right: 'auto', bottom: 'auto', width: '100%', flexShrink: 0 }} />
       </div>
-      {showMore && <MoreSheet onClose={() => setShowMore(false)} onSelect={setTab} />}
+      {showMore && <MoreSheet onClose={() => setShowMore(false)} onSelect={setTab} badges={badgeCounts} />}
     </div>
   );
 }

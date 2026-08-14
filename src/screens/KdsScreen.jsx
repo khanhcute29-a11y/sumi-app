@@ -7,7 +7,7 @@ import { CameraCapture } from '../components/CameraCapture';
 import { IncidentReportModal } from '../components/IncidentReportModal';
 import { ActionChip } from '../components/ActionChip';
 import { OrderDetailModal } from '../components/OrderDetailModal';
-import { fetchOrders, updateOrder, uploadPhoto, addOrderNote } from '../lib/queries';
+import { fetchOrders, updateOrder, uploadPhoto, addOrderNote, fetchOpenIncidentOrderIds } from '../lib/queries';
 import { useAuth } from '../lib/AuthContext';
 import { hasAnyRole } from '../lib/roles';
 import { enqueue } from '../lib/offlineQueue';
@@ -99,7 +99,7 @@ function QuickAskButton({ orderId, orderCode }) {
 const STATUS_LABELS = { moi: 'Chờ nhận', dang_lam: 'Đang làm', cho_giao: 'Hoàn thành', dang_giao: 'Đang giao', hoan_thanh: 'Đã giao' };
 const STATUS_TONES = { moi: 'neutral', dang_lam: 'warning', cho_giao: 'success', dang_giao: 'info', hoan_thanh: 'success' };
 
-function CompactOrderRow({ order, onAccept, onReady, canAct }) {
+function CompactOrderRow({ order, onAccept, onReady, canAct, hasIncident }) {
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
@@ -128,7 +128,7 @@ function CompactOrderRow({ order, onAccept, onReady, canAct }) {
   };
 
   return (
-    <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)' }}>
+    <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', border: hasIncident ? '2px solid var(--status-danger)' : 'none' }}>
       <button
         onClick={() => setExpanded((v) => !v)}
         style={{
@@ -142,6 +142,7 @@ function CompactOrderRow({ order, onAccept, onReady, canAct }) {
             <span style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>{order.customer?.name || 'Khách lẻ'}</span>
             {order.order_code && <span style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>{order.order_code}</span>}
             {urgent && <Badge tone="danger" icon={<IconWarning size={14} />}>Khẩn cấp</Badge>}
+            {hasIncident && <Badge tone="danger" icon={<IconWarning size={14} />}>Có báo sự cố</Badge>}
           </div>
           <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{itemSummary}</div>
         </div>
@@ -258,6 +259,7 @@ export default function KdsScreen({ initialStation }) {
   const canAct = hasAnyRole(profile, ['kitchen', 'bakery', 'kitchen_lead', 'kitchen_deputy', 'owner', 'admin']);
   const [activeStation, setActiveStation] = useState(initialStation || 'all');
   const [orders, setOrders] = useState([]);
+  const [incidentOrderIds, setIncidentOrderIds] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -273,12 +275,16 @@ export default function KdsScreen({ initialStation }) {
       .finally(() => setLoading(false));
   };
 
+  const loadIncidentOrderIds = () => { fetchOpenIncidentOrderIds().then(setIncidentOrderIds).catch(() => {}); };
+
   useEffect(load, []);
+  useEffect(loadIncidentOrderIds, []);
 
   useEffect(() => {
     const channel = supabase
       .channel('kds-orders-live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'incident_reports' }, loadIncidentOrderIds)
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
@@ -377,7 +383,7 @@ export default function KdsScreen({ initialStation }) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {visibleOrders.map((o) => (
-            <CompactOrderRow key={o.id} order={o} onAccept={handleAccept} onReady={handleReady} canAct={canAct} />
+            <CompactOrderRow key={o.id} order={o} onAccept={handleAccept} onReady={handleReady} canAct={canAct} hasIncident={incidentOrderIds.has(o.id)} />
           ))}
         </div>
       )}

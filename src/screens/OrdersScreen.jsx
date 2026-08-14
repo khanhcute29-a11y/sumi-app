@@ -6,7 +6,7 @@ import { Button } from '../components/forms/Button';
 import { Input } from '../components/forms/Input';
 import { Select } from '../components/forms/Select';
 import { Tabs } from '../components/navigation/Tabs';
-import { fetchOrders, createOrder, fetchProducts, createProduct, cancelOrder, deleteOrder, updateOrderFull, createApprovalRequest } from '../lib/queries';
+import { fetchOrders, createOrder, fetchProducts, createProduct, cancelOrder, deleteOrder, updateOrderFull, createApprovalRequest, fetchOpenIncidentOrderIds } from '../lib/queries';
 import { CommentSection } from '../components/CommentSection';
 import { formatVnd, parseDigits } from '../lib/currency';
 import { useAuth } from '../lib/AuthContext';
@@ -72,7 +72,7 @@ function SearchResultRow({ o, onOpen }) {
   );
 }
 
-function Column({ title, count, orders, onOpen }) {
+function Column({ title, count, orders, onOpen, incidentOrderIds }) {
   return (
     <div style={{ flex: 1, minWidth: 260, display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, font: 'var(--text-label)', color: 'var(--text-secondary)' }}>
@@ -84,6 +84,7 @@ function Column({ title, count, orders, onOpen }) {
           return (
             <KanbanCard key={o.id} customer={o.customer?.name || 'Khách lẻ'} phone={o.customer?.phone} item={itemSummary} note={o.note} channel={o.channel}
               orderCode={o.order_code} total={o.total} deliveryDate={o.delivery_date} deliveryTime={o.delivery_time} paid={getPaidBadgeState(o)}
+              hasIncident={incidentOrderIds?.has(o.id)}
               onClick={() => onOpen(o)}
               badges={[
                 o.customer?.vip && <Badge tone="primary" icon={<IconStar size={13} />} key="vip">VIP</Badge>,
@@ -1172,6 +1173,7 @@ export default function OrdersScreen() {
   const canManage = hasAnyRole(profile, ['owner', 'admin']);
   const canRequestChange = hasAnyRole(profile, ['cashier', 'sale']);
   const [orders, setOrders] = useState([]);
+  const [incidentOrderIds, setIncidentOrderIds] = useState(new Set());
   const [cancelledOrders, setCancelledOrders] = useState([]);
   const [completedOrders, setCompletedOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1243,14 +1245,18 @@ export default function OrdersScreen() {
     fetchOrders({ statuses: ['hoan_thanh'], from: today, to: today }).then(setCompletedOrders).catch(() => {});
   };
 
+  const loadIncidentOrderIds = () => { fetchOpenIncidentOrderIds().then(setIncidentOrderIds).catch(() => {}); };
+
   useEffect(load, []);
   useEffect(loadCancelled, []);
   useEffect(loadCompleted, []);
+  useEffect(loadIncidentOrderIds, []);
 
   useEffect(() => {
     const channel = supabase
       .channel('orders-list-live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => { load(); loadCancelled(); loadCompleted(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'incident_reports' }, loadIncidentOrderIds)
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
@@ -1466,16 +1472,16 @@ export default function OrdersScreen() {
                 </button>
               ))}
             </div>
-            <Column title={active.title} count={active.orders.length} orders={active.orders} onOpen={openModal} />
+            <Column title={active.title} count={active.orders.length} orders={active.orders} onOpen={openModal} incidentOrderIds={incidentOrderIds} />
           </React.Fragment>
         );
       })() : (
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', flex: 1 }}>
-          <Column title="Mới" count={vipOnly(moi, filter).length} orders={vipOnly(moi, filter)} onOpen={openModal} />
-          <Column title="Đang làm" count={vipOnly(dangLam, filter).length} orders={vipOnly(dangLam, filter)} onOpen={openModal} />
-          <Column title="Chờ giao" count={vipOnly(choGiao, filter).length} orders={vipOnly(choGiao, filter)} onOpen={openModal} />
-          <Column title="Đang giao" count={vipOnly(dangGiao, filter).length} orders={vipOnly(dangGiao, filter)} onOpen={openModal} />
-          <Column title="Hoàn thành hôm nay" count={vipOnly(completedOrders, filter).length} orders={vipOnly(completedOrders, filter)} onOpen={openModal} />
+          <Column title="Mới" count={vipOnly(moi, filter).length} orders={vipOnly(moi, filter)} onOpen={openModal} incidentOrderIds={incidentOrderIds} />
+          <Column title="Đang làm" count={vipOnly(dangLam, filter).length} orders={vipOnly(dangLam, filter)} onOpen={openModal} incidentOrderIds={incidentOrderIds} />
+          <Column title="Chờ giao" count={vipOnly(choGiao, filter).length} orders={vipOnly(choGiao, filter)} onOpen={openModal} incidentOrderIds={incidentOrderIds} />
+          <Column title="Đang giao" count={vipOnly(dangGiao, filter).length} orders={vipOnly(dangGiao, filter)} onOpen={openModal} incidentOrderIds={incidentOrderIds} />
+          <Column title="Hoàn thành hôm nay" count={vipOnly(completedOrders, filter).length} orders={vipOnly(completedOrders, filter)} onOpen={openModal} incidentOrderIds={incidentOrderIds} />
         </div>
       )}
       {modalOrder && (

@@ -480,6 +480,38 @@ export async function fetchApprovalRequests({ status } = {}) {
   return data;
 }
 
+export async function countNewOrders() {
+  const { count, error } = await supabase.from('orders').select('id', { count: 'exact', head: true }).eq('status', 'moi');
+  if (error) throw error;
+  return count || 0;
+}
+
+export async function countKitchenActiveOrders() {
+  const { count, error } = await supabase.from('orders').select('id', { count: 'exact', head: true }).in('status', ['moi', 'dang_lam']);
+  if (error) throw error;
+  return count || 0;
+}
+
+export async function countPendingApprovals() {
+  const { count, error } = await supabase.from('approval_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending');
+  if (error) throw error;
+  return count || 0;
+}
+
+export async function countOpenIncidents({ categories } = {}) {
+  let q = supabase.from('incident_reports').select('id', { count: 'exact', head: true }).eq('status', 'open');
+  if (categories?.length) q = q.in('category', categories);
+  const { count, error } = await q;
+  if (error) throw error;
+  return count || 0;
+}
+
+export async function fetchOpenIncidentOrderIds() {
+  const { data, error } = await supabase.from('incident_reports').select('order_id').eq('status', 'open').not('order_id', 'is', null);
+  if (error) throw error;
+  return new Set(data.map((r) => r.order_id));
+}
+
 export async function resolveApprovalRequest(id, { status, resolvedBy }) {
   const { error } = await supabase.from('approval_requests').update({
     status, resolved_by: resolvedBy || null, resolved_at: new Date().toISOString(),

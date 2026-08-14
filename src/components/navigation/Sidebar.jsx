@@ -4,6 +4,7 @@ import {
   IconShipping, IconProducts, IconShifts, IconReports, IconCustomers, IconStaff,
   IconSettings, IconStationHot, IconStationCold, IconStationWorkshop, IconStationSparkle, IconCheck, IconWarning,
 } from '../icons/FrogIcons';
+import { NavBadge } from './NavBadge';
 
 const items = [
   { key: 'dashboard', label: 'Tổng Quan', Icon: IconDashboard },
@@ -43,7 +44,7 @@ function useSubmenus({ activeStation, onSelectStation, activeBranch, onSelectBra
   };
 }
 
-export function Sidebar({ active = 'orders', activeStation, onSelectStation, activeBranch, onSelectBranch, onSelect, brand = 'Sumi Bakery', style }) {
+export function Sidebar({ active = 'orders', activeStation, onSelectStation, activeBranch, onSelectBranch, onSelect, brand = 'Sumi Bakery', style, badges = {} }) {
   const [openKeys, setOpenKeys] = useState({ [active]: true });
   const submenus = useSubmenus({ activeStation, onSelectStation, activeBranch, onSelectBranch });
 
@@ -66,7 +67,7 @@ export function Sidebar({ active = 'orders', activeStation, onSelectStation, act
                 background: isActive ? 'var(--surface-primary-soft)' : 'transparent',
                 color: isActive ? 'var(--primary-700)' : 'var(--text-primary)', fontWeight: isActive ? 600 : 400,
               }}>
-                <it.Icon size={20} style={{ color: iconColor }} />{it.label}
+                <it.Icon size={20} style={{ color: iconColor }} /><span style={{ flex: 1 }}>{it.label}</span><NavBadge count={badges[it.key]} />
               </button>
             );
           }
@@ -81,6 +82,7 @@ export function Sidebar({ active = 'orders', activeStation, onSelectStation, act
               }}>
                 <it.Icon size={20} style={{ color: iconColor }} />
                 <span style={{ flex: 1 }}>{it.label}</span>
+                <NavBadge count={badges[it.key]} />
                 <span aria-hidden="true" style={{ color: 'var(--text-muted)', font: 'var(--text-caption)' }}>{isOpen ? '▾' : '▸'}</span>
               </button>
               {isOpen && (

@@ -125,3 +125,20 @@ export function hasRole(profile, role) {
 export function hasAnyRole(profile, roles) {
   return roles.some((r) => hasRole(profile, r));
 }
+
+// Chấm đỏ thông báo (kiểu Messenger) — vai trò nào thấy chấm đỏ ở mục nào.
+export function navBadgeVisibility(profile) {
+  const isManager = hasAnyRole(profile, ['owner', 'admin']);
+  const incidentCategories = isManager ? null : [
+    hasAnyRole(profile, ['shipper']) && 'log',
+    hasAnyRole(profile, ['kitchen', 'bakery', 'kitchen_lead', 'kitchen_deputy']) && 'kit',
+    hasAnyRole(profile, ['warehouse', 'kho_bakery', 'kho_xuong41', 'kho_xuong42']) && 'inv',
+  ].filter(Boolean);
+  return {
+    orders: isManager || hasAnyRole(profile, ['sale', 'cashier']),
+    kds: isManager || hasAnyRole(profile, ['kitchen', 'bakery', 'kitchen_lead', 'kitchen_deputy']),
+    approvals: isManager,
+    incidents: isManager || incidentCategories.length > 0,
+    incidentCategories, // null = tất cả (sếp/admin), mảng rỗng = không thấy mục nào
+  };
+}
