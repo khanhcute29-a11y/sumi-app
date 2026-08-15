@@ -298,6 +298,21 @@ export async function uploadPhoto(blob, pathPrefix) {
   return data.publicUrl;
 }
 
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+
+export async function uploadFile(file, pathPrefix) {
+  if (file.size > MAX_ATTACHMENT_BYTES) throw new Error('File vượt quá 25MB');
+  const contentType = file.type || 'application/octet-stream';
+  const originalName = file.name || 'file';
+  const extMatch = originalName.match(/\.[^.]+$/);
+  const ext = extMatch ? extMatch[0] : '';
+  const path = `${pathPrefix}/${Date.now()}${ext}`;
+  const { error } = await supabase.storage.from('uploads').upload(path, file, { contentType });
+  if (error) throw error;
+  const { data } = supabase.storage.from('uploads').getPublicUrl(path);
+  return { url: data.publicUrl, name: originalName, type: contentType, size: file.size };
+}
+
 // ---- Warehouse ----
 
 export async function fetchWarehouseStock() {
