@@ -6,12 +6,12 @@ import { Input } from '../components/forms/Input';
 import { Select } from '../components/forms/Select';
 import { CameraCapture } from '../components/CameraCapture';
 import { IncidentReportModal } from '../components/IncidentReportModal';
+import { VoiceMicButton } from '../components/VoiceMicButton';
 import { fetchWarehouseStock, addWarehouseStock, updateWarehouseStock, deductWarehouseStock, uploadPhoto, fetchWarehouseStockInLog, fetchWarehouseStockOutLog } from '../lib/queries';
-import { useVoiceInput } from '../lib/useVoiceInput';
 import { useAuth } from '../lib/AuthContext';
 import { hasAnyRole } from '../lib/roles';
 import { enqueue, getQueue } from '../lib/offlineQueue';
-import { IconMic, IconCamera, IconWarning, IconAdd, IconDownload } from '../components/icons/FrogIcons';
+import { IconCamera, IconWarning, IconAdd, IconDownload } from '../components/icons/FrogIcons';
 
 const UNITS = ['g', 'kg', 'ml', 'lít', 'quả', 'cái', 'gói'];
 const BRANCHES = [
@@ -33,13 +33,8 @@ function AddStockForm({ onAdded, onQueued, onClose, defaultBranch, lockedBranch,
   const [showCamera, setShowCamera] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const voice = useVoiceInput();
   const offline = !navigator.onLine;
   const qtyLabel = qty ? `${qty} ${unit}` : '';
-
-  const handleVoice = () => {
-    voice.start((transcript) => setName(transcript));
-  };
 
   const queueOffline = () => {
     const payload = { name, qtyLabel, unit, qty: Number(qty) || 0, costPerUnit: Number(costPerUnit) || 0, status, expiryDate, photoUrl: null, branch, staffName };
@@ -82,11 +77,7 @@ function AddStockForm({ onAdded, onQueued, onClose, defaultBranch, lockedBranch,
       )}
       <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
         <Input label="Tên nguyên liệu" placeholder="VD: Bột mì số 8" value={name} onChange={(e) => setName(e.target.value)} style={{ flex: '1 1 160px', minWidth: 0 }} />
-        {voice.supported && (
-          <Button variant={voice.listening ? 'danger' : 'secondary'} size="sm" icon={<IconMic size={16} />} onClick={handleVoice}>
-            {voice.listening ? 'Đang nghe...' : 'Nói'}
-          </Button>
-        )}
+        <VoiceMicButton onTranscript={setName} />
       </div>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <Input label="Số lượng nhập" type="number" placeholder="VD: 40" value={qty} onChange={(e) => setQty(e.target.value)} style={{ flex: '1 1 100px' }} />
@@ -119,7 +110,6 @@ function StockOutForm({ stock, staffName, onDone, onClose }) {
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const voice = useVoiceInput();
   const item = stock.find((s) => s.id === stockId);
 
   useEffect(() => {
@@ -155,11 +145,7 @@ function StockOutForm({ stock, staffName, onDone, onClose }) {
         <React.Fragment>
           <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
             <Input label="Tìm nguyên liệu" placeholder="Gõ hoặc nói tên nguyên liệu..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ flex: '1 1 160px', minWidth: 0 }} />
-            {voice.supported && (
-              <Button variant={voice.listening ? 'danger' : 'secondary'} size="sm" icon={<IconMic size={16} />} onClick={() => voice.start((t) => setSearch(t))}>
-                {voice.listening ? 'Đang nghe...' : 'Nói'}
-              </Button>
-            )}
+            <VoiceMicButton onTranscript={setSearch} />
           </div>
           <Select label="Nguyên liệu" value={stockId} onChange={(e) => setStockId(e.target.value)}
             options={filteredStock.map((s) => ({ value: s.id, label: `${s.name} (còn ${s.qty_label})` }))} />
