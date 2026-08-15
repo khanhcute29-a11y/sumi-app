@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Badge } from '../components/feedback/Badge';
 import { Button } from '../components/forms/Button';
-import { formatOrderItemLine } from '../lib/cakePricing';
+import { formatOrderItemLine, KEM_GROUP_CATEGORIES } from '../lib/cakePricing';
 import { formatDeliveryDateTime } from '../lib/date';
 import { CameraCapture } from '../components/CameraCapture';
 import { IncidentReportModal } from '../components/IncidentReportModal';
@@ -30,7 +30,7 @@ const URGENT_MINUTES = 45;
 function getStation(order) {
   if (order.channel === 'Macaron Sỉ') return 'xuong41';
   if (order.channel === 'Teabreak') return 'xuong42';
-  const hasKem = (order.order_items || []).some((it) => it.category === 'banh_kem');
+  const hasKem = (order.order_items || []).some((it) => KEM_GROUP_CATEGORIES.includes(it.category));
   return hasKem ? 'lanh' : 'nong';
 }
 

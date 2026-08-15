@@ -17,7 +17,7 @@ import { ActionChip } from '../components/ActionChip';
 import { supabase } from '../lib/supabaseClient';
 import { localDateStr, formatDeliveryDateTime } from '../lib/date';
 import { downloadCsv } from '../lib/exportCsv';
-import { CAKE_SIZES_CM, CAKE_BASES, CAKE_FILLINGS, basePriceForSize, fillingSurchargeForSize, computeCakePrice, baseSurcharge, formatOrderItemLine } from '../lib/cakePricing';
+import { CAKE_SIZES_CM, CAKE_BASES, CAKE_FILLINGS, basePriceForSize, fillingSurchargeForSize, computeCakePrice, baseSurcharge, formatOrderItemLine, KEM_GROUP_CATEGORIES, SIZE_VARIANT_CATEGORIES, QTY_ONLY_CATEGORIES } from '../lib/cakePricing';
 import { IconWarning, IconEye, IconMapPin, IconClock, IconClipboard, IconPaperclip, IconHome, IconTruck, IconBan, IconCheck, IconTrash, IconStar, IconPhone, IconDownload, IconEdit } from '../components/icons/FrogIcons';
 
 const STATUS_LABELS = {
@@ -748,11 +748,23 @@ function EditMacaronModal({ order, onClose, onSaved }) {
 
 function ProductRow({ item, onChange, onRemove, isKem, canRemove, products }) {
   const set = (k, v) => onChange({ ...item, [k]: v });
+  const selectedProduct = item.mode === 'catalog' ? products.find((p) => p.id === item.productId) : null;
+  const category = selectedProduct?.category || (isKem ? 'banh_kem' : null);
+  const isFormula = isKem && (item.mode === 'manual' || category === 'banh_kem');
+  const isSizeVariant = !!category && SIZE_VARIANT_CATEGORIES.includes(category);
+  const isQtyOnly = !isKem || (!!category && QTY_ONLY_CATEGORIES.includes(category));
 
   const handleSelectProduct = (productId) => {
     if (productId === MANUAL_OPTION) { onChange({ ...item, mode: 'manual', productId: '', name: '', price: '' }); return; }
     const p = products.find((x) => x.id === productId);
-    onChange({ ...item, mode: 'catalog', productId, name: p.name, price: isKem ? item.price : p.price });
+    if (SIZE_VARIANT_CATEGORIES.includes(p.category)) {
+      const firstVariant = (p.product_variants || [])[0];
+      onChange({ ...item, mode: 'catalog', productId, name: p.name, size: firstVariant?.label || '', price: firstVariant?.price ?? p.price });
+    } else if (p.category === 'banh_kem') {
+      onChange({ ...item, mode: 'catalog', productId, name: p.name, price: item.price });
+    } else {
+      onChange({ ...item, mode: 'catalog', productId, name: p.name, price: p.price });
+    }
   };
 
   return (
@@ -766,7 +778,7 @@ function ProductRow({ item, onChange, onRemove, isKem, canRemove, products }) {
         )}
         <Input label="Số lượng" type="number" value={item.qty} onChange={(e) => set('qty', e.target.value)} style={{ flex: '1 1 80px', minWidth: 0 }} />
       </div>
-      {isKem && (() => {
+      {isFormula && (() => {
         const sizeCm = item.size ? parseInt(item.size, 10) : null;
         const fillingOptions = [{ value: '', label: 'Chọn nhân...' }, ...CAKE_FILLINGS.map((f) => {
           if (!f.surcharge) return { value: f.value, label: f.label };
@@ -794,7 +806,13 @@ function ProductRow({ item, onChange, onRemove, isKem, canRemove, products }) {
           </div>
         );
       })()}
-      {!isKem && (
+      {isSizeVariant && (
+        <Select label="Kích thước" value={item.size || ''} onChange={(e) => {
+          const variant = (selectedProduct?.product_variants || []).find((v) => v.label === e.target.value);
+          onChange({ ...item, size: e.target.value, price: variant?.price ?? item.price });
+        }} options={(selectedProduct?.product_variants || []).map((v) => ({ value: v.label, label: `${v.label} (${Number(v.price).toLocaleString('vi-VN')}đ)` }))} style={{ maxWidth: 220 }} />
+      )}
+      {isQtyOnly && (
         <Input label="Ghi chú / mô tả" placeholder="VD: loại có hộp nhỏ" value={item.note} onChange={(e) => set('note', e.target.value)} />
       )}
       <PhotoField url={item.refPhotoUrl} onChange={(url) => set('refPhotoUrl', url)} label="Ảnh mẫu khách muốn đặt (nếu có)" prefix="reference" />
@@ -888,7 +906,7 @@ function NewOrderModal({ onClose, onCreated, onManualItems }) {
     if (!totalTouched) setTotal(String(catalogSuggestedTotal + effectiveShipFee || ''));
   }, [catalogSuggestedTotal, hasShipFee, shipFee]);
 
-  const kemCatalog = catalog.filter((p) => p.category === 'banh_kem');
+  const kemCatalog = catalog.filter((p) => KEM_GROUP_CATEGORIES.includes(p.category));
   const manCatalog = catalog.filter((p) => p.category === 'banh_man_ngot');
 
   const handleSubmit = async () => {
@@ -903,7 +921,7 @@ function NewOrderModal({ onClose, onCreated, onManualItems }) {
         deliveryMethod, shipFee: effectiveShipFee,
         total: Number(total) || 0, deposit: Number(deposit) || 0, paymentMethod,
         items: [
-          ...kemProducts.map((it) => ({ ...it, category: 'banh_kem' })),
+          ...kemProducts.map((it) => ({ ...it, category: catalog.find((p) => p.id === it.productId)?.category || 'banh_kem' })),
           ...manProducts.map((it) => ({ ...it, category: 'banh_man_ngot' })),
         ].map((it) => ({
           ...it,
@@ -1058,7 +1076,7 @@ function EditOrderModal({ order, onClose, onSaved }) {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  const kemCatalog = catalog.filter((p) => p.category === 'banh_kem');
+  const kemCatalog = catalog.filter((p) => KEM_GROUP_CATEGORIES.includes(p.category));
   const manCatalog = catalog.filter((p) => p.category === 'banh_man_ngot');
   const previewItems = [...kemProducts, ...manProducts].filter((p) => p.name);
 
@@ -1072,7 +1090,7 @@ function EditOrderModal({ order, onClose, onSaved }) {
         address, deliveryDate, deliveryTime, deliveryMethod, shipFee: effectiveShipFee,
         total: Number(total) || 0, deposit: Number(deposit) || 0, paymentMethod, note,
         items: [
-          ...kemProducts.map((it) => ({ ...it, category: 'banh_kem' })),
+          ...kemProducts.map((it) => ({ ...it, category: catalog.find((p) => p.id === it.productId)?.category || 'banh_kem' })),
           ...manProducts.map((it) => ({ ...it, category: 'banh_man_ngot' })),
         ].map((it) => ({ ...it, name: it.note ? `${it.name} (${it.note})` : it.name })),
       });
