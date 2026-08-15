@@ -85,8 +85,8 @@ export async function fetchProducts({ activeOnly } = {}) {
   return data;
 }
 
-export async function createProduct({ name, category, unit, price }) {
-  const { data, error } = await supabase.from('products').insert({ name, category, unit, price: price || 0 }).select().single();
+export async function createProduct({ name, category, unit, price, photoUrl }) {
+  const { data, error } = await supabase.from('products').insert({ name, category, unit, price: price || 0, photo_url: photoUrl || null }).select().single();
   if (error) throw error;
   return data;
 }

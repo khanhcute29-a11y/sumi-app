@@ -10,6 +10,7 @@ import {
   addProductVariant, deleteProductVariant,
   fetchProductRecipes, addRecipeItem, deleteRecipeItem, fetchWarehouseStock,
 } from '../lib/queries';
+import { PhotoField } from '../components/PhotoField';
 import { IconTrash, IconRuler } from '../components/icons/FrogIcons';
 import { useAuth } from '../lib/AuthContext';
 import { hasRole } from '../lib/roles';
@@ -34,6 +35,7 @@ function AddProductForm({ onAdded, onClose }) {
   const [category, setCategory] = useState('banh_kem');
   const [unit, setUnit] = useState('cái');
   const [price, setPrice] = useState('');
+  const [photoUrl, setPhotoUrl] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -42,7 +44,7 @@ function AddProductForm({ onAdded, onClose }) {
     setSaving(true);
     setError('');
     try {
-      await createProduct({ name, category, unit, price: Number(price) || 0 });
+      await createProduct({ name, category, unit, price: Number(price) || 0, photoUrl });
       onAdded();
       onClose();
     } catch (err) {
@@ -62,6 +64,7 @@ function AddProductForm({ onAdded, onClose }) {
       </div>
       <Input label="Giá mặc định" type="number" placeholder="VD: 350000" value={price} onChange={(e) => setPrice(e.target.value)}
         helpText="Nếu sản phẩm có nhiều mức giá theo size, thêm ở bước sau — giá này chỉ dùng khi không chọn size." />
+      <PhotoField url={photoUrl} onChange={setPhotoUrl} label="Ảnh sản phẩm (nếu có)" prefix="product" />
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
         <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>Hủy</Button>
         <Button variant="primary" size="sm" onClick={handleSubmit} disabled={saving}>{saving ? 'Đang lưu...' : 'Lưu'}</Button>
@@ -184,6 +187,7 @@ function RecipeEditor({ product, ingredients, onCostChange }) {
 function ProductRow({ product, ingredients, canEdit, onChanged }) {
   const variants = product.product_variants || [];
   const [showRecipe, setShowRecipe] = useState(false);
+  const [showPhotoEdit, setShowPhotoEdit] = useState(false);
   const [cost, setCost] = useState(null);
   const basePrice = Number(product.price) || 0;
   const margin = cost != null ? basePrice - cost : null;
@@ -192,7 +196,11 @@ function ProductRow({ product, ingredients, canEdit, onChanged }) {
   return (
     <Card style={{ display: 'flex', flexDirection: 'column', gap: 8 }} padding={14}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
-        <div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', minWidth: 0 }}>
+          {product.photo_url && (
+            <img src={product.photo_url} alt={product.name} style={{ width: 48, height: 48, borderRadius: 'var(--radius-sm)', objectFit: 'cover', flexShrink: 0 }} />
+          )}
+          <div style={{ minWidth: 0 }}>
           <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>{product.name}</div>
           <div style={{ display: 'flex', gap: 6, marginTop: 4, alignItems: 'center', flexWrap: 'wrap' }}>
             <Badge tone="neutral">{categoryLabel(product.category)}</Badge>
@@ -206,6 +214,7 @@ function ProductRow({ product, ingredients, canEdit, onChanged }) {
             )}
             {!product.active && <Badge tone="neutral">Ngừng bán</Badge>}
           </div>
+          </div>
         </div>
         {canEdit && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -218,9 +227,17 @@ function ProductRow({ product, ingredients, canEdit, onChanged }) {
       {VARIANT_CATEGORIES.includes(product.category) && <VariantRow product={product} canEdit={canEdit} onChanged={onChanged} />}
       {canEdit && (
         <React.Fragment>
-          <Button variant="ghost" size="sm" onClick={() => setShowRecipe((v) => !v)} style={{ alignSelf: 'flex-start' }}>
-            {showRecipe ? 'Ẩn công thức & giá vốn' : <><IconRuler size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Công thức & giá vốn</>}
-          </Button>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Button variant="ghost" size="sm" onClick={() => setShowRecipe((v) => !v)}>
+              {showRecipe ? 'Ẩn công thức & giá vốn' : <><IconRuler size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Công thức & giá vốn</>}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setShowPhotoEdit((v) => !v)}>
+              {showPhotoEdit ? 'Ẩn ảnh' : product.photo_url ? 'Đổi ảnh' : '+ Thêm ảnh'}
+            </Button>
+          </div>
+          {showPhotoEdit && (
+            <PhotoField url={product.photo_url} onChange={(url) => { updateProduct(product.id, { photo_url: url }); onChanged(); }} label="Ảnh sản phẩm" prefix="product" />
+          )}
           {showRecipe && <RecipeEditor product={product} ingredients={ingredients} onCostChange={setCost} />}
         </React.Fragment>
       )}

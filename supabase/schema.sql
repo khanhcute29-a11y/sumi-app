@@ -91,6 +91,7 @@ create table if not exists products (
   category text not null default 'khac' check (category in ('banh_kem','banh_kem_bap_choco','mousse_tiramisu','set_mousse','banh_su','cupcake','banh_man_ngot','teabreak','khac','macaron')),
   unit text not null default 'cái',
   price numeric(12,0) not null default 0,
+  photo_url text,
   active boolean not null default true,
   created_at timestamptz not null default now()
 );
