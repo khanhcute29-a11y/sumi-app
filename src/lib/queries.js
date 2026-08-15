@@ -234,9 +234,10 @@ export async function fetchIncidentReports({ status, limit = 100 } = {}) {
   return data;
 }
 
-export async function addIncidentReport({ orderId, orderCode, category, code, label, note, reporterId, reporterName, reporterRole }) {
+export async function addIncidentReport({ orderId, orderCode, category, code, label, note, photos, reporterId, reporterName, reporterRole }) {
   const { error } = await supabase.from('incident_reports').insert({
     order_id: orderId || null, order_code: orderCode || null, category, code, label, note: note || null,
+    photos: photos && photos.length > 0 ? photos : null,
     reporter_id: reporterId || null, reporter_name: reporterName || null, reporter_role: reporterRole || null,
   });
   if (error) throw error;
