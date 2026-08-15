@@ -582,7 +582,7 @@ function MacaronOrderModal({ onClose, onCreated, onManualItems }) {
                 <Select label="Phí ship" value={hasShipFee} onChange={(e) => { setHasShipFee(e.target.value); if (e.target.value === 'no') setShipFee(''); }}
                   options={[{ value: 'no', label: 'Miễn phí' }, { value: 'yes', label: 'Có phí' }]} style={{ flex: '1 1 120px' }} />
                 {hasShipFee === 'yes' && (
-                  <PriceInput label="Số tiền ship" placeholder="VD: 115000" value={shipFee} onChange={setShipFee} noDelete style={{ flex: '1 1 140px' }} />
+                  <PriceInput label="Số tiền ship" placeholder="VD: 115000" value={shipFee} onChange={setShipFee} style={{ flex: '1 1 140px' }} />
                 )}
               </div>
             )}
@@ -714,7 +714,7 @@ function EditMacaronModal({ order, onClose, onSaved }) {
                 <Select label="Phí ship" value={hasShipFee} onChange={(e) => { setHasShipFee(e.target.value); if (e.target.value === 'no') setShipFee(''); }}
                   options={[{ value: 'no', label: 'Miễn phí' }, { value: 'yes', label: 'Có phí' }]} style={{ flex: '1 1 120px' }} />
                 {hasShipFee === 'yes' && (
-                  <PriceInput label="Số tiền ship" value={shipFee} onChange={setShipFee} noDelete style={{ flex: '1 1 140px' }} />
+                  <PriceInput label="Số tiền ship" value={shipFee} onChange={setShipFee} style={{ flex: '1 1 140px' }} />
                 )}
               </div>
             )}
@@ -1039,7 +1039,7 @@ function NewOrderModal({ onClose, onCreated, onManualItems }) {
                 <Select label="Phí ship" value={hasShipFee} onChange={(e) => { setHasShipFee(e.target.value); if (e.target.value === 'no') setShipFee(''); }}
                   options={[{ value: 'no', label: 'Miễn phí' }, { value: 'yes', label: 'Có phí' }]} style={{ flex: '1 1 120px' }} />
                 {hasShipFee === 'yes' && (
-                  <PriceInput label="Số tiền ship" placeholder="VD: 20000" value={shipFee} onChange={setShipFee} noDelete style={{ flex: '1 1 140px' }} />
+                  <PriceInput label="Số tiền ship" placeholder="VD: 20000" value={shipFee} onChange={setShipFee} style={{ flex: '1 1 140px' }} />
                 )}
               </div>
             )}
@@ -1048,7 +1048,8 @@ function NewOrderModal({ onClose, onCreated, onManualItems }) {
               helpText="Tự tính từ Tiền hàng + Phí ship — có thể chỉnh tay (VD: giảm giá VIP)." />
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <Select label="Phương thức thanh toán" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} options={[{ value: 'cod', label: 'COD' }, { value: 'bank', label: 'Chuyển khoản Ngân hàng' }]} style={{ flex: '1 1 160px' }} />
-              <PriceInput label="Đặt cọc" placeholder="VD: 100000" value={deposit} onChange={setDeposit} style={{ flex: '1 1 140px' }} />
+              <PriceInput label="Đặt cọc" placeholder="VD: 100000" value={deposit} onChange={setDeposit} style={{ flex: '1 1 140px' }}
+                helpText={`Còn lại: ${Math.max(0, Number(total || 0) - Number(deposit || 0)).toLocaleString('vi-VN')}đ`} />
             </div>
 
             <div style={{ font: 'var(--text-label)', paddingTop: 6, borderTop: '1px solid var(--border-subtle)' }}>Ghi chú</div>
@@ -1197,14 +1198,15 @@ function EditOrderModal({ order, onClose, onSaved }) {
                 <Select label="Phí ship" value={hasShipFee} onChange={(e) => { setHasShipFee(e.target.value); if (e.target.value === 'no') setShipFee(''); }}
                   options={[{ value: 'no', label: 'Miễn phí' }, { value: 'yes', label: 'Có phí' }]} style={{ flex: '1 1 120px' }} />
                 {hasShipFee === 'yes' && (
-                  <PriceInput label="Số tiền ship" value={shipFee} onChange={setShipFee} noDelete style={{ flex: '1 1 140px' }} />
+                  <PriceInput label="Số tiền ship" value={shipFee} onChange={setShipFee} style={{ flex: '1 1 140px' }} />
                 )}
               </div>
             )}
             <PriceInput label="Tổng tiền" value={total} onChange={setTotal} />
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <Select label="Phương thức thanh toán" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} options={[{ value: 'cod', label: 'COD' }, { value: 'bank', label: 'Chuyển khoản Ngân hàng' }]} style={{ flex: '1 1 160px' }} />
-              <PriceInput label="Đặt cọc" value={deposit} onChange={setDeposit} style={{ flex: '1 1 140px' }} />
+              <PriceInput label="Đặt cọc" value={deposit} onChange={setDeposit} style={{ flex: '1 1 140px' }}
+                helpText={`Còn lại: ${Math.max(0, Number(total || 0) - Number(deposit || 0)).toLocaleString('vi-VN')}đ`} />
             </div>
 
             <div style={{ font: 'var(--text-label)', paddingTop: 6, borderTop: '1px solid var(--border-subtle)' }}>Ghi chú</div>
