@@ -4,6 +4,7 @@ import { Input } from './forms/Input';
 import { addIncidentReport, uploadPhoto } from '../lib/queries';
 import { toWebSafeImage } from '../lib/imageConvert';
 import { useAuth } from '../lib/AuthContext';
+import { VoiceMicButton } from './VoiceMicButton';
 import { IconWarning, IconCamera, IconImage } from './icons/FrogIcons';
 
 const TAXONOMY = [
@@ -107,7 +108,10 @@ export function IncidentReportModal({ orderId, orderCode, onClose, onSent }) {
               </div>
             </div>
           ))}
-          <Input placeholder="Ghi chú thêm (không bắt buộc)..." value={note} onChange={(e) => setNote(e.target.value)} />
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <Input placeholder="Ghi chú thêm (không bắt buộc)..." value={note} onChange={(e) => setNote(e.target.value)} style={{ flex: '1 1 auto', minWidth: 0 }} />
+            <VoiceMicButton onTranscript={(t) => setNote(note ? `${note} ${t}` : t)} />
+          </div>
 
           {/* Photo upload section */}
           <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12 }}>
