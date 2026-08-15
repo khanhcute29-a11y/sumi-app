@@ -4,6 +4,7 @@ import { toWebSafeImage } from '../lib/imageConvert';
 import { Input } from './forms/Input';
 import { Button } from './forms/Button';
 import { useAuth } from '../lib/AuthContext';
+import { VoiceMicButton } from './VoiceMicButton';
 import { IconChat, IconCamera, IconImage, IconBell } from './icons/FrogIcons';
 
 const NOTE_ROLE_LABELS = { owner: 'Chủ', cashier: 'Thu ngân', kitchen: 'Bếp', shipper: 'Ship', admin: 'Admin', bakery: 'Bếp', sale: 'Bán hàng', accountant: 'Kế toán', warehouse: 'Kho' };
@@ -169,6 +170,7 @@ export function CommentSection({ order, profile }) {
           <IconImage size={16} />
         </button>
         <Input placeholder="Viết bình luận cho đơn này..." value={draft} onChange={(e) => setDraft(e.target.value)} style={{ flex: '1 1 160px', minWidth: 0 }} />
+        <VoiceMicButton onTranscript={(t) => setDraft(draft ? `${draft} ${t}` : t)} />
         <Button variant="primary" size="sm" onClick={handleSend} disabled={sending || uploading || (!draft.trim() && photos.length === 0)}>
           {uploading ? 'Tải...' : sending ? '...' : 'Gửi'}
         </Button>
