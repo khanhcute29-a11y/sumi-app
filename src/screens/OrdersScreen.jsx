@@ -805,8 +805,8 @@ function ProductRow({ item, onChange, onRemove, isKem, canRemove, products }) {
     if (productId === MANUAL_OPTION) { onChange({ ...item, mode: 'manual', productId: '', name: '', price: '' }); return; }
     const p = products.find((x) => x.id === productId);
     if (SIZE_VARIANT_CATEGORIES.includes(p.category)) {
-      const firstVariant = (p.product_variants || [])[0];
-      onChange({ ...item, mode: 'catalog', productId, name: p.name, size: firstVariant?.label || '', price: firstVariant?.price ?? p.price });
+      // Không tự chọn sẵn size — bắt buộc nhân viên chọn tay để tránh chốt nhầm giá.
+      onChange({ ...item, mode: 'catalog', productId, name: p.name, size: '', price: '' });
     } else if (p.category === 'banh_kem') {
       onChange({ ...item, mode: 'catalog', productId, name: p.name, price: item.price });
     } else {
@@ -857,12 +857,15 @@ function ProductRow({ item, onChange, onRemove, isKem, canRemove, products }) {
           </div>
         );
       })()}
-      {isSizeVariant && (
-        <Select label="Kích thước" value={item.size || ''} onChange={(e) => {
-          const variant = (selectedProduct?.product_variants || []).find((v) => v.label === e.target.value);
-          onChange({ ...item, size: e.target.value, price: variant?.price ?? item.price });
-        }} options={(selectedProduct?.product_variants || []).map((v) => ({ value: v.label, label: `${v.label} (${Number(v.price).toLocaleString('vi-VN')}đ)` }))} style={{ maxWidth: 220 }} />
-      )}
+      {isSizeVariant && (() => {
+        const sortedVariants = [...(selectedProduct?.product_variants || [])].sort((a, b) => Number(a.price) - Number(b.price));
+        return (
+          <Select label="Kích thước" value={item.size || ''} onChange={(e) => {
+            const variant = sortedVariants.find((v) => v.label === e.target.value);
+            onChange({ ...item, size: e.target.value, price: variant?.price ?? '' });
+          }} options={[{ value: '', label: 'Chọn size...' }, ...sortedVariants.map((v) => ({ value: v.label, label: `${v.label} (${Number(v.price).toLocaleString('vi-VN')}đ)` }))]} style={{ maxWidth: 220 }} />
+        );
+      })()}
       {isQtyOnly && (
         <Input label="Ghi chú / mô tả" placeholder="VD: loại có hộp nhỏ" value={item.note} onChange={(e) => set('note', e.target.value)} />
       )}

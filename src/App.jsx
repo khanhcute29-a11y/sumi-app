@@ -105,7 +105,8 @@ function OpsApp({ onSignOut }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'incident_reports' }, loadBadges)
       .subscribe();
     return () => { window.removeEventListener('sumi-badges-changed', loadBadges); supabase.removeChannel(channel); };
-  }, [profile?.role, profile?.extra_roles]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.role, (profile?.extra_roles || []).join(',')]);
 
   const screens = {
     dashboard: <DashboardScreen />, orders: <OrdersScreen />, kds: <KdsScreen initialStation={kdsStation} />, warehouse: <WarehouseScreen branch={warehouseBranch} onBranchChange={setWarehouseBranch} />, cashbook: <CashbookScreen />,

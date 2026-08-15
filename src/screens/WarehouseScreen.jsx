@@ -80,8 +80,8 @@ function AddStockForm({ onAdded, onQueued, onClose, defaultBranch, lockedBranch,
       ) : (
         <Select label="Thuộc kho" value={branch} onChange={(e) => setBranch(e.target.value)} options={BRANCHES} />
       )}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-        <Input label="Tên nguyên liệu" placeholder="VD: Bột mì số 8" value={name} onChange={(e) => setName(e.target.value)} style={{ flex: 1 }} />
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <Input label="Tên nguyên liệu" placeholder="VD: Bột mì số 8" value={name} onChange={(e) => setName(e.target.value)} style={{ flex: '1 1 160px', minWidth: 0 }} />
         {voice.supported && (
           <Button variant={voice.listening ? 'danger' : 'secondary'} size="sm" icon={<IconMic size={16} />} onClick={handleVoice}>
             {voice.listening ? 'Đang nghe...' : 'Nói'}
@@ -153,8 +153,8 @@ function StockOutForm({ stock, staffName, onDone, onClose }) {
         <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Kho chưa có nguyên liệu nào để xuất.</div>
       ) : (
         <React.Fragment>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-            <Input label="Tìm nguyên liệu" placeholder="Gõ hoặc nói tên nguyên liệu..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ flex: 1 }} />
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <Input label="Tìm nguyên liệu" placeholder="Gõ hoặc nói tên nguyên liệu..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ flex: '1 1 160px', minWidth: 0 }} />
             {voice.supported && (
               <Button variant={voice.listening ? 'danger' : 'secondary'} size="sm" icon={<IconMic size={16} />} onClick={() => voice.start((t) => setSearch(t))}>
                 {voice.listening ? 'Đang nghe...' : 'Nói'}
@@ -242,8 +242,8 @@ function HistorySection({ stock, effectiveBranch, onClose }) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 420, overflowY: 'auto' }}>
           {filtered.map((e) => (
-            <div key={`${e.kind}-${e.id}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-              <div>
+            <div key={`${e.kind}-${e.id}`} style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+              <div style={{ minWidth: 0, flex: '1 1 200px' }}>
                 <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-primary)' }}>
                   <Badge tone={e.kind === 'in' ? 'success' : 'warning'}>{e.kind === 'in' ? 'Nhập' : 'Xuất'}</Badge> {e.name} — {e.qty} {e.unit}
                 </div>
