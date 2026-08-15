@@ -271,17 +271,17 @@ function TeabreakOrderModal({ onClose, onCreated, onManualItems }) {
             {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)', background: 'var(--status-danger-soft)', borderRadius: 'var(--radius-sm)', padding: '8px 10px' }}>{error}</div>}
             <div style={{ font: 'var(--text-label)' }}>Thông tin đơn vị đặt hàng</div>
             <Input label="Tên công ty / khách" placeholder="VD: Công ty Cổ phần Bệnh viện ĐHQT Hồng Bàng" value={customer.name} onChange={(e) => setC('name', e.target.value)} />
-            <div style={{ display: 'flex', gap: 12 }}>
-              <Input label="MST" value={customer.mst} onChange={(e) => setC('mst', e.target.value)} style={{ flex: 1 }} />
-              <Input label="Email" value={customer.email} onChange={(e) => setC('email', e.target.value)} style={{ flex: 1 }} />
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <Input label="MST" value={customer.mst} onChange={(e) => setC('mst', e.target.value)} style={{ flex: '1 1 140px', minWidth: 0 }} />
+              <Input label="Email" value={customer.email} onChange={(e) => setC('email', e.target.value)} style={{ flex: '1 1 140px', minWidth: 0 }} />
             </div>
             <Input label="Địa chỉ" value={customer.address} onChange={(e) => setC('address', e.target.value)} />
             <Input label="Số điện thoại" value={customer.phone} onChange={(e) => setC('phone', e.target.value)} />
 
             <div style={{ font: 'var(--text-label)', paddingTop: 6, borderTop: '1px solid var(--border-subtle)' }}>Giao hàng</div>
-            <div style={{ display: 'flex', gap: 12 }}>
-              <Input label="Ngày giao" type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ flex: 1 }} />
-              <Input label="Thời gian" placeholder="VD: 7h15-11h30" value={time} onChange={(e) => setTime(e.target.value)} style={{ flex: 1 }} />
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <Input label="Ngày giao" type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ flex: '1 1 140px', minWidth: 0 }} />
+              <Input label="Thời gian" placeholder="VD: 7h15-11h30" value={time} onChange={(e) => setTime(e.target.value)} style={{ flex: '1 1 140px', minWidth: 0 }} />
             </div>
             <Input label="Số khách Teabreak" placeholder="VD: 300 khách" value={guestCount} onChange={(e) => setGuestCount(e.target.value)} />
 
@@ -396,9 +396,9 @@ function EditTeabreakModal({ order, onClose, onSaved }) {
             <Input label="Số điện thoại" value={custPhone} onChange={(e) => setCustPhone(e.target.value)} />
 
             <div style={{ font: 'var(--text-label)', paddingTop: 6, borderTop: '1px solid var(--border-subtle)' }}>Giao hàng</div>
-            <div style={{ display: 'flex', gap: 12 }}>
-              <Input label="Ngày giao" type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ flex: 1 }} />
-              <Input label="Thời gian" placeholder="VD: 7h15-11h30" value={time} onChange={(e) => setTime(e.target.value)} style={{ flex: 1 }} />
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <Input label="Ngày giao" type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ flex: '1 1 140px', minWidth: 0 }} />
+              <Input label="Thời gian" placeholder="VD: 7h15-11h30" value={time} onChange={(e) => setTime(e.target.value)} style={{ flex: '1 1 140px', minWidth: 0 }} />
             </div>
 
             <div style={{ font: 'var(--text-label)', paddingTop: 6, borderTop: '1px solid var(--border-subtle)' }}>Danh sách món</div>
@@ -562,9 +562,9 @@ function MacaronOrderModal({ onClose, onCreated, onManualItems }) {
             {deliveryMethod === 'giao_tan_noi' && (
               <Input label="Địa chỉ giao" placeholder="Số nhà, đường, xã/phường, tỉnh/thành..." value={address} onChange={(e) => setAddress(e.target.value)} />
             )}
-            <div style={{ display: 'flex', gap: 12 }}>
-              <Input label="Ngày giao" type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} style={{ flex: 1 }} />
-              <Input label="Giờ giao" type="time" value={deliveryTime} onChange={(e) => setDeliveryTime(e.target.value)} style={{ flex: 1 }} />
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <Input label="Ngày giao" type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} style={{ flex: '1 1 140px', minWidth: 0 }} />
+              <Input label="Giờ giao" type="time" value={deliveryTime} onChange={(e) => setDeliveryTime(e.target.value)} style={{ flex: '1 1 140px', minWidth: 0 }} />
             </div>
 
             <div style={{ font: 'var(--text-label)', paddingTop: 6, borderTop: '1px solid var(--border-subtle)' }}>Danh sách hàng hóa — chọn từ menu Macaron để tự động ra giá, hoặc nhập tay</div>
@@ -694,9 +694,9 @@ function EditMacaronModal({ order, onClose, onSaved }) {
             {deliveryMethod === 'giao_tan_noi' && (
               <Input label="Địa chỉ giao" value={address} onChange={(e) => setAddress(e.target.value)} />
             )}
-            <div style={{ display: 'flex', gap: 12 }}>
-              <Input label="Ngày giao" type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} style={{ flex: 1 }} />
-              <Input label="Giờ giao" type="time" value={deliveryTime} onChange={(e) => setDeliveryTime(e.target.value)} style={{ flex: 1 }} />
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <Input label="Ngày giao" type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} style={{ flex: '1 1 140px', minWidth: 0 }} />
+              <Input label="Giờ giao" type="time" value={deliveryTime} onChange={(e) => setDeliveryTime(e.target.value)} style={{ flex: '1 1 140px', minWidth: 0 }} />
             </div>
 
             <div style={{ font: 'var(--text-label)', paddingTop: 6, borderTop: '1px solid var(--border-subtle)' }}>Danh sách hàng hóa</div>
@@ -1030,9 +1030,9 @@ function NewOrderModal({ onClose, onCreated, onManualItems }) {
             {deliveryMethod === 'giao_tan_noi' && (
               <Input label="Địa chỉ giao" placeholder="Số nhà, đường, quận..." value={address} onChange={(e) => setAddress(e.target.value)} />
             )}
-            <div style={{ display: 'flex', gap: 12 }}>
-              <Input label="Ngày giao" type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} style={{ flex: 1 }} />
-              <Input label="Giờ giao" type="time" value={deliveryTime} onChange={(e) => setDeliveryTime(e.target.value)} style={{ flex: 1 }} />
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <Input label="Ngày giao" type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} style={{ flex: '1 1 140px', minWidth: 0 }} />
+              <Input label="Giờ giao" type="time" value={deliveryTime} onChange={(e) => setDeliveryTime(e.target.value)} style={{ flex: '1 1 140px', minWidth: 0 }} />
             </div>
             <Input label="Số điện thoại" placeholder="09xx xxx xxx" value={custPhone} onChange={(e) => setCustPhone(e.target.value)} />
 
@@ -1189,9 +1189,9 @@ function EditOrderModal({ order, onClose, onSaved }) {
             {deliveryMethod === 'giao_tan_noi' && (
               <Input label="Địa chỉ giao" value={address} onChange={(e) => setAddress(e.target.value)} />
             )}
-            <div style={{ display: 'flex', gap: 12 }}>
-              <Input label="Ngày giao" type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} style={{ flex: 1 }} />
-              <Input label="Giờ giao" type="time" value={deliveryTime} onChange={(e) => setDeliveryTime(e.target.value)} style={{ flex: 1 }} />
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <Input label="Ngày giao" type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} style={{ flex: '1 1 140px', minWidth: 0 }} />
+              <Input label="Giờ giao" type="time" value={deliveryTime} onChange={(e) => setDeliveryTime(e.target.value)} style={{ flex: '1 1 140px', minWidth: 0 }} />
             </div>
             <Input label="Số điện thoại" value={custPhone} onChange={(e) => setCustPhone(e.target.value)} />
 

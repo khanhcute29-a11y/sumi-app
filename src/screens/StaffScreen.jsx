@@ -4,7 +4,7 @@ import { Badge } from '../components/feedback/Badge';
 import { Button } from '../components/forms/Button';
 import { Select } from '../components/forms/Select';
 import { fetchMyProfile, fetchAllProfiles, updateProfileRole, updateProfileExtraRoles, approveStaff } from '../lib/queries';
-import { ROLE_META, ROLE_OPTIONS, ROLE_PERMISSIONS, hasAnyRole } from '../lib/roles';
+import { ROLE_META, ROLE_OPTIONS, ROLE_PERMISSIONS, hasRole } from '../lib/roles';
 
 function PendingStaffRow({ s, onApprove }) {
   const [role, setRole] = useState(s.role);
@@ -109,7 +109,9 @@ export default function StaffScreen() {
 
   useEffect(load, []);
 
-  const isOwner = hasAnyRole(me, ['owner', 'admin']);
+  // Chỉ Chủ sở hữu mới đổi được vai trò người khác ở database (chặn admin tự nâng quyền) —
+  // UI phải khớp đúng, nếu không admin bấm Duyệt/Đổi vai trò sẽ bị âm thầm không lưu được gì.
+  const isOwner = hasRole(me, 'owner');
   const pending = staff.filter((s) => s.approved === false);
   const approved = staff.filter((s) => s.approved !== false);
 

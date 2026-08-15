@@ -56,9 +56,9 @@ function AddProductForm({ onAdded, onClose }) {
     <Card style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
       <Input label="Tên sản phẩm" placeholder="VD: Bánh Kem Dâu" value={name} onChange={(e) => setName(e.target.value)} />
-      <div style={{ display: 'flex', gap: 10 }}>
-        <Select label="Danh mục" value={category} onChange={(e) => setCategory(e.target.value)} options={CATEGORIES} />
-        <Input label="Đơn vị" placeholder="VD: cái, kg, set" value={unit} onChange={(e) => setUnit(e.target.value)} style={{ flex: 1 }} />
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <Select label="Danh mục" value={category} onChange={(e) => setCategory(e.target.value)} options={CATEGORIES} style={{ flex: '1 1 200px', minWidth: 0 }} />
+        <Input label="Đơn vị" placeholder="VD: cái, kg, set" value={unit} onChange={(e) => setUnit(e.target.value)} style={{ flex: '1 1 120px', minWidth: 0 }} />
       </div>
       <Input label="Giá mặc định" type="number" placeholder="VD: 350000" value={price} onChange={(e) => setPrice(e.target.value)}
         helpText="Nếu sản phẩm có nhiều mức giá theo size, thêm ở bước sau — giá này chỉ dùng khi không chọn size." />
