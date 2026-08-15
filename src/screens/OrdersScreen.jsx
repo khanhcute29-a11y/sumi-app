@@ -747,6 +747,8 @@ function EditMacaronModal({ order, onClose, onSaved }) {
 }
 
 function ProductRow({ item, onChange, onRemove, isKem, canRemove, products }) {
+  const [search, setSearch] = useState('');
+  const filteredProducts = search.trim() ? products.filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase())) : products;
   const set = (k, v) => onChange({ ...item, [k]: v });
   const selectedProduct = item.mode === 'catalog' ? products.find((p) => p.id === item.productId) : null;
   const category = selectedProduct?.category || (isKem ? 'banh_kem' : null);
@@ -771,8 +773,11 @@ function ProductRow({ item, onChange, onRemove, isKem, canRemove, products }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10, borderRadius: 'var(--radius-md)', background: 'var(--surface-sunken)' }}>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {item.mode === 'catalog' ? (
-          <Select label="Tên sản phẩm" value={item.productId} onChange={(e) => handleSelectProduct(e.target.value)}
-            options={productOptions(products)} style={{ flex: '3 1 200px', minWidth: 0 }} />
+          <React.Fragment>
+            <Input label="Tìm sản phẩm" placeholder="Gõ tên để lọc..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ flex: '1 1 140px', minWidth: 0 }} />
+            <Select label="Tên sản phẩm" value={item.productId} onChange={(e) => handleSelectProduct(e.target.value)}
+              options={productOptions(filteredProducts)} style={{ flex: '3 1 200px', minWidth: 0 }} />
+          </React.Fragment>
         ) : (
           <Input label="Tên sản phẩm (nhập tay)" placeholder={isKem ? 'VD: Bánh Kem Dâu' : 'VD: Bánh Bông Lan Mặn'} value={item.name} onChange={(e) => set('name', e.target.value)} style={{ flex: '3 1 200px', minWidth: 0 }} />
         )}
