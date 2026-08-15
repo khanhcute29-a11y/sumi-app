@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { fetchOrderNotes, addOrderNote, uploadPhoto } from '../lib/queries';
+import { fetchOrderNotes, addOrderNote, uploadPhoto, uploadFile } from '../lib/queries';
 import { toWebSafeImage } from '../lib/imageConvert';
 import { Input } from './forms/Input';
 import { Button } from './forms/Button';
 import { useAuth } from '../lib/AuthContext';
 import { VoiceMicButton } from './VoiceMicButton';
-import { IconChat, IconCamera, IconImage, IconBell } from './icons/FrogIcons';
+import { IconChat, IconCamera, IconImage, IconBell, IconPaperclip, IconDownload } from './icons/FrogIcons';
 
 const NOTE_ROLE_LABELS = { owner: 'Chủ', cashier: 'Thu ngân', kitchen: 'Bếp', shipper: 'Ship', admin: 'Admin', bakery: 'Bếp', sale: 'Bán hàng', accountant: 'Kế toán', warehouse: 'Kho' };
 
@@ -59,11 +59,15 @@ export function CommentSection({ order, profile }) {
     setUploading(true);
     setError('');
     try {
-      const newPhotos = await Promise.all(Array.from(files).map(async (file, i) => {
-        const safeFile = await toWebSafeImage(file);
-        return uploadPhoto(safeFile, `comment_${Date.now()}_${i}`);
+      const newAttachments = await Promise.all(Array.from(files).map(async (file, i) => {
+        if (file.type.startsWith('image/')) {
+          const safeFile = await toWebSafeImage(file);
+          const url = await uploadPhoto(safeFile, `comment_${Date.now()}_${i}`);
+          return { url, name: safeFile.name || file.name, type: safeFile.type };
+        }
+        return uploadFile(file, `comment_${Date.now()}_${i}`);
       }));
-      setPhotos([...photos, ...newPhotos]);
+      setPhotos([...photos, ...newAttachments]);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -78,7 +82,7 @@ export function CommentSection({ order, profile }) {
     setError('');
     try {
       const fullMessage = photos.length > 0
-        ? `${message}\n[PHOTOS: ${photos.map(p => `![image](${p})`).join(', ')}]`
+        ? `${message}\n[FILES: ${photos.map(p => `${p.name}|${p.type}|${p.url}`).join(', ')}]`
         : message;
 
       await addOrderNote({
@@ -120,7 +124,7 @@ export function CommentSection({ order, profile }) {
                 <span>{new Date(c.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' })}</span>
               </div>
               <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                {c.message.split('[PHOTOS:')[0]}
+                {c.message.split('[PHOTOS:')[0].split('[FILES:')[0]}
               </div>
               {c.message.includes('[PHOTOS:') && (
                 <div style={{ marginTop: 6, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -134,6 +138,35 @@ export function CommentSection({ order, profile }) {
                         style={{ maxWidth: 100, maxHeight: 100, borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}
                         onClick={() => window.open(url, '_blank')}
                       />
+                    );
+                  })}
+                </div>
+              )}
+              {c.message.includes('[FILES:') && (
+                <div style={{ marginTop: 6, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {c.message.match(/\[FILES: (.+)\]/)?.[1].split(', ').map((entry, i) => {
+                    const [name, type, url] = entry.split('|');
+                    if (type?.startsWith('image/')) {
+                      return (
+                        <img
+                          key={i}
+                          src={url}
+                          alt={name}
+                          style={{ maxWidth: 100, maxHeight: 100, borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}
+                          onClick={() => window.open(url, '_blank')}
+                        />
+                      );
+                    }
+                    return (
+                      <a
+                        key={i}
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', font: 'var(--text-caption)', color: 'var(--text-primary)', textDecoration: 'none' }}
+                      >
+                        <IconDownload size={14} /> {name}
+                      </a>
                     );
                   })}
                 </div>
@@ -178,9 +211,16 @@ export function CommentSection({ order, profile }) {
 
       {photos.length > 0 && (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {photos.map((url, i) => (
-            <div key={i} style={{ position: 'relative', width: 60, height: 60, borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
-              <img src={url} alt={`comment-photo-${i}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          {photos.map((p, i) => (
+            <div key={i} style={{ position: 'relative', width: 60, height: 60, borderRadius: 'var(--radius-sm)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface-sunken)' }}>
+              {p.type?.startsWith('image/') ? (
+                <img src={p.url} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, padding: 4 }}>
+                  <IconPaperclip size={16} />
+                  <span style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', fontSize: 9, textAlign: 'center', wordBreak: 'break-all' }}>{p.name}</span>
+                </div>
+              )}
               <button
                 onClick={() => setPhotos(photos.filter((_, idx) => idx !== i))}
                 style={{
@@ -197,7 +237,7 @@ export function CommentSection({ order, profile }) {
       )}
 
       <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={(e) => handlePhotoSelect(e.target.files)} style={{ display: 'none' }} />
-      <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={(e) => handlePhotoSelect(e.target.files)} style={{ display: 'none' }} />
+      <input ref={fileInputRef} type="file" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx" multiple onChange={(e) => handlePhotoSelect(e.target.files)} style={{ display: 'none' }} />
 
       <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconBell size={14} /> Có delay 3-4 giây và tiếng chuông thông báo cho mọi bình luận mới.</div>
     </div>
