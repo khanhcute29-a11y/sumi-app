@@ -5,6 +5,7 @@ import { Button } from '../components/forms/Button';
 import { Input } from '../components/forms/Input';
 import { Select } from '../components/forms/Select';
 import { Switch } from '../components/forms/Switch';
+import { VoiceMicButton } from '../components/VoiceMicButton';
 import {
   fetchProducts, createProduct, updateProduct, deleteProduct,
   addProductVariant, deleteProductVariant,
@@ -57,7 +58,10 @@ function AddProductForm({ onAdded, onClose }) {
   return (
     <Card style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
-      <Input label="Tên sản phẩm" placeholder="VD: Bánh Kem Dâu" value={name} onChange={(e) => setName(e.target.value)} />
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+        <Input label="Tên sản phẩm" placeholder="VD: Bánh Kem Dâu" value={name} onChange={(e) => setName(e.target.value)} style={{ flex: '1 1 auto', minWidth: 0 }} />
+        <VoiceMicButton onTranscript={setName} />
+      </div>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <Select label="Danh mục" value={category} onChange={(e) => setCategory(e.target.value)} options={CATEGORIES} style={{ flex: '1 1 200px', minWidth: 0 }} />
         <Input label="Đơn vị" placeholder="VD: cái, kg, set" value={unit} onChange={(e) => setUnit(e.target.value)} style={{ flex: '1 1 120px', minWidth: 0 }} />

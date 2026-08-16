@@ -3,6 +3,7 @@ import { Tabs } from '../components/navigation/Tabs';
 import { StatCard } from '../components/data/StatCard';
 import { Button } from '../components/forms/Button';
 import { Input } from '../components/forms/Input';
+import { VoiceMicButton } from '../components/VoiceMicButton';
 import { Badge } from '../components/feedback/Badge';
 import {
   fetchCashbookEntries, addCashbookEntry, fetchOrders, markOrderPaid,
@@ -54,7 +55,10 @@ function CashReconciliationModal({ expectedCash, staffName, onClose, onClosed })
             Chênh lệch: {difference > 0 ? '+' : ''}{difference.toLocaleString('vi-VN')}đ
           </div>
         )}
-        <Input label="Lý do lệch quỹ (bắt buộc nếu có chênh lệch)" placeholder="VD: làm tròn tiền lẻ, khách trả thiếu..." value={note} onChange={(e) => setNote(e.target.value)} />
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+          <Input label="Lý do lệch quỹ (bắt buộc nếu có chênh lệch)" placeholder="VD: làm tròn tiền lẻ, khách trả thiếu..." value={note} onChange={(e) => setNote(e.target.value)} style={{ flex: '1 1 auto', minWidth: 0 }} />
+          <VoiceMicButton onTranscript={setNote} />
+        </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>Hủy</Button>
           <Button variant="primary" size="sm" disabled={saving} onClick={handleSubmit}>{saving ? 'Đang lưu...' : 'Khóa ca'}</Button>
@@ -84,6 +88,7 @@ function AddEntryForm({ type, onAdded }) {
   return (
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
       <Input label={type === 'thu' ? 'Khoản thu' : 'Khoản chi'} placeholder="VD: Thanh toán VietQR" value={label} onChange={(e) => setLabel(e.target.value)} style={{ flex: '2 1 200px' }} />
+      <VoiceMicButton onTranscript={setLabel} />
       <Input label="Số tiền" type="number" placeholder="VD: 500000" value={amount} onChange={(e) => setAmount(e.target.value)} style={{ flex: '1 1 140px' }} />
       <Button variant="secondary" size="sm" onClick={handleSubmit} disabled={saving || !label || !amount}>{saving ? 'Đang lưu...' : '+ Thêm'}</Button>
     </div>
@@ -133,9 +138,11 @@ function AddDebtForm({ onAdded }) {
   return (
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
       <Input label="Nhà cung cấp" placeholder="VD: Vựa trứng Cô Ba" value={supplierName} onChange={(e) => setSupplierName(e.target.value)} style={{ flex: '2 1 180px' }} />
+      <VoiceMicButton onTranscript={setSupplierName} />
       <Input label="Số tiền nợ" type="number" placeholder="VD: 2000000" value={amount} onChange={(e) => setAmount(e.target.value)} style={{ flex: '1 1 130px' }} />
       <Input label="Hạn trả" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={{ flex: '1 1 140px' }} />
       <Input label="Ghi chú" placeholder="VD: tiền trứng tháng 8" value={note} onChange={(e) => setNote(e.target.value)} style={{ flex: '2 1 180px' }} />
+      <VoiceMicButton onTranscript={setNote} />
       <Button variant="secondary" size="sm" onClick={handleSubmit} disabled={saving || !supplierName || !amount}>{saving ? 'Đang lưu...' : '+ Ghi nợ'}</Button>
     </div>
   );

@@ -12,6 +12,7 @@ import { formatVnd, parseDigits } from '../lib/currency';
 import { useAuth } from '../lib/AuthContext';
 import { hasRole, hasAnyRole } from '../lib/roles';
 import { PhotoField } from '../components/PhotoField';
+import { VoiceMicButton } from '../components/VoiceMicButton';
 import { IncidentReportModal } from '../components/IncidentReportModal';
 import { ActionChip } from '../components/ActionChip';
 import { supabase } from '../lib/supabaseClient';
@@ -270,12 +271,18 @@ function TeabreakOrderModal({ onClose, onCreated, onManualItems }) {
           <div style={{ flex: isMobile ? '1 1 auto' : '1 1 480px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
             {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)', background: 'var(--status-danger-soft)', borderRadius: 'var(--radius-sm)', padding: '8px 10px' }}>{error}</div>}
             <div style={{ font: 'var(--text-label)' }}>Thông tin đơn vị đặt hàng</div>
-            <Input label="Tên công ty / khách" placeholder="VD: Công ty Cổ phần Bệnh viện ĐHQT Hồng Bàng" value={customer.name} onChange={(e) => setC('name', e.target.value)} />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <Input label="Tên công ty / khách" placeholder="VD: Công ty Cổ phần Bệnh viện ĐHQT Hồng Bàng" value={customer.name} onChange={(e) => setC('name', e.target.value)} style={{ flex: '1 1 auto', minWidth: 0 }} />
+              <VoiceMicButton onTranscript={(t) => setC('name', t)} />
+            </div>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <Input label="MST" value={customer.mst} onChange={(e) => setC('mst', e.target.value)} style={{ flex: '1 1 140px', minWidth: 0 }} />
               <Input label="Email" value={customer.email} onChange={(e) => setC('email', e.target.value)} style={{ flex: '1 1 140px', minWidth: 0 }} />
             </div>
-            <Input label="Địa chỉ" value={customer.address} onChange={(e) => setC('address', e.target.value)} />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <Input label="Địa chỉ" value={customer.address} onChange={(e) => setC('address', e.target.value)} style={{ flex: '1 1 auto', minWidth: 0 }} />
+              <VoiceMicButton onTranscript={(t) => setC('address', t)} />
+            </div>
             <Input label="Số điện thoại" value={customer.phone} onChange={(e) => setC('phone', e.target.value)} />
 
             <div style={{ font: 'var(--text-label)', paddingTop: 6, borderTop: '1px solid var(--border-subtle)' }}>Giao hàng</div>
@@ -299,7 +306,10 @@ function TeabreakOrderModal({ onClose, onCreated, onManualItems }) {
               <div style={{ display: 'flex', justifyContent: 'space-between', font: 'var(--text-body)' }}><span>VAT 8%</span><b>{vat.toLocaleString('vi-VN')}đ</b></div>
               <div style={{ display: 'flex', justifyContent: 'space-between', font: 'var(--text-title)', color: 'var(--text-primary)' }}><span>Tổng cộng</span><b>{(subtotal + vat).toLocaleString('vi-VN')}đ</b></div>
             </div>
-            <Input label="Ghi chú" placeholder="Đơn giá chưa gồm VAT, thời gian đặt hàng, thanh toán..." value={note} onChange={(e) => setNote(e.target.value)} />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <Input label="Ghi chú" placeholder="Đơn giá chưa gồm VAT, thời gian đặt hàng, thanh toán..." value={note} onChange={(e) => setNote(e.target.value)} style={{ flex: '1 1 auto', minWidth: 0 }} />
+              <VoiceMicButton onTranscript={setNote} />
+            </div>
           </div>
 
           <div style={{ flex: isMobile ? '0 1 auto' : '1 1 320px', minWidth: 0 }}>
@@ -391,8 +401,14 @@ function EditTeabreakModal({ order, onClose, onSaved }) {
             {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)', background: 'var(--status-danger-soft)', borderRadius: 'var(--radius-sm)', padding: '8px 10px' }}>{error}</div>}
 
             <div style={{ font: 'var(--text-label)' }}>Thông tin đơn vị đặt hàng</div>
-            <Input label="Tên công ty / khách" value={custName} onChange={(e) => setCustName(e.target.value)} />
-            <Input label="Địa chỉ" value={address} onChange={(e) => setAddress(e.target.value)} />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <Input label="Tên công ty / khách" value={custName} onChange={(e) => setCustName(e.target.value)} style={{ flex: '1 1 auto', minWidth: 0 }} />
+              <VoiceMicButton onTranscript={setCustName} />
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <Input label="Địa chỉ" value={address} onChange={(e) => setAddress(e.target.value)} style={{ flex: '1 1 auto', minWidth: 0 }} />
+              <VoiceMicButton onTranscript={setAddress} />
+            </div>
             <Input label="Số điện thoại" value={custPhone} onChange={(e) => setCustPhone(e.target.value)} />
 
             <div style={{ font: 'var(--text-label)', paddingTop: 6, borderTop: '1px solid var(--border-subtle)' }}>Giao hàng</div>
@@ -415,7 +431,10 @@ function EditTeabreakModal({ order, onClose, onSaved }) {
               <div style={{ display: 'flex', justifyContent: 'space-between', font: 'var(--text-body)' }}><span>VAT 8%</span><b>{vat.toLocaleString('vi-VN')}đ</b></div>
               <div style={{ display: 'flex', justifyContent: 'space-between', font: 'var(--text-title)', color: 'var(--text-primary)' }}><span>Tổng cộng</span><b>{(subtotal + vat).toLocaleString('vi-VN')}đ</b></div>
             </div>
-            <Input label="Ghi chú" value={note} onChange={(e) => setNote(e.target.value)} />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <Input label="Ghi chú" value={note} onChange={(e) => setNote(e.target.value)} style={{ flex: '1 1 auto', minWidth: 0 }} />
+              <VoiceMicButton onTranscript={setNote} />
+            </div>
           </div>
 
           <div style={{ flex: isMobile ? '0 1 auto' : '1 1 320px', minWidth: 0 }}>
@@ -555,12 +574,18 @@ function MacaronOrderModal({ onClose, onCreated, onManualItems }) {
             {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)', background: 'var(--status-danger-soft)', borderRadius: 'var(--radius-sm)', padding: '8px 10px' }}>{error}</div>}
 
             <div style={{ font: 'var(--text-label)' }}>Thông tin khách/đơn vị đặt hàng</div>
-            <Input label="Tên khách hàng / công ty" placeholder="VD: Tiệm Bánh Phương Thảo" value={custName} onChange={(e) => setCustName(e.target.value)} />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <Input label="Tên khách hàng / công ty" placeholder="VD: Tiệm Bánh Phương Thảo" value={custName} onChange={(e) => setCustName(e.target.value)} style={{ flex: '1 1 auto', minWidth: 0 }} />
+              <VoiceMicButton onTranscript={setCustName} />
+            </div>
             <Input label="Số điện thoại" placeholder="09xx xxx xxx" value={custPhone} onChange={(e) => setCustPhone(e.target.value)} />
             <Select label="Hình thức nhận hàng" value={deliveryMethod} onChange={(e) => setDeliveryMethod(e.target.value)}
               options={[{ value: 'giao_tan_noi', label: '🚚 Giao hàng tận nơi' }, { value: 'lay_tai_xuong', label: '🏠 Lấy tại xưởng' }]} />
             {deliveryMethod === 'giao_tan_noi' && (
-              <Input label="Địa chỉ giao" placeholder="Số nhà, đường, xã/phường, tỉnh/thành..." value={address} onChange={(e) => setAddress(e.target.value)} />
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                <Input label="Địa chỉ giao" placeholder="Số nhà, đường, xã/phường, tỉnh/thành..." value={address} onChange={(e) => setAddress(e.target.value)} style={{ flex: '1 1 auto', minWidth: 0 }} />
+                <VoiceMicButton onTranscript={setAddress} />
+              </div>
             )}
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <Input label="Ngày giao" type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} style={{ flex: '1 1 140px', minWidth: 0 }} />
@@ -591,7 +616,10 @@ function MacaronOrderModal({ onClose, onCreated, onManualItems }) {
               helpText="Tự tính từ Tiền hàng + Phí ship — có thể chỉnh tay (VD: giảm giá sỉ)." />
 
             <div style={{ font: 'var(--text-label)', paddingTop: 6, borderTop: '1px solid var(--border-subtle)' }}>Ghi chú</div>
-            <Input label="Ghi chú" placeholder="Yêu cầu riêng, thời gian đặt hàng, thanh toán..." value={note} onChange={(e) => setNote(e.target.value)} />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <Input label="Ghi chú" placeholder="Yêu cầu riêng, thời gian đặt hàng, thanh toán..." value={note} onChange={(e) => setNote(e.target.value)} style={{ flex: '1 1 auto', minWidth: 0 }} />
+              <VoiceMicButton onTranscript={setNote} />
+            </div>
           </div>
 
           <div style={{ flex: isMobile ? '0 1 auto' : '1 1 320px', minWidth: 0 }}>
@@ -687,12 +715,18 @@ function EditMacaronModal({ order, onClose, onSaved }) {
             {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)', background: 'var(--status-danger-soft)', borderRadius: 'var(--radius-sm)', padding: '8px 10px' }}>{error}</div>}
 
             <div style={{ font: 'var(--text-label)' }}>Thông tin khách/đơn vị đặt hàng</div>
-            <Input label="Tên khách hàng / công ty" value={custName} onChange={(e) => setCustName(e.target.value)} />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <Input label="Tên khách hàng / công ty" value={custName} onChange={(e) => setCustName(e.target.value)} style={{ flex: '1 1 auto', minWidth: 0 }} />
+              <VoiceMicButton onTranscript={setCustName} />
+            </div>
             <Input label="Số điện thoại" value={custPhone} onChange={(e) => setCustPhone(e.target.value)} />
             <Select label="Hình thức nhận hàng" value={deliveryMethod} onChange={(e) => setDeliveryMethod(e.target.value)}
               options={[{ value: 'giao_tan_noi', label: '🚚 Giao hàng tận nơi' }, { value: 'lay_tai_xuong', label: '🏠 Lấy tại xưởng' }]} />
             {deliveryMethod === 'giao_tan_noi' && (
-              <Input label="Địa chỉ giao" value={address} onChange={(e) => setAddress(e.target.value)} />
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                <Input label="Địa chỉ giao" value={address} onChange={(e) => setAddress(e.target.value)} style={{ flex: '1 1 auto', minWidth: 0 }} />
+                <VoiceMicButton onTranscript={setAddress} />
+              </div>
             )}
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <Input label="Ngày giao" type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} style={{ flex: '1 1 140px', minWidth: 0 }} />
@@ -721,7 +755,10 @@ function EditMacaronModal({ order, onClose, onSaved }) {
             <PriceInput label="Tổng tiền" value={total} onChange={setTotal} />
 
             <div style={{ font: 'var(--text-label)', paddingTop: 6, borderTop: '1px solid var(--border-subtle)' }}>Ghi chú</div>
-            <Input label="Ghi chú" value={note} onChange={(e) => setNote(e.target.value)} />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <Input label="Ghi chú" value={note} onChange={(e) => setNote(e.target.value)} style={{ flex: '1 1 auto', minWidth: 0 }} />
+              <VoiceMicButton onTranscript={setNote} />
+            </div>
           </div>
 
           <div style={{ flex: isMobile ? '0 1 auto' : '1 1 320px', minWidth: 0 }}>
@@ -824,6 +861,7 @@ function ProductRow({ item, onChange, onRemove, isKem, canRemove, products }) {
         ) : (
           <div style={{ flex: '3 1 200px', minWidth: 0, display: 'flex', gap: 6, alignItems: 'flex-end', flexWrap: 'wrap' }}>
             <Input label="Tên sản phẩm (nhập tay)" placeholder={isKem ? 'VD: Bánh Kem Dâu' : 'VD: Bánh Bông Lan Mặn'} value={item.name} onChange={(e) => set('name', e.target.value)} style={{ flex: '1 1 160px', minWidth: 0 }} />
+            <VoiceMicButton onTranscript={(t) => set('name', t)} />
             <Button variant="ghost" size="sm" onClick={() => onChange({ ...item, mode: 'catalog', productId: '', name: '' })}>Tìm trong menu</Button>
           </div>
         )}
@@ -1024,11 +1062,17 @@ function NewOrderModal({ onClose, onCreated, onManualItems }) {
             <Button variant="secondary" size="sm" onClick={addRow}>+ Thêm sản phẩm {isKem ? 'bánh kem' : 'bánh mặn ngọt'}</Button>
 
             <div style={{ font: 'var(--text-label)', paddingTop: 6, borderTop: '1px solid var(--border-subtle)' }}>Thông tin khách hàng</div>
-            <Input label="Tên khách" placeholder="Nguyễn Văn A" value={custName} onChange={(e) => setCustName(e.target.value)} />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <Input label="Tên khách" placeholder="Nguyễn Văn A" value={custName} onChange={(e) => setCustName(e.target.value)} style={{ flex: '1 1 auto', minWidth: 0 }} />
+              <VoiceMicButton onTranscript={setCustName} />
+            </div>
             <Select label="Hình thức nhận hàng" value={deliveryMethod} onChange={(e) => setDeliveryMethod(e.target.value)}
               options={[{ value: 'giao_tan_noi', label: '🚚 Giao hàng tận nơi' }, { value: 'lay_tai_xuong', label: '🏠 Lấy tại xưởng' }]} />
             {deliveryMethod === 'giao_tan_noi' && (
-              <Input label="Địa chỉ giao" placeholder="Số nhà, đường, quận..." value={address} onChange={(e) => setAddress(e.target.value)} />
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                <Input label="Địa chỉ giao" placeholder="Số nhà, đường, quận..." value={address} onChange={(e) => setAddress(e.target.value)} style={{ flex: '1 1 auto', minWidth: 0 }} />
+                <VoiceMicButton onTranscript={setAddress} />
+              </div>
             )}
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <Input label="Ngày giao" type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} style={{ flex: '1 1 140px', minWidth: 0 }} />
@@ -1056,7 +1100,10 @@ function NewOrderModal({ onClose, onCreated, onManualItems }) {
             </div>
 
             <div style={{ font: 'var(--text-label)', paddingTop: 6, borderTop: '1px solid var(--border-subtle)' }}>Ghi chú</div>
-            <Input label="Ghi chú đơn hàng" placeholder="Yêu cầu riêng của khách, lưu ý giao hàng..." value={note} onChange={(e) => setNote(e.target.value)} />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <Input label="Ghi chú đơn hàng" placeholder="Yêu cầu riêng của khách, lưu ý giao hàng..." value={note} onChange={(e) => setNote(e.target.value)} style={{ flex: '1 1 auto', minWidth: 0 }} />
+              <VoiceMicButton onTranscript={setNote} />
+            </div>
           </div>
 
           <div style={{ flex: isMobile ? '0 1 auto' : '1 1 320px', minWidth: 0 }}>
@@ -1183,11 +1230,17 @@ function EditOrderModal({ order, onClose, onSaved }) {
             <Button variant="secondary" size="sm" onClick={addRow}>+ Thêm sản phẩm {isKem ? 'bánh kem' : 'bánh mặn ngọt'}</Button>
 
             <div style={{ font: 'var(--text-label)', paddingTop: 6, borderTop: '1px solid var(--border-subtle)' }}>Thông tin khách hàng</div>
-            <Input label="Tên khách" value={custName} onChange={(e) => setCustName(e.target.value)} />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <Input label="Tên khách" value={custName} onChange={(e) => setCustName(e.target.value)} style={{ flex: '1 1 auto', minWidth: 0 }} />
+              <VoiceMicButton onTranscript={setCustName} />
+            </div>
             <Select label="Hình thức nhận hàng" value={deliveryMethod} onChange={(e) => setDeliveryMethod(e.target.value)}
               options={[{ value: 'giao_tan_noi', label: '🚚 Giao hàng tận nơi' }, { value: 'lay_tai_xuong', label: '🏠 Lấy tại xưởng' }]} />
             {deliveryMethod === 'giao_tan_noi' && (
-              <Input label="Địa chỉ giao" value={address} onChange={(e) => setAddress(e.target.value)} />
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                <Input label="Địa chỉ giao" value={address} onChange={(e) => setAddress(e.target.value)} style={{ flex: '1 1 auto', minWidth: 0 }} />
+                <VoiceMicButton onTranscript={setAddress} />
+              </div>
             )}
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <Input label="Ngày giao" type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} style={{ flex: '1 1 140px', minWidth: 0 }} />
@@ -1213,7 +1266,10 @@ function EditOrderModal({ order, onClose, onSaved }) {
             </div>
 
             <div style={{ font: 'var(--text-label)', paddingTop: 6, borderTop: '1px solid var(--border-subtle)' }}>Ghi chú</div>
-            <Input label="Ghi chú đơn hàng" value={note} onChange={(e) => setNote(e.target.value)} />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <Input label="Ghi chú đơn hàng" value={note} onChange={(e) => setNote(e.target.value)} style={{ flex: '1 1 auto', minWidth: 0 }} />
+              <VoiceMicButton onTranscript={setNote} />
+            </div>
           </div>
 
           <div style={{ flex: isMobile ? '0 1 auto' : '1 1 320px', minWidth: 0 }}>

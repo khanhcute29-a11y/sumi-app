@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Badge } from '../components/feedback/Badge';
 import { Button } from '../components/forms/Button';
 import { Input } from '../components/forms/Input';
+import { VoiceMicButton } from '../components/VoiceMicButton';
 import { CameraCapture } from '../components/CameraCapture';
 import { IncidentReportModal } from '../components/IncidentReportModal';
 import { ActionChip } from '../components/ActionChip';
@@ -51,7 +52,10 @@ function LateReasonPrompt({ onCancel, onConfirm, busy }) {
       <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: 340, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto', padding: 20, boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 12 }} onClick={(e) => e.stopPropagation()}>
         <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>Đơn này đang giao trễ — lý do?</div>
         <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Bắt buộc nhập lý do trước khi xác nhận hoàn thành.</div>
-        <Input label="Lý do giao trễ" placeholder="VD: Kẹt xe, chờ khách, khách đổi địa chỉ..." value={reason} onChange={(e) => setReason(e.target.value)} />
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+          <Input label="Lý do giao trễ" placeholder="VD: Kẹt xe, chờ khách, khách đổi địa chỉ..." value={reason} onChange={(e) => setReason(e.target.value)} style={{ flex: '1 1 auto', minWidth: 0 }} />
+          <VoiceMicButton onTranscript={setReason} />
+        </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <Button variant="secondary" size="sm" onClick={onCancel} disabled={busy}>Huỷ</Button>
           <Button variant="warning" size="sm" onClick={() => onConfirm(reason)} disabled={busy || !reason.trim()}>{busy ? 'Đang lưu...' : 'Xác nhận hoàn thành'}</Button>

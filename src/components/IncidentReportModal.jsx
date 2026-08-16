@@ -1,10 +1,11 @@
 import React, { useState, useRef } from 'react';
 import { Button } from './forms/Button';
 import { Input } from './forms/Input';
-import { addIncidentReport, uploadPhoto } from '../lib/queries';
+import { addIncidentReport, uploadPhoto, uploadFile } from '../lib/queries';
 import { toWebSafeImage } from '../lib/imageConvert';
 import { useAuth } from '../lib/AuthContext';
-import { IconWarning, IconCamera, IconImage } from './icons/FrogIcons';
+import { VoiceMicButton } from './VoiceMicButton';
+import { IconWarning, IconCamera, IconImage, IconPaperclip } from './icons/FrogIcons';
 
 const TAXONOMY = [
   { key: 'log', label: 'VẬN CHUYỂN (LOG)', items: [
@@ -47,11 +48,15 @@ export function IncidentReportModal({ orderId, orderCode, onClose, onSent }) {
     setUploading(true);
     setError('');
     try {
-      const newPhotos = await Promise.all(Array.from(files).map(async (file, i) => {
-        const safeFile = await toWebSafeImage(file);
-        return uploadPhoto(safeFile, `incident_${Date.now()}_${i}`);
+      const newAttachments = await Promise.all(Array.from(files).map(async (file, i) => {
+        if (file.type.startsWith('image/') || /\.(heic|heif|jpe?g|png|webp|gif)$/i.test(file.name || '')) {
+          const safeFile = await toWebSafeImage(file);
+          const url = await uploadPhoto(safeFile, `incident_${Date.now()}_${i}`);
+          return { url, name: safeFile.name || file.name, type: safeFile.type };
+        }
+        return uploadFile(file, `incident_${Date.now()}_${i}`);
       }));
-      setPhotos([...photos, ...newPhotos]);
+      setPhotos([...photos, ...newAttachments]);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -107,7 +112,10 @@ export function IncidentReportModal({ orderId, orderCode, onClose, onSent }) {
               </div>
             </div>
           ))}
-          <Input placeholder="Ghi chú thêm (không bắt buộc)..." value={note} onChange={(e) => setNote(e.target.value)} />
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <Input placeholder="Ghi chú thêm (không bắt buộc)..." value={note} onChange={(e) => setNote(e.target.value)} style={{ flex: '1 1 auto', minWidth: 0 }} />
+            <VoiceMicButton onTranscript={(t) => setNote(note ? `${note} ${t}` : t)} />
+          </div>
 
           {/* Photo upload section */}
           <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12 }}>
@@ -149,16 +157,23 @@ export function IncidentReportModal({ orderId, orderCode, onClose, onSent }) {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*"
+              accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx"
               multiple
               onChange={(e) => handlePhotoSelect(e.target.files)}
               style={{ display: 'none' }}
             />
             {photos.length > 0 && (
               <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {photos.map((url, i) => (
-                  <div key={i} style={{ position: 'relative', width: 60, height: 60, borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
-                    <img src={url} alt={`incident-${i}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                {photos.map((p, i) => (
+                  <div key={i} style={{ position: 'relative', width: 60, height: 60, borderRadius: 'var(--radius-sm)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface-sunken)' }}>
+                    {p.type?.startsWith('image/') ? (
+                      <img src={p.url} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, padding: 4 }}>
+                        <IconPaperclip size={16} />
+                        <span style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', fontSize: 9, textAlign: 'center', wordBreak: 'break-all' }}>{p.name}</span>
+                      </div>
+                    )}
                     <button
                       onClick={() => setPhotos(photos.filter((_, idx) => idx !== i))}
                       style={{

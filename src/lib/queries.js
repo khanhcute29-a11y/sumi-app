@@ -234,9 +234,10 @@ export async function fetchIncidentReports({ status, limit = 100 } = {}) {
   return data;
 }
 
-export async function addIncidentReport({ orderId, orderCode, category, code, label, note, reporterId, reporterName, reporterRole }) {
+export async function addIncidentReport({ orderId, orderCode, category, code, label, note, photos, reporterId, reporterName, reporterRole }) {
   const { error } = await supabase.from('incident_reports').insert({
     order_id: orderId || null, order_code: orderCode || null, category, code, label, note: note || null,
+    photos: photos && photos.length > 0 ? photos : null,
     reporter_id: reporterId || null, reporter_name: reporterName || null, reporter_role: reporterRole || null,
   });
   if (error) throw error;
@@ -296,6 +297,21 @@ export async function uploadPhoto(blob, pathPrefix) {
   if (error) throw error;
   const { data } = supabase.storage.from('uploads').getPublicUrl(path);
   return data.publicUrl;
+}
+
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+
+export async function uploadFile(file, pathPrefix) {
+  if (file.size > MAX_ATTACHMENT_BYTES) throw new Error('File vượt quá 25MB');
+  const contentType = file.type || 'application/octet-stream';
+  const originalName = file.name || 'file';
+  const extMatch = originalName.match(/\.[^.]+$/);
+  const ext = extMatch ? extMatch[0] : '';
+  const path = `${pathPrefix}/${Date.now()}${ext}`;
+  const { error } = await supabase.storage.from('uploads').upload(path, file, { contentType });
+  if (error) throw error;
+  const { data } = supabase.storage.from('uploads').getPublicUrl(path);
+  return { url: data.publicUrl, name: originalName, type: contentType, size: file.size };
 }
 
 // ---- Warehouse ----
