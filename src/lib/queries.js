@@ -132,11 +132,11 @@ export async function deleteProductVariant(id) {
 
 const ORDER_SELECT = '*, customer:customers(id, name, phone, trust_score, vip, locked), order_items(*)';
 
-export async function fetchOrders({ statuses, from, to } = {}) {
+export async function fetchOrders({ statuses, from, to, dateField = 'created_at' } = {}) {
   let q = supabase.from('orders').select(ORDER_SELECT).order('created_at', { ascending: false });
   if (statuses?.length) q = q.in('status', statuses);
-  if (from) q = q.gte('created_at', `${from}T00:00:00+07:00`);
-  if (to) q = q.lte('created_at', `${to}T23:59:59.999+07:00`);
+  if (from) q = q.gte(dateField, `${from}T00:00:00+07:00`);
+  if (to) q = q.lte(dateField, `${to}T23:59:59.999+07:00`);
   const { data, error } = await q;
   if (error) throw error;
   return data;

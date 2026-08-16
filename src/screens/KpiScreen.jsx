@@ -52,7 +52,8 @@ export default function KpiScreen() {
   const today = localDateStr();
   const [customFrom, setCustomFrom] = useState(today);
   const [customTo, setCustomTo] = useState(today);
-  const [orders, setOrders] = useState([]);
+  const [ordersByCreation, setOrdersByCreation] = useState([]);
+  const [ordersByCompletion, setOrdersByCompletion] = useState([]);
   const [productionLogs, setProductionLogs] = useState([]);
   const [allProfiles, setAllProfiles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -64,11 +65,16 @@ export default function KpiScreen() {
   useEffect(() => {
     setLoading(true);
     setError('');
-    const loads = [fetchOrders({ from, to }), fetchProductionLogs({ from, to })];
+    const loads = [
+      fetchOrders({ from, to }),
+      fetchOrders({ from, to, dateField: 'completed_at' }),
+      fetchProductionLogs({ from, to }).catch(() => []),
+    ];
     if (isAdmin) loads.push(fetchAllProfiles());
     Promise.all(loads)
-      .then(([ordersData, logsData, profilesData]) => {
-        setOrders(ordersData);
+      .then(([ordersData, ordersCompletedData, logsData, profilesData]) => {
+        setOrdersByCreation(ordersData);
+        setOrdersByCompletion(ordersCompletedData);
         setProductionLogs(logsData);
         if (profilesData) setAllProfiles(profilesData);
       })
@@ -105,8 +111,9 @@ export default function KpiScreen() {
         </div>
       )}
 
-      {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>Lỗi tải KPI: {error}</div>}
-      {loading ? (
+      {error ? (
+        <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>Lỗi tải KPI: {error}</div>
+      ) : loading ? (
         <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Đang tải...</div>
       ) : isAdmin ? (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
@@ -116,10 +123,10 @@ export default function KpiScreen() {
           {kpiStaffList.map((p) => (
             <React.Fragment key={p.id}>
               {hasRole(p, 'shipper') && (
-                <ShipperKpiCard name={p.full_name} kpi={computeShipperKpi(orders, p.full_name)} />
+                <ShipperKpiCard name={p.full_name} kpi={computeShipperKpi(ordersByCompletion, p.full_name)} />
               )}
               {hasAnyRole(p, KITCHEN_ROLES) && (
-                <KitchenKpiCard name={p.full_name} kpi={computeKitchenKpi(orders, productionLogs, p.full_name)} />
+                <KitchenKpiCard name={p.full_name} kpi={computeKitchenKpi(ordersByCreation, productionLogs, p.full_name)} />
               )}
             </React.Fragment>
           ))}
@@ -127,10 +134,10 @@ export default function KpiScreen() {
       ) : hasRole(profile, 'shipper') || hasAnyRole(profile, KITCHEN_ROLES) ? (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
           {hasRole(profile, 'shipper') && (
-            <ShipperKpiCard name={profile?.full_name} kpi={computeShipperKpi(orders, profile?.full_name)} />
+            <ShipperKpiCard name={profile?.full_name} kpi={computeShipperKpi(ordersByCompletion, profile?.full_name)} />
           )}
           {hasAnyRole(profile, KITCHEN_ROLES) && (
-            <KitchenKpiCard name={profile?.full_name} kpi={computeKitchenKpi(orders, productionLogs, profile?.full_name)} />
+            <KitchenKpiCard name={profile?.full_name} kpi={computeKitchenKpi(ordersByCreation, productionLogs, profile?.full_name)} />
           )}
         </div>
       ) : (

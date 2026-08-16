@@ -18,4 +18,40 @@ create policy "read production_logs" on production_logs for select
 
 drop policy if exists "insert production_logs" on production_logs;
 create policy "insert production_logs" on production_logs for insert
-  with check (auth.role() = 'authenticated' and public.is_approved());
+  with check (
+    auth.role() = 'authenticated' and public.is_approved()
+    and exists (
+      select 1 from profiles
+      where id = auth.uid()
+        and (
+          role in ('kitchen', 'bakery', 'kitchen_lead', 'kitchen_deputy', 'owner', 'admin')
+          or extra_roles && array['kitchen', 'bakery', 'kitchen_lead', 'kitchen_deputy', 'owner', 'admin']
+        )
+    )
+  );
+
+drop policy if exists "delete production_logs" on production_logs;
+create policy "delete production_logs" on production_logs for delete
+  using (
+    exists (
+      select 1 from profiles
+      where id = auth.uid()
+        and (
+          role in ('owner', 'admin')
+          or extra_roles && array['owner', 'admin']
+        )
+    )
+  );
+
+drop policy if exists "update production_logs" on production_logs;
+create policy "update production_logs" on production_logs for update
+  using (
+    exists (
+      select 1 from profiles
+      where id = auth.uid()
+        and (
+          role in ('owner', 'admin')
+          or extra_roles && array['owner', 'admin']
+        )
+    )
+  );
