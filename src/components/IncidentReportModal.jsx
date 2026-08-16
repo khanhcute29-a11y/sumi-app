@@ -48,15 +48,18 @@ export function IncidentReportModal({ orderId, orderCode, onClose, onSent }) {
     setUploading(true);
     setError('');
     try {
-      const newAttachments = await Promise.all(Array.from(files).map(async (file, i) => {
+      const results = await Promise.allSettled(Array.from(files).map(async (file, i) => {
         if (file.type.startsWith('image/') || /\.(heic|heif|jpe?g|png|webp|gif)$/i.test(file.name || '')) {
           const safeFile = await toWebSafeImage(file);
           const url = await uploadPhoto(safeFile, `incident_${Date.now()}_${i}`);
-          return { url, name: safeFile.name || file.name, type: safeFile.type };
+          return { url, name: safeFile.name || file.name, type: safeFile.type || 'image/jpeg' };
         }
         return uploadFile(file, `incident_${Date.now()}_${i}`);
       }));
-      setPhotos([...photos, ...newAttachments]);
+      const newAttachments = results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
+      const failures = results.filter((r) => r.status === 'rejected');
+      if (newAttachments.length > 0) setPhotos((prev) => [...prev, ...newAttachments]);
+      if (failures.length > 0) setError(failures.map((r) => r.reason?.message || 'Lỗi tải file').join('; '));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -114,7 +117,7 @@ export function IncidentReportModal({ orderId, orderCode, onClose, onSent }) {
           ))}
           <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
             <Input placeholder="Ghi chú thêm (không bắt buộc)..." value={note} onChange={(e) => setNote(e.target.value)} style={{ flex: '1 1 auto', minWidth: 0 }} />
-            <VoiceMicButton onTranscript={(t) => setNote(note ? `${note} ${t}` : t)} />
+            <VoiceMicButton onTranscript={(t) => setNote((prev) => (prev ? `${prev} ${t}` : t))} />
           </div>
 
           {/* Photo upload section */}

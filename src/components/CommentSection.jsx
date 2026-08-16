@@ -59,15 +59,18 @@ export function CommentSection({ order, profile }) {
     setUploading(true);
     setError('');
     try {
-      const newAttachments = await Promise.all(Array.from(files).map(async (file, i) => {
+      const results = await Promise.allSettled(Array.from(files).map(async (file, i) => {
         if (file.type.startsWith('image/') || /\.(heic|heif|jpe?g|png|webp|gif)$/i.test(file.name || '')) {
           const safeFile = await toWebSafeImage(file);
           const url = await uploadPhoto(safeFile, `comment_${Date.now()}_${i}`);
-          return { url, name: safeFile.name || file.name, type: safeFile.type };
+          return { url, name: safeFile.name || file.name, type: safeFile.type || 'image/jpeg' };
         }
         return uploadFile(file, `comment_${Date.now()}_${i}`);
       }));
-      setPhotos([...photos, ...newAttachments]);
+      const newAttachments = results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
+      const failures = results.filter((r) => r.status === 'rejected');
+      if (newAttachments.length > 0) setPhotos((prev) => [...prev, ...newAttachments]);
+      if (failures.length > 0) setError(failures.map((r) => r.reason?.message || 'Lỗi tải file').join('; '));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -214,7 +217,7 @@ export function CommentSection({ order, profile }) {
           <IconImage size={16} />
         </button>
         <Input placeholder="Viết bình luận cho đơn này..." value={draft} onChange={(e) => setDraft(e.target.value)} style={{ flex: '1 1 160px', minWidth: 0 }} />
-        <VoiceMicButton onTranscript={(t) => setDraft(draft ? `${draft} ${t}` : t)} />
+        <VoiceMicButton onTranscript={(t) => setDraft((prev) => (prev ? `${prev} ${t}` : t))} />
         <Button variant="primary" size="sm" onClick={handleSend} disabled={sending || uploading || (!draft.trim() && photos.length === 0)}>
           {uploading ? 'Tải...' : sending ? '...' : 'Gửi'}
         </Button>

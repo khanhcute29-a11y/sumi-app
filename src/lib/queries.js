@@ -289,7 +289,10 @@ export async function markOrderPaid(id, total) {
 
 // ---- Storage (ảnh chụp: tem/bill kho, ảnh giao hàng) ----
 
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+
 export async function uploadPhoto(blob, pathPrefix) {
+  if (blob.size > MAX_ATTACHMENT_BYTES) throw new Error('File vượt quá 25MB');
   const contentType = blob.type || 'image/jpeg';
   const ext = contentType === 'image/png' ? 'png' : 'jpg';
   const path = `${pathPrefix}/${Date.now()}.${ext}`;
@@ -298,8 +301,6 @@ export async function uploadPhoto(blob, pathPrefix) {
   const { data } = supabase.storage.from('uploads').getPublicUrl(path);
   return data.publicUrl;
 }
-
-const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
 export async function uploadFile(file, pathPrefix) {
   if (file.size > MAX_ATTACHMENT_BYTES) throw new Error('File vượt quá 25MB');
