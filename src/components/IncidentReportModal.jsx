@@ -5,7 +5,7 @@ import { addIncidentReport, uploadPhoto, uploadFile } from '../lib/queries';
 import { toWebSafeImage } from '../lib/imageConvert';
 import { useAuth } from '../lib/AuthContext';
 import { VoiceMicButton } from './VoiceMicButton';
-import { IconWarning, IconCamera, IconImage, IconPaperclip, IconDownload } from './icons/FrogIcons';
+import { IconWarning, IconCamera, IconImage, IconPaperclip } from './icons/FrogIcons';
 
 const TAXONOMY = [
   { key: 'log', label: 'VẬN CHUYỂN (LOG)', items: [
@@ -49,7 +49,7 @@ export function IncidentReportModal({ orderId, orderCode, onClose, onSent }) {
     setError('');
     try {
       const newAttachments = await Promise.all(Array.from(files).map(async (file, i) => {
-        if (file.type.startsWith('image/')) {
+        if (file.type.startsWith('image/') || /\.(heic|heif|jpe?g|png|webp|gif)$/i.test(file.name || '')) {
           const safeFile = await toWebSafeImage(file);
           const url = await uploadPhoto(safeFile, `incident_${Date.now()}_${i}`);
           return { url, name: safeFile.name || file.name, type: safeFile.type };
