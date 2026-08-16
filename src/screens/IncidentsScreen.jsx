@@ -3,7 +3,7 @@ import { Tabs } from '../components/navigation/Tabs';
 import { Button } from '../components/forms/Button';
 import { Badge } from '../components/feedback/Badge';
 import { fetchIncidentReports, resolveIncidentReport } from '../lib/queries';
-import { IconCheck } from '../components/icons/FrogIcons';
+import { IconCheck, IconPaperclip, IconDownload } from '../components/icons/FrogIcons';
 
 const INCIDENT_CATEGORY_LABELS = { log: 'Vận chuyển', kit: 'Bếp', inv: 'Kho' };
 
@@ -25,6 +25,45 @@ function IncidentRow({ report, onResolved }) {
       </div>
       {report.order_code && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Đơn: {report.order_code}</div>}
       {report.note && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>{report.note}</div>}
+      {Array.isArray(report.photos) && report.photos.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {report.photos.map((p, i) => {
+            const safeUrl = /^https?:\/\//i.test(p?.url || '');
+            if (p?.type?.startsWith('image/') && safeUrl) {
+              return (
+                <img
+                  key={i}
+                  src={p.url}
+                  alt={p.name}
+                  style={{ maxWidth: 100, maxHeight: 100, borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}
+                  onClick={() => window.open(p.url, '_blank')}
+                />
+              );
+            }
+            if (!safeUrl) {
+              return (
+                <span
+                  key={i}
+                  style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', font: 'var(--text-caption)', color: 'var(--text-muted)' }}
+                >
+                  <IconPaperclip size={14} /> {p?.name || 'tệp đính kèm'}
+                </span>
+              );
+            }
+            return (
+              <a
+                key={i}
+                href={p.url}
+                target="_blank"
+                rel="noreferrer"
+                style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', font: 'var(--text-caption)', color: 'var(--text-primary)', textDecoration: 'none' }}
+              >
+                <IconDownload size={14} /> {p.name}
+              </a>
+            );
+          })}
+        </div>
+      )}
       <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Người báo: {report.reporter_name || 'Không rõ'} {report.reporter_role ? `· ${report.reporter_role}` : ''}</div>
       <div>
         {report.status === 'resolved' ? (
