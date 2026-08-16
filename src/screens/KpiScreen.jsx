@@ -113,18 +113,26 @@ export default function KpiScreen() {
           {kpiStaffList.length === 0 && (
             <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Chưa có nhân viên nào ở vai trò có KPI.</div>
           )}
-          {kpiStaffList.map((p) =>
-            hasRole(p, 'shipper') ? (
-              <ShipperKpiCard key={p.id} name={p.full_name} kpi={computeShipperKpi(orders, p.full_name)} />
-            ) : (
-              <KitchenKpiCard key={p.id} name={p.full_name} kpi={computeKitchenKpi(orders, productionLogs, p.full_name)} />
-            )
+          {kpiStaffList.map((p) => (
+            <React.Fragment key={p.id}>
+              {hasRole(p, 'shipper') && (
+                <ShipperKpiCard name={p.full_name} kpi={computeShipperKpi(orders, p.full_name)} />
+              )}
+              {hasAnyRole(p, KITCHEN_ROLES) && (
+                <KitchenKpiCard name={p.full_name} kpi={computeKitchenKpi(orders, productionLogs, p.full_name)} />
+              )}
+            </React.Fragment>
+          ))}
+        </div>
+      ) : hasRole(profile, 'shipper') || hasAnyRole(profile, KITCHEN_ROLES) ? (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+          {hasRole(profile, 'shipper') && (
+            <ShipperKpiCard name={profile?.full_name} kpi={computeShipperKpi(orders, profile?.full_name)} />
+          )}
+          {hasAnyRole(profile, KITCHEN_ROLES) && (
+            <KitchenKpiCard name={profile?.full_name} kpi={computeKitchenKpi(orders, productionLogs, profile?.full_name)} />
           )}
         </div>
-      ) : hasRole(profile, 'shipper') ? (
-        <ShipperKpiCard name={profile?.full_name} kpi={computeShipperKpi(orders, profile?.full_name)} />
-      ) : hasAnyRole(profile, KITCHEN_ROLES) ? (
-        <KitchenKpiCard name={profile?.full_name} kpi={computeKitchenKpi(orders, productionLogs, profile?.full_name)} />
       ) : (
         <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Vai trò của bạn chưa có chỉ số KPI.</div>
       )}
