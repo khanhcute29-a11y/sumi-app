@@ -13,7 +13,7 @@ export function VoiceMicButton({ onTranscript, onInterim, size = 'sm' }) {
         variant={voice.listening ? 'danger' : 'secondary'}
         size={size}
         icon={<IconMic size={16} />}
-        onClick={() => voice.start(onTranscript, onInterim)}
+        onClick={() => voice.start(onTranscript, onInterim || onTranscript)}
       >
         {voice.listening ? 'Đang nghe...' : 'Nói'}
       </Button>
