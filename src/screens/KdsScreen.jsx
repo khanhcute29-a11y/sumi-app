@@ -5,6 +5,7 @@ import { formatOrderItemLine, KEM_GROUP_CATEGORIES } from '../lib/cakePricing';
 import { formatDeliveryDateTime } from '../lib/date';
 import { CameraCapture } from '../components/CameraCapture';
 import { IncidentReportModal } from '../components/IncidentReportModal';
+import { ProductionLogModal } from '../components/ProductionLogModal';
 import { ActionChip } from '../components/ActionChip';
 import { OrderDetailModal } from '../components/OrderDetailModal';
 import { fetchOrders, updateOrder, uploadPhoto, addOrderNote, fetchOpenIncidentOrderIds } from '../lib/queries';
@@ -262,6 +263,7 @@ export default function KdsScreen({ initialStation }) {
   const [incidentOrderIds, setIncidentOrderIds] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showProductionLog, setShowProductionLog] = useState(false);
 
   useEffect(() => {
     if (initialStation) setActiveStation(initialStation);
@@ -348,6 +350,14 @@ export default function KdsScreen({ initialStation }) {
         <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>4 luồng độc lập — mỗi luồng theo bộ phận tương ứng</div>
       </div>
 
+      {canAct && (
+        <div>
+          <Button variant="secondary" size="sm" icon={<IconClipboard size={16} />} onClick={() => setShowProductionLog(true)}>
+            Ghi Sản Xuất
+          </Button>
+        </div>
+      )}
+
       {/* Dropdown chọn nhanh luồng bếp — không cần lướt xuống */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <label style={{ font: 'var(--text-label)', color: 'var(--text-secondary)' }}>Chọn luồng bếp:</label>
@@ -386,6 +396,13 @@ export default function KdsScreen({ initialStation }) {
             <CompactOrderRow key={o.id} order={o} onAccept={handleAccept} onReady={handleReady} canAct={canAct} hasIncident={incidentOrderIds.has(o.id)} />
           ))}
         </div>
+      )}
+
+      {showProductionLog && (
+        <ProductionLogModal
+          onClose={() => setShowProductionLog(false)}
+          onSaved={() => setShowProductionLog(false)}
+        />
       )}
     </div>
   );
