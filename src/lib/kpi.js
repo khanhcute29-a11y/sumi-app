@@ -11,7 +11,7 @@ export function computeShipperKpi(orders, staffFullName) {
 }
 
 export function computeKitchenKpi(orders, productionLogs, staffFullName) {
-  const matched = orders.filter((o) => o.kitchen_staff_name === staffFullName);
+  const matched = orders.filter((o) => o.kitchen_staff_name === staffFullName && o.status !== 'huy');
   const orderCount = matched.length;
   const productsFromOrders = matched.reduce((sum, o) => {
     const items = o.order_items || [];

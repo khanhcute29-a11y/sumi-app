@@ -4,6 +4,7 @@ import { Input } from './forms/Input';
 import { Select } from './forms/Select';
 import { addProductionLog, fetchProducts } from '../lib/queries';
 import { useAuth } from '../lib/AuthContext';
+import { localDateStr } from '../lib/date';
 import { IconClipboard } from './icons/FrogIcons';
 
 export function ProductionLogModal({ onClose, onSaved }) {
@@ -28,7 +29,7 @@ export function ProductionLogModal({ onClose, onSaved }) {
     try {
       await addProductionLog({
         productId: product.id, productName: product.name, qty: qtyNum,
-        staffId: profile?.id, staffName: profile?.full_name,
+        staffId: profile?.id, staffName: profile?.full_name, workDate: localDateStr(),
       });
       onSaved?.();
       onClose();
