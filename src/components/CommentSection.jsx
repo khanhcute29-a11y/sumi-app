@@ -60,7 +60,7 @@ export function CommentSection({ order, profile }) {
     setError('');
     try {
       const newAttachments = await Promise.all(Array.from(files).map(async (file, i) => {
-        if (file.type.startsWith('image/')) {
+        if (file.type.startsWith('image/') || /\.(heic|heif|jpe?g|png|webp|gif)$/i.test(file.name || '')) {
           const safeFile = await toWebSafeImage(file);
           const url = await uploadPhoto(safeFile, `comment_${Date.now()}_${i}`);
           return { url, name: safeFile.name || file.name, type: safeFile.type };
@@ -82,7 +82,7 @@ export function CommentSection({ order, profile }) {
     setError('');
     try {
       const fullMessage = photos.length > 0
-        ? `${message}\n[FILES: ${photos.map(p => `${p.name}|${p.type}|${p.url}`).join(', ')}]`
+        ? `${message}\n[FILES: ${photos.map(p => `${(p.name || '').replace(/[|,]/g, '_')}|${p.type}|${p.url}`).join(', ')}]`
         : message;
 
       await addOrderNote({
@@ -146,7 +146,8 @@ export function CommentSection({ order, profile }) {
                 <div style={{ marginTop: 6, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {c.message.match(/\[FILES: (.+)\]/)?.[1].split(', ').map((entry, i) => {
                     const [name, type, url] = entry.split('|');
-                    if (type?.startsWith('image/')) {
+                    const safeUrl = /^https?:\/\//i.test(url || '');
+                    if (type?.startsWith('image/') && safeUrl) {
                       return (
                         <img
                           key={i}
@@ -155,6 +156,16 @@ export function CommentSection({ order, profile }) {
                           style={{ maxWidth: 100, maxHeight: 100, borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}
                           onClick={() => window.open(url, '_blank')}
                         />
+                      );
+                    }
+                    if (!safeUrl) {
+                      return (
+                        <span
+                          key={i}
+                          style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', font: 'var(--text-caption)', color: 'var(--text-muted)' }}
+                        >
+                          <IconDownload size={14} /> {name}
+                        </span>
                       );
                     }
                     return (
