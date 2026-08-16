@@ -85,6 +85,23 @@ export async function fetchProducts({ activeOnly } = {}) {
   return data;
 }
 
+export async function addProductionLog({ productId, productName, qty, staffId, staffName }) {
+  const { error } = await supabase.from('production_logs').insert({
+    product_id: productId || null, product_name: productName, qty,
+    staff_id: staffId || null, staff_name: staffName,
+  });
+  if (error) throw error;
+}
+
+export async function fetchProductionLogs({ from, to } = {}) {
+  let q = supabase.from('production_logs').select('*').order('work_date', { ascending: false });
+  if (from) q = q.gte('work_date', from);
+  if (to) q = q.lte('work_date', to);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data;
+}
+
 export async function createProduct({ name, category, unit, price, photoUrl }) {
   const { data, error } = await supabase.from('products').insert({ name, category, unit, price: price || 0, photo_url: photoUrl || null }).select().single();
   if (error) throw error;
