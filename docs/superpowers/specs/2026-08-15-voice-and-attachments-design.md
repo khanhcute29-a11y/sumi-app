@@ -65,6 +65,10 @@ Add `uploadFile(file, pathPrefix)` alongside the existing `uploadPhoto`:
 
 No change — these keep `PhotoField` / `CameraPhotoField`, image-only, exactly as today.
 
+## Addendum (found during planning)
+
+`IncidentReportModal.jsx` already uploads photos via `uploadPhoto` and passes a `photos` array into `addIncidentReport(...)`, but `addIncidentReport` (src/lib/queries.js:237) never accepts or stores that field, and the `incident_reports` table (supabase/schema.sql:653) has no `photos` column — uploaded incident photos are silently discarded today. Since this plan touches this exact call path to add generic file attachments, it also fixes this pre-existing bug: add a `photos jsonb` column via a new migration (`supabase/migrate_incident_photos.sql`, hand-run by the owner like other migrations in this repo) and wire `addIncidentReport` to store it. This is a one-line scope exception to "No DB schema changes" below — required to make incident attachments work at all, not a new feature.
+
 ## Out of scope
 
 - No DB schema changes (attachments continue to piggyback on the existing note-message text field).
