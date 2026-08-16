@@ -256,10 +256,11 @@ export async function fetchOrderNotes(orderId) {
   return data;
 }
 
-export async function addOrderNote({ orderId, orderCode, authorId, authorName, authorRole, message }) {
+export async function addOrderNote({ orderId, orderCode, authorId, authorName, authorRole, message, attachments }) {
   const { error } = await supabase.from('order_notes').insert({
     order_id: orderId, order_code: orderCode || null, author_id: authorId || null,
     author_name: authorName || null, author_role: authorRole || null, message,
+    attachments: attachments && attachments.length > 0 ? attachments : null,
   });
   if (error) throw error;
 }

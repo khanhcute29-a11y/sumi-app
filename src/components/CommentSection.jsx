@@ -84,20 +84,18 @@ export function CommentSection({ order, profile }) {
     setSending(true);
     setError('');
     try {
-      const fullMessage = photos.length > 0
-        ? `${message}\n[FILES: ${photos.map(p => `${(p.name || '').replace(/[|,]/g, '_')}|${p.type}|${p.url}`).join(', ')}]`
-        : message;
+      const attachments = photos.length > 0 ? photos : null;
 
       await addOrderNote({
         orderId: order.id, orderCode: order.order_code, authorId: profile?.id,
-        authorName: profile?.full_name, authorRole: profile?.role, message: fullMessage,
+        authorName: profile?.full_name, authorRole: profile?.role, message, attachments,
       });
 
       // Simulate 3-4s delay before showing comment (real-time sync would show it)
       setTimeout(() => {
         setComments((prev) => [...prev, {
           id: `local-${Date.now()}`, author_name: profile?.full_name, author_role: profile?.role,
-          message: fullMessage, created_at: new Date().toISOString(),
+          message, attachments, created_at: new Date().toISOString(),
         }]);
         playNotificationSound();
         lastCommentCountRef.current += 1;
@@ -111,6 +109,25 @@ export function CommentSection({ order, profile }) {
       setSending(false);
     }
   };
+
+  // Historical comments (sent before the `attachments` column existed) embedded
+  // attachments as text markers in `message` — parse those for backward compat.
+  function legacyAttachmentsFromMessage(message) {
+    const legacy = [];
+    if (message.includes('[PHOTOS:')) {
+      message.match(/!\[image\]\(([^)]+)\)/g)?.forEach((match) => {
+        const url = match.match(/\((.*?)\)/)[1];
+        legacy.push({ url, name: 'ảnh', type: 'image/jpeg' });
+      });
+    }
+    if (message.includes('[FILES:')) {
+      message.match(/\[FILES: (.+)\]/)?.[1].split(', ').forEach((entry) => {
+        const [name, type, url] = entry.split('|');
+        legacy.push({ url, name, type });
+      });
+    }
+    return legacy;
+  }
 
   return (
     <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -129,62 +146,51 @@ export function CommentSection({ order, profile }) {
               <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                 {c.message.split('[PHOTOS:')[0].split('[FILES:')[0]}
               </div>
-              {c.message.includes('[PHOTOS:') && (
-                <div style={{ marginTop: 6, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {c.message.match(/!\[image\]\(([^)]+)\)/g)?.map((match, i) => {
-                    const url = match.match(/\((.*?)\)/)[1];
-                    return (
-                      <img
-                        key={i}
-                        src={url}
-                        alt={`comment-${i}`}
-                        style={{ maxWidth: 100, maxHeight: 100, borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}
-                        onClick={() => window.open(url, '_blank')}
-                      />
-                    );
-                  })}
-                </div>
-              )}
-              {c.message.includes('[FILES:') && (
-                <div style={{ marginTop: 6, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {c.message.match(/\[FILES: (.+)\]/)?.[1].split(', ').map((entry, i) => {
-                    const [name, type, url] = entry.split('|');
-                    const safeUrl = /^https?:\/\//i.test(url || '');
-                    if (type?.startsWith('image/') && safeUrl) {
+              {(() => {
+                const attachments = (c.attachments && c.attachments.length > 0)
+                  ? c.attachments
+                  : legacyAttachmentsFromMessage(c.message);
+                if (attachments.length === 0) return null;
+                return (
+                  <div style={{ marginTop: 6, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {attachments.map((p, i) => {
+                      const safeUrl = /^https?:\/\//i.test(p.url || '');
+                      if (p.type?.startsWith('image/') && safeUrl) {
+                        return (
+                          <img
+                            key={i}
+                            src={p.url}
+                            alt={p.name}
+                            style={{ maxWidth: 100, maxHeight: 100, borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}
+                            onClick={() => window.open(p.url, '_blank')}
+                          />
+                        );
+                      }
+                      if (!safeUrl) {
+                        return (
+                          <span
+                            key={i}
+                            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', font: 'var(--text-caption)', color: 'var(--text-muted)' }}
+                          >
+                            <IconDownload size={14} /> {p.name}
+                          </span>
+                        );
+                      }
                       return (
-                        <img
+                        <a
                           key={i}
-                          src={url}
-                          alt={name}
-                          style={{ maxWidth: 100, maxHeight: 100, borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}
-                          onClick={() => window.open(url, '_blank')}
-                        />
-                      );
-                    }
-                    if (!safeUrl) {
-                      return (
-                        <span
-                          key={i}
-                          style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', font: 'var(--text-caption)', color: 'var(--text-muted)' }}
+                          href={p.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', font: 'var(--text-caption)', color: 'var(--text-primary)', textDecoration: 'none' }}
                         >
-                          <IconDownload size={14} /> {name}
-                        </span>
+                          <IconDownload size={14} /> {p.name}
+                        </a>
                       );
-                    }
-                    return (
-                      <a
-                        key={i}
-                        href={url}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', font: 'var(--text-caption)', color: 'var(--text-primary)', textDecoration: 'none' }}
-                      >
-                        <IconDownload size={14} /> {name}
-                      </a>
-                    );
-                  })}
-                </div>
-              )}
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           ))}
         </div>
