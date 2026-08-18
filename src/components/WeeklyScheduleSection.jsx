@@ -42,10 +42,12 @@ export function WeeklyScheduleSection({ profile }) {
   const [shiftConfigs, setShiftConfigs] = useState([]);
   const [liveStaffIds, setLiveStaffIds] = useState(new Set());
   const [leaveByStaffDate, setLeaveByStaffDate] = useState(new Set());
+  const [pendingLeaveByStaffDate, setPendingLeaveByStaffDate] = useState(new Set());
   const [allProfiles, setAllProfiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [assignCell, setAssignCell] = useState(null);
+  const [assignError, setAssignError] = useState('');
   const [leaveRequestDate, setLeaveRequestDate] = useState(null);
 
   const days = useMemo(() => weekDates(weekMonday), [weekMonday]);
@@ -53,17 +55,17 @@ export function WeeklyScheduleSection({ profile }) {
   const to = localDateStr(days[6]);
   const todayStr = localDateStr();
 
-  useEffect(() => {
+  const loadData = () => {
     setLoading(true);
     setError('');
     const loads = [
       fetchShiftSchedule({ station, from, to }),
       fetchShiftConfigs(),
       fetchShiftLogsRange(from, to),
-      fetchApprovalRequests({}),
+      fetchApprovalRequests({ type: 'leave_request' }),
     ];
     if (isOwner) loads.push(fetchAllProfiles());
-    Promise.all(loads)
+    return Promise.all(loads)
       .then(([scheduleData, configsData, logsData, approvalsData, profilesData]) => {
         setSchedule(scheduleData);
         setShiftConfigs(configsData);
@@ -73,14 +75,24 @@ export function WeeklyScheduleSection({ profile }) {
         );
         setLiveStaffIds(live);
         const approvedLeaves = new Set(
-          approvalsData.filter((a) => a.type === 'leave_request' && a.status === 'approved' && a.leave_date)
+          approvalsData.filter((a) => a.status === 'approved' && a.leave_date)
             .map((a) => `${a.requester_id}_${a.leave_date}`)
         );
         setLeaveByStaffDate(approvedLeaves);
+        const pendingLeaves = new Set(
+          approvalsData.filter((a) => a.status === 'pending' && a.leave_date)
+            .map((a) => `${a.requester_id}_${a.leave_date}`)
+        );
+        setPendingLeaveByStaffDate(pendingLeaves);
         if (profilesData) setAllProfiles(profilesData);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [station, from, to, isOwner]);
 
   const cellEntries = (shiftConfigId, date) => {
@@ -105,10 +117,11 @@ export function WeeklyScheduleSection({ profile }) {
         staffId, staffName, createdBy: profile?.id,
       });
       setAssignCell(null);
+      setAssignError('');
       const refreshed = await fetchShiftSchedule({ station, from, to });
       setSchedule(refreshed);
     } catch (err) {
-      setError(err.message);
+      setAssignError(err.message);
     }
   };
 
@@ -154,22 +167,27 @@ export function WeeklyScheduleSection({ profile }) {
                       <td key={i} style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', padding: 6, verticalAlign: 'top', minWidth: 90 }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                           {entries.map((e) => {
-                            const isLive = liveStaffIds.has(`${e.staff_id}_${dateStr}`);
-                            const isLeave = leaveByStaffDate.has(`${e.staff_id}_${dateStr}`);
+                            const key = `${e.staff_id}_${dateStr}`;
+                            const isLive = liveStaffIds.has(key);
+                            const isLeave = leaveByStaffDate.has(key);
+                            const isPendingLeave = pendingLeaveByStaffDate.has(key);
                             const bg = isLeave ? 'var(--status-danger-soft)' : isLive ? 'var(--status-success-soft)' : 'var(--surface-sunken)';
                             const color = isLeave ? 'var(--status-danger)' : isLive ? 'var(--status-success)' : 'var(--text-primary)';
                             return (
                               <div key={e.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, background: bg, color, borderRadius: 'var(--radius-sm)', padding: '3px 6px', font: 'var(--text-caption)' }}>
-                                <span>{e.staff_name}{isLeave ? ' (nghỉ)' : ''}</span>
+                                <span>
+                                  {e.staff_name}{isLeave ? ' (nghỉ)' : ''}
+                                  {isPendingLeave && !isLeave && <span style={{ color: 'var(--status-warning)' }}> (chờ duyệt)</span>}
+                                </span>
                                 {isOwner && <button onClick={() => handleRemove(e.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', color, fontSize: 11 }}>✕</button>}
-                                {e.staff_id === profile?.id && dateStr >= todayStr && !isLeave && (
+                                {e.staff_id === profile?.id && dateStr >= todayStr && !isLeave && !isPendingLeave && (
                                   <button onClick={() => setLeaveRequestDate(dateStr)} style={{ border: 'none', background: 'none', color: 'var(--text-muted)', font: 'var(--text-caption)', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}>Xin nghỉ</button>
                                 )}
                               </div>
                             );
                           })}
                           {isOwner && canAddMore && (
-                            <button onClick={() => setAssignCell({ date: d, shiftConfigId: sc.id })} style={{ border: '1px dashed var(--border-subtle)', background: 'none', borderRadius: 'var(--radius-sm)', padding: '3px 6px', font: 'var(--text-caption)', color: 'var(--text-muted)', cursor: 'pointer' }}>+ Thêm</button>
+                            <button onClick={() => { setAssignError(''); setAssignCell({ date: d, shiftConfigId: sc.id }); }} style={{ border: '1px dashed var(--border-subtle)', background: 'none', borderRadius: 'var(--radius-sm)', padding: '3px 6px', font: 'var(--text-caption)', color: 'var(--text-muted)', cursor: 'pointer' }}>+ Thêm</button>
                           )}
                         </div>
                       </td>
@@ -187,7 +205,7 @@ export function WeeklyScheduleSection({ profile }) {
       </div>
 
       {assignCell && (
-        <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 16 }} onClick={() => setAssignCell(null)}>
+        <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 16 }} onClick={() => { setAssignCell(null); setAssignError(''); }}>
           <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: 320, maxWidth: '100%', padding: 20, boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 12 }} onClick={(e) => e.stopPropagation()}>
             <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>Thêm người vào ca</div>
             <Select
@@ -196,10 +214,11 @@ export function WeeklyScheduleSection({ profile }) {
                 const p = allProfiles.find((p) => p.id === e.target.value);
                 if (p) handleAssign(p.id, p.full_name);
               }}
-              options={allProfiles.map((p) => ({ value: p.id, label: p.full_name }))}
+              options={allProfiles.filter((p) => p.approved && p.full_name).map((p) => ({ value: p.id, label: p.full_name }))}
               placeholder="Chọn nhân viên..."
             />
-            <Button variant="secondary" size="sm" onClick={() => setAssignCell(null)}>Đóng</Button>
+            {assignError && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{assignError}</div>}
+            <Button variant="secondary" size="sm" onClick={() => { setAssignCell(null); setAssignError(''); }}>Đóng</Button>
           </div>
         </div>
       )}
@@ -211,7 +230,7 @@ export function WeeklyScheduleSection({ profile }) {
           staffName={profile?.full_name}
           staffRole={profile?.role}
           onClose={() => setLeaveRequestDate(null)}
-          onSent={() => setLeaveRequestDate(null)}
+          onSent={() => { setLeaveRequestDate(null); loadData(); }}
         />
       )}
     </div>

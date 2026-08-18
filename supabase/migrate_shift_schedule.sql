@@ -26,11 +26,23 @@ create policy "read shift_schedule" on shift_schedule for select
 
 drop policy if exists "owner insert shift_schedule" on shift_schedule;
 create policy "owner insert shift_schedule" on shift_schedule for insert
-  with check (exists (select 1 from profiles where id = auth.uid() and role in ('owner','admin')));
+  with check (
+    exists (
+      select 1 from profiles
+      where id = auth.uid()
+        and (role in ('owner', 'admin') or extra_roles && array['owner', 'admin'])
+    )
+  );
 
 drop policy if exists "owner delete shift_schedule" on shift_schedule;
 create policy "owner delete shift_schedule" on shift_schedule for delete
-  using (exists (select 1 from profiles where id = auth.uid() and role in ('owner','admin')));
+  using (
+    exists (
+      select 1 from profiles
+      where id = auth.uid()
+        and (role in ('owner', 'admin') or extra_roles && array['owner', 'admin'])
+    )
+  );
 
 alter table profiles add column if not exists station text
   check (station in ('bakery','nong','lanh','xuong41','xuong42'));

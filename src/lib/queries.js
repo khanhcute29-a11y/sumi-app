@@ -565,8 +565,9 @@ export async function addShiftScheduleEntry({ station, workDate, shiftConfigId, 
 }
 
 export async function removeShiftScheduleEntry(id) {
-  const { error } = await supabase.from('shift_schedule').delete().eq('id', id);
+  const { data, error } = await supabase.from('shift_schedule').delete().eq('id', id).select();
   if (error) throw error;
+  if (!data || data.length === 0) throw new Error('Không thể xoá — có thể bạn không có quyền.');
 }
 
 export async function updateProfileStation(id, station) {
@@ -586,9 +587,10 @@ export async function createApprovalRequest({ type, orderId, orderCode, shiftLog
   notifyBadgesChanged();
 }
 
-export async function fetchApprovalRequests({ status } = {}) {
+export async function fetchApprovalRequests({ status, type } = {}) {
   let q = supabase.from('approval_requests').select('*').order('created_at', { ascending: false });
   if (status) q = q.eq('status', status);
+  if (type) q = q.eq('type', type);
   const { data, error } = await q;
   if (error) throw error;
   return data;
