@@ -16,6 +16,7 @@ import { hasAnyRole } from '../lib/roles';
 import { enqueue } from '../lib/offlineQueue';
 import { localDateStr } from '../lib/date';
 import { IconClipboard, IconCheck, IconClock, IconQuestion } from '../components/icons/FrogIcons';
+import { WeeklyScheduleSection } from '../components/WeeklyScheduleSection';
 
 const LATE_THRESHOLD_MIN = 15;
 const BRANCHES = ['Vĩnh Phú 42', 'Quốc lộ 13'];
@@ -398,6 +399,7 @@ export default function ShiftsScreen() {
   const [branchFilter, setBranchFilter] = useState('all');
   const [payrollRefreshKey, setPayrollRefreshKey] = useState(0);
   const [myTodayLogs, setMyTodayLogs] = useState([]);
+  const [viewMode, setViewMode] = useState('checkin');
 
   const loadConfigs = () => { fetchShiftConfigs().then(setShiftConfigs).catch(() => {}); };
   const loadLogs = () => {
@@ -436,6 +438,10 @@ export default function ShiftsScreen() {
         <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Chấm công, báo trễ giờ và xin nghỉ đột xuất — lưu offline khi mất mạng, tự đồng bộ khi có lại</div>
       </div>
 
+      <Tabs tabs={[{ key: 'checkin', label: 'Chấm công' }, { key: 'schedule', label: 'Lịch tuần' }]} active={viewMode} onChange={setViewMode} />
+
+      {viewMode === 'checkin' && (
+      <>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <Input label="Xem ngày" type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ maxWidth: 200 }} />
         <Button variant="primary" onClick={() => setShowCheckin(true)} disabled={shiftConfigs.length === 0 || !!myCheckinToday}>
@@ -485,6 +491,9 @@ export default function ShiftsScreen() {
 
       {isOwner && <ShiftConfigManager shiftConfigs={shiftConfigs} onChanged={loadConfigs} />}
       {isOwner && <PayrollSection refreshKey={payrollRefreshKey} />}
+      </>
+      )}
+      {viewMode === 'schedule' && <WeeklyScheduleSection profile={profile} />}
 
       {showCheckin && (
         <CheckinModal shiftConfigs={shiftConfigs} staffId={profile?.id} staffName={profile?.full_name}

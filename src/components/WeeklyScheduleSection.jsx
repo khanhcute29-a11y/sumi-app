@@ -7,6 +7,7 @@ import {
 } from '../lib/queries';
 import { hasAnyRole } from '../lib/roles';
 import { localDateStr } from '../lib/date';
+import { LeaveScheduleRequestModal } from './LeaveScheduleRequestModal';
 
 const STATIONS = [
   { key: 'bakery', label: 'Bakery' },
@@ -45,6 +46,7 @@ export function WeeklyScheduleSection({ profile }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [assignCell, setAssignCell] = useState(null);
+  const [leaveRequestDate, setLeaveRequestDate] = useState(null);
 
   const days = useMemo(() => weekDates(weekMonday), [weekMonday]);
   const from = localDateStr(days[0]);
@@ -160,6 +162,9 @@ export function WeeklyScheduleSection({ profile }) {
                               <div key={e.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, background: bg, color, borderRadius: 'var(--radius-sm)', padding: '3px 6px', font: 'var(--text-caption)' }}>
                                 <span>{e.staff_name}{isLeave ? ' (nghỉ)' : ''}</span>
                                 {isOwner && <button onClick={() => handleRemove(e.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', color, fontSize: 11 }}>✕</button>}
+                                {e.staff_id === profile?.id && dateStr >= todayStr && !isLeave && (
+                                  <button onClick={() => setLeaveRequestDate(dateStr)} style={{ border: 'none', background: 'none', color: 'var(--text-muted)', font: 'var(--text-caption)', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}>Xin nghỉ</button>
+                                )}
                               </div>
                             );
                           })}
@@ -197,6 +202,17 @@ export function WeeklyScheduleSection({ profile }) {
             <Button variant="secondary" size="sm" onClick={() => setAssignCell(null)}>Đóng</Button>
           </div>
         </div>
+      )}
+
+      {leaveRequestDate && (
+        <LeaveScheduleRequestModal
+          leaveDate={leaveRequestDate}
+          staffId={profile?.id}
+          staffName={profile?.full_name}
+          staffRole={profile?.role}
+          onClose={() => setLeaveRequestDate(null)}
+          onSent={() => setLeaveRequestDate(null)}
+        />
       )}
     </div>
   );
