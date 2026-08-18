@@ -542,13 +542,45 @@ export async function deleteShiftLog(id) {
   if (error) throw error;
 }
 
+export async function fetchShiftSchedule({ station, from, to }) {
+  const { data, error } = await supabase
+    .from('shift_schedule').select('*')
+    .eq('station', station).gte('work_date', from).lte('work_date', to)
+    .order('work_date', { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
+export async function addShiftScheduleEntry({ station, workDate, shiftConfigId, staffId, staffName, createdBy }) {
+  const { error } = await supabase.from('shift_schedule').insert({
+    station, work_date: workDate, shift_config_id: shiftConfigId,
+    staff_id: staffId, staff_name: staffName, created_by: createdBy || null,
+  });
+  if (error) {
+    if (error.code === '23505') {
+      throw new Error(station === 'bakery' ? 'Bakery chỉ được 1 người/ca.' : 'Người này đã có trong ca này.');
+    }
+    throw error;
+  }
+}
+
+export async function removeShiftScheduleEntry(id) {
+  const { error } = await supabase.from('shift_schedule').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function updateProfileStation(id, station) {
+  const { error } = await supabase.from('profiles').update({ station: station || null }).eq('id', id);
+  if (error) throw error;
+}
+
 // ---- Yêu cầu duyệt hợp nhất (sửa/hủy/xoá đơn, chấm công lại) ----
 
-export async function createApprovalRequest({ type, orderId, orderCode, shiftLogId, requesterId, requesterName, requesterRole, reason, photoUrl }) {
+export async function createApprovalRequest({ type, orderId, orderCode, shiftLogId, requesterId, requesterName, requesterRole, reason, photoUrl, leaveDate }) {
   const { error } = await supabase.from('approval_requests').insert({
     type, order_id: orderId || null, order_code: orderCode || null, shift_log_id: shiftLogId || null,
     requester_id: requesterId || null, requester_name: requesterName || null, requester_role: requesterRole || null,
-    reason: reason || null, photo_url: photoUrl || null,
+    reason: reason || null, photo_url: photoUrl || null, leave_date: leaveDate || null,
   });
   if (error) throw error;
   notifyBadgesChanged();
