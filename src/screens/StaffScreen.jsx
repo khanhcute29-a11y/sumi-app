@@ -3,8 +3,17 @@ import { Card } from '../components/data/Card';
 import { Badge } from '../components/feedback/Badge';
 import { Button } from '../components/forms/Button';
 import { Select } from '../components/forms/Select';
-import { fetchMyProfile, fetchAllProfiles, updateProfileRole, updateProfileExtraRoles, approveStaff } from '../lib/queries';
+import { fetchMyProfile, fetchAllProfiles, updateProfileRole, updateProfileExtraRoles, updateProfileStation, approveStaff } from '../lib/queries';
 import { ROLE_META, ROLE_OPTIONS, ROLE_PERMISSIONS, hasRole } from '../lib/roles';
+
+const STATION_OPTIONS = [
+  { value: '', label: 'Chưa gán khâu' },
+  { value: 'bakery', label: 'Bakery' },
+  { value: 'nong', label: 'Bếp Nóng' },
+  { value: 'lanh', label: 'Bếp Lạnh' },
+  { value: 'xuong41', label: 'Xưởng 41' },
+  { value: 'xuong42', label: 'Xưởng 42' },
+];
 
 function PendingStaffRow({ s, onApprove }) {
   const [role, setRole] = useState(s.role);
@@ -27,7 +36,7 @@ function PendingStaffRow({ s, onApprove }) {
   );
 }
 
-function StaffRow({ s, isOwner, isMe, onChangeRole, onChangeExtraRoles, expanded, onToggle }) {
+function StaffRow({ s, isOwner, isMe, onChangeRole, onChangeExtraRoles, onChangeStation, expanded, onToggle }) {
   const perm = ROLE_PERMISSIONS.find((p) => p.role === s.role);
   const extraRoles = s.extra_roles || [];
   const [savingExtra, setSavingExtra] = useState(false);
@@ -64,6 +73,12 @@ function StaffRow({ s, isOwner, isMe, onChangeRole, onChangeExtraRoles, expanded
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Đổi vai trò:</span>
                 <Select value={s.role} onChange={(e) => onChangeRole(s.id, e.target.value)} options={ROLE_OPTIONS} style={{ width: 160 }} />
+                <Select
+                  value={s.station || ''}
+                  onChange={(e) => onChangeStation(s.id, e.target.value || null)}
+                  options={STATION_OPTIONS}
+                  style={{ width: 150 }}
+                />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <span style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Kiêm nhiệm thêm (tuỳ chọn):</span>
@@ -130,6 +145,11 @@ export default function StaffScreen() {
     load();
   };
 
+  const handleChangeStation = async (id, station) => {
+    await updateProfileStation(id, station);
+    load();
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 720 }}>
       <div>
@@ -159,7 +179,7 @@ export default function StaffScreen() {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 {approved.map((s) => (
-                  <StaffRow key={s.id} s={s} isOwner={isOwner} isMe={s.id === me?.id} onChangeRole={handleChangeRole} onChangeExtraRoles={handleChangeExtraRoles}
+                  <StaffRow key={s.id} s={s} isOwner={isOwner} isMe={s.id === me?.id} onChangeRole={handleChangeRole} onChangeExtraRoles={handleChangeExtraRoles} onChangeStation={handleChangeStation}
                     expanded={expandedId === s.id} onToggle={() => setExpandedId(expandedId === s.id ? null : s.id)} />
                 ))}
               </div>
