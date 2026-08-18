@@ -6,7 +6,11 @@ export function getUiScale() {
 }
 
 export function applyUiScale(scale) {
-  document.documentElement.style.zoom = SCALE_MAP[scale] || 1;
+  // CSS `zoom` has known rendering bugs on mobile Safari when combined with
+  // horizontal-scroll flex rows (clipped/overlapping content) — skip it on
+  // mobile viewports, where native pinch-zoom already covers this need.
+  const isMobileViewport = window.innerWidth < 860;
+  document.documentElement.style.zoom = isMobileViewport ? 1 : (SCALE_MAP[scale] || 1);
 }
 
 export function setUiScale(scale) {
