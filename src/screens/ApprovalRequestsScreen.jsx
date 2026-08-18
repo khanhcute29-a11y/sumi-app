@@ -15,6 +15,7 @@ const TYPE_LABELS = {
   order_cancel: 'Yêu cầu khách hủy đơn',
   order_delete: 'Yêu cầu xoá đơn',
   shift_recheck: 'Yêu cầu chấm công lại',
+  leave_request: 'Yêu cầu xin nghỉ (lịch tuần)',
 };
 
 function RequestRow({ req, canResolve, onResolved }) {
@@ -65,7 +66,7 @@ function RequestRow({ req, canResolve, onResolved }) {
     <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
         <div>
-          <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>{TYPE_LABELS[req.type] || req.type}{req.order_code ? ` — ${req.order_code}` : ''}</div>
+          <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>{TYPE_LABELS[req.type] || req.type}{req.order_code ? ` — ${req.order_code}` : ''}{req.leave_date ? ` — nghỉ ngày ${req.leave_date}` : ''}</div>
           <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>{req.requester_name || 'Nhân viên'}{req.requester_role ? ` (${req.requester_role})` : ''} · {new Date(req.created_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</div>
         </div>
         {req.status === 'pending' ? (
