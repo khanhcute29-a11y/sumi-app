@@ -78,6 +78,10 @@ function DeliveryCard({ order, onPickup, onComplete, onSignedDoc, isDedicatedShi
   const claimedByMe = !!order.shipper_staff_name && order.shipper_staff_name === profile?.full_name;
   const canAct = isDedicatedShipper || claimedByMe || (order.status === 'cho_giao' && phoneVerified);
   const canSelfClaim = !isDedicatedShipper && !claimedByMe && order.status === 'cho_giao';
+  // Xác thực 4 số cuối chỉ có ý nghĩa khi chưa nhìn thấy số — che SĐT (và chặn mở
+  // chi tiết đơn, nơi cũng hiện SĐT) cho tới khi xác thực xong.
+  const hidePhone = canSelfClaim && !phoneVerified;
+  const maskPhone = (phone) => (hidePhone ? '•'.repeat((phone || '').length) : phone);
 
   const handleVerifyPhone = () => {
     const last4 = (order.customer?.phone || '').slice(-4);
@@ -161,7 +165,7 @@ function DeliveryCard({ order, onPickup, onComplete, onSignedDoc, isDedicatedShi
     : null;
 
   return (
-    <div onClick={() => setShowDetail(true)} style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', padding: 14, display: 'flex', flexDirection: 'column', gap: 8, cursor: 'pointer' }}>
+    <div onClick={() => { if (!hidePhone) setShowDetail(true); }} style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', padding: 14, display: 'flex', flexDirection: 'column', gap: 8, cursor: 'pointer' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -169,7 +173,11 @@ function DeliveryCard({ order, onPickup, onComplete, onSignedDoc, isDedicatedShi
             {order.order_code && <Badge tone="neutral">{order.order_code}</Badge>}
           </div>
           {showDetail && <OrderDetailModal order={order} onClose={() => setShowDetail(false)} />}
-          {order.customer?.phone && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconPhone size={14} /> {order.customer.phone}</div>}
+          {order.customer?.phone && (
+            <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <IconPhone size={14} /> {maskPhone(order.customer.phone)}
+            </div>
+          )}
           <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>Sản phẩm: {itemSummary}</div>
           <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconOrders size={14} /> Số kiện hàng: {packageCount}</div>
           {order.delivery_method === 'lay_tai_xuong' ? (
@@ -278,6 +286,7 @@ export default function ShippingScreen() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
   const [shopSettings, setShopSettings] = useState(null);
 
   const load = () => {
@@ -299,30 +308,55 @@ export default function ShippingScreen() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  const applyFields = (order, fields) => {
+  // Lỗi từ server (RLS chặn, trigger raise, ràng buộc dữ liệu...) luôn kèm mã lỗi
+  // Postgrest. Lỗi mạng của supabase-js không có mã — chỉ khi đó mới xếp hàng offline.
+  const isServerRejection = (err) => navigator.onLine && !!err?.code;
+
+  const queueOffline = (order, fields) => {
+    enqueue('updateOrder', { id: order.id, fields });
+    setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, ...fields, pendingSync: true } : o)));
+  };
+
+  // Trả về true nếu thay đổi đã được ghi (hoặc đã xếp hàng offline), false nếu bị từ chối.
+  const applyFields = async (order, fields) => {
     if (!navigator.onLine) {
-      enqueue('updateOrder', { id: order.id, fields });
-      setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, ...fields, pendingSync: true } : o)));
-      return;
+      queueOffline(order, fields);
+      return true;
     }
-    updateOrder(order.id, fields)
-      .then(load)
-      .catch(() => {
-        enqueue('updateOrder', { id: order.id, fields });
-        setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, ...fields, pendingSync: true } : o)));
-      });
+    try {
+      await updateOrder(order.id, fields);
+      setActionError('');
+      load();
+      return true;
+    } catch (err) {
+      if (isServerRejection(err)) {
+        setActionError(err.message || 'Không lưu được thay đổi — bạn không có quyền hoặc dữ liệu không hợp lệ.');
+        load();
+        return false;
+      }
+      queueOffline(order, fields);
+      return true;
+    }
   };
 
   const handlePickup = async (order, photoUrl, pos, selfClaimed) => {
     const fields = { status: 'dang_giao', shipper_staff_name: profile?.full_name || null };
     if (photoUrl) fields.pickup_photo_url = photoUrl;
     if (pos) { fields.pickup_lat = pos.lat; fields.pickup_lng = pos.lng; }
-    applyFields(order, fields);
-    if (selfClaimed) {
-      createAdhocTask({
+    const ok = await applyFields(order, fields);
+    if (ok && selfClaimed) {
+      const payload = {
         assigneeId: profile?.id, title: `Nhận giao hộ đơn ${order.order_code || ''}`.trim(),
         orderCode: order.order_code || null, createdBy: profile?.id,
-      }).catch(() => {});
+      };
+      createAdhocTask(payload).catch((err) => {
+        console.error('Không ghi được việc phát sinh "nhận giao hộ":', err);
+        if (isServerRejection(err)) {
+          setActionError(`Đã nhận giao hộ nhưng chưa ghi được việc phát sinh: ${err.message || ''}`.trim());
+        } else {
+          enqueue('createAdhocTask', payload);
+        }
+      });
     }
   };
 
@@ -331,11 +365,11 @@ export default function ShippingScreen() {
     if (photoUrl) fields.delivery_photo_url = photoUrl;
     if (pos) { fields.delivery_lat = pos.lat; fields.delivery_lng = pos.lng; }
     if (lateReason) fields.late_reason = lateReason;
-    applyFields(order, fields);
+    await applyFields(order, fields);
   };
 
   const handleSignedDoc = async (order, photoUrl) => {
-    applyFields(order, { signed_doc_photo_url: photoUrl });
+    await applyFields(order, { signed_doc_photo_url: photoUrl });
   };
 
   return (
@@ -345,6 +379,7 @@ export default function ShippingScreen() {
         <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Nhận giao &amp; giao hàng từ Bếp KDS chuyển sang</div>
       </div>
       {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>Lỗi tải đơn: {error}</div>}
+      {actionError && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)', background: 'var(--status-danger-soft)', borderRadius: 'var(--radius-sm)', padding: '8px 10px' }}>Không thực hiện được: {actionError}</div>}
       {loading ? (
         <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Đang tải...</div>
       ) : orders.length === 0 ? (

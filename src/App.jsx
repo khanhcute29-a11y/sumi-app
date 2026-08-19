@@ -4,7 +4,7 @@ import { BottomNav } from './components/navigation/BottomNav';
 import { supabase } from './lib/supabaseClient';
 import { initOfflineSync } from './lib/offlineQueue';
 import {
-  updateOrderStatus, updateOrder, addWarehouseStock, addShiftCheckin, addShiftCheckout, addLeaveRequest,
+  updateOrderStatus, updateOrder, addWarehouseStock, addShiftCheckin, addShiftCheckout, addLeaveRequest, createAdhocTask,
   countNewOrders, countKitchenActiveOrders, countPendingApprovals, countOpenIncidents,
 } from './lib/queries';
 import { navBadgeVisibility } from './lib/roles';
@@ -71,6 +71,7 @@ const OFFLINE_HANDLERS = {
   addShiftCheckin: (payload) => addShiftCheckin(payload),
   addShiftCheckout: (payload) => addShiftCheckout(payload),
   addLeaveRequest: (payload) => addLeaveRequest(payload),
+  createAdhocTask: (payload) => createAdhocTask(payload),
 };
 
 function OpsApp({ onSignOut }) {

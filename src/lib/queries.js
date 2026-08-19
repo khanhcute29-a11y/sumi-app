@@ -787,8 +787,10 @@ export async function updateTaskTemplate(id, { title, station, active }) {
 
 // --- Task management: daily checklist completions ---
 
-export async function fetchTaskCompletions({ date }) {
-  const { data, error } = await supabase.from('task_completions').select('*').eq('date', date);
+export async function fetchTaskCompletions({ date, staffId } = {}) {
+  let q = supabase.from('task_completions').select('*').eq('date', date);
+  if (staffId) q = q.eq('staff_id', staffId);
+  const { data, error } = await q;
   if (error) throw error;
   return data;
 }
@@ -861,8 +863,8 @@ export async function deleteTask(id) {
   notifyBadgesChanged();
 }
 
-export async function requestTaskExemption({ taskId, requesterId, requesterName, requesterRole, reason, photoUrl }) {
-  await createApprovalRequest({ type: 'task_exemption', taskId, reason, photoUrl, requesterId, requesterName, requesterRole });
+export async function requestTaskExemption({ taskId, orderCode, requesterId, requesterName, requesterRole, reason, photoUrl }) {
+  await createApprovalRequest({ type: 'task_exemption', taskId, orderCode, reason, photoUrl, requesterId, requesterName, requesterRole });
 }
 
 export async function exemptTask(id) {

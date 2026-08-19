@@ -48,7 +48,14 @@ alter table task_completions enable row level security;
 
 drop policy if exists "read task_completions" on task_completions;
 create policy "read task_completions" on task_completions for select
-  using (auth.role() = 'authenticated' and public.is_approved());
+  using (
+    staff_id = auth.uid()
+    or exists (
+      select 1 from profiles
+      where id = auth.uid()
+        and (role in ('owner','admin') or extra_roles && array['owner','admin'])
+    )
+  );
 
 drop policy if exists "self insert task_completions" on task_completions;
 create policy "self insert task_completions" on task_completions for insert
@@ -68,6 +75,43 @@ create policy "self or owner update task_completions" on task_completions for up
     )
   )
   with check (auth.role() = 'authenticated' and public.is_approved());
+
+-- Chốt ở tầng cột: chỉ chủ/quản lý mới được ghi confirmed_by/confirmed_at
+-- (xác nhận cuối ngày), và staff_id không bao giờ được đổi khi update.
+create or replace function public.enforce_task_completion_update_rules()
+returns trigger as $$
+declare
+  is_boss boolean;
+begin
+  if auth.uid() is null then
+    return new; -- service role / SQL editor
+  end if;
+
+  if new.staff_id is distinct from old.staff_id then
+    raise exception 'Không được đổi nhân viên của mục checklist đã tạo.';
+  end if;
+
+  select exists (
+    select 1 from profiles
+    where id = auth.uid()
+      and (role in ('owner','admin') or extra_roles && array['owner','admin'])
+  ) into is_boss;
+
+  if not is_boss and (
+       new.confirmed_by is distinct from old.confirmed_by
+    or new.confirmed_at is distinct from old.confirmed_at
+  ) then
+    raise exception 'Chỉ chủ hoặc quản lý mới được xác nhận checklist cuối ngày.';
+  end if;
+
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+drop trigger if exists trg_enforce_task_completion_update_rules on task_completions;
+create trigger trg_enforce_task_completion_update_rules
+  before update on task_completions
+  for each row execute procedure public.enforce_task_completion_update_rules();
 
 create table if not exists tasks (
   id uuid primary key default gen_random_uuid(),
@@ -124,6 +168,49 @@ create policy "assignee or owner update tasks" on tasks for update
   )
   with check (auth.role() = 'authenticated' and public.is_approved());
 
+-- Chốt ở tầng cột: nhân viên được giao chỉ được tự hoàn thành việc của mình
+-- (status -> 'done', kèm completed_at/late). Không được tự miễn trừ, không được
+-- đổi người phụ trách hay hạn chót — những việc đó phải đi qua luồng duyệt.
+create or replace function public.enforce_task_update_rules()
+returns trigger as $$
+declare
+  is_boss boolean;
+begin
+  if auth.uid() is null then
+    return new; -- service role / SQL editor
+  end if;
+
+  select exists (
+    select 1 from profiles
+    where id = auth.uid()
+      and (role in ('owner','admin') or extra_roles && array['owner','admin'])
+  ) into is_boss;
+
+  if is_boss then
+    return new;
+  end if;
+
+  if new.assignee_id is distinct from old.assignee_id then
+    raise exception 'Chỉ chủ hoặc quản lý mới được đổi người phụ trách công việc.';
+  end if;
+
+  if new.deadline is distinct from old.deadline then
+    raise exception 'Chỉ chủ hoặc quản lý mới được đổi hạn chót công việc.';
+  end if;
+
+  if new.status is distinct from old.status and new.status = 'exempted' then
+    raise exception 'Miễn trừ công việc phải được chủ duyệt — không tự đặt được.';
+  end if;
+
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+drop trigger if exists trg_enforce_task_update_rules on tasks;
+create trigger trg_enforce_task_update_rules
+  before update on tasks
+  for each row execute procedure public.enforce_task_update_rules();
+
 drop policy if exists "owner delete tasks" on tasks;
 create policy "owner delete tasks" on tasks for delete
   using (
@@ -133,6 +220,64 @@ create policy "owner delete tasks" on tasks for delete
         and (role in ('owner','admin') or extra_roles && array['owner','admin'])
     )
   );
+
+-- --- Nhận giao hộ (self-claim) trên màn Vận Chuyển ---
+-- Policy "update orders" trong migrate_orders_security.sql chỉ cho các vai trò
+-- vận hành đơn (và bỏ qua extra_roles), nên nhân viên kho/kế toán/bếp phụ...
+-- không thể nhận giao hộ. Postgres OR các permissive policy lại với nhau, nên
+-- thêm một policy hẹp riêng cho đúng thao tác nhận giao hộ.
+drop policy if exists "self-claim delivery orders" on orders;
+create policy "self-claim delivery orders" on orders for update
+  using (
+    auth.role() = 'authenticated' and public.is_approved()
+    and status = 'cho_giao'
+  )
+  with check (
+    auth.role() = 'authenticated' and public.is_approved()
+    and status = 'dang_giao'
+    and shipper_staff_name = (select full_name from profiles where id = auth.uid())
+  );
+
+-- Policy trên chỉ chốt được ở tầng row; chốt thêm ở tầng cột để người nhận giao
+-- hộ (không thuộc nhóm vai trò vận hành đơn) chỉ đụng được đúng các cột của
+-- thao tác xuất bến.
+create or replace function public.enforce_order_self_claim_columns()
+returns trigger as $$
+declare
+  is_ops boolean;
+begin
+  if auth.uid() is null then
+    return new; -- service role / SQL editor
+  end if;
+
+  select exists (
+    select 1 from profiles
+    where id = auth.uid()
+      and (
+        role in ('owner','admin','cashier','sale','kitchen','bakery','shipper')
+        or extra_roles && array['owner','admin','cashier','sale','kitchen','bakery','shipper']
+      )
+  ) into is_ops;
+
+  if is_ops then
+    return new;
+  end if;
+
+  -- Người ngoài nhóm vận hành đơn: chỉ được đổi đúng các cột nhận giao hộ.
+  if to_jsonb(new) - 'status' - 'shipper_staff_name' - 'pickup_photo_url' - 'pickup_lat' - 'pickup_lng'
+     is distinct from
+     to_jsonb(old) - 'status' - 'shipper_staff_name' - 'pickup_photo_url' - 'pickup_lat' - 'pickup_lng' then
+    raise exception 'Bạn chỉ được nhận giao hộ đơn này, không được sửa thông tin khác của đơn.';
+  end if;
+
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+drop trigger if exists trg_enforce_order_self_claim_columns on orders;
+create trigger trg_enforce_order_self_claim_columns
+  before update on orders
+  for each row execute procedure public.enforce_order_self_claim_columns();
 
 alter table approval_requests drop constraint if exists approval_requests_type_check;
 alter table approval_requests add constraint approval_requests_type_check
