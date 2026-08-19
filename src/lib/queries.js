@@ -130,7 +130,7 @@ export async function deleteProductVariant(id) {
 
 // ---- Orders ----
 
-const ORDER_SELECT = '*, customer:customers(id, name, phone, trust_score, vip, locked), order_items(*)';
+const ORDER_SELECT = '*, customer:customers(id, name, phone, trust_score, vip, locked), order_items(*), order_stages(*)';
 
 export async function fetchOrders({ statuses, from, to, dateField = 'created_at' } = {}) {
   let q = supabase.from('orders').select(ORDER_SELECT).order('created_at', { ascending: false });
@@ -573,6 +573,32 @@ export async function removeShiftScheduleEntry(id) {
 export async function updateProfileStation(id, station) {
   const { error } = await supabase.from('profiles').update({ station: station || null }).eq('id', id);
   if (error) throw error;
+}
+
+// ---- Chia công đoạn bếp (gán nhân viên đang trực vào công đoạn của đơn) ----
+
+export async function createOrderStages(rows) {
+  const { error } = await supabase.from('order_stages').insert(rows);
+  if (error) throw error;
+  notifyBadgesChanged();
+}
+
+export async function startOrderStage(id) {
+  const { error } = await supabase.from('order_stages').update({ status: 'dang_lam', started_at: new Date().toISOString() }).eq('id', id).eq('status', 'cho_lam');
+  if (error) throw error;
+  notifyBadgesChanged();
+}
+
+export async function completeOrderStage(id) {
+  const { error } = await supabase.from('order_stages').update({ status: 'hoan_thanh', ended_at: new Date().toISOString() }).eq('id', id).eq('status', 'dang_lam');
+  if (error) throw error;
+  notifyBadgesChanged();
+}
+
+export async function reassignOrderStage(id, { assigneeId, assigneeName }) {
+  const { error } = await supabase.from('order_stages').update({ assignee_id: assigneeId, assignee_name: assigneeName }).eq('id', id);
+  if (error) throw error;
+  notifyBadgesChanged();
 }
 
 // ---- Yêu cầu duyệt hợp nhất (sửa/hủy/xoá đơn, chấm công lại) ----
