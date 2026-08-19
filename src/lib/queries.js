@@ -758,3 +758,57 @@ export async function fetchSubordinates(userRole, managerId) {
   if (error) throw error;
   return data;
 }
+
+// --- Task management: daily checklist templates ---
+
+export async function fetchTaskTemplates({ active = true } = {}) {
+  let q = supabase.from('task_templates').select('*').order('created_at', { ascending: true });
+  if (active !== null) q = q.eq('active', active);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data;
+}
+
+export async function createTaskTemplate({ title, station, createdBy }) {
+  const { error } = await supabase.from('task_templates').insert({ title, station: station || null, created_by: createdBy || null });
+  if (error) throw error;
+  notifyBadgesChanged();
+}
+
+export async function updateTaskTemplate(id, { title, station, active }) {
+  const fields = {};
+  if (title !== undefined) fields.title = title;
+  if (station !== undefined) fields.station = station || null;
+  if (active !== undefined) fields.active = active;
+  const { error } = await supabase.from('task_templates').update(fields).eq('id', id);
+  if (error) throw error;
+  notifyBadgesChanged();
+}
+
+// --- Task management: daily checklist completions ---
+
+export async function fetchTaskCompletions({ date }) {
+  const { data, error } = await supabase.from('task_completions').select('*').eq('date', date);
+  if (error) throw error;
+  return data;
+}
+
+export async function setTaskCompletion({ templateId, staffId, date, completed }) {
+  const { data: existing, error: findErr } = await supabase
+    .from('task_completions').select('id').eq('template_id', templateId).eq('staff_id', staffId).eq('date', date).maybeSingle();
+  if (findErr) throw findErr;
+  if (existing) {
+    const { error } = await supabase.from('task_completions').update({ completed_at: completed ? new Date().toISOString() : null }).eq('id', existing.id);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase.from('task_completions').insert({ template_id: templateId, staff_id: staffId, date, completed_at: completed ? new Date().toISOString() : null });
+    if (error) throw error;
+  }
+  notifyBadgesChanged();
+}
+
+export async function confirmTaskCompletion(id, { confirmedBy }) {
+  const { error } = await supabase.from('task_completions').update({ confirmed_by: confirmedBy, confirmed_at: new Date().toISOString() }).eq('id', id);
+  if (error) throw error;
+  notifyBadgesChanged();
+}
