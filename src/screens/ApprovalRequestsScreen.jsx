@@ -4,7 +4,7 @@ import { Button } from '../components/forms/Button';
 import { Tabs } from '../components/navigation/Tabs';
 import {
   fetchApprovalRequests, resolveApprovalRequest,
-  cancelOrder, deleteOrder, fetchOrderById, deleteShiftLog,
+  cancelOrder, deleteOrder, fetchOrderById, deleteShiftLog, exemptTask,
 } from '../lib/queries';
 import { useAuth } from '../lib/AuthContext';
 import { hasAnyRole } from '../lib/roles';
@@ -16,6 +16,7 @@ const TYPE_LABELS = {
   order_delete: 'Yêu cầu xoá đơn',
   shift_recheck: 'Yêu cầu chấm công lại',
   leave_request: 'Yêu cầu xin nghỉ (lịch tuần)',
+  task_exemption: 'Yêu cầu miễn trừ công việc',
 };
 
 function RequestRow({ req, canResolve, onResolved }) {
@@ -51,6 +52,8 @@ function RequestRow({ req, canResolve, onResolved }) {
         });
       } else if (req.type === 'shift_recheck' && req.shift_log_id) {
         await deleteShiftLog(req.shift_log_id);
+      } else if (req.type === 'task_exemption' && req.task_id) {
+        await exemptTask(req.task_id);
       }
       // order_edit: không có gì để tự động — sếp bấm Duyệt để báo đã xem, rồi tự vào đơn bấm "Sửa đơn".
       await resolveApprovalRequest(req.id, { status: 'approved', resolvedBy: profile?.full_name });
