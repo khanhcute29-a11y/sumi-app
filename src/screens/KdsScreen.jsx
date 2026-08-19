@@ -410,6 +410,7 @@ export default function KdsScreen({ initialStation }) {
   const [error, setError] = useState('');
   const [showProductionLog, setShowProductionLog] = useState(false);
   const [onlineProfiles, setOnlineProfiles] = useState([]);
+  const [actionError, setActionError] = useState('');
 
   useEffect(() => {
     if (initialStation) setActiveStation(initialStation);
@@ -454,23 +455,38 @@ export default function KdsScreen({ initialStation }) {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  const applyFields = (order, fields) => {
+  // Lỗi từ server (RLS chặn, trigger raise, ràng buộc dữ liệu...) luôn kèm mã lỗi
+  // Postgrest. Lỗi mạng của supabase-js không có mã — chỉ khi đó mới xếp hàng offline.
+  // (Cùng logic với ShippingScreen.applyFields — xem đó để biết lý do.)
+  const isServerRejection = (err) => navigator.onLine && !!err?.code;
+
+  // Trả về true nếu thay đổi đã được ghi (hoặc đã xếp hàng offline), false nếu bị từ chối.
+  const applyFields = async (order, fields) => {
     if (!navigator.onLine) {
       enqueue('updateOrder', { id: order.id, fields });
       setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, ...fields } : o)));
-      return;
+      return true;
     }
-    updateOrder(order.id, fields)
-      .then(load)
-      .catch(() => {
-        enqueue('updateOrder', { id: order.id, fields });
-        setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, ...fields } : o)));
-      });
+    try {
+      await updateOrder(order.id, fields);
+      setActionError('');
+      load();
+      return true;
+    } catch (err) {
+      if (isServerRejection(err)) {
+        setActionError(err.message || 'Không lưu được thay đổi — bạn không có quyền hoặc dữ liệu không hợp lệ.');
+        load();
+        return false;
+      }
+      enqueue('updateOrder', { id: order.id, fields });
+      setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, ...fields } : o)));
+      return true;
+    }
   };
 
   const handleAccept = async (order) => {
     const staffName = profile?.full_name || null;
-    applyFields(order, { status: 'dang_lam', kitchen_staff_name: staffName });
+    await applyFields(order, { status: 'dang_lam', kitchen_staff_name: staffName });
     if (isUrgent(order) && staffName) {
       addOrderNote({
         orderId: order.id, orderCode: order.order_code, authorId: profile?.id,
@@ -483,7 +499,7 @@ export default function KdsScreen({ initialStation }) {
   const handleReady = async (order, photoUrl) => {
     const fields = { status: 'cho_giao' };
     if (photoUrl) fields.kitchen_photo_url = photoUrl;
-    applyFields(order, fields);
+    await applyFields(order, fields);
   };
 
   const handleStageStart = async (stage) => {
@@ -496,7 +512,7 @@ export default function KdsScreen({ initialStation }) {
     if (isLastStage) {
       const fields = { status: 'cho_giao', kitchen_staff_name: stage.assignee_name };
       if (photoUrl) fields.kitchen_photo_url = photoUrl;
-      applyFields(order, fields);
+      await applyFields(order, fields);
     } else {
       load();
     }
@@ -561,6 +577,7 @@ export default function KdsScreen({ initialStation }) {
       </div>
 
       {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>Lỗi tải đơn: {error}</div>}
+      {actionError && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)', background: 'var(--status-danger-soft)', borderRadius: 'var(--radius-sm)', padding: '8px 10px' }}>Không thực hiện được: {actionError}</div>}
 
       {/* Cards tổng quan từng luồng bếp */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 12 }}>
