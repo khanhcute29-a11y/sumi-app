@@ -119,7 +119,7 @@ export default function ApprovalRequestsScreen() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div>
         <div style={{ font: 'var(--text-display-md)', color: 'var(--text-primary)' }}>Yêu Cầu Duyệt</div>
-        <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Sửa/hủy/xoá đơn và chấm công lại — chờ Chủ sở hữu duyệt tại đây</div>
+        <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Sửa/hủy/xoá đơn, chấm công lại, xin nghỉ và xin miễn trừ công việc — chờ Chủ sở hữu duyệt tại đây</div>
       </div>
       <Tabs tabs={[{ key: 'pending', label: 'Chờ duyệt' }, { key: 'approved', label: 'Đã duyệt' }, { key: 'rejected', label: 'Đã từ chối' }, { key: 'all', label: 'Tất cả' }]} active={tab} onChange={setTab} />
       {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>Lỗi tải dữ liệu: {error}</div>}

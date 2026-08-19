@@ -48,6 +48,15 @@ export default function TasksScreen() {
   }, []);
 
   const filteredStaff = stationFilter ? staffList.filter((p) => p.station === stationFilter) : staffList;
+
+  // Đổi bộ lọc khâu mà nhân viên đang chọn không còn trong danh sách → chọn lại người đầu tiên.
+  useEffect(() => {
+    if (!isOwner) return;
+    if (selectedStaffId && !filteredStaff.some((p) => p.id === selectedStaffId)) {
+      setSelectedStaffId(filteredStaff[0]?.id || '');
+    }
+  }, [stationFilter, staffList]);
+
   const viewingStaffId = isOwner ? selectedStaffId : profile?.id;
   const viewingStaffName = isOwner ? (staffList.find((p) => p.id === selectedStaffId)?.full_name || '') : profile?.full_name;
   const viewingStation = isOwner ? (staffList.find((p) => p.id === selectedStaffId)?.station || '') : profile?.station;
@@ -70,9 +79,9 @@ export default function TasksScreen() {
         <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Chọn nhân viên để xem việc.</div>
       ) : (
         <React.Fragment>
-          {tab === 'daily' && <DailyChecklistTab key={`daily-${refreshKey}`} profile={profile} isOwner={isOwner} viewingStaffId={viewingStaffId} viewingStaffName={viewingStaffName} viewingStation={viewingStation} />}
-          {tab === 'assigned' && <AssignedTasksTab key={`assigned-${refreshKey}`} profile={profile} isOwner={isOwner} viewingStaffId={viewingStaffId} viewingStaffName={viewingStaffName} staffList={staffList} orderCodeFilter={orderCodeFilter} />}
-          {tab === 'adhoc' && <AdhocTasksTab key={`adhoc-${refreshKey}`} profile={profile} isOwner={isOwner} viewingStaffId={viewingStaffId} viewingStaffName={viewingStaffName} orderCodeFilter={orderCodeFilter} />}
+          {tab === 'daily' && <DailyChecklistTab refreshKey={refreshKey} profile={profile} isOwner={isOwner} viewingStaffId={viewingStaffId} viewingStaffName={viewingStaffName} viewingStation={viewingStation} />}
+          {tab === 'assigned' && <AssignedTasksTab refreshKey={refreshKey} profile={profile} isOwner={isOwner} viewingStaffId={viewingStaffId} viewingStaffName={viewingStaffName} staffList={staffList} orderCodeFilter={orderCodeFilter} />}
+          {tab === 'adhoc' && <AdhocTasksTab refreshKey={refreshKey} profile={profile} isOwner={isOwner} viewingStaffId={viewingStaffId} viewingStaffName={viewingStaffName} orderCodeFilter={orderCodeFilter} />}
         </React.Fragment>
       )}
     </div>

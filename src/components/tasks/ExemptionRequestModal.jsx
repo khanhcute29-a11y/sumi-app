@@ -15,7 +15,8 @@ export function ExemptionRequestModal({ task, profile, onClose, onSent }) {
     setSaving(true); setError('');
     try {
       await requestTaskExemption({
-        taskId: task.id, reason, photoUrl: photoUrl || null,
+        taskId: task.id, orderCode: task.order_code || null,
+        reason: `[${task.title}] ${reason}`, photoUrl: photoUrl || null,
         requesterId: profile?.id, requesterName: profile?.full_name, requesterRole: profile?.role,
       });
       onSent?.();

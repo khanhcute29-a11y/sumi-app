@@ -3,7 +3,7 @@ import { Button } from '../forms/Button';
 import { fetchTasks, deleteTask } from '../../lib/queries';
 import { AdhocReportModal } from './AdhocReportModal';
 
-export function AdhocTasksTab({ profile, isOwner, viewingStaffId, orderCodeFilter }) {
+export function AdhocTasksTab({ profile, isOwner, viewingStaffId, orderCodeFilter, refreshKey }) {
   const [tasks, setTasks] = useState([]);
   const [error, setError] = useState('');
   const [showReport, setShowReport] = useState(false);
@@ -15,7 +15,7 @@ export function AdhocTasksTab({ profile, isOwner, viewingStaffId, orderCodeFilte
       .catch((err) => setError(err.message));
   };
 
-  useEffect(load, [viewingStaffId]);
+  useEffect(() => { load(); }, [viewingStaffId, refreshKey]);
 
   const visible = orderCodeFilter ? tasks.filter((t) => (t.order_code || '').includes(orderCodeFilter)) : tasks;
   const canReport = !isOwner && profile?.id === viewingStaffId;

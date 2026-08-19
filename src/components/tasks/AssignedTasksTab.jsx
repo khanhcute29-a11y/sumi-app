@@ -1,23 +1,32 @@
 import React, { useEffect, useState } from 'react';
 import { Button } from '../forms/Button';
-import { fetchTasks, completeTask } from '../../lib/queries';
+import { fetchTasks, completeTask, fetchApprovalRequests } from '../../lib/queries';
 import { AssignTaskModal } from './AssignTaskModal';
 import { ExemptionRequestModal } from './ExemptionRequestModal';
 
-export function AssignedTasksTab({ profile, isOwner, viewingStaffId, staffList, orderCodeFilter }) {
+export function AssignedTasksTab({ profile, isOwner, viewingStaffId, staffList, orderCodeFilter, refreshKey }) {
   const [tasks, setTasks] = useState([]);
+  const [pendingExemptionTaskIds, setPendingExemptionTaskIds] = useState([]);
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState('');
   const [showAssign, setShowAssign] = useState(false);
   const [exemptTarget, setExemptTarget] = useState(null);
 
   const load = () => {
-    fetchTasks({ assigneeId: viewingStaffId, category: 'assigned' })
-      .then((data) => { setTasks(data); setError(''); })
+    Promise.all([
+      fetchTasks({ assigneeId: viewingStaffId, category: 'assigned' }),
+      fetchApprovalRequests({ status: 'pending', type: 'task_exemption' }).catch(() => []),
+    ])
+      .then(([data, reqs]) => {
+        setTasks(data);
+        const ids = new Set(data.map((t) => t.id));
+        setPendingExemptionTaskIds(reqs.filter((r) => r.task_id && ids.has(r.task_id)).map((r) => r.task_id));
+        setError('');
+      })
       .catch((err) => setError(err.message));
   };
 
-  useEffect(load, [viewingStaffId]);
+  useEffect(() => { load(); }, [viewingStaffId, refreshKey]);
 
   const visible = orderCodeFilter ? tasks.filter((t) => (t.order_code || '').includes(orderCodeFilter)) : tasks;
 
@@ -41,10 +50,15 @@ export function AssignedTasksTab({ profile, isOwner, viewingStaffId, staffList, 
           {t.description && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>{t.description}</div>}
           {t.order_code && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Mã đơn: {t.order_code}</div>}
           {t.deadline && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Hạn: {new Date(t.deadline).toLocaleString('vi-VN')}</div>}
-          {!isOwner && t.assignee_id === profile?.id && t.status === 'open' && (
+          {pendingExemptionTaskIds.includes(t.id) && t.status === 'open' && (
+            <div style={{ font: 'var(--text-caption)', color: 'var(--status-warning)' }}>Đang chờ duyệt miễn trừ</div>
+          )}
+          {t.assignee_id === profile?.id && t.status === 'open' && (
             <div style={{ display: 'flex', gap: 8 }}>
               <Button size="sm" disabled={busyId === t.id} onClick={() => handleComplete(t.id)}>Hoàn thành</Button>
-              <Button size="sm" variant="secondary" onClick={() => setExemptTarget(t)}>Xin miễn trừ</Button>
+              {!pendingExemptionTaskIds.includes(t.id) && (
+                <Button size="sm" variant="secondary" onClick={() => setExemptTarget(t)}>Xin miễn trừ</Button>
+              )}
             </div>
           )}
         </div>
