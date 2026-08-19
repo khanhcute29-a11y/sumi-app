@@ -301,7 +301,7 @@ function ShiftConfigManager({ shiftConfigs, onChanged }) {
     if (!label.trim()) return;
     setSaving(true);
     try {
-      await addShiftConfig({ label, branch, startTime, wagePerShift: Number(wagePerShift) || 0 });
+      await addShiftConfig({ label, branch, startTime, endTime, wagePerShift: Number(wagePerShift) || 0 });
       setLabel(''); setEndTime(''); setWagePerShift('');
       onChanged();
     } finally {

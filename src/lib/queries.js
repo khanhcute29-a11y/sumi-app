@@ -493,8 +493,8 @@ export async function fetchShiftConfigs() {
   return data;
 }
 
-export async function addShiftConfig({ label, branch, startTime, wagePerShift }) {
-  const { error } = await supabase.from('shift_configs').insert({ label, branch: branch || null, start_time: startTime, wage_per_shift: wagePerShift || 0 });
+export async function addShiftConfig({ label, branch, startTime, endTime, wagePerShift }) {
+  const { error } = await supabase.from('shift_configs').insert({ label, branch: branch || null, start_time: startTime, end_time: endTime || null, wage_per_shift: wagePerShift || 0 });
   if (error) throw error;
 }
 
