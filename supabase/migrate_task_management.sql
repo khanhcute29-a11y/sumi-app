@@ -230,13 +230,75 @@ drop policy if exists "self-claim delivery orders" on orders;
 create policy "self-claim delivery orders" on orders for update
   using (
     auth.role() = 'authenticated' and public.is_approved()
-    and status = 'cho_giao'
+    and (
+      -- Nhận giao hộ: chỉ đơn Chờ giao CHƯA có người nhận
+      (status = 'cho_giao' and (shipper_staff_name is null or shipper_staff_name = ''))
+      -- Hoàn tất / chụp biên bản: chỉ đơn chính mình đang giao
+      or (status = 'dang_giao' and shipper_staff_name = (select full_name from profiles where id = auth.uid()))
+    )
   )
   with check (
     auth.role() = 'authenticated' and public.is_approved()
-    and status = 'dang_giao'
+    and status in ('dang_giao', 'hoan_thanh')
     and shipper_staff_name = (select full_name from profiles where id = auth.uid())
   );
+
+-- Trigger có sẵn enforce_order_update_permissions() chạy TRƯỚC trigger nhận giao hộ bên
+-- dưới (Postgres gọi trigger theo thứ tự tên) và ném lỗi ngay với mọi vai trò ngoài danh
+-- sách vận hành đơn — làm tính năng nhận giao hộ vô hiệu dù policy đã mở. Khai báo lại
+-- hàm với đúng một ngoại lệ hẹp: chuỗi thao tác nhận giao hộ của chính người nhận.
+create or replace function public.enforce_order_update_permissions()
+returns trigger as $$
+declare
+  my_role text;
+  my_name text;
+  allowed_cols text[];
+  changed_keys text[];
+begin
+  select role into my_role from profiles where id = auth.uid();
+
+  if my_role in ('owner', 'cashier', 'admin', 'sale') then
+    return new;
+  end if;
+
+  if my_role in ('kitchen', 'bakery', 'kitchen_lead', 'kitchen_deputy') then
+    if not (old.status in ('moi', 'dang_lam') and new.status in ('moi', 'dang_lam', 'cho_giao')) then
+      raise exception 'Bếp chỉ được thao tác đơn ở bước Mới / Đang làm / chuyển sang Chờ giao.';
+    end if;
+    allowed_cols := array['status', 'kitchen_staff_name', 'kitchen_photo_url'];
+  elsif my_role = 'shipper' then
+    if not (old.status in ('cho_giao', 'dang_giao') and new.status in ('cho_giao', 'dang_giao', 'hoan_thanh')) then
+      raise exception 'Vận chuyển chỉ được thao tác đơn ở bước Chờ giao / Đang giao / Hoàn thành.';
+    end if;
+    allowed_cols := array['status', 'shipper_staff_name', 'pickup_photo_url', 'delivery_photo_url', 'signed_doc_photo_url',
+      'pickup_lat', 'pickup_lng', 'delivery_lat', 'delivery_lng', 'completed_at', 'late_reason'];
+  else
+    select full_name into my_name from profiles where id = auth.uid();
+
+    if old.status = 'cho_giao' and new.status = 'dang_giao'
+       and my_name is not null and new.shipper_staff_name = my_name then
+      allowed_cols := array['status', 'shipper_staff_name', 'pickup_photo_url', 'pickup_lat', 'pickup_lng'];
+    elsif old.status = 'dang_giao' and new.status in ('dang_giao', 'hoan_thanh')
+       and my_name is not null and old.shipper_staff_name = my_name then
+      allowed_cols := array['status', 'shipper_staff_name', 'pickup_photo_url', 'pickup_lat', 'pickup_lng',
+        'delivery_photo_url', 'delivery_lat', 'delivery_lng', 'completed_at', 'late_reason', 'signed_doc_photo_url'];
+    else
+      raise exception 'Bạn không có quyền sửa đơn hàng.';
+    end if;
+  end if;
+
+  select array_agg(n.key) into changed_keys
+  from jsonb_each(to_jsonb(new)) n
+  join jsonb_each(to_jsonb(old)) o on n.key = o.key
+  where n.value is distinct from o.value;
+
+  if changed_keys is not null and exists (select 1 from unnest(changed_keys) k where k <> all (allowed_cols)) then
+    raise exception 'Bạn không có quyền sửa các trường: %', array_to_string(changed_keys, ', ');
+  end if;
+
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
 
 -- Policy trên chỉ chốt được ở tầng row; chốt thêm ở tầng cột để người nhận giao
 -- hộ (không thuộc nhóm vai trò vận hành đơn) chỉ đụng được đúng các cột của
@@ -245,6 +307,9 @@ create or replace function public.enforce_order_self_claim_columns()
 returns trigger as $$
 declare
   is_ops boolean;
+  my_name text;
+  allowed_cols text[];
+  changed_keys text[];
 begin
   if auth.uid() is null then
     return new; -- service role / SQL editor
@@ -263,10 +328,27 @@ begin
     return new;
   end if;
 
-  -- Người ngoài nhóm vận hành đơn: chỉ được đổi đúng các cột nhận giao hộ.
-  if to_jsonb(new) - 'status' - 'shipper_staff_name' - 'pickup_photo_url' - 'pickup_lat' - 'pickup_lng'
-     is distinct from
-     to_jsonb(old) - 'status' - 'shipper_staff_name' - 'pickup_photo_url' - 'pickup_lat' - 'pickup_lng' then
+  -- Người ngoài nhóm vận hành đơn: chỉ được đổi đúng các cột của thao tác nhận giao hộ
+  -- (xuất bến) và của thao tác hoàn tất chính đơn mình đang giao.
+  select full_name into my_name from profiles where id = auth.uid();
+
+  if old.status = 'cho_giao' and new.status = 'dang_giao'
+     and my_name is not null and new.shipper_staff_name = my_name then
+    allowed_cols := array['status', 'shipper_staff_name', 'pickup_photo_url', 'pickup_lat', 'pickup_lng'];
+  elsif old.status = 'dang_giao' and new.status in ('dang_giao', 'hoan_thanh')
+     and my_name is not null and old.shipper_staff_name = my_name then
+    allowed_cols := array['status', 'shipper_staff_name', 'pickup_photo_url', 'pickup_lat', 'pickup_lng',
+      'delivery_photo_url', 'delivery_lat', 'delivery_lng', 'completed_at', 'late_reason', 'signed_doc_photo_url'];
+  else
+    raise exception 'Bạn chỉ được nhận giao hộ, hoặc hoàn tất đơn chính mình đang giao.';
+  end if;
+
+  select array_agg(n.key) into changed_keys
+  from jsonb_each(to_jsonb(new)) n
+  join jsonb_each(to_jsonb(old)) o on n.key = o.key
+  where n.value is distinct from o.value;
+
+  if changed_keys is not null and exists (select 1 from unnest(changed_keys) k where k <> all (allowed_cols)) then
     raise exception 'Bạn chỉ được nhận giao hộ đơn này, không được sửa thông tin khác của đơn.';
   end if;
 

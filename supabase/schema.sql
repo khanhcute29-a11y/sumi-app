@@ -356,6 +356,7 @@ create or replace function public.enforce_order_update_permissions()
 returns trigger as $$
 declare
   my_role text;
+  my_name text;
   allowed_cols text[];
   changed_keys text[];
 begin
@@ -377,7 +378,21 @@ begin
     allowed_cols := array['status', 'shipper_staff_name', 'pickup_photo_url', 'delivery_photo_url', 'signed_doc_photo_url',
       'pickup_lat', 'pickup_lng', 'delivery_lat', 'delivery_lng', 'completed_at', 'late_reason'];
   else
-    raise exception 'Bạn không có quyền sửa đơn hàng.';
+    -- Nhận giao hộ: nhân viên ngoài nhóm vận hành đơn (kho, kế toán, bếp trưởng...) được
+    -- tự nhận một đơn Chờ giao về tên mình, và sau đó hoàn tất chính đơn mình đang giao.
+    -- Mọi trường hợp khác vẫn bị chặn như trước.
+    select full_name into my_name from profiles where id = auth.uid();
+
+    if old.status = 'cho_giao' and new.status = 'dang_giao'
+       and my_name is not null and new.shipper_staff_name = my_name then
+      allowed_cols := array['status', 'shipper_staff_name', 'pickup_photo_url', 'pickup_lat', 'pickup_lng'];
+    elsif old.status = 'dang_giao' and new.status in ('dang_giao', 'hoan_thanh')
+       and my_name is not null and old.shipper_staff_name = my_name then
+      allowed_cols := array['status', 'shipper_staff_name', 'pickup_photo_url', 'pickup_lat', 'pickup_lng',
+        'delivery_photo_url', 'delivery_lat', 'delivery_lng', 'completed_at', 'late_reason', 'signed_doc_photo_url'];
+    else
+      raise exception 'Bạn không có quyền sửa đơn hàng.';
+    end if;
   end if;
 
   select array_agg(n.key) into changed_keys
