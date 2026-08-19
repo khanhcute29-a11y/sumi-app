@@ -6,7 +6,7 @@ import {
   fetchShiftConfigs, fetchShiftLogsRange, fetchApprovalRequests, fetchAllProfiles,
 } from '../lib/queries';
 import { hasAnyRole } from '../lib/roles';
-import { localDateStr } from '../lib/date';
+import { localDateStr, mondayOf, weekDates } from '../lib/date';
 import { LeaveScheduleRequestModal } from './LeaveScheduleRequestModal';
 
 const STATIONS = [
@@ -17,22 +17,6 @@ const STATIONS = [
   { key: 'xuong42', label: 'Xưởng 42' },
 ];
 const DOW_LABELS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
-
-function mondayOf(date) {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  return d;
-}
-
-function weekDates(monday) {
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(monday);
-    d.setDate(d.getDate() + i);
-    return d;
-  });
-}
 
 export function WeeklyScheduleSection({ profile }) {
   const isOwner = hasAnyRole(profile, ['owner', 'admin']);
