@@ -7,7 +7,7 @@ import { Tabs } from '../components/navigation/Tabs';
 import { PhotoField } from '../components/PhotoField';
 import { CameraPhotoField } from '../components/CameraPhotoField';
 import {
-  fetchShiftConfigs, addShiftConfig, deleteShiftConfig,
+  fetchShiftConfigs, addShiftConfig, updateShiftConfig, deleteShiftConfig,
   fetchShiftLogs, fetchShiftLogsRange, addShiftCheckin, addShiftCheckout, addLeaveRequest,
   createApprovalRequest,
 } from '../lib/queries';
@@ -253,10 +253,47 @@ function LeaveModal({ shiftConfigs, staffName, staffId, onClose, onDone }) {
   );
 }
 
+function ShiftConfigRow({ config, onSaved }) {
+  const [editing, setEditing] = useState(false);
+  const [endTime, setEndTime] = useState(config.end_time ? config.end_time.slice(0, 5) : '');
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await updateShiftConfig(config.id, { endTime: endTime || null });
+      setEditing(false);
+      onSaved();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>
+        {config.label}{config.branch ? ` — ${config.branch}` : ''} — {config.start_time.slice(0, 5)}
+        {config.end_time ? `–${config.end_time.slice(0, 5)}` : ' (chưa có giờ kết thúc)'}
+        {config.wage_per_shift ? ` — ${Number(config.wage_per_shift).toLocaleString('vi-VN')}đ/ca` : ''}
+      </div>
+      {editing ? (
+        <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+          <Input label="Giờ kết thúc" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} style={{ width: 110 }} />
+          <Button variant="secondary" size="sm" onClick={save} disabled={saving}>Lưu</Button>
+          <Button variant="ghost" size="sm" onClick={() => setEditing(false)} disabled={saving}>Huỷ</Button>
+        </div>
+      ) : (
+        <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>Sửa giờ kết thúc</Button>
+      )}
+    </div>
+  );
+}
+
 function ShiftConfigManager({ shiftConfigs, onChanged }) {
   const [label, setLabel] = useState('');
   const [branch, setBranch] = useState(BRANCHES[0]);
   const [startTime, setStartTime] = useState('07:00');
+  const [endTime, setEndTime] = useState('');
   const [wagePerShift, setWagePerShift] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -265,7 +302,7 @@ function ShiftConfigManager({ shiftConfigs, onChanged }) {
     setSaving(true);
     try {
       await addShiftConfig({ label, branch, startTime, wagePerShift: Number(wagePerShift) || 0 });
-      setLabel(''); setWagePerShift('');
+      setLabel(''); setEndTime(''); setWagePerShift('');
       onChanged();
     } finally {
       setSaving(false);
@@ -281,11 +318,11 @@ function ShiftConfigManager({ shiftConfigs, onChanged }) {
     <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>Quản lý ca làm việc (Chủ sở hữu)</div>
       {shiftConfigs.map((s) => (
-        <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>
-            {s.label}{s.branch ? ` — ${s.branch}` : ''} — {s.start_time.slice(0, 5)}{s.wage_per_shift ? ` — ${Number(s.wage_per_shift).toLocaleString('vi-VN')}đ/ca` : ''}
+        <div key={s.id} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <ShiftConfigRow config={s} onSaved={onChanged} />
+            <Button variant="ghost" size="sm" onClick={() => remove(s.id)}>✕</Button>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => remove(s.id)}>✕</Button>
         </div>
       ))}
       <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
@@ -293,6 +330,7 @@ function ShiftConfigManager({ shiftConfigs, onChanged }) {
         <Select label="Chi nhánh" value={branch} onChange={(e) => setBranch(e.target.value)}
           options={BRANCHES.map((b) => ({ value: b, label: b }))} style={{ flex: '2 1 160px' }} />
         <Input label="Giờ bắt đầu" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} style={{ flex: '1 1 100px' }} />
+        <Input label="Giờ kết thúc" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} style={{ flex: '1 1 100px' }} />
         <Input label="Lương/ca" type="number" placeholder="VD: 200000" value={wagePerShift} onChange={(e) => setWagePerShift(e.target.value)} style={{ flex: '1 1 120px' }} />
         <Button variant="secondary" size="sm" onClick={add} disabled={saving}>+ Thêm ca</Button>
       </div>
