@@ -503,6 +503,17 @@ export async function deleteShiftConfig(id) {
   if (error) throw error;
 }
 
+export async function updateShiftConfig(id, { label, branch, startTime, endTime, wagePerShift } = {}) {
+  const fields = {};
+  if (label !== undefined) fields.label = label;
+  if (branch !== undefined) fields.branch = branch || null;
+  if (startTime !== undefined) fields.start_time = startTime;
+  if (endTime !== undefined) fields.end_time = endTime || null;
+  if (wagePerShift !== undefined) fields.wage_per_shift = wagePerShift;
+  const { error } = await supabase.from('shift_configs').update(fields).eq('id', id);
+  if (error) throw error;
+}
+
 export async function fetchShiftLogs({ date } = {}) {
   let q = supabase.from('shift_logs').select('*').order('created_at', { ascending: false });
   if (date) q = q.eq('work_date', date);
@@ -589,6 +600,16 @@ export async function createOrderStages(rows) {
   const { error } = await supabase.from('order_stages').insert(rows);
   if (error) throw error;
   notifyBadgesChanged();
+}
+
+export async function fetchOrderStagesRange(fromDate, toDate) {
+  const { data, error } = await supabase
+    .from('order_stages')
+    .select('*')
+    .gte('started_at', `${fromDate}T00:00:00+07:00`)
+    .lte('started_at', `${toDate}T23:59:59.999+07:00`);
+  if (error) throw error;
+  return data;
 }
 
 export async function startOrderStage(id) {
@@ -825,11 +846,13 @@ export async function confirmTaskCompletion(id, { confirmedBy }) {
 
 // --- Task management: assigned & ad-hoc tasks ---
 
-export async function fetchTasks({ assigneeId, category, status } = {}) {
+export async function fetchTasks({ assigneeId, category, status, createdFrom, createdTo } = {}) {
   let q = supabase.from('tasks').select('*').order('created_at', { ascending: false });
   if (assigneeId) q = q.eq('assignee_id', assigneeId);
   if (category) q = q.eq('category', category);
   if (status) q = q.eq('status', status);
+  if (createdFrom) q = q.gte('created_at', `${createdFrom}T00:00:00+07:00`);
+  if (createdTo) q = q.lte('created_at', `${createdTo}T23:59:59.999+07:00`);
   const { data, error } = await q;
   if (error) throw error;
   return data;
