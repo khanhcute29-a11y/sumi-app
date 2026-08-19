@@ -642,10 +642,12 @@ export async function createApprovalRequest({ type, orderId, orderCode, shiftLog
   notifyBadgesChanged();
 }
 
-export async function fetchApprovalRequests({ status, type } = {}) {
+export async function fetchApprovalRequests({ status, type, leaveFrom, leaveTo } = {}) {
   let q = supabase.from('approval_requests').select('*').order('created_at', { ascending: false });
   if (status) q = q.eq('status', status);
   if (type) q = q.eq('type', type);
+  if (leaveFrom) q = q.gte('leave_date', leaveFrom);
+  if (leaveTo) q = q.lte('leave_date', leaveTo);
   const { data, error } = await q;
   if (error) throw error;
   return data;
