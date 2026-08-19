@@ -1,14 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { Badge } from '../components/feedback/Badge';
 import { Button } from '../components/forms/Button';
+import { Select } from '../components/forms/Select';
 import { formatOrderItemLine, KEM_GROUP_CATEGORIES } from '../lib/cakePricing';
-import { formatDeliveryDateTime } from '../lib/date';
+import { formatDeliveryDateTime, localDateStr } from '../lib/date';
 import { CameraCapture } from '../components/CameraCapture';
 import { IncidentReportModal } from '../components/IncidentReportModal';
 import { ProductionLogModal } from '../components/ProductionLogModal';
 import { ActionChip } from '../components/ActionChip';
 import { OrderDetailModal } from '../components/OrderDetailModal';
-import { fetchOrders, updateOrder, uploadPhoto, addOrderNote, fetchOpenIncidentOrderIds } from '../lib/queries';
+import { StageSplitModal } from '../components/StageSplitModal';
+import { fetchOrders, updateOrder, uploadPhoto, addOrderNote, fetchOpenIncidentOrderIds, startOrderStage, completeOrderStage, reassignOrderStage, fetchShiftLogsRange, fetchAllProfiles } from '../lib/queries';
 import { useAuth } from '../lib/AuthContext';
 import { hasAnyRole } from '../lib/roles';
 import { enqueue } from '../lib/offlineQueue';
@@ -16,7 +18,7 @@ import { supabase } from '../lib/supabaseClient';
 import {
   IconStationHot, IconStationCold, IconStationWorkshop, IconStationSparkle,
   IconChat, IconWarning, IconPaperclip, IconClipboard, IconKitchen, IconCamera, IconSearch, IconClock,
-  IconPhone, IconHome, IconMapPin,
+  IconPhone, IconHome, IconMapPin, IconStaff,
 } from '../components/icons/FrogIcons';
 
 const STATIONS = {
@@ -100,12 +102,15 @@ function QuickAskButton({ orderId, orderCode }) {
 const STATUS_LABELS = { moi: 'Chờ nhận', dang_lam: 'Đang làm', cho_giao: 'Hoàn thành', dang_giao: 'Đang giao', hoan_thanh: 'Đã giao' };
 const STATUS_TONES = { moi: 'neutral', dang_lam: 'warning', cho_giao: 'success', dang_giao: 'info', hoan_thanh: 'success' };
 
-function CompactOrderRow({ order, onAccept, onReady, canAct, hasIncident }) {
+function CompactOrderRow({ order, onAccept, onReady, canAct, hasIncident, profile, onlineProfiles, onStageStart, onStageComplete, onStageReassign }) {
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [showIncident, setShowIncident] = useState(false);
   const [showFullDetail, setShowFullDetail] = useState(false);
+  const [showSplitStages, setShowSplitStages] = useState(false);
+  const stages = (order.order_stages || []).slice().sort((a, b) => a.stage_index - b.stage_index);
+  const canSplit = hasAnyRole(profile, ['kitchen_lead', 'owner', 'admin']) && stages.length === 0 && (order.status === 'moi' || order.status === 'dang_lam');
 
   const itemSummary = (order.order_items || []).map((it) => formatOrderItemLine(it)).join(', ') || 'Không có sản phẩm';
   const refPhotos = (order.order_items || []).filter((it) => it.ref_photo_url);
@@ -178,23 +183,66 @@ function CompactOrderRow({ order, onAccept, onReady, canAct, hasIncident }) {
           {order.kitchen_staff_name && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconKitchen size={14} /> Bếp: {order.kitchen_staff_name}</div>}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {order.status === 'moi' && <Button variant="primary" size="sm" onClick={handleAccept} disabled={busy || !canAct}>{busy ? 'Đang xử lý...' : 'Nhận đơn'}</Button>}
-            {order.status === 'dang_lam' && (
+            {stages.length === 0 && (
               <React.Fragment>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  <ElapsedBadge since={order.created_at} />
-                </div>
-                <Button variant="secondary" size="sm" icon={<IconCamera size={16} />} onClick={() => setShowCamera(true)} disabled={busy || !canAct}>{busy ? 'Đang xử lý...' : 'Chụp ảnh & Sẵn sàng giao'}</Button>
-                {navigator.onLine === false && (
-                  <Button variant="ghost" size="sm" onClick={handleReadySkipPhoto} disabled={busy || !canAct}>Mất mạng — bỏ qua ảnh, chuyển giao luôn</Button>
+                {order.status === 'moi' && <Button variant="primary" size="sm" onClick={handleAccept} disabled={busy || !canAct}>{busy ? 'Đang xử lý...' : 'Nhận đơn'}</Button>}
+                {order.status === 'dang_lam' && (
+                  <React.Fragment>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <ElapsedBadge since={order.created_at} />
+                    </div>
+                    <Button variant="secondary" size="sm" icon={<IconCamera size={16} />} onClick={() => setShowCamera(true)} disabled={busy || !canAct}>{busy ? 'Đang xử lý...' : 'Chụp ảnh & Sẵn sàng giao'}</Button>
+                    {navigator.onLine === false && (
+                      <Button variant="ghost" size="sm" onClick={handleReadySkipPhoto} disabled={busy || !canAct}>Mất mạng — bỏ qua ảnh, chuyển giao luôn</Button>
+                    )}
+                  </React.Fragment>
                 )}
               </React.Fragment>
+            )}
+            {stages.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {stages.map((stage, i) => {
+                  const locked = i > 0 && stages[i - 1].status !== 'hoan_thanh';
+                  const isMine = stage.assignee_id === profile?.id;
+                  const canManage = hasAnyRole(profile, ['kitchen_lead', 'owner', 'admin']);
+                  return (
+                    <div key={stage.id} style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: 8, background: locked ? 'var(--surface-sunken)' : 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', opacity: locked ? 0.6 : 1 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', font: 'var(--text-body-sm)' }}>
+                        <span>CĐ{stage.stage_index} · {stage.stage_name}</span>
+                        <Badge tone={stage.status === 'hoan_thanh' ? 'success' : stage.status === 'dang_lam' ? 'primary' : 'neutral'}>
+                          {stage.status === 'hoan_thanh' ? 'Xong' : stage.status === 'dang_lam' ? 'Đang làm' : locked ? 'Đã khoá' : 'Chờ làm'}
+                        </Badge>
+                      </div>
+                      <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>{stage.assignee_name}</div>
+                      {!locked && stage.status === 'cho_lam' && (isMine || canManage) && (
+                        <Button variant="secondary" size="sm" onClick={() => onStageStart(stage)}>Bắt đầu</Button>
+                      )}
+                      {!locked && stage.status === 'dang_lam' && (isMine || canManage) && (
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <Button variant="primary" size="sm" onClick={() => onStageComplete(order, stage, i === stages.length - 1)}>Hoàn thành</Button>
+                          <Select
+                            value=""
+                            onChange={(e) => {
+                              const opt = onlineProfiles.find((p) => p.id === e.target.value);
+                              if (opt) onStageReassign(stage, opt.id, opt.full_name);
+                            }}
+                            options={onlineProfiles.filter((p) => p.id !== stage.assignee_id).map((p) => ({ value: p.id, label: p.full_name }))}
+                            placeholder="Nhường lại cho..."
+                            style={{ maxWidth: 160 }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             )}
             {!canAct && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Chỉ Bếp hoặc Chủ sở hữu mới thao tác được ở đây.</div>}
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               <QuickAskButton orderId={order.id} orderCode={order.order_code} />
               <ActionChip icon={<IconWarning size={16} />} label="Báo sự cố" tone="danger" onClick={() => setShowIncident(true)} />
               <ActionChip icon={<IconSearch size={16} />} label="Xem đầy đủ" tone="neutral" onClick={() => setShowFullDetail(true)} />
+              {canSplit && <ActionChip icon={<IconStaff size={16} />} label="Chia công đoạn" tone="info" onClick={() => setShowSplitStages(true)} />}
             </div>
           </div>
 
@@ -208,6 +256,9 @@ function CompactOrderRow({ order, onAccept, onReady, canAct, hasIncident }) {
             />
           )}
           {showFullDetail && <OrderDetailModal order={order} onClose={() => setShowFullDetail(false)} />}
+          {showSplitStages && (
+            <StageSplitModal order={order} onClose={() => setShowSplitStages(false)} onSaved={() => setShowSplitStages(false)} />
+          )}
         </div>
       )}
     </div>
@@ -264,6 +315,7 @@ export default function KdsScreen({ initialStation }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showProductionLog, setShowProductionLog] = useState(false);
+  const [onlineProfiles, setOnlineProfiles] = useState([]);
 
   useEffect(() => {
     if (initialStation) setActiveStation(initialStation);
@@ -279,7 +331,20 @@ export default function KdsScreen({ initialStation }) {
 
   const loadIncidentOrderIds = () => { fetchOpenIncidentOrderIds().then(setIncidentOrderIds).catch(() => {}); };
 
-  useEffect(load, []);
+  const loadOnlineProfiles = () => {
+    const today = localDateStr();
+    Promise.all([fetchShiftLogsRange(today, today), fetchAllProfiles()])
+      .then(([logs, profiles]) => {
+        const onlineIds = new Set(
+          logs.filter((l) => l.type === 'checkin' && !logs.some((c) => c.type === 'checkout' && c.staff_id === l.staff_id && c.work_date === l.work_date))
+            .map((l) => l.staff_id)
+        );
+        setOnlineProfiles(profiles.filter((p) => onlineIds.has(p.id)));
+      })
+      .catch(() => {});
+  };
+
+  useEffect(() => { load(); loadOnlineProfiles(); }, []);
   useEffect(loadIncidentOrderIds, []);
 
   useEffect(() => {
@@ -287,6 +352,7 @@ export default function KdsScreen({ initialStation }) {
       .channel('kds-orders-live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, load)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'incident_reports' }, loadIncidentOrderIds)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_stages' }, load)
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
@@ -321,6 +387,25 @@ export default function KdsScreen({ initialStation }) {
     const fields = { status: 'cho_giao' };
     if (photoUrl) fields.kitchen_photo_url = photoUrl;
     applyFields(order, fields);
+  };
+
+  const handleStageStart = async (stage) => {
+    await startOrderStage(stage.id);
+    load();
+  };
+
+  const handleStageComplete = async (order, stage, isLastStage) => {
+    await completeOrderStage(stage.id);
+    if (isLastStage) {
+      applyFields(order, { status: 'cho_giao', kitchen_staff_name: stage.assignee_name });
+    } else {
+      load();
+    }
+  };
+
+  const handleStageReassign = async (stage, assigneeId, assigneeName) => {
+    await reassignOrderStage(stage.id, { assigneeId, assigneeName });
+    load();
   };
 
   // Ưu tiên khách đặt trước (created_at sớm hơn) lên đầu trong cùng ngày giao, kể cả khi giờ giao ghi trễ hơn.
@@ -393,7 +478,19 @@ export default function KdsScreen({ initialStation }) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {visibleOrders.map((o) => (
-            <CompactOrderRow key={o.id} order={o} onAccept={handleAccept} onReady={handleReady} canAct={canAct} hasIncident={incidentOrderIds.has(o.id)} />
+            <CompactOrderRow
+              key={o.id}
+              order={o}
+              onAccept={handleAccept}
+              onReady={handleReady}
+              canAct={canAct}
+              hasIncident={incidentOrderIds.has(o.id)}
+              profile={profile}
+              onlineProfiles={onlineProfiles}
+              onStageStart={handleStageStart}
+              onStageComplete={handleStageComplete}
+              onStageReassign={handleStageReassign}
+            />
           ))}
         </div>
       )}
