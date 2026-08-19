@@ -603,11 +603,11 @@ export async function reassignOrderStage(id, { assigneeId, assigneeName }) {
 
 // ---- Yêu cầu duyệt hợp nhất (sửa/hủy/xoá đơn, chấm công lại) ----
 
-export async function createApprovalRequest({ type, orderId, orderCode, shiftLogId, requesterId, requesterName, requesterRole, reason, photoUrl, leaveDate }) {
+export async function createApprovalRequest({ type, orderId, orderCode, shiftLogId, requesterId, requesterName, requesterRole, reason, photoUrl, leaveDate, taskId }) {
   const { error } = await supabase.from('approval_requests').insert({
     type, order_id: orderId || null, order_code: orderCode || null, shift_log_id: shiftLogId || null,
     requester_id: requesterId || null, requester_name: requesterName || null, requester_role: requesterRole || null,
-    reason: reason || null, photo_url: photoUrl || null, leave_date: leaveDate || null,
+    reason: reason || null, photo_url: photoUrl || null, leave_date: leaveDate || null, task_id: taskId || null,
   });
   if (error) throw error;
   notifyBadgesChanged();
@@ -809,6 +809,64 @@ export async function setTaskCompletion({ templateId, staffId, date, completed }
 
 export async function confirmTaskCompletion(id, { confirmedBy }) {
   const { error } = await supabase.from('task_completions').update({ confirmed_by: confirmedBy, confirmed_at: new Date().toISOString() }).eq('id', id);
+  if (error) throw error;
+  notifyBadgesChanged();
+}
+
+// --- Task management: assigned & ad-hoc tasks ---
+
+export async function fetchTasks({ assigneeId, category, status } = {}) {
+  let q = supabase.from('tasks').select('*').order('created_at', { ascending: false });
+  if (assigneeId) q = q.eq('assignee_id', assigneeId);
+  if (category) q = q.eq('category', category);
+  if (status) q = q.eq('status', status);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data;
+}
+
+export async function createAssignedTasks(rows) {
+  const { error } = await supabase.from('tasks').insert(rows.map((r) => ({ ...r, category: 'assigned' })));
+  if (error) throw error;
+  notifyBadgesChanged();
+}
+
+export async function createAdhocTask({ assigneeId, title, description, orderCode, createdBy }) {
+  const { error } = await supabase.from('tasks').insert({
+    category: 'adhoc', assignee_id: assigneeId, title, description: description || null, order_code: orderCode || null, created_by: createdBy || null,
+  });
+  if (error) throw error;
+  notifyBadgesChanged();
+}
+
+export async function completeTask(id) {
+  const { data: task, error: findErr } = await supabase.from('tasks').select('deadline').eq('id', id).single();
+  if (findErr) throw findErr;
+  const completedAt = new Date();
+  const late = task.deadline ? completedAt.getTime() > new Date(task.deadline).getTime() : false;
+  const { error } = await supabase.from('tasks').update({ status: 'done', completed_at: completedAt.toISOString(), late }).eq('id', id);
+  if (error) throw error;
+  notifyBadgesChanged();
+}
+
+export async function updateTask(id, fields) {
+  const { error } = await supabase.from('tasks').update(fields).eq('id', id);
+  if (error) throw error;
+  notifyBadgesChanged();
+}
+
+export async function deleteTask(id) {
+  const { error } = await supabase.from('tasks').delete().eq('id', id);
+  if (error) throw error;
+  notifyBadgesChanged();
+}
+
+export async function requestTaskExemption({ taskId, requesterId, requesterName, requesterRole, reason, photoUrl }) {
+  await createApprovalRequest({ type: 'task_exemption', taskId, reason, photoUrl, requesterId, requesterName, requesterRole });
+}
+
+export async function exemptTask(id) {
+  const { error } = await supabase.from('tasks').update({ status: 'exempted' }).eq('id', id);
   if (error) throw error;
   notifyBadgesChanged();
 }
