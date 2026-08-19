@@ -42,14 +42,7 @@ create policy "assignee or lead update order_stages" on order_stages for update
         and (role in ('kitchen_lead','owner','admin') or extra_roles && array['kitchen_lead','owner','admin'])
     )
   )
-  with check (
-    assignee_id = auth.uid()
-    or exists (
-      select 1 from profiles
-      where id = auth.uid()
-        and (role in ('kitchen_lead','owner','admin') or extra_roles && array['kitchen_lead','owner','admin'])
-    )
-  );
+  with check (auth.role() = 'authenticated' and public.is_approved());
 
 drop policy if exists "kitchen_lead delete order_stages" on order_stages;
 create policy "kitchen_lead delete order_stages" on order_stages for delete
