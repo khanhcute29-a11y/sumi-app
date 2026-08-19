@@ -1,4 +1,5 @@
 import { haversineKm } from './geo';
+import { localDateStr } from './date';
 
 export function computeShipperKpi(orders, staffFullName) {
   const matched = orders.filter((o) => o.shipper_staff_name === staffFullName && o.status === 'hoan_thanh');
@@ -31,25 +32,61 @@ function timeStrToMinutes(t) {
   return h * 60 + m;
 }
 
-// Ghép cặp checkin/checkout theo work_date để tính giờ làm, giờ tăng ca (so với
-// shift_configs.end_time nếu đã cấu hình), và giờ trễ (late_minutes trên dòng checkin).
-export function computeShiftHours(shiftLogs, shiftConfigs, staffId) {
-  const mine = shiftLogs.filter((l) => l.staff_id === staffId);
-  const byDate = {};
-  for (const log of mine) {
-    if (!byDate[log.work_date]) byDate[log.work_date] = {};
-    if (log.type === 'checkin') byDate[log.work_date].checkin = log;
-    if (log.type === 'checkout') byDate[log.work_date].checkout = log;
-  }
+// Cửa sổ tối đa giữa checkin và checkout để coi là cùng một ca — đủ dài cho ca
+// qua đêm, đủ ngắn để không ghép nhầm với ca của ngày khác.
+const MAX_SHIFT_PAIR_HOURS = 18;
+
+// Ca chỉ thuộc về kỳ đang xem nếu *bắt đầu* trong kỳ — ca bắt đầu hôm trước và
+// kết thúc trong kỳ không được tính vào kỳ này.
+function isCheckinInPeriod(checkin, inMs, periodFrom, periodTo) {
+  if (!periodFrom && !periodTo) return true;
+  const d = checkin.work_date || localDateStr(new Date(inMs));
+  if (periodFrom && d < periodFrom) return false;
+  if (periodTo && d > periodTo) return false;
+  return true;
+}
+
+// Ghép cặp checkin/checkout theo thứ tự thời gian (không gom theo work_date, vì
+// checkout của ca qua đêm được ghi sang ngày hôm sau và một ngày có thể có nhiều ca)
+// để tính giờ làm, giờ tăng ca (so với shift_configs.end_time nếu đã cấu hình),
+// và giờ trễ (late_minutes trên dòng checkin).
+// periodFrom/periodTo (tuỳ chọn): chỉ tính những ca có checkin nằm trong khoảng này.
+export function computeShiftHours(shiftLogs, shiftConfigs, staffId, periodFrom, periodTo) {
+  const mine = shiftLogs.filter((l) => l.staff_id === staffId && l.checkin_time);
+  const byTime = (a, b) => new Date(a.checkin_time) - new Date(b.checkin_time);
+  const checkins = mine.filter((l) => l.type === 'checkin').sort(byTime);
+  const checkouts = mine.filter((l) => l.type === 'checkout').sort(byTime);
+  const usedCheckout = new Set();
+
   let hoursWorked = 0;
   let overtimeHours = 0;
   let lateHours = 0;
   let hasUnconfiguredShift = false;
-  for (const workDate of Object.keys(byDate)) {
-    const { checkin, checkout } = byDate[workDate];
-    if (checkin) lateHours += (checkin.late_minutes || 0) / 60;
-    if (!checkin || !checkout) continue;
-    const actualHours = (new Date(checkout.checkin_time) - new Date(checkin.checkin_time)) / MS_PER_HOUR;
+
+  for (const checkin of checkins) {
+    const inMs = new Date(checkin.checkin_time).getTime();
+    // Ca nằm ngoài kỳ đang xem: vẫn ghép cặp (để "tiêu thụ" checkout của nó,
+    // tránh checkout đó bị gán nhầm cho ca sau) nhưng không cộng vào tổng.
+    const inPeriod = isCheckinInPeriod(checkin, inMs, periodFrom, periodTo);
+
+    let matchIdx = -1;
+    for (let i = 0; i < checkouts.length; i += 1) {
+      if (usedCheckout.has(i)) continue;
+      const outMs = new Date(checkouts[i].checkin_time).getTime();
+      if (outMs <= inMs) continue;
+      if (outMs - inMs > MAX_SHIFT_PAIR_HOURS * MS_PER_HOUR) break; // đã sắp xếp tăng dần
+      matchIdx = i;
+      break;
+    }
+
+    // Giờ trễ tính theo dòng checkin, độc lập với việc có checkout hay không.
+    if (inPeriod) lateHours += (checkin.late_minutes || 0) / 60;
+
+    if (matchIdx === -1) continue; // chưa checkout (hoặc quá cửa sổ) → 0 giờ cho ca này
+    usedCheckout.add(matchIdx);
+    if (!inPeriod) continue;
+
+    const actualHours = (new Date(checkouts[matchIdx].checkin_time) - new Date(checkin.checkin_time)) / MS_PER_HOUR;
     if (actualHours <= 0) continue;
     hoursWorked += actualHours;
     const config = shiftConfigs.find((c) => c.label === checkin.shift_label && (c.branch || null) === (checkin.branch || null));
@@ -72,17 +109,28 @@ export function computeAssignedTaskCount(tasks, staffId) {
   return tasks.filter((t) => t.category === 'assigned' && t.assignee_id === staffId).length;
 }
 
-export function computeLeaveDayCount(approvalRequests, staffId, from, to) {
+// Ngày nghỉ đến từ hai đường: đơn xin nghỉ đã duyệt (approval_requests) và nghỉ
+// đột xuất trong ngày (ghi thẳng vào shift_logs, không tạo approval_requests).
+export function computeLeaveDayCount(approvalRequests, shiftLogs, staffId, from, to) {
   const dates = new Set();
   for (const r of approvalRequests) {
     if (r.type !== 'leave_request' || r.status !== 'approved') continue;
     if (r.requester_id !== staffId) continue;
     if (!r.leave_date) continue;
-    if (from && r.leave_date < from) continue;
-    if (to && r.leave_date > to) continue;
     dates.add(r.leave_date);
   }
-  return dates.size;
+  for (const l of shiftLogs || []) {
+    if (l.type !== 'leave_request' || l.staff_id !== staffId) continue;
+    if (!l.work_date) continue;
+    dates.add(l.work_date);
+  }
+  let count = 0;
+  for (const d of dates) {
+    if (from && d < from) continue;
+    if (to && d > to) continue;
+    count += 1;
+  }
+  return count;
 }
 
 // Tổng thời gian trùng giờ [started_at, ended_at] giữa các công đoạn cùng đơn

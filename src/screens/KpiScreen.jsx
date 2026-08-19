@@ -26,6 +26,14 @@ function periodRangeFor(unit, anchor) {
   return { from: localDateStr(startOfMonth(anchor)), to: localDateStr(endOfMonth(anchor)) };
 }
 
+// Ca qua đêm ghi checkout sang ngày hôm sau, nên phải lấy shift_logs rộng hơn kỳ
+// một ngày mỗi phía; việc lọc "ca bắt đầu trong kỳ" do computeShiftHours đảm nhiệm.
+function shiftDateStr(dateStr, days) {
+  const d = new Date(`${dateStr}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return localDateStr(d);
+}
+
 function periodLabelFor(unit, anchor) {
   if (unit === 'day') return anchor.toLocaleDateString('vi-VN');
   if (unit === 'week') {
@@ -114,10 +122,10 @@ export default function KpiScreen() {
       fetchOrders({ from, to }),
       fetchOrders({ from, to, dateField: 'completed_at' }),
       fetchProductionLogs({ from, to }).catch(() => []),
-      fetchShiftLogsRange(from, to),
+      fetchShiftLogsRange(shiftDateStr(from, -1), shiftDateStr(to, 1)),
       fetchShiftConfigs(),
       fetchTasks({ category: 'assigned', createdFrom: from, createdTo: to }),
-      fetchApprovalRequests({ status: 'approved', type: 'leave_request' }),
+      fetchApprovalRequests({ status: 'approved', type: 'leave_request', leaveFrom: from, leaveTo: to }),
       fetchOrderStagesRange(from, to),
     ];
     if (isAdmin) loads.push(fetchAllProfiles());
@@ -149,11 +157,11 @@ export default function KpiScreen() {
   }, [allProfiles, isAdmin]);
 
   function extendedKpiFor(staffId) {
-    const shift = computeShiftHours(shiftLogs, shiftConfigs, staffId);
+    const shift = computeShiftHours(shiftLogs, shiftConfigs, staffId, from, to);
     return {
       ...shift,
       assignedTaskCount: computeAssignedTaskCount(assignedTasks, staffId),
-      leaveDayCount: computeLeaveDayCount(approvedLeaveRequests, staffId, from, to),
+      leaveDayCount: computeLeaveDayCount(approvedLeaveRequests, shiftLogs, staffId, from, to),
       coworkingHours: computeCoworkingHours(orderStages, staffId),
     };
   }
