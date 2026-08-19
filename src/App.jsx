@@ -28,6 +28,7 @@ import ShiftsScreen from './screens/ShiftsScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import StaffScreen from './screens/StaffScreen';
 import ApprovalRequestsScreen from './screens/ApprovalRequestsScreen';
+import TasksScreen from './screens/TasksScreen';
 import IncidentsScreen from './screens/IncidentsScreen';
 import KpiScreen from './screens/KpiScreen';
 import { applyUiScale, getUiScale } from './lib/uiScale';
@@ -112,7 +113,7 @@ function OpsApp({ onSignOut }) {
 
   const screens = {
     dashboard: <DashboardScreen />, orders: <OrdersScreen />, kds: <KdsScreen initialStation={kdsStation} />, warehouse: <WarehouseScreen branch={warehouseBranch} onBranchChange={setWarehouseBranch} />, cashbook: <CashbookScreen />,
-    shipping: <ShippingScreen />, products: <ProductsScreen />, shifts: <ShiftsScreen />, approvals: <ApprovalRequestsScreen />, incidents: <IncidentsScreen />, reports: <ReportsScreen />, kpi: <KpiScreen />, crm: <CustomersScreen />, staff: <StaffScreen />, settings: <SettingsScreen onSignOut={onSignOut} />,
+    shipping: <ShippingScreen />, products: <ProductsScreen />, shifts: <ShiftsScreen />, approvals: <ApprovalRequestsScreen />, tasks: <TasksScreen />, incidents: <IncidentsScreen />, reports: <ReportsScreen />, kpi: <KpiScreen />, crm: <CustomersScreen />, staff: <StaffScreen />, settings: <SettingsScreen onSignOut={onSignOut} />,
   };
   const isBottomKey = (k) => ['orders', 'kds', 'warehouse', 'cashbook'].includes(k);
   return (
