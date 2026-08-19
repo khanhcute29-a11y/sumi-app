@@ -24,7 +24,14 @@ create policy "owner manage task_templates" on task_templates for all
         and (role in ('owner','admin') or extra_roles && array['owner','admin'])
     )
   )
-  with check (auth.role() = 'authenticated' and public.is_approved());
+  with check (
+    auth.role() = 'authenticated' and public.is_approved()
+    and exists (
+      select 1 from profiles
+      where id = auth.uid()
+        and (role in ('owner','admin') or extra_roles && array['owner','admin'])
+    )
+  );
 
 create table if not exists task_completions (
   id uuid primary key default gen_random_uuid(),
