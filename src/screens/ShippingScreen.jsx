@@ -7,7 +7,7 @@ import { CameraCapture } from '../components/CameraCapture';
 import { IncidentReportModal } from '../components/IncidentReportModal';
 import { ActionChip } from '../components/ActionChip';
 import { OrderDetailModal } from '../components/OrderDetailModal';
-import { fetchOrders, updateOrder, uploadPhoto, fetchShopSettings } from '../lib/queries';
+import { fetchOrders, updateOrder, uploadPhoto, fetchShopSettings, createAdhocTask } from '../lib/queries';
 import { useAuth } from '../lib/AuthContext';
 import { hasAnyRole } from '../lib/roles';
 import { enqueue } from '../lib/offlineQueue';
@@ -65,13 +65,29 @@ function LateReasonPrompt({ onCancel, onConfirm, busy }) {
   );
 }
 
-function DeliveryCard({ order, onPickup, onComplete, onSignedDoc, canAct, shopSettings }) {
+function DeliveryCard({ order, onPickup, onComplete, onSignedDoc, isDedicatedShipper, profile, shopSettings }) {
   const [busy, setBusy] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [showSignedDocCamera, setShowSignedDocCamera] = useState(false);
   const [pendingComplete, setPendingComplete] = useState(null);
   const [showIncident, setShowIncident] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
+  const [phoneVerified, setPhoneVerified] = useState(false);
+  const [phoneInput, setPhoneInput] = useState('');
+  const [phoneError, setPhoneError] = useState('');
+  const claimedByMe = !!order.shipper_staff_name && order.shipper_staff_name === profile?.full_name;
+  const canAct = isDedicatedShipper || claimedByMe || (order.status === 'cho_giao' && phoneVerified);
+  const canSelfClaim = !isDedicatedShipper && !claimedByMe && order.status === 'cho_giao';
+
+  const handleVerifyPhone = () => {
+    const last4 = (order.customer?.phone || '').slice(-4);
+    if (!last4 || phoneInput.trim() !== last4) {
+      setPhoneError('Số không khớp — kiểm tra lại 4 số cuối SĐT khách.');
+      return;
+    }
+    setPhoneError('');
+    setPhoneVerified(true);
+  };
   const itemLine = (it) => formatOrderItemLine(it, { withQty: false });
   const itemSummary = (order.order_items || []).map(itemLine).join(', ') || 'Không có sản phẩm';
   const packageCount = (order.order_items || []).reduce((s, it) => s + (Number(it.qty) || 0), 0);
@@ -82,7 +98,7 @@ function DeliveryCard({ order, onPickup, onComplete, onSignedDoc, canAct, shopSe
     try {
       const photoUrl = await uploadPhoto(blob, 'pickup');
       const pos = await getCurrentPosition();
-      await onPickup(order, photoUrl, pos);
+      await onPickup(order, photoUrl, pos, canSelfClaim && phoneVerified);
     } finally {
       setBusy(false);
     }
@@ -129,7 +145,7 @@ function DeliveryCard({ order, onPickup, onComplete, onSignedDoc, canAct, shopSe
     setBusy(true);
     try {
       if (order.status === 'cho_giao') {
-        await onPickup(order, null, null);
+        await onPickup(order, null, null, canSelfClaim && phoneVerified);
       } else if (isLate(order)) {
         setPendingComplete({ photoUrl: null, pos: null });
       } else {
@@ -179,7 +195,17 @@ function DeliveryCard({ order, onPickup, onComplete, onSignedDoc, canAct, shopSe
         {order.status === 'cho_giao' && (
           <React.Fragment>
             <Badge tone="neutral" style={{ alignSelf: 'flex-start' }}>Chờ xuất bến</Badge>
-            <Button variant="primary" size="sm" icon={<IconCamera size={16} />} disabled={busy || !canAct} onClick={() => setShowCamera(true)}>{busy ? 'Đang xử lý...' : 'Chụp xuất bến & Nhận giao'}</Button>
+            {canSelfClaim && !phoneVerified && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 10, background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)' }}>
+                <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Nhập 4 số cuối SĐT khách để xác thực trước khi nhận giao hộ.</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Input placeholder="VD: 1234" value={phoneInput} onChange={(e) => setPhoneInput(e.target.value)} style={{ flex: '1 1 auto', minWidth: 0 }} />
+                  <Button size="sm" variant="secondary" onClick={handleVerifyPhone}>Xác thực</Button>
+                </div>
+                {phoneError && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{phoneError}</div>}
+              </div>
+            )}
+            <Button variant="primary" size="sm" icon={<IconCamera size={16} />} disabled={busy || !canAct} onClick={() => setShowCamera(true)}>{busy ? 'Đang xử lý...' : canSelfClaim ? 'Chụp xuất bến & Nhận giao hộ' : 'Chụp xuất bến & Nhận giao'}</Button>
             {navigator.onLine === false && <Button variant="ghost" size="sm" onClick={skipPhoto} disabled={busy || !canAct}>Mất mạng — bỏ qua ảnh, nhận giao luôn</Button>}
           </React.Fragment>
         )}
@@ -228,7 +254,7 @@ function DeliveryCard({ order, onPickup, onComplete, onSignedDoc, canAct, shopSe
           </React.Fragment>
         )}
 
-        {!canAct && order.status !== 'hoan_thanh' && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Chỉ Vận chuyển hoặc Chủ sở hữu mới thao tác được ở đây.</div>}
+        {!canAct && order.status !== 'hoan_thanh' && !canSelfClaim && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Chỉ Vận chuyển, Chủ sở hữu, hoặc người đã nhận giao hộ mới thao tác được ở đây.</div>}
         <ActionChip icon={<IconWarning size={16} />} label="Báo sự cố" tone="danger" onClick={() => setShowIncident(true)} />
         {showCamera && <CameraCapture onClose={() => setShowCamera(false)} onCapture={order.status === 'cho_giao' ? handlePickupPhoto : handleCompletePhoto} />}
         {showSignedDocCamera && <CameraCapture onClose={() => setShowSignedDocCamera(false)} onCapture={handleSignedDocPhoto} />}
@@ -248,7 +274,7 @@ function DeliveryCard({ order, onPickup, onComplete, onSignedDoc, canAct, shopSe
 
 export default function ShippingScreen() {
   const { profile } = useAuth();
-  const canAct = hasAnyRole(profile, ['shipper', 'owner', 'admin']);
+  const isDedicatedShipper = hasAnyRole(profile, ['shipper', 'owner', 'admin']);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -287,11 +313,17 @@ export default function ShippingScreen() {
       });
   };
 
-  const handlePickup = async (order, photoUrl, pos) => {
+  const handlePickup = async (order, photoUrl, pos, selfClaimed) => {
     const fields = { status: 'dang_giao', shipper_staff_name: profile?.full_name || null };
     if (photoUrl) fields.pickup_photo_url = photoUrl;
     if (pos) { fields.pickup_lat = pos.lat; fields.pickup_lng = pos.lng; }
     applyFields(order, fields);
+    if (selfClaimed) {
+      createAdhocTask({
+        assigneeId: profile?.id, title: `Nhận giao hộ đơn ${order.order_code || ''}`.trim(),
+        orderCode: order.order_code || null, createdBy: profile?.id,
+      }).catch(() => {});
+    }
   };
 
   const handleComplete = async (order, photoUrl, pos, lateReason) => {
@@ -319,7 +351,7 @@ export default function ShippingScreen() {
         <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Chưa có đơn nào cần giao.</div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 12 }}>
-          {orders.map((o) => <DeliveryCard key={o.id} order={o} onPickup={handlePickup} onComplete={handleComplete} onSignedDoc={handleSignedDoc} canAct={canAct} shopSettings={shopSettings} />)}
+          {orders.map((o) => <DeliveryCard key={o.id} order={o} onPickup={handlePickup} onComplete={handleComplete} onSignedDoc={handleSignedDoc} isDedicatedShipper={isDedicatedShipper} profile={profile} shopSettings={shopSettings} />)}
         </div>
       )}
     </div>
