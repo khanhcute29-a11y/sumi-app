@@ -53,10 +53,10 @@ export function computeShiftHours(shiftLogs, shiftConfigs, staffId) {
     if (actualHours <= 0) continue;
     hoursWorked += actualHours;
     const config = shiftConfigs.find((c) => c.label === checkin.shift_label && (c.branch || null) === (checkin.branch || null));
-    if (!config || !config.end_time) { hasUnconfiguredShift = true; continue; }
+    if (!config || !config.end_time || config.end_time === config.start_time) { hasUnconfiguredShift = true; continue; }
     const startMin = timeStrToMinutes(config.start_time);
     let endMin = timeStrToMinutes(config.end_time);
-    if (endMin <= startMin) endMin += 24 * 60; // ca qua đêm
+    if (endMin < startMin) endMin += 24 * 60; // ca qua đêm
     const expectedHours = (endMin - startMin) / 60;
     overtimeHours += Math.max(0, actualHours - expectedHours);
   }
