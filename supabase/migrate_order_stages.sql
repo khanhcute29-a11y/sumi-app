@@ -24,7 +24,8 @@ create policy "read order_stages" on order_stages for select
 drop policy if exists "kitchen_lead insert order_stages" on order_stages;
 create policy "kitchen_lead insert order_stages" on order_stages for insert
   with check (
-    exists (
+    auth.role() = 'authenticated' and public.is_approved()
+    and exists (
       select 1 from profiles
       where id = auth.uid()
         and (role in ('kitchen_lead','owner','admin') or extra_roles && array['kitchen_lead','owner','admin'])
@@ -36,6 +37,24 @@ create policy "assignee or lead update order_stages" on order_stages for update
   using (
     assignee_id = auth.uid()
     or exists (
+      select 1 from profiles
+      where id = auth.uid()
+        and (role in ('kitchen_lead','owner','admin') or extra_roles && array['kitchen_lead','owner','admin'])
+    )
+  )
+  with check (
+    assignee_id = auth.uid()
+    or exists (
+      select 1 from profiles
+      where id = auth.uid()
+        and (role in ('kitchen_lead','owner','admin') or extra_roles && array['kitchen_lead','owner','admin'])
+    )
+  );
+
+drop policy if exists "kitchen_lead delete order_stages" on order_stages;
+create policy "kitchen_lead delete order_stages" on order_stages for delete
+  using (
+    exists (
       select 1 from profiles
       where id = auth.uid()
         and (role in ('kitchen_lead','owner','admin') or extra_roles && array['kitchen_lead','owner','admin'])

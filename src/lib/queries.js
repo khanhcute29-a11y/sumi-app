@@ -584,13 +584,13 @@ export async function createOrderStages(rows) {
 }
 
 export async function startOrderStage(id) {
-  const { error } = await supabase.from('order_stages').update({ status: 'dang_lam', started_at: new Date().toISOString() }).eq('id', id);
+  const { error } = await supabase.from('order_stages').update({ status: 'dang_lam', started_at: new Date().toISOString() }).eq('id', id).eq('status', 'cho_lam');
   if (error) throw error;
   notifyBadgesChanged();
 }
 
 export async function completeOrderStage(id) {
-  const { error } = await supabase.from('order_stages').update({ status: 'hoan_thanh', ended_at: new Date().toISOString() }).eq('id', id);
+  const { error } = await supabase.from('order_stages').update({ status: 'hoan_thanh', ended_at: new Date().toISOString() }).eq('id', id).eq('status', 'dang_lam');
   if (error) throw error;
   notifyBadgesChanged();
 }

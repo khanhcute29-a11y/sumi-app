@@ -109,6 +109,9 @@ function CompactOrderRow({ order, onAccept, onReady, canAct, hasIncident, profil
   const [showIncident, setShowIncident] = useState(false);
   const [showFullDetail, setShowFullDetail] = useState(false);
   const [showSplitStages, setShowSplitStages] = useState(false);
+  const [completingStage, setCompletingStage] = useState(null);
+  const [stageBusy, setStageBusy] = useState(null);
+  const [stageActionError, setStageActionError] = useState('');
   const stages = (order.order_stages || []).slice().sort((a, b) => a.stage_index - b.stage_index);
   const canSplit = hasAnyRole(profile, ['kitchen_lead', 'owner', 'admin']) && stages.length === 0 && (order.status === 'moi' || order.status === 'dang_lam');
 
@@ -131,6 +134,79 @@ function CompactOrderRow({ order, onAccept, onReady, canAct, hasIncident, profil
   const handleReadySkipPhoto = async () => {
     setBusy(true);
     try { await onReady(order, null); } finally { setBusy(false); }
+  };
+
+  // ---- Stage checklist actions (multi-stage split orders) ----
+  const handleStageStartClick = async (stage) => {
+    setStageActionError('');
+    setStageBusy(stage.id);
+    try {
+      await onStageStart(stage);
+    } catch (err) {
+      setStageActionError(err.message || 'Có lỗi xảy ra, thử lại.');
+    } finally {
+      setStageBusy(null);
+    }
+  };
+
+  const handleStageCompleteClick = async (stage, isLast) => {
+    if (isLast) {
+      // Công đoạn cuối vẫn cần ảnh giao hàng như luồng bếp thường — mở camera thay vì hoàn thành thẳng.
+      setStageActionError('');
+      setCompletingStage(stage);
+      setShowCamera(true);
+      return;
+    }
+    setStageActionError('');
+    setStageBusy(stage.id);
+    try {
+      await onStageComplete(order, stage, false);
+    } catch (err) {
+      setStageActionError(err.message || 'Có lỗi xảy ra, thử lại.');
+    } finally {
+      setStageBusy(null);
+    }
+  };
+
+  const handleStageReadyWithPhoto = async (blob) => {
+    setShowCamera(false);
+    const stage = completingStage;
+    setCompletingStage(null);
+    if (!stage) return;
+    setStageActionError('');
+    setStageBusy(stage.id);
+    try {
+      const photoUrl = await uploadPhoto(blob, 'kitchen');
+      await onStageComplete(order, stage, true, photoUrl);
+    } catch (err) {
+      setStageActionError(err.message || 'Có lỗi xảy ra, thử lại.');
+    } finally {
+      setStageBusy(null);
+    }
+  };
+
+  const handleStageReadySkipPhoto = async (stage) => {
+    setStageActionError('');
+    setStageBusy(stage.id);
+    try {
+      await onStageComplete(order, stage, true, null);
+    } catch (err) {
+      setStageActionError(err.message || 'Có lỗi xảy ra, thử lại.');
+    } finally {
+      setStageBusy(null);
+    }
+  };
+
+  const handleStageReassignClick = async (stage, assigneeId, assigneeName) => {
+    setStageActionError('');
+    setStageBusy(stage.id);
+    try {
+      await onStageReassign(stage, assigneeId, assigneeName);
+    } catch (err) {
+      setStageActionError(err.message || 'Có lỗi xảy ra, thử lại.');
+    } finally {
+      setStageBusy(null);
+    }
   };
 
   return (
@@ -215,26 +291,39 @@ function CompactOrderRow({ order, onAccept, onReady, canAct, hasIncident, profil
                       </div>
                       <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>{stage.assignee_name}</div>
                       {!locked && stage.status === 'cho_lam' && (isMine || canManage) && (
-                        <Button variant="secondary" size="sm" onClick={() => onStageStart(stage)}>Bắt đầu</Button>
+                        <Button variant="secondary" size="sm" onClick={() => handleStageStartClick(stage)} disabled={stageBusy === stage.id}>
+                          {stageBusy === stage.id ? 'Đang xử lý...' : 'Bắt đầu'}
+                        </Button>
                       )}
                       {!locked && stage.status === 'dang_lam' && (isMine || canManage) && (
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          <Button variant="primary" size="sm" onClick={() => onStageComplete(order, stage, i === stages.length - 1)}>Hoàn thành</Button>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          <Button variant="primary" size="sm" onClick={() => handleStageCompleteClick(stage, i === stages.length - 1)} disabled={stageBusy === stage.id}>
+                            {stageBusy === stage.id ? 'Đang xử lý...' : 'Hoàn thành'}
+                          </Button>
+                          {i === stages.length - 1 && navigator.onLine === false && (
+                            <Button variant="ghost" size="sm" onClick={() => handleStageReadySkipPhoto(stage)} disabled={stageBusy === stage.id}>
+                              Mất mạng — bỏ qua ảnh, hoàn thành luôn
+                            </Button>
+                          )}
                           <Select
                             value=""
                             onChange={(e) => {
                               const opt = onlineProfiles.find((p) => p.id === e.target.value);
-                              if (opt) onStageReassign(stage, opt.id, opt.full_name);
+                              if (opt) handleStageReassignClick(stage, opt.id, opt.full_name);
                             }}
                             options={onlineProfiles.filter((p) => p.id !== stage.assignee_id).map((p) => ({ value: p.id, label: p.full_name }))}
                             placeholder="Nhường lại cho..."
                             style={{ maxWidth: 160 }}
+                            disabled={stageBusy === stage.id}
                           />
                         </div>
                       )}
                     </div>
                   );
                 })}
+                {stageActionError && (
+                  <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{stageActionError}</div>
+                )}
               </div>
             )}
             {!canAct && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Chỉ Bếp hoặc Chủ sở hữu mới thao tác được ở đây.</div>}
@@ -246,7 +335,12 @@ function CompactOrderRow({ order, onAccept, onReady, canAct, hasIncident, profil
             </div>
           </div>
 
-          {showCamera && <CameraCapture onClose={() => setShowCamera(false)} onCapture={handleReadyWithPhoto} />}
+          {showCamera && (
+            <CameraCapture
+              onClose={() => { setShowCamera(false); setCompletingStage(null); }}
+              onCapture={completingStage ? handleStageReadyWithPhoto : handleReadyWithPhoto}
+            />
+          )}
           {showIncident && (
             <IncidentReportModal
               orderId={order.id}
@@ -348,11 +442,14 @@ export default function KdsScreen({ initialStation }) {
   useEffect(loadIncidentOrderIds, []);
 
   useEffect(() => {
+    // Nhân viên có thể check-in sau khi tab KDS đã mở — làm mới luôn danh sách "đang trực"
+    // mỗi khi có thay đổi đơn/công đoạn, để khỏi phải tải lại trang mới thấy người mới vào ca.
+    const refreshOrdersAndOnline = () => { load(); loadOnlineProfiles(); };
     const channel = supabase
       .channel('kds-orders-live')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, refreshOrdersAndOnline)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'incident_reports' }, loadIncidentOrderIds)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_stages' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_stages' }, refreshOrdersAndOnline)
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, []);
@@ -394,10 +491,12 @@ export default function KdsScreen({ initialStation }) {
     load();
   };
 
-  const handleStageComplete = async (order, stage, isLastStage) => {
+  const handleStageComplete = async (order, stage, isLastStage, photoUrl) => {
     await completeOrderStage(stage.id);
     if (isLastStage) {
-      applyFields(order, { status: 'cho_giao', kitchen_staff_name: stage.assignee_name });
+      const fields = { status: 'cho_giao', kitchen_staff_name: stage.assignee_name };
+      if (photoUrl) fields.kitchen_photo_url = photoUrl;
+      applyFields(order, fields);
     } else {
       load();
     }
