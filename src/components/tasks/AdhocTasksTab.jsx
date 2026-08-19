@@ -18,7 +18,7 @@ export function AdhocTasksTab({ profile, isOwner, viewingStaffId, orderCodeFilte
   useEffect(() => { load(); }, [viewingStaffId, refreshKey]);
 
   const visible = orderCodeFilter ? tasks.filter((t) => (t.order_code || '').includes(orderCodeFilter)) : tasks;
-  const canReport = !isOwner && profile?.id === viewingStaffId;
+  const canReport = profile?.id === viewingStaffId;
 
   const handleDelete = async (id) => {
     setBusyId(id); setError('');
