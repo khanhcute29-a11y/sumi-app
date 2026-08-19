@@ -199,8 +199,16 @@ export async function updateOrderStatus(id, status) {
 }
 
 export async function updateOrder(id, fields) {
-  const { error } = await supabase.from('orders').update(fields).eq('id', id);
+  // .select() để phân biệt "đã ghi" với "RLS lọc hết hàng ở mệnh đề USING" — trường hợp
+  // sau PostgREST trả về thành công nhưng 0 dòng, không có lỗi. Gắn thêm mã lỗi để phía
+  // giao diện coi đây là từ chối từ server (hiện lỗi) chứ không phải mất mạng (xếp hàng).
+  const { data, error } = await supabase.from('orders').update(fields).eq('id', id).select('id');
   if (error) throw error;
+  if (!data || data.length === 0) {
+    const err = new Error('Không cập nhật được đơn hàng — bạn không có quyền hoặc đơn không còn ở trạng thái phù hợp.');
+    err.code = 'RLS_NO_ROWS';
+    throw err;
+  }
   notifyBadgesChanged();
 }
 
