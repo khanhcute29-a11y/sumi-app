@@ -900,10 +900,14 @@ function ProductRow({ item, onChange, onRemove, isKem, canRemove, products }) {
       {isSizeVariant && (() => {
         const sortedVariants = [...(selectedProduct?.product_variants || [])].sort((a, b) => Number(a.price) - Number(b.price));
         return (
-          <Select label="Kích thước" value={item.size || ''} onChange={(e) => {
-            const variant = sortedVariants.find((v) => v.label === e.target.value);
-            onChange({ ...item, size: e.target.value, price: variant?.price ?? '' });
-          }} options={[{ value: '', label: 'Chọn size...' }, ...sortedVariants.map((v) => ({ value: v.label, label: v.label }))]} style={{ maxWidth: 220 }} />
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
+            <Select label="Kích thước" value={item.size || ''} onChange={(e) => {
+              const variant = sortedVariants.find((v) => v.label === e.target.value);
+              onChange({ ...item, size: e.target.value, price: variant?.price ?? '' });
+            }} options={[{ value: '', label: 'Chọn size...' }, ...sortedVariants.map((v) => ({ value: v.label, label: v.label }))]} style={{ flex: '1 1 150px', minWidth: 0 }} />
+            <Input label="Nội dung (chữ trên bánh)" placeholder="VD: Chúc mừng sinh nhật Linh" value={item.content || ''} onChange={(e) => set('content', e.target.value)} style={{ flex: '2 1 220px', minWidth: 0 }} />
+            <Input label="Loại nến" placeholder="VD: Nến số 25" value={item.candle || ''} onChange={(e) => set('candle', e.target.value)} style={{ flex: '1 1 150px', minWidth: 0 }} />
+          </div>
         );
       })()}
       {isQtyOnly && (
