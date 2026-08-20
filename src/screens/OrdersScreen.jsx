@@ -1149,8 +1149,8 @@ function EditOrderModal({ order, onClose, onSaved }) {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 860);
   const [showIncident, setShowIncident] = useState(false);
   const [cakeType, setCakeType] = useState('kem');
-  const initialKem = (order.order_items || []).filter((it) => it.category === 'banh_kem').map(itemToRowState);
-  const initialMan = (order.order_items || []).filter((it) => it.category !== 'banh_kem').map(itemToRowState);
+  const initialKem = (order.order_items || []).filter((it) => KEM_GROUP_CATEGORIES.includes(it.category)).map(itemToRowState);
+  const initialMan = (order.order_items || []).filter((it) => !KEM_GROUP_CATEGORIES.includes(it.category)).map(itemToRowState);
   const [kemProducts, setKemProducts] = useState(initialKem.length ? initialKem : [{ ...BLANK_KEM }]);
   const [manProducts, setManProducts] = useState(initialMan.length ? initialMan : [{ ...BLANK_MAN }]);
   const [catalog, setCatalog] = useState([]);

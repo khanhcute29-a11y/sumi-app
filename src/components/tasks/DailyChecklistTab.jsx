@@ -93,9 +93,9 @@ export function DailyChecklistTab({ profile, isOwner, viewingStaffId, viewingSta
         const done = !!c?.completed_at;
         const confirmed = !!c?.confirmed_at;
         return (
-          <div key={t.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 10, background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)' }}>
-            <Checkbox label={t.title} checked={done} onChange={canToggle ? () => handleToggle(t.id, done) : undefined} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div key={t.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', padding: 10, background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)' }}>
+            <Checkbox label={t.title} checked={done} onChange={canToggle ? () => handleToggle(t.id, done) : undefined} style={{ flex: '1 1 160px', minWidth: 0 }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               {confirmed && <span style={{ font: 'var(--text-caption)', color: 'var(--status-success)' }}>Đã xác nhận</span>}
               {isOwner && done && !confirmed && (
                 <Button size="sm" variant="secondary" disabled={busyId === c.id} onClick={() => handleConfirm(c.id)}>Xác nhận</Button>
