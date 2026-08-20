@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from './forms/Button';
 import { Input } from './forms/Input';
 import { Select } from './forms/Select';
@@ -8,10 +8,61 @@ import { localDateStr } from '../lib/date';
 import { formatVnd, parseDigits } from '../lib/currency';
 import { IconClipboard } from './icons/FrogIcons';
 
+const MANUAL_OPTION = '__manual__';
+
+function ProductPicker({ products, productId, onSelectProduct, onManual }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = (e) => { if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
+
+  const filtered = query.trim() ? products.filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase())) : products;
+  const selectedName = products.find((p) => p.id === productId)?.name || '';
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative' }}>
+      <Input label="Sản phẩm" placeholder="Gõ để tìm sản phẩm..." value={open ? query : selectedName}
+        onFocus={() => { setOpen(true); setQuery(''); }}
+        onChange={(e) => { setOpen(true); setQuery(e.target.value); }} />
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20, marginTop: 4,
+          background: 'var(--surface-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)',
+          boxShadow: 'var(--shadow-lg)', maxHeight: 220, overflowY: 'auto',
+        }}>
+          {filtered.length === 0 && <div style={{ padding: '8px 10px', font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Không tìm thấy sản phẩm nào.</div>}
+          {filtered.map((p) => (
+            <button key={p.id} type="button" onClick={() => { onSelectProduct(p.id); setOpen(false); setQuery(''); }} style={{
+              display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px', border: 'none', background: 'none',
+              cursor: 'pointer', font: 'var(--text-body-sm)', color: 'var(--text-primary)',
+            }}>
+              {p.name}
+            </button>
+          ))}
+          <button type="button" onClick={() => { onManual(); setOpen(false); setQuery(''); }} style={{
+            display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px', border: 'none', borderTop: '1px solid var(--border-subtle)',
+            background: 'none', cursor: 'pointer', font: 'var(--text-body-sm)', color: 'var(--action-primary)',
+          }}>
+            Khác (nhập tay)
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ProductionLogModal({ onClose, onSaved }) {
   const { profile } = useAuth();
   const [products, setProducts] = useState([]);
+  const [mode, setMode] = useState('catalog');
   const [productId, setProductId] = useState('');
+  const [manualName, setManualName] = useState('');
   const [size, setSize] = useState('');
   const [qty, setQty] = useState('');
   const [price, setPrice] = useState('');
@@ -27,11 +78,19 @@ export function ProductionLogModal({ onClose, onSaved }) {
   const variants = useMemo(() => selectedProduct?.product_variants || [], [selectedProduct]);
 
   const handleSelectProduct = (id) => {
+    setMode('catalog');
     setProductId(id);
     const product = products.find((p) => p.id === id);
     const productVariants = product?.product_variants || [];
     setSize('');
     setPrice(productVariants.length === 0 ? String(product?.price || '') : '');
+  };
+
+  const handleManual = () => {
+    setMode('manual');
+    setProductId('');
+    setSize('');
+    setPrice('');
   };
 
   const handleSelectSize = (label) => {
@@ -41,16 +100,16 @@ export function ProductionLogModal({ onClose, onSaved }) {
   };
 
   const handleSave = async () => {
-    const product = products.find((p) => p.id === productId);
-    if (!product) { setError('Chọn 1 sản phẩm.'); return; }
-    if (variants.length > 0 && !size) { setError('Chọn kích thước.'); return; }
+    const productName = mode === 'manual' ? manualName.trim() : selectedProduct?.name;
+    if (!productName) { setError(mode === 'manual' ? 'Nhập tên sản phẩm.' : 'Chọn 1 sản phẩm.'); return; }
+    if (mode === 'catalog' && variants.length > 0 && !size) { setError('Chọn kích thước.'); return; }
     const qtyNum = Number(qty);
     if (!qtyNum || qtyNum <= 0) { setError('Nhập số lượng hợp lệ.'); return; }
     setSaving(true);
     setError('');
     try {
       await addProductionLog({
-        productId: product.id, productName: product.name, qty: qtyNum,
+        productId: mode === 'catalog' ? productId : null, productName, qty: qtyNum,
         size: size || null, price: price ? Number(price) : null,
         staffId: profile?.id, staffName: profile?.full_name, workDate: localDateStr(),
       });
@@ -72,14 +131,15 @@ export function ProductionLogModal({ onClose, onSaved }) {
         </div>
         <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Ghi số lượng bánh vừa làm xong cho tủ bakery (không phải theo đơn khách).</div>
-          <Select
-            label="Sản phẩm"
-            value={productId}
-            onChange={(e) => handleSelectProduct(e.target.value)}
-            options={products.map((p) => ({ value: p.id, label: p.name }))}
-            placeholder="Chọn sản phẩm..."
-          />
-          {variants.length > 0 && (
+          {mode === 'catalog' ? (
+            <ProductPicker products={products} productId={productId} onSelectProduct={handleSelectProduct} onManual={handleManual} />
+          ) : (
+            <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <Input label="Sản phẩm (nhập tay)" placeholder="VD: Bánh Kem Dâu" value={manualName} onChange={(e) => setManualName(e.target.value)} style={{ flex: '1 1 160px', minWidth: 0 }} />
+              <Button variant="ghost" size="sm" onClick={() => { setMode('catalog'); setManualName(''); }}>Tìm trong menu</Button>
+            </div>
+          )}
+          {mode === 'catalog' && variants.length > 0 && (
             <Select
               label="Kích thước"
               value={size}

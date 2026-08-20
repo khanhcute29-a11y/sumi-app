@@ -553,7 +553,7 @@ export default function KdsScreen({ initialStation }) {
       </div>
 
       {canAct && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
           <div>
             <Button variant="secondary" size="sm" icon={<IconClipboard size={16} />} onClick={() => setShowProductionLog(true)}>
               Ghi Sản Xuất

@@ -46,7 +46,7 @@ export function ProductionLogList({ refreshKey }) {
   }, [logs]);
 
   return (
-    <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
       <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>Đã ghi sản xuất</div>
       <Tabs
         tabs={[
@@ -79,8 +79,15 @@ export function ProductionLogList({ refreshKey }) {
         <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Chưa có sản xuất nào trong khoảng này.</div>
       ) : (
         <>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', font: 'var(--text-body-sm)' }}>
+          <div style={{ overflowX: 'auto', minWidth: 0 }}>
+            <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', font: 'var(--text-body-sm)' }}>
+              <colgroup>
+                <col style={{ width: '40%' }} />
+                <col style={{ width: '12%' }} />
+                <col style={{ width: '10%' }} />
+                <col style={{ width: '18%' }} />
+                <col style={{ width: '20%' }} />
+              </colgroup>
               <thead>
                 <tr style={{ color: 'var(--text-muted)', textAlign: 'left' }}>
                   <th style={{ padding: '6px 4px', borderBottom: '1px solid var(--border-subtle)', fontWeight: 400 }}>Sản phẩm</th>
@@ -93,7 +100,7 @@ export function ProductionLogList({ refreshKey }) {
               <tbody>
                 {logs.map((l) => (
                   <tr key={l.id}>
-                    <td style={{ padding: '8px 4px', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}>{l.product_name}</td>
+                    <td style={{ padding: '8px 4px', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-primary)', wordBreak: 'break-word' }}>{l.product_name}</td>
                     <td style={{ padding: '8px 4px', borderBottom: '1px solid var(--border-subtle)', color: l.size ? 'var(--text-primary)' : 'var(--text-muted)' }}>{l.size || '—'}</td>
                     <td style={{ padding: '8px 4px', borderBottom: '1px solid var(--border-subtle)', textAlign: 'right', color: 'var(--text-primary)' }}>{l.qty}</td>
                     <td style={{ padding: '8px 4px', borderBottom: '1px solid var(--border-subtle)', textAlign: 'right', color: 'var(--text-primary)' }}>
