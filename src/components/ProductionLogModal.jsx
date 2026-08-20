@@ -148,8 +148,8 @@ export function ProductionLogModal({ onClose, onSaved }) {
               placeholder="Chọn size..."
             />
           )}
-          <div style={{ display: 'flex', gap: 10 }}>
-            <Input label="Số lượng" type="number" placeholder="VD: 50" value={qty} onChange={(e) => setQty(e.target.value)} style={{ flex: 1 }} />
+          <div style={{ display: 'flex', gap: 10, minWidth: 0 }}>
+            <Input label="Số lượng" type="number" placeholder="VD: 50" value={qty} onChange={(e) => setQty(e.target.value)} style={{ flex: 1, minWidth: 0 }} />
             <Input
               label="Giá tiền"
               type="text"
@@ -159,7 +159,7 @@ export function ProductionLogModal({ onClose, onSaved }) {
               onFocus={() => setPriceFocused(true)}
               onBlur={() => setPriceFocused(false)}
               onChange={(e) => setPrice(parseDigits(e.target.value))}
-              style={{ flex: 1 }}
+              style={{ flex: 1, minWidth: 0 }}
             />
           </div>
           <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Giá tự điền theo sản phẩm/kích thước đã chọn, sửa lại được nếu cần.</div>

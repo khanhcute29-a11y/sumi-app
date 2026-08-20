@@ -47,7 +47,6 @@ export function ProductionLogList({ refreshKey }) {
 
   return (
     <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', padding: 14, display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
-      <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>Đã ghi sản xuất</div>
       <Tabs
         tabs={[
           { key: 'day', label: 'Ngày' },

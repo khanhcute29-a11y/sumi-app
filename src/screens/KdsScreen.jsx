@@ -410,6 +410,7 @@ export default function KdsScreen({ initialStation }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showProductionLog, setShowProductionLog] = useState(false);
+  const [showProductionLogList, setShowProductionLogList] = useState(false);
   const [productionLogRefreshKey, setProductionLogRefreshKey] = useState(0);
   const [onlineProfiles, setOnlineProfiles] = useState([]);
   const [actionError, setActionError] = useState('');
@@ -554,12 +555,15 @@ export default function KdsScreen({ initialStation }) {
 
       {canAct && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
-          <div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Button variant="secondary" size="sm" icon={<IconClipboard size={16} />} onClick={() => setShowProductionLog(true)}>
               Ghi Sản Xuất
             </Button>
+            <Button variant={showProductionLogList ? 'primary' : 'ghost'} size="sm" onClick={() => setShowProductionLogList((v) => !v)}>
+              Đã ghi sản xuất {showProductionLogList ? '▲' : '▼'}
+            </Button>
           </div>
-          <ProductionLogList refreshKey={productionLogRefreshKey} />
+          {showProductionLogList && <ProductionLogList refreshKey={productionLogRefreshKey} />}
         </div>
       )}
 
