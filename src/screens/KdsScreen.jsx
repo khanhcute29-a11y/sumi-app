@@ -410,6 +410,7 @@ export default function KdsScreen({ initialStation }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showProductionLog, setShowProductionLog] = useState(false);
+  const [productionLogRefreshKey, setProductionLogRefreshKey] = useState(0);
   const [onlineProfiles, setOnlineProfiles] = useState([]);
   const [actionError, setActionError] = useState('');
 
@@ -558,7 +559,7 @@ export default function KdsScreen({ initialStation }) {
               Ghi Sản Xuất
             </Button>
           </div>
-          <ProductionLogList />
+          <ProductionLogList refreshKey={productionLogRefreshKey} />
         </div>
       )}
 
@@ -618,7 +619,7 @@ export default function KdsScreen({ initialStation }) {
       {showProductionLog && (
         <ProductionLogModal
           onClose={() => setShowProductionLog(false)}
-          onSaved={() => setShowProductionLog(false)}
+          onSaved={() => { setShowProductionLog(false); setProductionLogRefreshKey((k) => k + 1); }}
         />
       )}
     </div>

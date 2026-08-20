@@ -4,8 +4,9 @@ import { Button } from './forms/Button';
 import { Input } from './forms/Input';
 import { fetchProductionLogs } from '../lib/queries';
 import { localDateStr, periodRangeFor, periodLabelFor, shiftAnchor } from '../lib/date';
+import { supabase } from '../lib/supabaseClient';
 
-export function ProductionLogList() {
+export function ProductionLogList({ refreshKey }) {
   const [unit, setUnit] = useState('day');
   const [anchor, setAnchor] = useState(() => new Date());
   const today = localDateStr();
@@ -24,6 +25,17 @@ export function ProductionLogList() {
       .then(setLogs)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
+  }, [from, to, refreshKey]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('production-logs-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'production_logs' }, () => {
+        fetchProductionLogs({ from, to }).then(setLogs).catch(() => {});
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [from, to]);
 
   const totals = useMemo(() => {
