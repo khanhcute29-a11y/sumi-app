@@ -7,6 +7,7 @@ import { formatDeliveryDateTime, localDateStr } from '../lib/date';
 import { CameraCapture } from '../components/CameraCapture';
 import { IncidentReportModal } from '../components/IncidentReportModal';
 import { ProductionLogModal } from '../components/ProductionLogModal';
+import { ProductionLogList } from '../components/ProductionLogList';
 import { ActionChip } from '../components/ActionChip';
 import { OrderDetailModal } from '../components/OrderDetailModal';
 import { StageSplitModal } from '../components/StageSplitModal';
@@ -551,10 +552,13 @@ export default function KdsScreen({ initialStation }) {
       </div>
 
       {canAct && (
-        <div>
-          <Button variant="secondary" size="sm" icon={<IconClipboard size={16} />} onClick={() => setShowProductionLog(true)}>
-            Ghi Sản Xuất
-          </Button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <Button variant="secondary" size="sm" icon={<IconClipboard size={16} />} onClick={() => setShowProductionLog(true)}>
+              Ghi Sản Xuất
+            </Button>
+          </div>
+          <ProductionLogList />
         </div>
       )}
 

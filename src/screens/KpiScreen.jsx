@@ -10,21 +10,9 @@ import {
 import { computeShipperKpi, computeKitchenKpi, computeShiftHours, computeAssignedTaskCount, computeLeaveDayCount, computeCoworkingHours } from '../lib/kpi';
 import { hasAnyRole, hasRole } from '../lib/roles';
 import { useAuth } from '../lib/AuthContext';
-import { localDateStr, mondayOf, weekDates, startOfMonth, endOfMonth } from '../lib/date';
+import { localDateStr, periodRangeFor, periodLabelFor, shiftAnchor } from '../lib/date';
 
 const KITCHEN_ROLES = ['kitchen', 'bakery', 'kitchen_lead', 'kitchen_deputy'];
-
-function periodRangeFor(unit, anchor) {
-  if (unit === 'day') {
-    const s = localDateStr(anchor);
-    return { from: s, to: s };
-  }
-  if (unit === 'week') {
-    const days = weekDates(mondayOf(anchor));
-    return { from: localDateStr(days[0]), to: localDateStr(days[6]) };
-  }
-  return { from: localDateStr(startOfMonth(anchor)), to: localDateStr(endOfMonth(anchor)) };
-}
 
 // Ca qua đêm ghi checkout sang ngày hôm sau, nên phải lấy shift_logs rộng hơn kỳ
 // một ngày mỗi phía; việc lọc "ca bắt đầu trong kỳ" do computeShiftHours đảm nhiệm.
@@ -32,24 +20,6 @@ function shiftDateStr(dateStr, days) {
   const d = new Date(`${dateStr}T00:00:00`);
   d.setDate(d.getDate() + days);
   return localDateStr(d);
-}
-
-function periodLabelFor(unit, anchor) {
-  if (unit === 'day') return anchor.toLocaleDateString('vi-VN');
-  if (unit === 'week') {
-    const days = weekDates(mondayOf(anchor));
-    return `${days[0].toLocaleDateString('vi-VN')} - ${days[6].toLocaleDateString('vi-VN')}`;
-  }
-  return `Tháng ${anchor.getMonth() + 1}/${anchor.getFullYear()}`;
-}
-
-function shiftAnchor(unit, anchor, dir) {
-  const d = new Date(anchor);
-  if (unit === 'day') { d.setDate(d.getDate() + dir); return d; }
-  if (unit === 'week') { d.setDate(d.getDate() + dir * 7); return d; }
-  d.setDate(1);
-  d.setMonth(d.getMonth() + dir);
-  return d;
 }
 
 function ShipperKpiCard({ name, kpi }) {

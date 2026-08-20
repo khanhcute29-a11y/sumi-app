@@ -48,3 +48,35 @@ export function endOfMonth(date) {
   d.setMonth(d.getMonth() + 1, 0);
   return d;
 }
+
+// Khoảng {from, to} (chuỗi YYYY-MM-DD) cho 1 đơn vị kỳ (ngày/tuần/tháng) neo tại `anchor`.
+// Dùng chung cho các màn có bộ lọc Ngày/Tuần/Tháng (KPI, Ghi Sản Xuất).
+export function periodRangeFor(unit, anchor) {
+  if (unit === 'day') {
+    const s = localDateStr(anchor);
+    return { from: s, to: s };
+  }
+  if (unit === 'week') {
+    const days = weekDates(mondayOf(anchor));
+    return { from: localDateStr(days[0]), to: localDateStr(days[6]) };
+  }
+  return { from: localDateStr(startOfMonth(anchor)), to: localDateStr(endOfMonth(anchor)) };
+}
+
+export function periodLabelFor(unit, anchor) {
+  if (unit === 'day') return anchor.toLocaleDateString('vi-VN');
+  if (unit === 'week') {
+    const days = weekDates(mondayOf(anchor));
+    return `${days[0].toLocaleDateString('vi-VN')} - ${days[6].toLocaleDateString('vi-VN')}`;
+  }
+  return `Tháng ${anchor.getMonth() + 1}/${anchor.getFullYear()}`;
+}
+
+export function shiftAnchor(unit, anchor, dir) {
+  const d = new Date(anchor);
+  if (unit === 'day') { d.setDate(d.getDate() + dir); return d; }
+  if (unit === 'week') { d.setDate(d.getDate() + dir * 7); return d; }
+  d.setDate(1);
+  d.setMonth(d.getMonth() + dir);
+  return d;
+}
