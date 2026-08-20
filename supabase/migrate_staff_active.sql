@@ -135,7 +135,7 @@ create policy "delete orders" on orders for delete
   using (
     public.is_approved()
     and status <> 'huy'
-    and exists (select 1 from profiles where id = auth.uid() and role in ('owner','cashier','admin','sale'))
+    and exists (select 1 from profiles where id = auth.uid() and role in ('owner','admin'))
   );
 
 drop policy if exists "insert order_items" on order_items;
@@ -217,33 +217,33 @@ create policy "delete debts" on debts for delete
 
 drop policy if exists "write products" on products;
 create policy "write products" on products for insert
-  with check (public.is_approved() and exists (select 1 from profiles where id = auth.uid() and role in ('owner','cashier','admin','sale')));
+  with check (public.is_approved() and exists (select 1 from profiles where id = auth.uid() and role = 'owner'));
 drop policy if exists "update products" on products;
 create policy "update products" on products for update
-  using (public.is_approved() and exists (select 1 from profiles where id = auth.uid() and role in ('owner','cashier','admin','sale')));
+  using (public.is_approved() and exists (select 1 from profiles where id = auth.uid() and role = 'owner'));
 drop policy if exists "delete products" on products;
 create policy "delete products" on products for delete
-  using (public.is_approved() and exists (select 1 from profiles where id = auth.uid() and role in ('owner','cashier','admin','sale')));
+  using (public.is_approved() and exists (select 1 from profiles where id = auth.uid() and role = 'owner'));
 
 drop policy if exists "write product_variants" on product_variants;
 create policy "write product_variants" on product_variants for insert
-  with check (public.is_approved() and exists (select 1 from profiles where id = auth.uid() and role in ('owner','cashier','admin','sale')));
+  with check (public.is_approved() and exists (select 1 from profiles where id = auth.uid() and role = 'owner'));
 drop policy if exists "update product_variants" on product_variants;
 create policy "update product_variants" on product_variants for update
-  using (public.is_approved() and exists (select 1 from profiles where id = auth.uid() and role in ('owner','cashier','admin','sale')));
+  using (public.is_approved() and exists (select 1 from profiles where id = auth.uid() and role = 'owner'));
 drop policy if exists "delete product_variants" on product_variants;
 create policy "delete product_variants" on product_variants for delete
-  using (public.is_approved() and exists (select 1 from profiles where id = auth.uid() and role in ('owner','cashier','admin','sale')));
+  using (public.is_approved() and exists (select 1 from profiles where id = auth.uid() and role = 'owner'));
 
 drop policy if exists "write product_recipes" on product_recipes;
 create policy "write product_recipes" on product_recipes for insert
-  with check (public.is_approved() and exists (select 1 from profiles where id = auth.uid() and role in ('owner','cashier','admin','sale')));
+  with check (public.is_approved() and exists (select 1 from profiles where id = auth.uid() and role = 'owner'));
 drop policy if exists "update product_recipes" on product_recipes;
 create policy "update product_recipes" on product_recipes for update
-  using (public.is_approved() and exists (select 1 from profiles where id = auth.uid() and role in ('owner','cashier','admin','sale')));
+  using (public.is_approved() and exists (select 1 from profiles where id = auth.uid() and role = 'owner'));
 drop policy if exists "delete product_recipes" on product_recipes;
 create policy "delete product_recipes" on product_recipes for delete
-  using (public.is_approved() and exists (select 1 from profiles where id = auth.uid() and role in ('owner','cashier','admin','sale')));
+  using (public.is_approved() and exists (select 1 from profiles where id = auth.uid() and role = 'owner'));
 
 drop policy if exists "write cash_reconciliations" on cash_reconciliations;
 create policy "write cash_reconciliations" on cash_reconciliations for insert
