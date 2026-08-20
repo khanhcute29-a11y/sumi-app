@@ -880,7 +880,7 @@ function ProductRow({ item, onChange, onRemove, isKem, canRemove, products }) {
               const newSize = e.target.value;
               const price = newSize && item.fillingValue ? computeCakePrice(newSize, item.fillingValue, item.cot) : item.price;
               onChange({ ...item, size: newSize ? `${newSize}cm` : '', price });
-            }} options={[{ value: '', label: 'Chọn size...' }, ...CAKE_SIZES_CM.map((s) => ({ value: String(s), label: `${s}cm (${basePriceForSize(s).toLocaleString('vi-VN')}đ)` }))]} style={{ flex: '1 1 170px', minWidth: 0 }} />
+            }} options={[{ value: '', label: 'Chọn size...' }, ...CAKE_SIZES_CM.map((s) => ({ value: String(s), label: `${s}cm` }))]} style={{ flex: '1 1 170px', minWidth: 0 }} />
             <Select label="Cốt bánh" value={item.cot || ''} onChange={(e) => {
               const cot = e.target.value;
               const price = sizeCm && item.fillingValue ? computeCakePrice(sizeCm, item.fillingValue, cot) : (sizeCm && !item.fillingValue ? basePriceForSize(sizeCm) + baseSurcharge(cot) : item.price);
@@ -901,7 +901,7 @@ function ProductRow({ item, onChange, onRemove, isKem, canRemove, products }) {
           <Select label="Kích thước" value={item.size || ''} onChange={(e) => {
             const variant = sortedVariants.find((v) => v.label === e.target.value);
             onChange({ ...item, size: e.target.value, price: variant?.price ?? '' });
-          }} options={[{ value: '', label: 'Chọn size...' }, ...sortedVariants.map((v) => ({ value: v.label, label: `${v.label} (${Number(v.price).toLocaleString('vi-VN')}đ)` }))]} style={{ maxWidth: 220 }} />
+          }} options={[{ value: '', label: 'Chọn size...' }, ...sortedVariants.map((v) => ({ value: v.label, label: v.label }))]} style={{ maxWidth: 220 }} />
         );
       })()}
       {isQtyOnly && (
