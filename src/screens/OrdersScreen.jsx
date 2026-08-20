@@ -18,7 +18,7 @@ import { ActionChip } from '../components/ActionChip';
 import { supabase } from '../lib/supabaseClient';
 import { localDateStr, formatDeliveryDateTime } from '../lib/date';
 import { downloadCsv } from '../lib/exportCsv';
-import { CAKE_SIZES_CM, CAKE_BASES, CAKE_FILLINGS, basePriceForSize, fillingSurchargeForSize, computeCakePrice, baseSurcharge, formatOrderItemLine, KEM_GROUP_CATEGORIES, SIZE_VARIANT_CATEGORIES, QTY_ONLY_CATEGORIES } from '../lib/cakePricing';
+import { CAKE_SIZES_CM, CAKE_BASES, CAKE_FILLINGS, basePriceForSize, fillingSurchargeForSize, computeCakePrice, baseSurcharge, formatOrderItemLine, KEM_GROUP_CATEGORIES, MAN_GROUP_CATEGORIES, SIZE_VARIANT_CATEGORIES, QTY_ONLY_CATEGORIES } from '../lib/cakePricing';
 import { IconWarning, IconEye, IconMapPin, IconClock, IconClipboard, IconPaperclip, IconHome, IconTruck, IconBan, IconCheck, IconTrash, IconStar, IconPhone, IconDownload, IconEdit } from '../components/icons/FrogIcons';
 
 const STATUS_LABELS = {
@@ -1005,7 +1005,7 @@ function NewOrderModal({ onClose, onCreated, onManualItems }) {
   }, [catalogSuggestedTotal, hasShipFee, shipFee]);
 
   const kemCatalog = catalog.filter((p) => KEM_GROUP_CATEGORIES.includes(p.category));
-  const manCatalog = catalog.filter((p) => p.category === 'banh_man_ngot');
+  const manCatalog = catalog.filter((p) => MAN_GROUP_CATEGORIES.includes(p.category));
 
   const handleSubmit = async () => {
     if (!custName) { setError('Nhập tên khách hàng.'); return; }
@@ -1020,7 +1020,7 @@ function NewOrderModal({ onClose, onCreated, onManualItems }) {
         total: Number(total) || 0, deposit: Number(deposit) || 0, paymentMethod,
         items: [
           ...kemProducts.map((it) => ({ ...it, category: catalog.find((p) => p.id === it.productId)?.category || 'banh_kem' })),
-          ...manProducts.map((it) => ({ ...it, category: 'banh_man_ngot' })),
+          ...manProducts.map((it) => ({ ...it, category: catalog.find((p) => p.id === it.productId)?.category || 'banh_man_ngot' })),
         ].map((it) => ({
           ...it,
           name: it.note ? `${it.name} (${it.note})` : it.name,
@@ -1186,7 +1186,7 @@ function EditOrderModal({ order, onClose, onSaved }) {
   }, []);
 
   const kemCatalog = catalog.filter((p) => KEM_GROUP_CATEGORIES.includes(p.category));
-  const manCatalog = catalog.filter((p) => p.category === 'banh_man_ngot');
+  const manCatalog = catalog.filter((p) => MAN_GROUP_CATEGORIES.includes(p.category));
   const previewItems = [...kemProducts, ...manProducts].filter((p) => p.name);
 
   const handleSubmit = async () => {
@@ -1200,7 +1200,7 @@ function EditOrderModal({ order, onClose, onSaved }) {
         total: Number(total) || 0, deposit: Number(deposit) || 0, paymentMethod, note,
         items: [
           ...kemProducts.map((it) => ({ ...it, category: catalog.find((p) => p.id === it.productId)?.category || 'banh_kem' })),
-          ...manProducts.map((it) => ({ ...it, category: 'banh_man_ngot' })),
+          ...manProducts.map((it) => ({ ...it, category: catalog.find((p) => p.id === it.productId)?.category || 'banh_man_ngot' })),
         ].map((it) => ({ ...it, name: it.note ? `${it.name} (${it.note})` : it.name })),
       });
       onSaved();
