@@ -5,6 +5,9 @@ export const KEM_GROUP_CATEGORIES = ['banh_kem', 'banh_kem_bap_choco', 'mousse_t
 export const MAN_GROUP_CATEGORIES = ['banh_man_ngot', 'banh_trung_thu', 'trung_thu_combo', 'phu_kien_trung_thu'];
 export const SIZE_VARIANT_CATEGORIES = ['banh_kem_bap_choco', 'mousse_tiramisu', 'banh_trung_thu'];
 export const QTY_ONLY_CATEGORIES = ['banh_su', 'cupcake', 'set_mousse', 'trung_thu_combo', 'phu_kien_trung_thu'];
+// Trong số các danh mục ở SIZE_VARIANT_CATEGORIES, đây là những danh mục KHÔNG cần
+// "Nội dung (chữ trên bánh)"/"Loại nến" — vì không phải bánh sinh nhật kem tươi.
+export const NO_CAKE_EXTRAS_CATEGORIES = ['banh_trung_thu'];
 
 // Bảng giá bánh sinh nhật kem tươi / bánh trứng muối — cập nhật 12/08/2026.
 export const CAKE_SIZES_CM = [12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40];

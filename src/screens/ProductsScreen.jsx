@@ -15,6 +15,7 @@ import { PhotoField } from '../components/PhotoField';
 import { IconTrash, IconRuler } from '../components/icons/FrogIcons';
 import { useAuth } from '../lib/AuthContext';
 import { hasRole } from '../lib/roles';
+import { SIZE_VARIANT_CATEGORIES } from '../lib/cakePricing';
 
 const CATEGORIES = [
   { value: 'banh_kem', label: 'Bánh Kem' },
@@ -32,7 +33,10 @@ const CATEGORIES = [
   { value: 'khac', label: 'Khác' },
 ];
 const categoryLabel = (v) => CATEGORIES.find((c) => c.value === v)?.label || v;
-const VARIANT_CATEGORIES = ['banh_kem', 'banh_kem_bap_choco', 'mousse_tiramisu', 'banh_trung_thu'];
+// 'banh_kem' vẫn dùng công thức Size+Cốt+Nhân lúc lên đơn (không đọc product_variants),
+// nhưng vẫn cho phép thêm mức giá theo size ở đây — cộng thêm vào SIZE_VARIANT_CATEGORIES
+// (nguồn dùng chung với OrdersScreen) thay vì tự duy trì một danh sách riêng dễ lệch nhau.
+const VARIANT_CATEGORIES = ['banh_kem', ...SIZE_VARIANT_CATEGORIES];
 
 function AddProductForm({ onAdded, onClose }) {
   const [name, setName] = useState('');

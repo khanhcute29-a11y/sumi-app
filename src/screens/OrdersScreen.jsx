@@ -18,7 +18,7 @@ import { ActionChip } from '../components/ActionChip';
 import { supabase } from '../lib/supabaseClient';
 import { localDateStr, formatDeliveryDateTime } from '../lib/date';
 import { downloadCsv } from '../lib/exportCsv';
-import { CAKE_SIZES_CM, CAKE_BASES, CAKE_FILLINGS, basePriceForSize, fillingSurchargeForSize, computeCakePrice, baseSurcharge, formatOrderItemLine, KEM_GROUP_CATEGORIES, MAN_GROUP_CATEGORIES, SIZE_VARIANT_CATEGORIES, QTY_ONLY_CATEGORIES } from '../lib/cakePricing';
+import { CAKE_SIZES_CM, CAKE_BASES, CAKE_FILLINGS, basePriceForSize, fillingSurchargeForSize, computeCakePrice, baseSurcharge, formatOrderItemLine, KEM_GROUP_CATEGORIES, MAN_GROUP_CATEGORIES, SIZE_VARIANT_CATEGORIES, QTY_ONLY_CATEGORIES, NO_CAKE_EXTRAS_CATEGORIES } from '../lib/cakePricing';
 import { IconWarning, IconEye, IconMapPin, IconClock, IconClipboard, IconPaperclip, IconHome, IconTruck, IconBan, IconCheck, IconTrash, IconStar, IconPhone, IconDownload, IconEdit } from '../components/icons/FrogIcons';
 
 const STATUS_LABELS = {
@@ -839,15 +839,18 @@ function ProductRow({ item, onChange, onRemove, isKem, canRemove, products }) {
   const isQtyOnly = !isKem || (!!category && QTY_ONLY_CATEGORIES.includes(category));
 
   const handleSelectProduct = (productId) => {
-    if (productId === MANUAL_OPTION) { onChange({ ...item, mode: 'manual', productId: '', name: '', price: '' }); return; }
+    // Đổi sản phẩm thì xoá luôn Nội dung/Loại nến cũ — tránh dính nhầm chữ/nến của
+    // sản phẩm trước sang sản phẩm mới chọn (VD: gõ nội dung cho bánh kem rồi đổi ý
+    // sang cupcake, chữ cũ không được lưu ngầm vào đơn).
+    if (productId === MANUAL_OPTION) { onChange({ ...item, mode: 'manual', productId: '', name: '', price: '', content: '', candle: '' }); return; }
     const p = products.find((x) => x.id === productId);
     if (SIZE_VARIANT_CATEGORIES.includes(p.category)) {
       // Không tự chọn sẵn size — bắt buộc nhân viên chọn tay để tránh chốt nhầm giá.
-      onChange({ ...item, mode: 'catalog', productId, name: p.name, size: '', price: '' });
+      onChange({ ...item, mode: 'catalog', productId, name: p.name, size: '', price: '', content: '', candle: '' });
     } else if (p.category === 'banh_kem') {
-      onChange({ ...item, mode: 'catalog', productId, name: p.name, price: item.price });
+      onChange({ ...item, mode: 'catalog', productId, name: p.name, price: item.price, content: '', candle: '' });
     } else {
-      onChange({ ...item, mode: 'catalog', productId, name: p.name, price: p.price });
+      onChange({ ...item, mode: 'catalog', productId, name: p.name, price: p.price, content: '', candle: '' });
     }
   };
 
@@ -899,7 +902,7 @@ function ProductRow({ item, onChange, onRemove, isKem, canRemove, products }) {
       })()}
       {isSizeVariant && (() => {
         const sortedVariants = [...(selectedProduct?.product_variants || [])].sort((a, b) => Number(a.price) - Number(b.price));
-        const showCakeExtras = category !== 'banh_trung_thu';
+        const showCakeExtras = !NO_CAKE_EXTRAS_CATEGORIES.includes(category);
         return (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
             <Select label="Kích thước" value={item.size || ''} onChange={(e) => {

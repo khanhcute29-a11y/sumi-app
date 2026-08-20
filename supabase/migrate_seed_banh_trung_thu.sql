@@ -15,6 +15,10 @@ alter table products add constraint products_category_check
 --    lượng (150g/1 trứng, 210g/1 trứng, 220g/2 trứng, 250g/2 trứng). Giá lấy đúng
 --    từng ô trong bảng giá gốc (không làm tròn theo công thức chung, vì Thập Cẩm ở
 --    210g và Dừa Cốm ở 250g lệch nhẹ so với các vị cùng nhóm).
+-- Idempotent ở CẢ hai cấp: bỏ qua sản phẩm đã có (theo tên), và bỏ qua từng mức giá
+-- (product_variants) đã có (theo product_id+label) — nên nếu lỡ xoá tay 1 mức giá
+-- (VD "220g") của 1 vị đã có sẵn, chạy lại file này vẫn tự thêm lại đúng mức đó,
+-- không cần xoá cả sản phẩm rồi tạo lại.
 with flavors(name, w150, w210, w220, w250) as (
   values
     ('Bánh Trung Thu Mè Đen',        65000,  90000,  95000, 110000),
@@ -30,23 +34,30 @@ with flavors(name, w150, w210, w220, w250) as (
     ('Bánh Trung Thu Chanh Dây',     75000, 105000, 110000, 125000),
     ('Bánh Trung Thu Phúc Bồn Tử',   75000, 105000, 110000, 125000)
 ),
-to_insert as (
-  select f.* from flavors f
-  where not exists (select 1 from products p where p.name = f.name)
-),
 new_products as (
   insert into products (name, category, unit, price)
-  select name, 'banh_trung_thu', 'bánh', w150 from to_insert
+  select f.name, 'banh_trung_thu', 'bánh', f.w150 from flavors f
+  where not exists (select 1 from products p where p.name = f.name)
   returning id, name
+),
+all_flavor_products as (
+  select np.id, np.name from new_products np
+  union all
+  select p.id, p.name from products p
+  join flavors f on f.name = p.name
+  where p.id not in (select id from new_products)
 )
 insert into product_variants (product_id, label, price)
-select np.id, v.label, v.price
-from new_products np
-join to_insert ti on ti.name = np.name
+select afp.id, v.label, v.price
+from all_flavor_products afp
+join flavors f on f.name = afp.name
 cross join lateral (
-  values ('150g (1 trứng)', ti.w150), ('210g (1 trứng)', ti.w210),
-         ('220g (2 trứng)', ti.w220), ('250g (2 trứng)', ti.w250)
-) as v(label, price);
+  values ('150g (1 trứng)', f.w150), ('210g (1 trứng)', f.w210),
+         ('220g (2 trứng)', f.w220), ('250g (2 trứng)', f.w250)
+) as v(label, price)
+where not exists (
+  select 1 from product_variants pv where pv.product_id = afp.id and pv.label = v.label
+);
 
 -- 3. Hộp 4 bánh trung thu khuyến mãi (1 Thập Cẩm + 3 bánh ngọt tùy chọn + hộp).
 --    Giá nhập tay lúc lên đơn nếu khách đổi sang vị cao cấp (+30k/+40k) hoặc hết
