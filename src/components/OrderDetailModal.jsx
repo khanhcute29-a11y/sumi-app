@@ -38,7 +38,7 @@ export function OrderDetailModal({ order, onClose }) {
             <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)', marginBottom: 6 }}>Sản phẩm</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {items.map((it) => {
-                const details = [it.size && `Size ${it.size}`, it.cot && `Cốt ${it.cot}`, it.vi && `Vị ${it.vi}`].filter(Boolean).join(' · ');
+                const details = [it.size && `Size ${it.size}`, it.cot && `Cốt ${it.cot}`, it.vi && `Vị ${it.vi}`, it.content && `Nội dung "${it.content}"`, it.candle && `Nến ${it.candle}`].filter(Boolean).join(' · ');
                 return (
                   <div key={it.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--border-subtle)' }}>
                     <div>

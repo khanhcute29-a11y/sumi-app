@@ -70,7 +70,7 @@ export function fillingLabel(fillingValue) {
 // Dòng tóm tắt 1 sản phẩm trong đơn: "Bánh Kem Dâu x1 (18cm · Matcha · Mứt Việt quất · ...)" —
 // dùng chung cho OrdersScreen/KdsScreen/ShippingScreen thay vì lặp lại filter+join ở từng nơi.
 export function formatOrderItemLine(it, { withQty = true } = {}) {
-  const details = [it.size && `Size ${it.size}`, it.cot && `Cốt ${it.cot}`, it.vi && `Vị ${it.vi}`, it.note].filter(Boolean).join(' · ');
+  const details = [it.size && `Size ${it.size}`, it.cot && `Cốt ${it.cot}`, it.vi && `Vị ${it.vi}`, it.content && `Nội dung "${it.content}"`, it.candle && `Nến ${it.candle}`, it.note].filter(Boolean).join(' · ');
   const qty = withQty && it.qty != null ? ` x${it.qty}` : '';
   return details ? `${it.name}${qty} (${details})` : `${it.name}${qty}`;
 }

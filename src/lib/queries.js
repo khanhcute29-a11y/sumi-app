@@ -188,6 +188,7 @@ export async function createOrder({ customer, channel, items, total, note, addre
       order_id: order.id, product_id: it.productId || null, name: it.name, qty: Number(it.qty) || 1,
       size: it.size || null, cot: it.cot || null, vi: it.vi || null, price: Number(it.price) || 0,
       ref_photo_url: it.refPhotoUrl || null, category: it.category || null,
+      content: it.content || null, candle: it.candle || null,
     }));
     if (rows.length) {
       const { error: itemsErr } = await supabase.from('order_items').insert(rows);
@@ -241,6 +242,7 @@ export async function updateOrderFull(id, { customerName, customerPhone, address
       order_id: id, product_id: it.productId || null, name: it.name, qty: Number(it.qty) || 1,
       size: it.size || null, cot: it.cot || null, vi: it.vi || null, price: Number(it.price) || 0,
       ref_photo_url: it.refPhotoUrl || null, category: it.category || null,
+      content: it.content || null, candle: it.candle || null,
     }));
     if (rows.length) {
       const { error: insErr } = await supabase.from('order_items').insert(rows);

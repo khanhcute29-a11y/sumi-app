@@ -115,7 +115,7 @@ function extractManualItems(items, category) {
 }
 
 const MANUAL_OPTION = '__manual__';
-const BLANK_KEM = { mode: 'catalog', productId: '', name: '', qty: 1, size: '', cot: '', vi: '', price: '', refPhotoUrl: '' };
+const BLANK_KEM = { mode: 'catalog', productId: '', name: '', qty: 1, size: '', cot: '', vi: '', content: '', candle: '', price: '', refPhotoUrl: '' };
 const BLANK_MAN = { mode: 'catalog', productId: '', name: '', qty: 1, note: '', price: '', refPhotoUrl: '' };
 const BLANK_TB_ITEM = { mode: 'catalog', productId: '', name: '', qty: '', unit: 'cái', price: '', refPhotoUrl: '' };
 const BLANK_MACARON_ITEM = { mode: 'catalog', productId: '', name: '', spec: '', qty: '', unit: 'khay', price: '', refPhotoUrl: '' };
@@ -892,6 +892,8 @@ function ProductRow({ item, onChange, onRemove, isKem, canRemove, products }) {
               const price = sizeCm && fillingValue ? computeCakePrice(sizeCm, fillingValue, item.cot) : item.price;
               onChange({ ...item, fillingValue, vi: filling?.label || '', price });
             }} options={fillingOptions} style={{ flex: '1 1 220px', minWidth: 0 }} />
+            <Input label="Nội dung (chữ trên bánh)" placeholder="VD: Chúc mừng sinh nhật Linh" value={item.content || ''} onChange={(e) => set('content', e.target.value)} style={{ flex: '2 1 220px', minWidth: 0 }} />
+            <Input label="Loại nến" placeholder="VD: Nến số 25" value={item.candle || ''} onChange={(e) => set('candle', e.target.value)} style={{ flex: '1 1 150px', minWidth: 0 }} />
           </div>
         );
       })()}
@@ -1133,6 +1135,7 @@ function itemToRowState(it) {
   return {
     mode: 'manual', productId: '', name: it.name || '', qty: it.qty || 1,
     size: it.size || '', cot: it.cot || '', vi: it.vi || '', fillingValue: matchedFilling?.value || '', price: it.price || '',
+    content: it.content || '', candle: it.candle || '',
     refPhotoUrl: it.ref_photo_url || '', note: '',
   };
 }
