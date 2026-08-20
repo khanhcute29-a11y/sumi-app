@@ -198,7 +198,7 @@ export function WeeklyScheduleSection({ profile }) {
                 const p = allProfiles.find((p) => p.id === e.target.value);
                 if (p) handleAssign(p.id, p.full_name);
               }}
-              options={allProfiles.filter((p) => p.approved && p.full_name).map((p) => ({ value: p.id, label: p.full_name }))}
+              options={allProfiles.filter((p) => p.approved && p.active !== false && p.full_name).map((p) => ({ value: p.id, label: p.full_name }))}
               placeholder="Chọn nhân viên..."
             />
             {assignError && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{assignError}</div>}

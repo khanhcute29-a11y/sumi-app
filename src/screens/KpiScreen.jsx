@@ -148,12 +148,12 @@ export default function KpiScreen() {
 
   const kpiStaffList = useMemo(() => {
     if (!isAdmin) return [];
-    return allProfiles.filter((p) => hasAnyRole(p, ['shipper', ...KITCHEN_ROLES]));
+    return allProfiles.filter((p) => p.active !== false && hasAnyRole(p, ['shipper', ...KITCHEN_ROLES]));
   }, [allProfiles, isAdmin]);
 
   const extendedStaffList = useMemo(() => {
     if (!isAdmin) return [];
-    return allProfiles.filter((p) => p.approved);
+    return allProfiles.filter((p) => p.approved && p.active !== false);
   }, [allProfiles, isAdmin]);
 
   function extendedKpiFor(staffId) {

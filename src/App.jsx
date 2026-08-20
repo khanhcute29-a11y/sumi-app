@@ -141,7 +141,10 @@ function AuthGate({ onSignOut }) {
     return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface-app)', color: 'var(--text-muted)', font: 'var(--text-body)' }}>Đang tải...</div>;
   }
   if (profile?.approved === false) {
-    return <PendingApprovalScreen profile={profile} onSignOut={onSignOut} />;
+    return <PendingApprovalScreen profile={profile} onSignOut={onSignOut} reason="pending" />;
+  }
+  if (profile?.active === false) {
+    return <PendingApprovalScreen profile={profile} onSignOut={onSignOut} reason="deactivated" />;
   }
   return <OpsApp onSignOut={onSignOut} />;
 }

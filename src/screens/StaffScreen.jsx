@@ -3,8 +3,8 @@ import { Card } from '../components/data/Card';
 import { Badge } from '../components/feedback/Badge';
 import { Button } from '../components/forms/Button';
 import { Select } from '../components/forms/Select';
-import { fetchMyProfile, fetchAllProfiles, updateProfileRole, updateProfileExtraRoles, updateProfileStation, approveStaff } from '../lib/queries';
-import { ROLE_META, ROLE_OPTIONS, ROLE_PERMISSIONS, hasRole } from '../lib/roles';
+import { fetchMyProfile, fetchAllProfiles, updateProfileRole, updateProfileExtraRoles, updateProfileStation, updateProfileActive, approveStaff } from '../lib/queries';
+import { ROLE_META, ROLE_OPTIONS, ROLE_PERMISSIONS, hasRole, hasAnyRole } from '../lib/roles';
 
 const STATION_OPTIONS = [
   { value: '', label: 'Chưa gán khâu' },
@@ -36,15 +36,22 @@ function PendingStaffRow({ s, onApprove }) {
   );
 }
 
-function StaffRow({ s, isOwner, isMe, onChangeRole, onChangeExtraRoles, onChangeStation, expanded, onToggle }) {
+function StaffRow({ s, isOwner, isMe, canDeactivate, onChangeRole, onChangeExtraRoles, onChangeStation, onDeactivate, expanded, onToggle }) {
   const perm = ROLE_PERMISSIONS.find((p) => p.role === s.role);
   const extraRoles = s.extra_roles || [];
   const [savingExtra, setSavingExtra] = useState(false);
+  const [confirmingDeactivate, setConfirmingDeactivate] = useState(false);
+  const [deactivating, setDeactivating] = useState(false);
 
   const toggleExtraRole = async (role) => {
     const next = extraRoles.includes(role) ? extraRoles.filter((r) => r !== role) : [...extraRoles, role];
     setSavingExtra(true);
     try { await onChangeExtraRoles(s.id, next); } finally { setSavingExtra(false); }
+  };
+
+  const handleDeactivate = async () => {
+    setDeactivating(true);
+    try { await onDeactivate(s.id); } finally { setDeactivating(false); setConfirmingDeactivate(false); }
   };
 
   return (
@@ -101,7 +108,40 @@ function StaffRow({ s, isOwner, isMe, onChangeRole, onChangeExtraRoles, onChange
               </div>
             </React.Fragment>
           )}
+          {canDeactivate && !isMe && s.role !== 'owner' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {confirmingDeactivate ? (
+                <>
+                  <span style={{ font: 'var(--text-caption)', color: 'var(--status-danger)' }}>Khoá tài khoản này? Nhân viên sẽ không đăng nhập được nữa.</span>
+                  <Button variant="danger" size="sm" onClick={handleDeactivate} disabled={deactivating}>{deactivating ? 'Đang khoá...' : 'Xác nhận khoá'}</Button>
+                  <Button variant="ghost" size="sm" onClick={() => setConfirmingDeactivate(false)} disabled={deactivating}>Huỷ</Button>
+                </>
+              ) : (
+                <Button variant="danger" size="sm" onClick={() => setConfirmingDeactivate(true)}>Khoá tài khoản (nghỉ việc)</Button>
+              )}
+            </div>
+          )}
         </div>
+      )}
+    </div>
+  );
+}
+
+function DeactivatedStaffRow({ s, canDeactivate, onReactivate }) {
+  const [busy, setBusy] = useState(false);
+  const handleReactivate = async () => {
+    setBusy(true);
+    try { await onReactivate(s.id); } finally { setBusy(false); }
+  };
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '10px 0', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ font: 'var(--text-body)', color: 'var(--text-muted)' }}>{s.full_name || '(chưa đặt tên)'}</span>
+        <Badge tone={ROLE_META[s.role]?.tone || 'neutral'}>{ROLE_META[s.role]?.label || s.role}</Badge>
+        <Badge tone="danger">Đã khoá</Badge>
+      </div>
+      {canDeactivate && (
+        <Button variant="secondary" size="sm" onClick={handleReactivate} disabled={busy}>{busy ? 'Đang mở...' : 'Mở lại'}</Button>
       )}
     </div>
   );
@@ -127,11 +167,23 @@ export default function StaffScreen() {
   // Chỉ Chủ sở hữu mới đổi được vai trò người khác ở database (chặn admin tự nâng quyền) —
   // UI phải khớp đúng, nếu không admin bấm Duyệt/Đổi vai trò sẽ bị âm thầm không lưu được gì.
   const isOwner = hasRole(me, 'owner');
+  const canDeactivate = hasAnyRole(me, ['owner', 'admin']);
   const pending = staff.filter((s) => s.approved === false);
-  const approved = staff.filter((s) => s.approved !== false);
+  const approved = staff.filter((s) => s.approved !== false && s.active !== false);
+  const deactivated = staff.filter((s) => s.approved !== false && s.active === false);
 
   const handleApprove = async (id, role) => {
     await approveStaff(id, role);
+    load();
+  };
+
+  const handleDeactivate = async (id) => {
+    await updateProfileActive(id, false);
+    load();
+  };
+
+  const handleReactivate = async (id) => {
+    await updateProfileActive(id, true);
     load();
   };
 
@@ -179,7 +231,8 @@ export default function StaffScreen() {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 {approved.map((s) => (
-                  <StaffRow key={s.id} s={s} isOwner={isOwner} isMe={s.id === me?.id} onChangeRole={handleChangeRole} onChangeExtraRoles={handleChangeExtraRoles} onChangeStation={handleChangeStation}
+                  <StaffRow key={s.id} s={s} isOwner={isOwner} isMe={s.id === me?.id} canDeactivate={canDeactivate}
+                    onChangeRole={handleChangeRole} onChangeExtraRoles={handleChangeExtraRoles} onChangeStation={handleChangeStation} onDeactivate={handleDeactivate}
                     expanded={expandedId === s.id} onToggle={() => setExpandedId(expandedId === s.id ? null : s.id)} />
                 ))}
               </div>
@@ -188,6 +241,15 @@ export default function StaffScreen() {
               Nhân viên mới tự bấm "Đăng ký ngay" ở màn đăng nhập để tạo tài khoản — tài khoản sẽ ở trạng thái "Chờ duyệt" và không xem được dữ liệu cho tới khi chủ sở hữu duyệt và gán quyền ở đây.
             </div>
           </Card>
+
+          {deactivated.length > 0 && (
+            <Card style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>Đã khoá tài khoản ({deactivated.length})</div>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {deactivated.map((s) => <DeactivatedStaffRow key={s.id} s={s} canDeactivate={canDeactivate} onReactivate={handleReactivate} />)}
+              </div>
+            </Card>
+          )}
         </React.Fragment>
       )}
     </div>

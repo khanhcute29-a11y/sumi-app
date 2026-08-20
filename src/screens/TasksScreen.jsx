@@ -31,7 +31,7 @@ export default function TasksScreen() {
   useEffect(() => {
     if (!isOwner) return;
     fetchAllProfiles().then((data) => {
-      const approved = data.filter((p) => p.approved && p.full_name);
+      const approved = data.filter((p) => p.approved && p.active !== false && p.full_name);
       setStaffList(approved);
       setSelectedStaffId((prev) => prev || approved[0]?.id || '');
     }).catch(() => {});

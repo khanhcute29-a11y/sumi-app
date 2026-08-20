@@ -56,6 +56,11 @@ export async function approveStaff(id, role) {
   if (error) throw error;
 }
 
+export async function updateProfileActive(id, active) {
+  const { error } = await supabase.from('profiles').update({ active }).eq('id', id);
+  if (error) throw error;
+}
+
 // ---- Customers ----
 
 export async function fetchCustomers() {
