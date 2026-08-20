@@ -163,6 +163,7 @@ export default function KpiScreen() {
         <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Đang tải...</div>
       ) : isAdmin ? (
         <>
+          <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>Chấm công & công việc</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
             {extendedStaffList.length === 0 && (
               <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Chưa có nhân viên nào.</div>
@@ -171,6 +172,7 @@ export default function KpiScreen() {
               <ExtendedKpiCard key={p.id} name={p.full_name} kpi={extendedKpiFor(p.id)} />
             ))}
           </div>
+          <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>Hiệu suất giao hàng & sản xuất</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
             {kpiStaffList.map((p) => (
               <React.Fragment key={p.id}>
@@ -186,18 +188,22 @@ export default function KpiScreen() {
         </>
       ) : (
         <>
+          <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>Chấm công & công việc</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
             <ExtendedKpiCard name={profile?.full_name} kpi={extendedKpiFor(profile?.id)} />
           </div>
           {(hasRole(profile, 'shipper') || hasAnyRole(profile, KITCHEN_ROLES)) && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-              {hasRole(profile, 'shipper') && (
-                <ShipperKpiCard name={profile?.full_name} kpi={computeShipperKpi(ordersByCompletion, profile?.full_name)} />
-              )}
-              {hasAnyRole(profile, KITCHEN_ROLES) && (
-                <KitchenKpiCard name={profile?.full_name} kpi={computeKitchenKpi(ordersByCreation, productionLogs, profile?.full_name)} />
-              )}
-            </div>
+            <>
+              <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>Hiệu suất giao hàng & sản xuất</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                {hasRole(profile, 'shipper') && (
+                  <ShipperKpiCard name={profile?.full_name} kpi={computeShipperKpi(ordersByCompletion, profile?.full_name)} />
+                )}
+                {hasAnyRole(profile, KITCHEN_ROLES) && (
+                  <KitchenKpiCard name={profile?.full_name} kpi={computeKitchenKpi(ordersByCreation, productionLogs, profile?.full_name)} />
+                )}
+              </div>
+            </>
           )}
         </>
       )}
