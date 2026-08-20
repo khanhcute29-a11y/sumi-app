@@ -88,7 +88,7 @@ create table if not exists order_deletion_log (
 create table if not exists products (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  category text not null default 'khac' check (category in ('banh_kem','banh_kem_bap_choco','mousse_tiramisu','set_mousse','banh_su','cupcake','banh_man_ngot','teabreak','khac','macaron')),
+  category text not null default 'khac' check (category in ('banh_kem','banh_kem_bap_choco','mousse_tiramisu','set_mousse','banh_su','cupcake','banh_man_ngot','teabreak','khac','macaron','banh_trung_thu','trung_thu_combo','phu_kien_trung_thu')),
   unit text not null default 'cái',
   price numeric(12,0) not null default 0,
   photo_url text,

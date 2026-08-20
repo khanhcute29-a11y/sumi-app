@@ -26,10 +26,13 @@ const CATEGORIES = [
   { value: 'banh_man_ngot', label: 'Bánh Mặn Ngọt' },
   { value: 'teabreak', label: 'Teabreak' },
   { value: 'macaron', label: 'Macaron' },
+  { value: 'banh_trung_thu', label: 'Bánh Trung Thu' },
+  { value: 'trung_thu_combo', label: 'Trung Thu — Hộp Combo' },
+  { value: 'phu_kien_trung_thu', label: 'Trung Thu — Phụ Kiện (hộp đựng)' },
   { value: 'khac', label: 'Khác' },
 ];
 const categoryLabel = (v) => CATEGORIES.find((c) => c.value === v)?.label || v;
-const VARIANT_CATEGORIES = ['banh_kem', 'banh_kem_bap_choco', 'mousse_tiramisu'];
+const VARIANT_CATEGORIES = ['banh_kem', 'banh_kem_bap_choco', 'mousse_tiramisu', 'banh_trung_thu'];
 
 function AddProductForm({ onAdded, onClose }) {
   const [name, setName] = useState('');

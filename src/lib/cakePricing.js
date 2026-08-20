@@ -1,9 +1,9 @@
 // Các danh mục sản phẩm được gộp hiển thị chung dưới tab "Bánh Kem" lúc tạo đơn — mỗi
 // danh mục tự quyết định cách tính giá (xem SIZE_VARIANT_CATEGORIES/QTY_ONLY_CATEGORIES
 // trong OrdersScreen.jsx), riêng 'banh_kem' vẫn dùng công thức Size+Cốt+Nhân bên dưới.
-export const KEM_GROUP_CATEGORIES = ['banh_kem', 'banh_kem_bap_choco', 'mousse_tiramisu', 'banh_su', 'cupcake', 'set_mousse'];
-export const SIZE_VARIANT_CATEGORIES = ['banh_kem_bap_choco', 'mousse_tiramisu'];
-export const QTY_ONLY_CATEGORIES = ['banh_su', 'cupcake', 'set_mousse'];
+export const KEM_GROUP_CATEGORIES = ['banh_kem', 'banh_kem_bap_choco', 'mousse_tiramisu', 'banh_su', 'cupcake', 'set_mousse', 'banh_trung_thu', 'trung_thu_combo', 'phu_kien_trung_thu'];
+export const SIZE_VARIANT_CATEGORIES = ['banh_kem_bap_choco', 'mousse_tiramisu', 'banh_trung_thu'];
+export const QTY_ONLY_CATEGORIES = ['banh_su', 'cupcake', 'set_mousse', 'trung_thu_combo', 'phu_kien_trung_thu'];
 
 // Bảng giá bánh sinh nhật kem tươi / bánh trứng muối — cập nhật 12/08/2026.
 export const CAKE_SIZES_CM = [12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40];
