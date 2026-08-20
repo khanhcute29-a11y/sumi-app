@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Tabs } from '../components/navigation/Tabs';
 import { Card } from '../components/data/Card';
 import { Button } from '../components/forms/Button';
+import { Input } from '../components/forms/Input';
 import { IconClipboard } from '../components/icons/FrogIcons';
 import {
   fetchOrders, fetchProductionLogs, fetchAllProfiles,
@@ -70,6 +71,9 @@ export default function KpiScreen() {
   const { profile } = useAuth();
   const [unit, setUnit] = useState('day');
   const [anchor, setAnchor] = useState(() => new Date());
+  const today = localDateStr();
+  const [customFrom, setCustomFrom] = useState(today);
+  const [customTo, setCustomTo] = useState(today);
   const [ordersByCreation, setOrdersByCreation] = useState([]);
   const [ordersByCompletion, setOrdersByCompletion] = useState([]);
   const [productionLogs, setProductionLogs] = useState([]);
@@ -83,7 +87,7 @@ export default function KpiScreen() {
   const [error, setError] = useState('');
 
   const isAdmin = hasAnyRole(profile, ['owner', 'admin']);
-  const { from, to } = periodRangeFor(unit, anchor);
+  const { from, to } = unit === 'custom' ? { from: customFrom, to: customTo } : periodRangeFor(unit, anchor);
 
   useEffect(() => {
     setLoading(true);
@@ -147,15 +151,23 @@ export default function KpiScreen() {
           { key: 'day', label: 'Ngày' },
           { key: 'week', label: 'Tuần' },
           { key: 'month', label: 'Tháng' },
+          { key: 'custom', label: 'Tùy chỉnh' },
         ]}
         active={unit}
         onChange={setUnit}
       />
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <Button variant="ghost" size="sm" onClick={() => setAnchor((a) => shiftAnchor(unit, a, -1))}>‹</Button>
-        <div style={{ font: 'var(--text-body)', color: 'var(--text-primary)' }}>{periodLabelFor(unit, anchor)}</div>
-        <Button variant="ghost" size="sm" onClick={() => setAnchor((a) => shiftAnchor(unit, a, 1))}>›</Button>
-      </div>
+      {unit === 'custom' ? (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <Input label="Từ ngày" type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} style={{ flex: '1 1 160px' }} />
+          <Input label="Đến ngày" type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} style={{ flex: '1 1 160px' }} />
+        </div>
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Button variant="ghost" size="sm" onClick={() => setAnchor((a) => shiftAnchor(unit, a, -1))}>‹</Button>
+          <div style={{ font: 'var(--text-body)', color: 'var(--text-primary)' }}>{periodLabelFor(unit, anchor)}</div>
+          <Button variant="ghost" size="sm" onClick={() => setAnchor((a) => shiftAnchor(unit, a, 1))}>›</Button>
+        </div>
+      )}
 
       {error ? (
         <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>Lỗi tải KPI: {error}</div>
