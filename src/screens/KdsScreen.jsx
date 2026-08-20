@@ -434,7 +434,7 @@ export default function KdsScreen({ initialStation }) {
           logs.filter((l) => l.type === 'checkin' && !logs.some((c) => c.type === 'checkout' && c.staff_id === l.staff_id && c.work_date === l.work_date))
             .map((l) => l.staff_id)
         );
-        setOnlineProfiles(profiles.filter((p) => onlineIds.has(p.id)));
+        setOnlineProfiles(profiles.filter((p) => onlineIds.has(p.id) && p.active !== false));
       })
       .catch(() => {});
   };

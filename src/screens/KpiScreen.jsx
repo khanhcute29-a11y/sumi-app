@@ -148,7 +148,7 @@ export default function KpiScreen() {
 
   const kpiStaffList = useMemo(() => {
     if (!isAdmin) return [];
-    return allProfiles.filter((p) => p.active !== false && hasAnyRole(p, ['shipper', ...KITCHEN_ROLES]));
+    return allProfiles.filter((p) => p.approved && p.active !== false && hasAnyRole(p, ['shipper', ...KITCHEN_ROLES]));
   }, [allProfiles, isAdmin]);
 
   const extendedStaffList = useMemo(() => {

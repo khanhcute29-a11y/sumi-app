@@ -51,7 +51,7 @@ export function StageSplitModal({ order, onClose, onSaved }) {
           logs.filter((l) => l.type === 'checkin' && !logs.some((c) => c.type === 'checkout' && c.staff_id === l.staff_id && c.work_date === l.work_date))
             .map((l) => l.staff_id)
         );
-        const online = profiles.filter((p) => onlineIds.has(p.id));
+        const online = profiles.filter((p) => onlineIds.has(p.id) && p.active !== false);
         setOnlineProfiles(online);
 
         if (order.status === 'dang_lam' && order.kitchen_staff_name && (order.order_stages || []).length === 0) {

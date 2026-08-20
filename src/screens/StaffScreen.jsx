@@ -108,7 +108,7 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, onChangeRole, onChangeExtra
               </div>
             </React.Fragment>
           )}
-          {canDeactivate && !isMe && s.role !== 'owner' && (
+          {canDeactivate && !isMe && !hasRole(s, 'owner') && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {confirmingDeactivate ? (
                 <>
