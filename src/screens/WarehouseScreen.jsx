@@ -12,6 +12,8 @@ import { useAuth } from '../lib/AuthContext';
 import { hasAnyRole } from '../lib/roles';
 import { enqueue, getQueue } from '../lib/offlineQueue';
 import { IconCamera, IconWarning, IconAdd, IconDownload } from '../components/icons/FrogIcons';
+import { Tabs } from '../components/navigation/Tabs';
+import FinishedGoodsPanel from '../components/warehouse/FinishedGoodsPanel';
 
 const UNITS = ['g', 'kg', 'ml', 'lít', 'quả', 'cái', 'gói'];
 const BRANCHES = [
@@ -266,6 +268,7 @@ export default function WarehouseScreen({ branch: viewBranch = 'all', onBranchCh
   const [showHistory, setShowHistory] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [showIncident, setShowIncident] = useState(false);
+  const [activeTab, setActiveTab] = useState('nguyen_lieu');
 
   const load = () => {
     setLoading(true);
@@ -298,6 +301,9 @@ export default function WarehouseScreen({ branch: viewBranch = 'all', onBranchCh
         <div style={{ font: 'var(--text-display-md)', color: 'var(--text-primary)' }}>Kho Hàng — Bà Tám{effectiveBranch !== 'all' ? ` · ${branchLabel(effectiveBranch)}` : ''}</div>
         <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Layout siêu to, dành cho thao tác nhanh tại kho</div>
       </div>
+      <Tabs tabs={[{ key: 'nguyen_lieu', label: 'Nguyên liệu' }, { key: 'thanh_pham', label: 'Thành phẩm' }]} active={activeTab} onChange={setActiveTab} />
+      {activeTab === 'nguyen_lieu' && (
+      <>
       {!lockedBranch && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <label style={{ font: 'var(--text-label)', color: 'var(--text-secondary)' }}>Chọn kho:</label>
@@ -383,6 +389,9 @@ export default function WarehouseScreen({ branch: viewBranch = 'all', onBranchCh
           ))}
         </div>
       )}
+      </>
+      )}
+      {activeTab === 'thanh_pham' && <FinishedGoodsPanel />}
     </div>
   );
 }
