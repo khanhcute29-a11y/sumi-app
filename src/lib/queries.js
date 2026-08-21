@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient';
 import { isSyntheticPhoneEmail } from './authPhone';
+import { branchForCategory } from './cakePricing';
 
 // Báo cho App.jsx biết cần đếm lại chấm đỏ thông báo ngay — không chờ Supabase Realtime
 // (bảng mới có thể chưa bật Realtime replication, khiến chấm đỏ bị kẹt tới khi tải lại trang).
@@ -97,6 +98,22 @@ export async function addProductionLog({ productId, productName, qty, size, pric
     staff_id: staffId || null, staff_name: staffName, work_date: workDate,
   });
   if (error) throw error;
+
+  if (productId) {
+    try {
+      const { data: product } = await supabase.from('products').select('category').eq('id', productId).maybeSingle();
+      const branch = branchForCategory(product?.category);
+      await upsertFinishedGoodsStock({ productId, size, branch }, Number(qty) || 0);
+      await supabase.from('finished_goods_stock_in_log').insert({
+        product_id: productId, product_name: productName, size: size || null, branch,
+        qty: Number(qty) || 0, source: 'production_log', staff_name: staffName || null,
+      });
+    } catch (stockErr) {
+      // Ghi sản xuất đã lưu thành công — không chặn luồng chính nếu cộng kho
+      // thất bại, chỉ cảnh báo để không mất dữ liệu sản xuất thật.
+      console.error('Không cộng được kho thành phẩm:', stockErr);
+    }
+  }
 }
 
 export async function fetchProductionLogs({ from, to } = {}) {
