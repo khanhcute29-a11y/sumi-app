@@ -131,8 +131,15 @@ export async function deductFinishedGoodsStockForOrder(order) {
   let productCategoryById = {};
   if (productIds.length) {
     const { data: productsData, error: productsErr } = await supabase.from('products').select('id, category').in('id', productIds);
-    if (productsErr) console.error('Không tra được category sản phẩm để trừ kho thành phẩm:', productsErr);
-    else productCategoryById = Object.fromEntries(productsData.map((p) => [p.id, p.category]));
+    if (productsErr) {
+      // Không tra được category thật của sản phẩm — KHÔNG được rơi về
+      // category ghi trên order_item (không đáng tin, gây trừ nhầm kho
+      // Macaron Sỉ/Teabreak và bỏ sót KEM_GROUP_CATEGORIES). An toàn hơn là
+      // bỏ qua toàn bộ lần trừ kho này (không ghi gì) hơn là ghi sai.
+      console.error('Không tra được category sản phẩm để trừ kho thành phẩm, bỏ qua toàn bộ đơn', order.order_code, productsErr);
+      return;
+    }
+    productCategoryById = Object.fromEntries(productsData.map((p) => [p.id, p.category]));
   }
   for (const item of items) {
     if (!item.product_id) continue;
