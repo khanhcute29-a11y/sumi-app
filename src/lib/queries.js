@@ -116,6 +116,31 @@ export async function addProductionLog({ productId, productName, qty, size, pric
   }
 }
 
+// Trừ kho thành phẩm cho từng sản phẩm trong đơn khi đơn được đánh dấu Hoàn
+// thành. Chỉ áp dụng cho dòng có product_id (chọn từ menu) — dòng nhập tay
+// tự do ("Khác") không có sản phẩm để trừ, bỏ qua theo đúng thiết kế đã
+// thống nhất. Cho phép âm kho (bánh custom làm theo đơn, chưa từng "nhập").
+export async function deductFinishedGoodsStockForOrder(order) {
+  const items = order.order_items || [];
+  for (const item of items) {
+    if (!item.product_id) continue;
+    const branch = branchForCategory(item.category);
+    const qty = Number(item.qty) || 0;
+    if (!qty) continue;
+    try {
+      await upsertFinishedGoodsStock({ productId: item.product_id, size: item.size, branch }, -qty);
+      await supabase.from('finished_goods_stock_out_log').insert({
+        product_id: item.product_id, product_name: item.name, size: item.size || null, branch,
+        qty, order_id: order.id, order_code: order.order_code,
+      });
+    } catch (stockErr) {
+      // Đơn đã được xác nhận giao xong — không chặn luồng giao hàng nếu trừ
+      // kho thất bại, chỉ cảnh báo.
+      console.error('Không trừ được kho thành phẩm cho đơn', order.order_code, stockErr);
+    }
+  }
+}
+
 export async function fetchProductionLogs({ from, to } = {}) {
   let q = supabase.from('production_logs').select('*').order('work_date', { ascending: false });
   if (from) q = q.gte('work_date', from);

@@ -7,7 +7,7 @@ import { CameraCapture } from '../components/CameraCapture';
 import { IncidentReportModal } from '../components/IncidentReportModal';
 import { ActionChip } from '../components/ActionChip';
 import { OrderDetailModal } from '../components/OrderDetailModal';
-import { fetchOrders, updateOrder, uploadPhoto, fetchShopSettings, createAdhocTask } from '../lib/queries';
+import { fetchOrders, updateOrder, uploadPhoto, fetchShopSettings, createAdhocTask, deductFinishedGoodsStockForOrder } from '../lib/queries';
 import { useAuth } from '../lib/AuthContext';
 import { hasAnyRole } from '../lib/roles';
 import { enqueue } from '../lib/offlineQueue';
@@ -365,7 +365,8 @@ export default function ShippingScreen() {
     if (photoUrl) fields.delivery_photo_url = photoUrl;
     if (pos) { fields.delivery_lat = pos.lat; fields.delivery_lng = pos.lng; }
     if (lateReason) fields.late_reason = lateReason;
-    await applyFields(order, fields);
+    const ok = await applyFields(order, fields);
+    if (ok) deductFinishedGoodsStockForOrder(order).catch((err) => console.error('Trừ kho thành phẩm thất bại:', err));
   };
 
   const handleSignedDoc = async (order, photoUrl) => {
