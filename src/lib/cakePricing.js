@@ -9,6 +9,17 @@ export const QTY_ONLY_CATEGORIES = ['banh_su', 'cupcake', 'set_mousse', 'trung_t
 // "Nội dung (chữ trên bánh)"/"Loại nến" — vì không phải bánh sinh nhật kem tươi.
 export const NO_CAKE_EXTRAS_CATEGORIES = ['banh_trung_thu'];
 
+// Kho bánh thành phẩm dùng đúng cách phân luồng này để xác định 1 sản phẩm
+// thuộc kho nào — macaron -> Xưởng Macaron (xuong41), teabreak -> Xưởng 42,
+// còn lại (bánh kem, mặn ngọt, trung thu...) -> Bakery. Dùng chung cho cả
+// nhập kho (Ghi Nhận Sản Xuất) và xuất kho (đơn Hoàn thành) để không bao giờ
+// lệch nhau giữa 2 luồng.
+export function branchForCategory(category) {
+  if (category === 'macaron') return 'xuong41';
+  if (category === 'teabreak') return 'xuong42';
+  return 'bakery';
+}
+
 // Bảng giá bánh sinh nhật kem tươi / bánh trứng muối — cập nhật 12/08/2026.
 export const CAKE_SIZES_CM = [12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40];
 
