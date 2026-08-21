@@ -162,7 +162,47 @@ create table if not exists warehouse_stock_in_log (
   created_at timestamptz not null default now()
 );
 
--- 5b. Công thức (BOM) — nguyên liệu cần cho 1 sản phẩm, dùng để tính giá vốn
+-- 5c. Kho bánh thành phẩm: tồn kho hiện tại theo (sản phẩm, size, chi nhánh)
+create table if not exists finished_goods_stock (
+  id uuid primary key default gen_random_uuid(),
+  product_id uuid not null references products(id) on delete cascade,
+  size text,
+  branch text not null check (branch in ('bakery','xuong41','xuong42')),
+  qty numeric(12,0) not null default 0,
+  updated_at timestamptz not null default now(),
+  unique (product_id, size, branch)
+);
+
+-- Nhật ký nhập kho bánh thành phẩm (từ ghi nhận sản xuất)
+create table if not exists finished_goods_stock_in_log (
+  id uuid primary key default gen_random_uuid(),
+  product_id uuid references products(id) on delete set null,
+  product_name text not null,
+  size text,
+  branch text not null,
+  qty numeric(12,0) not null,
+  source text not null default 'production_log',
+  source_id uuid,
+  staff_name text,
+  note text,
+  created_at timestamptz not null default now()
+);
+
+-- Nhật ký xuất kho bánh thành phẩm (khi đơn hoàn thành)
+create table if not exists finished_goods_stock_out_log (
+  id uuid primary key default gen_random_uuid(),
+  product_id uuid references products(id) on delete set null,
+  product_name text not null,
+  size text,
+  branch text not null,
+  qty numeric(12,0) not null,
+  order_id uuid references orders(id) on delete set null,
+  order_code text,
+  note text,
+  created_at timestamptz not null default now()
+);
+
+-- 5d. Công thức (BOM) — nguyên liệu cần cho 1 sản phẩm, dùng để tính giá vốn
 create table if not exists product_recipes (
   id uuid primary key default gen_random_uuid(),
   product_id uuid not null references products(id) on delete cascade,
@@ -284,6 +324,9 @@ alter table product_variants enable row level security;
 alter table warehouse_stock enable row level security;
 alter table warehouse_stock_out_log enable row level security;
 alter table warehouse_stock_in_log enable row level security;
+alter table finished_goods_stock enable row level security;
+alter table finished_goods_stock_in_log enable row level security;
+alter table finished_goods_stock_out_log enable row level security;
 alter table cashbook_entries enable row level security;
 alter table order_deletion_log enable row level security;
 alter table shift_configs enable row level security;
@@ -329,6 +372,19 @@ create policy "read warehouse_stock_out_log" on warehouse_stock_out_log for sele
 create policy "insert warehouse_stock_out_log" on warehouse_stock_out_log for insert with check (auth.role() = 'authenticated');
 create policy "read warehouse_stock_in_log" on warehouse_stock_in_log for select using (auth.role() = 'authenticated' and public.is_approved());
 create policy "insert warehouse_stock_in_log" on warehouse_stock_in_log for insert with check (auth.role() = 'authenticated');
+
+-- finished_goods_stock: đọc/tạo/sửa mở (nhập từ sản xuất, xuất khi đơn hoàn thành).
+create policy "read finished_goods_stock" on finished_goods_stock for select using (auth.role() = 'authenticated' and public.is_approved());
+create policy "insert finished_goods_stock" on finished_goods_stock for insert with check (auth.role() = 'authenticated');
+create policy "update finished_goods_stock" on finished_goods_stock for update using (auth.role() = 'authenticated');
+
+-- finished_goods_stock_in_log: đọc/tạo mở (ghi nhận nhập từ sản xuất).
+create policy "read finished_goods_stock_in_log" on finished_goods_stock_in_log for select using (auth.role() = 'authenticated' and public.is_approved());
+create policy "insert finished_goods_stock_in_log" on finished_goods_stock_in_log for insert with check (auth.role() = 'authenticated');
+
+-- finished_goods_stock_out_log: đọc/tạo mở (ghi nhận xuất khi đơn hoàn thành).
+create policy "read finished_goods_stock_out_log" on finished_goods_stock_out_log for select using (auth.role() = 'authenticated' and public.is_approved());
+create policy "insert finished_goods_stock_out_log" on finished_goods_stock_out_log for insert with check (auth.role() = 'authenticated');
 
 -- shift_logs: đọc/tạo mở (ai cũng tự chấm công/xin nghỉ được); SỬA/XOÁ (chỉnh giờ chấm công,
 -- lương đã tính) chỉ Chủ sở hữu — dữ liệu công/lương không giao cho nhân viên khác chỉnh sửa.
