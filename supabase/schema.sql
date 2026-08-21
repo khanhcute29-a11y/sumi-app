@@ -170,7 +170,7 @@ create table if not exists finished_goods_stock (
   branch text not null check (branch in ('bakery','xuong41','xuong42')),
   qty numeric(12,0) not null default 0,
   updated_at timestamptz not null default now(),
-  unique (product_id, size, branch)
+  unique nulls not distinct (product_id, size, branch)
 );
 
 -- Nhật ký nhập kho bánh thành phẩm (từ ghi nhận sản xuất)
@@ -198,6 +198,8 @@ create table if not exists finished_goods_stock_out_log (
   qty numeric(12,0) not null,
   order_id uuid references orders(id) on delete set null,
   order_code text,
+  source text not null default 'order',
+  staff_name text,
   note text,
   created_at timestamptz not null default now()
 );

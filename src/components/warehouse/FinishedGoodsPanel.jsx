@@ -17,7 +17,7 @@ const branchLabel = (v) => BRANCHES.find((b) => b.value === v)?.label || v;
 const BRANCH_ROLE_MAP = { kho_bakery: 'bakery', kho_xuong41: 'xuong41', kho_xuong42: 'xuong42' };
 const FULL_ACCESS_ROLES = ['owner', 'admin', 'warehouse'];
 
-function HistorySection({ products, effectiveBranch, onClose }) {
+function HistorySection({ effectiveBranch, onClose }) {
   const [entries, setEntries] = useState(null);
   const [error, setError] = useState('');
 
@@ -55,7 +55,7 @@ function HistorySection({ products, effectiveBranch, onClose }) {
                   <Badge tone={e.kind === 'in' ? 'success' : 'warning'}>{e.kind === 'in' ? 'Nhập' : 'Xuất'}</Badge> {e.product_name}{e.size ? ` · ${e.size}` : ''} — {e.qty}
                 </div>
                 <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>
-                  {branchLabel(e.branch)}{e.kind === 'in' && e.source === 'adjustment' ? ' · Điều chỉnh tay' : ''}{e.kind === 'out' && e.order_code ? ` · Đơn: ${e.order_code}` : ''}{e.staff_name ? ` · ${e.staff_name}` : ''}{e.note ? ` · ${e.note}` : ''}
+                  {branchLabel(e.branch)}{e.source === 'adjustment' ? ' · Điều chỉnh tay' : ''}{e.kind === 'out' && e.order_code ? ` · Đơn: ${e.order_code}` : ''}{e.staff_name ? ` · ${e.staff_name}` : ''}{e.note ? ` · ${e.note}` : ''}
                 </div>
               </div>
               <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', flexShrink: 0, textAlign: 'right' }}>
@@ -142,7 +142,7 @@ export default function FinishedGoodsPanel() {
         )}
       </div>
 
-      {showHistory && <HistorySection products={products} effectiveBranch={effectiveBranch} onClose={() => setShowHistory(false)} />}
+      {showHistory && <HistorySection effectiveBranch={effectiveBranch} onClose={() => setShowHistory(false)} />}
       {showAdjust && (
         <AdjustStockForm products={products} defaultBranch={effectiveBranch === 'all' ? 'bakery' : effectiveBranch}
           staffName={profile?.full_name} onSaved={load} onClose={() => setShowAdjust(false)} />
@@ -159,7 +159,7 @@ export default function FinishedGoodsPanel() {
             <div key={s.id} style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <div style={{ font: '700 17px var(--font-body)', color: 'var(--text-primary)' }}>{productName(s.product_id)}{s.size ? ` · ${s.size}` : ''}</div>
-                <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>{effectiveBranch === 'all' ? branchLabel(s.branch) : ' '}</div>
+                <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>{effectiveBranch === 'all' && branchLabel(s.branch)}</div>
               </div>
               <div style={{ font: '700 20px var(--font-body)', color: Number(s.qty) < 0 ? 'var(--status-danger)' : 'var(--text-primary)' }}>{s.qty}</div>
             </div>

@@ -1,6 +1,6 @@
 import { supabase } from './supabaseClient';
 import { isSyntheticPhoneEmail } from './authPhone';
-import { branchForCategory } from './cakePricing';
+import { branchForCategory, KEM_GROUP_CATEGORIES } from './cakePricing';
 
 // Báo cho App.jsx biết cần đếm lại chấm đỏ thông báo ngay — không chờ Supabase Realtime
 // (bảng mới có thể chưa bật Realtime replication, khiến chấm đỏ bị kẹt tới khi tải lại trang).
@@ -102,12 +102,16 @@ export async function addProductionLog({ productId, productName, qty, size, pric
   if (productId) {
     try {
       const { data: product } = await supabase.from('products').select('category').eq('id', productId).maybeSingle();
-      const branch = branchForCategory(product?.category);
-      await upsertFinishedGoodsStock({ productId, size, branch }, Number(qty) || 0);
-      await supabase.from('finished_goods_stock_in_log').insert({
-        product_id: productId, product_name: productName, size: size || null, branch,
-        qty: Number(qty) || 0, source: 'production_log', staff_name: staffName || null,
-      });
+      // Bánh làm theo đơn (bánh kem, mousse, bánh su...) không phải hàng sản
+      // xuất theo lô cố định — bỏ qua khỏi kho thành phẩm (xem KEM_GROUP_CATEGORIES).
+      if (!KEM_GROUP_CATEGORIES.includes(product?.category)) {
+        const branch = branchForCategory(product?.category);
+        await upsertFinishedGoodsStock({ productId, size, branch }, Number(qty) || 0);
+        await supabase.from('finished_goods_stock_in_log').insert({
+          product_id: productId, product_name: productName, size: size || null, branch,
+          qty: Number(qty) || 0, source: 'production_log', staff_name: staffName || null,
+        });
+      }
     } catch (stockErr) {
       // Ghi sản xuất đã lưu thành công — không chặn luồng chính nếu cộng kho
       // thất bại, chỉ cảnh báo để không mất dữ liệu sản xuất thật.
@@ -120,11 +124,23 @@ export async function addProductionLog({ productId, productName, qty, size, pric
 // thành. Chỉ áp dụng cho dòng có product_id (chọn từ menu) — dòng nhập tay
 // tự do ("Khác") không có sản phẩm để trừ, bỏ qua theo đúng thiết kế đã
 // thống nhất. Cho phép âm kho (bánh custom làm theo đơn, chưa từng "nhập").
+// Bánh làm theo đơn (KEM_GROUP_CATEGORIES) bị bỏ qua giống hệt luồng nhập.
 export async function deductFinishedGoodsStockForOrder(order) {
   const items = order.order_items || [];
+  const productIds = [...new Set(items.filter((it) => it.product_id).map((it) => it.product_id))];
+  let productCategoryById = {};
+  if (productIds.length) {
+    const { data: productsData, error: productsErr } = await supabase.from('products').select('id, category').in('id', productIds);
+    if (productsErr) console.error('Không tra được category sản phẩm để trừ kho thành phẩm:', productsErr);
+    else productCategoryById = Object.fromEntries(productsData.map((p) => [p.id, p.category]));
+  }
   for (const item of items) {
     if (!item.product_id) continue;
-    const branch = branchForCategory(item.category);
+    // Ưu tiên category thật của sản phẩm (nguồn đúng cho mọi kênh bán) —
+    // chỉ rơi về category ghi trên order_item nếu sản phẩm đã bị xoá.
+    const category = item.product_id in productCategoryById ? productCategoryById[item.product_id] : item.category;
+    if (KEM_GROUP_CATEGORIES.includes(category)) continue;
+    const branch = branchForCategory(category);
     const qty = Number(item.qty) || 0;
     if (!qty) continue;
     try {
@@ -541,9 +557,8 @@ export async function adjustFinishedGoodsStock({ productId, productName, size, b
   const logTable = delta > 0 ? 'finished_goods_stock_in_log' : 'finished_goods_stock_out_log';
   const logRow = {
     product_id: productId, product_name: productName, size: normalizedSize, branch,
-    qty: Math.abs(delta), note: note || null,
+    qty: Math.abs(delta), note: note || null, source: 'adjustment', staff_name: staffName || null,
   };
-  if (delta > 0) { logRow.source = 'adjustment'; logRow.staff_name = staffName || null; }
   const { error: logErr } = await supabase.from(logTable).insert(logRow);
   if (logErr) throw logErr;
 }

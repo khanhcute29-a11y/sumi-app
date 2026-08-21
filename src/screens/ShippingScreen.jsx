@@ -317,17 +317,19 @@ export default function ShippingScreen() {
     setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, ...fields, pendingSync: true } : o)));
   };
 
-  // Trả về true nếu thay đổi đã được ghi (hoặc đã xếp hàng offline), false nếu bị từ chối.
+  // Trả về 'written' nếu đã ghi thẳng lên Supabase, 'queued' nếu chỉ xếp hàng
+  // offline (chưa thật sự lưu), false nếu bị server từ chối. Các hiệu ứng phụ
+  // (như trừ kho thành phẩm) chỉ nên chạy khi 'written' — xem handleComplete.
   const applyFields = async (order, fields) => {
     if (!navigator.onLine) {
       queueOffline(order, fields);
-      return true;
+      return 'queued';
     }
     try {
       await updateOrder(order.id, fields);
       setActionError('');
       load();
-      return true;
+      return 'written';
     } catch (err) {
       if (isServerRejection(err)) {
         setActionError(err.message || 'Không lưu được thay đổi — bạn không có quyền hoặc dữ liệu không hợp lệ.');
@@ -335,7 +337,7 @@ export default function ShippingScreen() {
         return false;
       }
       queueOffline(order, fields);
-      return true;
+      return 'queued';
     }
   };
 
@@ -365,8 +367,17 @@ export default function ShippingScreen() {
     if (photoUrl) fields.delivery_photo_url = photoUrl;
     if (pos) { fields.delivery_lat = pos.lat; fields.delivery_lng = pos.lng; }
     if (lateReason) fields.late_reason = lateReason;
-    const ok = await applyFields(order, fields);
-    if (ok) deductFinishedGoodsStockForOrder(order).catch((err) => console.error('Trừ kho thành phẩm thất bại:', err));
+    const result = await applyFields(order, fields);
+    if (result === 'written') {
+      // Chỉ trừ kho khi đã ghi thẳng lên Supabase — không gọi khi mất mạng vì
+      // chắc chắn sẽ lỗi, và hàm này đã tự bắt lỗi từng dòng bên trong nên
+      // không cần .catch() ở đây (không bao giờ reject).
+      deductFinishedGoodsStockForOrder(order);
+    } else if (result === 'queued') {
+      // Đơn hoàn thành đã được xếp hàng offline — xếp luôn việc trừ kho để
+      // đồng bộ lại khi có mạng (xử lý ở OFFLINE_HANDLERS trong App.jsx).
+      enqueue('deductFinishedGoodsStockForOrder', { orderId: order.id });
+    }
   };
 
   const handleSignedDoc = async (order, photoUrl) => {

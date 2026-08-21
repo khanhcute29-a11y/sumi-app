@@ -6,6 +6,7 @@ import { initOfflineSync } from './lib/offlineQueue';
 import {
   updateOrderStatus, updateOrder, addWarehouseStock, addShiftCheckin, addShiftCheckout, addLeaveRequest, createAdhocTask,
   countNewOrders, countKitchenActiveOrders, countPendingApprovals, countOpenIncidents,
+  fetchOrderById, deductFinishedGoodsStockForOrder,
 } from './lib/queries';
 import { navBadgeVisibility } from './lib/roles';
 import { initAudioUnlock } from './lib/sound';
@@ -72,6 +73,12 @@ const OFFLINE_HANDLERS = {
   addShiftCheckout: (payload) => addShiftCheckout(payload),
   addLeaveRequest: (payload) => addLeaveRequest(payload),
   createAdhocTask: (payload) => createAdhocTask(payload),
+  // Đơn hoàn thành lúc mất mạng: nạp lại đơn mới nhất (kèm order_items) rồi
+  // mới trừ kho — payload lúc xếp hàng chỉ mang orderId, không mang snapshot cũ.
+  deductFinishedGoodsStockForOrder: async ({ orderId }) => {
+    const order = await fetchOrderById(orderId);
+    if (order) await deductFinishedGoodsStockForOrder(order);
+  },
 };
 
 function OpsApp({ onSignOut }) {

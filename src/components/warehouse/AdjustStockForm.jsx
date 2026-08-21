@@ -3,6 +3,7 @@ import { Button } from '../forms/Button';
 import { Input } from '../forms/Input';
 import { Select } from '../forms/Select';
 import { adjustFinishedGoodsStock, fetchFinishedGoodsStock } from '../../lib/queries';
+import { branchForCategory } from '../../lib/cakePricing';
 
 const BRANCHES = [
   { value: 'bakery', label: 'Kho Bakery' },
@@ -55,8 +56,13 @@ export default function AdjustStockForm({ products, defaultBranch, staffName, on
   return (
     <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
       {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
-      <Select label="Sản phẩm" value={productId} onChange={(e) => { setProductId(e.target.value); setSize(''); }}
-        options={products.map((p) => ({ value: p.id, label: p.name }))} />
+      <Select label="Sản phẩm" value={productId} onChange={(e) => {
+        const id = e.target.value;
+        setProductId(id);
+        setSize('');
+        const selected = products.find((p) => p.id === id);
+        setBranch(branchForCategory(selected?.category));
+      }} options={products.map((p) => ({ value: p.id, label: p.name }))} />
       {sizeOptions.length > 0 && (
         <Select label="Size" value={size} onChange={(e) => setSize(e.target.value)} options={sizeOptions} placeholder="Chọn size..." />
       )}
