@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Badge } from '../feedback/Badge';
 import { Button } from '../forms/Button';
 import {
@@ -74,8 +74,8 @@ export default function FinishedGoodsPanel() {
   const hasFullAccess = hasAnyRole(profile, FULL_ACCESS_ROLES);
   const myBranches = hasFullAccess ? [] : [...new Set([profile?.role, ...(profile?.extra_roles || [])].map((r) => BRANCH_ROLE_MAP[r]).filter(Boolean))];
   const lockedBranch = !hasFullAccess && myBranches.length === 1 ? myBranches[0] : null;
-  const [viewBranch, setViewBranch] = useState(lockedBranch || 'all');
-  const effectiveBranch = lockedBranch || viewBranch;
+  const [viewBranch, setViewBranch] = useState('all');
+  const effectiveBranch = lockedBranch || (myBranches.length > 1 && !myBranches.includes(viewBranch) ? myBranches[0] : viewBranch);
 
   const [stock, setStock] = useState([]);
   const [products, setProducts] = useState([]);
