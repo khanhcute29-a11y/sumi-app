@@ -418,6 +418,94 @@ export async function fetchWarehouseStockInLog(limit = 100) {
   return data;
 }
 
+// ---- Kho bánh thành phẩm ----
+
+// Cộng/trừ tồn kho thành phẩm cho đúng 1 dòng (product_id, size, branch).
+// delta dương = nhập, âm = xuất (được phép âm nếu bán trước khi kịp ghi
+// sản xuất). Trả về số dư mới để caller ghi log đúng số.
+async function upsertFinishedGoodsStock({ productId, size, branch }, delta) {
+  const normalizedSize = size || null;
+  let row, findError;
+  if (normalizedSize === null) {
+    const res = await supabase.from('finished_goods_stock').select('*')
+      .eq('product_id', productId).eq('branch', branch).is('size', null).maybeSingle();
+    row = res.data; findError = res.error;
+  } else {
+    const res = await supabase.from('finished_goods_stock').select('*')
+      .eq('product_id', productId).eq('branch', branch).eq('size', normalizedSize).maybeSingle();
+    row = res.data; findError = res.error;
+  }
+  if (findError) throw findError;
+
+  if (row) {
+    const newQty = Number(row.qty || 0) + delta;
+    const { error } = await supabase.from('finished_goods_stock')
+      .update({ qty: newQty, updated_at: new Date().toISOString() }).eq('id', row.id);
+    if (error) throw error;
+    return newQty;
+  }
+  const { error } = await supabase.from('finished_goods_stock')
+    .insert({ product_id: productId, size: normalizedSize, branch, qty: delta });
+  if (error) throw error;
+  return delta;
+}
+
+export async function fetchFinishedGoodsStock() {
+  const { data, error } = await supabase.from('finished_goods_stock').select('*').order('updated_at', { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+export async function fetchFinishedGoodsStockInLog(limit = 100) {
+  const { data, error } = await supabase.from('finished_goods_stock_in_log').select('*').order('created_at', { ascending: false }).limit(limit);
+  if (error) throw error;
+  return data;
+}
+
+export async function fetchFinishedGoodsStockOutLog(limit = 100) {
+  const { data, error } = await supabase.from('finished_goods_stock_out_log').select('*').order('created_at', { ascending: false }).limit(limit);
+  if (error) throw error;
+  return data;
+}
+
+export async function adjustFinishedGoodsStock({ productId, productName, size, branch, newQty, note, staffName }) {
+  const normalizedSize = size || null;
+  let current;
+  if (normalizedSize === null) {
+    const { data, error } = await supabase.from('finished_goods_stock').select('*')
+      .eq('product_id', productId).eq('branch', branch).is('size', null).maybeSingle();
+    if (error) throw error;
+    current = data;
+  } else {
+    const { data, error } = await supabase.from('finished_goods_stock').select('*')
+      .eq('product_id', productId).eq('branch', branch).eq('size', normalizedSize).maybeSingle();
+    if (error) throw error;
+    current = data;
+  }
+  const currentQty = Number(current?.qty || 0);
+  const delta = Number(newQty) - currentQty;
+  if (delta === 0) return;
+
+  if (current) {
+    const { error } = await supabase.from('finished_goods_stock')
+      .update({ qty: Number(newQty), updated_at: new Date().toISOString() }).eq('id', current.id);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase.from('finished_goods_stock')
+      .insert({ product_id: productId, size: normalizedSize, branch, qty: Number(newQty) });
+    if (error) throw error;
+  }
+
+  const logTable = delta > 0 ? 'finished_goods_stock_in_log' : 'finished_goods_stock_out_log';
+  const logRow = {
+    product_id: productId, product_name: productName, size: normalizedSize, branch,
+    qty: Math.abs(delta), note: note || null,
+  };
+  if (delta > 0) { logRow.source = 'adjustment'; logRow.staff_name = staffName || null; }
+  const { error: logErr } = await supabase.from(logTable).insert(logRow);
+  if (logErr) throw logErr;
+}
+
 // ---- Công thức sản phẩm (BOM) — tính giá vốn ----
 
 export async function fetchProductRecipes(productId) {
