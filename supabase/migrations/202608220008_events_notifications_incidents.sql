@@ -89,7 +89,10 @@ select case when o.status_v2='completed' then 'order_completed' when o.status_v2
 from public.orders o on conflict(idempotency_key) do nothing;
 
 insert into public.incidents_v2(incident_code,entity_type,entity_id,category,severity,status,reported_by,reported_at,description,resolved_at,legacy_source_key)
-select coalesce(nullif(ir.code,''),'LEGACY-'||upper(substr(md5(ir.id::text),1,10))),
+select case
+  when nullif(ir.code,'') is null then 'LEGACY-'||upper(substr(md5(ir.id::text),1,10))
+  when count(*) over(partition by nullif(ir.code,'')) > 1 then ir.code||'-'||upper(substr(md5(ir.id::text),1,6))
+  else ir.code end,
  case when ir.order_id is null then 'incident' else 'order' end,coalesce(ir.order_id,ir.id),ir.category,'medium',
  case when ir.status='resolved' then 'resolved' else 'open' end,ir.reporter_id,ir.created_at,
  coalesce(nullif(ir.note,''),ir.label),ir.resolved_at,'legacy:incident_reports:'||ir.id

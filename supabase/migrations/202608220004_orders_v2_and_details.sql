@@ -16,6 +16,14 @@ alter table public.orders add column if not exists cancelled_at timestamptz;
 alter table public.orders add column if not exists cancelled_by uuid references public.profiles(id) on delete set null;
 alter table public.orders add column if not exists legacy_status text;
 alter table public.orders add column if not exists legacy_import_key text;
+alter table public.orders add column if not exists signed_doc_photo_url text;
+
+-- Backfill runs as the migration owner, outside an authenticated staff session.
+-- Temporarily suspend only the legacy interactive-update guards; they are
+-- restored immediately after the additive compatibility fields are populated.
+alter table public.orders disable trigger enforce_order_update_permissions_trigger;
+alter table public.orders disable trigger trg_enforce_order_self_claim_columns;
+alter table public.orders disable trigger trg_enforce_order_update_rules;
 
 update public.orders
 set legacy_status = coalesce(legacy_status, status),
@@ -33,6 +41,10 @@ set legacy_status = coalesce(legacy_status, status),
       case when delivery_date ~ '^\d{4}-\d{2}-\d{2}$'
         then (delivery_date || ' ' || coalesce(nullif(delivery_time, ''), '00:00'))::timestamptz
         else null end);
+
+alter table public.orders enable trigger enforce_order_update_permissions_trigger;
+alter table public.orders enable trigger trg_enforce_order_self_claim_columns;
+alter table public.orders enable trigger trg_enforce_order_update_rules;
 
 alter table public.order_items add column if not exists quantity numeric;
 alter table public.order_items add column if not exists unit text;
