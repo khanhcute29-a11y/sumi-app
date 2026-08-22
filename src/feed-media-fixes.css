@@ -1,0 +1,4 @@
+.feed-avatar{overflow:hidden}
+.feed-avatar .sumi-user-avatar,.feed-avatar .sumi-user-avatar img{width:43px!important;height:43px!important;border-radius:14px;object-fit:cover}
+.feed-media-loading,.feed-media-error{grid-column:1/-1;min-height:170px;display:grid;place-items:center;background:#f1e8df;color:#7b6657;font-weight:850}
+.feed-media-error{background:#ffe8e4;color:#a12d25}
