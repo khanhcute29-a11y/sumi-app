@@ -16,7 +16,6 @@ import { AuthProvider, useAuth } from './lib/AuthContext';
 import LoginScreen from './screens/LoginScreen';
 import ResetPasswordScreen from './screens/ResetPasswordScreen';
 import PendingApprovalScreen from './screens/PendingApprovalScreen';
-import OrdersScreen from './screens/OrdersScreen';
 import OrdersV2Screen from './screens/OrdersV2Screen';
 import KdsScreen from './screens/KdsScreen';
 import WarehouseScreen from './screens/WarehouseScreen';
@@ -139,7 +138,7 @@ function OpsApp({ onSignOut }) {
 
   const screens = {
     home: <MobileHomeScreen onNavigate={setTab} />, feed: <CompanyFeedScreen />,
-    dashboard: <DashboardScreen />, orders: featureFlags.orders_v2_read ? <OrdersV2Screen /> : <OrdersScreen />, kds: <KdsScreen initialStation={kdsStation} />, warehouse: <WarehouseScreen branch={warehouseBranch} onBranchChange={setWarehouseBranch} />, cashbook: <CashbookScreen />,
+    dashboard: <DashboardScreen />, orders: <OrdersV2Screen />, kds: <KdsScreen initialStation={kdsStation} />, warehouse: <WarehouseScreen branch={warehouseBranch} onBranchChange={setWarehouseBranch} />, cashbook: <CashbookScreen />,
     shipping: featureFlags.delivery_v2 ? <ShippingV2Screen /> : <ShippingScreen />, products: <ProductsScreen />, shifts: <ShiftsScreen />, compensation: <CompensationScreen />, financeRequests: <FinanceRequestsScreen />, approvals: <ApprovalRequestsScreen />, tasks: <TasksScreen />, incidents: <IncidentsScreen />, reports: <ReportsScreen />, kpi: featureFlags.kpi_v2 ? <KpiV2Screen /> : <KpiScreen />, inbox: <InboxV2Screen />, crm: <CustomersScreen />, staff: <StaffScreen />, settings: <SettingsScreen onSignOut={onSignOut} />, profile: <MobileProfileScreen onSignOut={onSignOut} onNavigate={setTab} />,
   };
   const isBottomKey = (k) => ['home', 'feed', 'orders', 'tasks', 'profile'].includes(k);

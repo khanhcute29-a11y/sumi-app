@@ -18,7 +18,14 @@ export default function OrdersV2Screen() {
   const [canCreate, setCanCreate] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
-  const load = async () => { setLoading(true); try { setOrders(await listOrdersV2()); } finally { setLoading(false); } };
+  const [error, setError] = useState('');
+  const load = async () => {
+    setLoading(true);
+    setError('');
+    try { setOrders(await listOrdersV2()); }
+    catch (err) { setError(err?.message || 'Không tải được danh sách đơn hàng.'); }
+    finally { setLoading(false); }
+  };
   useEffect(() => { load(); loadFeatureFlags().then(f=>setCanCreate(f.orders_v2_write)); }, []);
   useEffect(() => { const open=()=>setShowCreate(true); window.addEventListener('sumi-create-order',open); return()=>window.removeEventListener('sumi-create-order',open); }, []);
   useEffect(() => { const open=(event)=>{ if(event.detail?.entityId) setSelectedId(event.detail.entityId); }; window.addEventListener('sumi-open-order',open); return()=>window.removeEventListener('sumi-open-order',open); }, []);
@@ -37,7 +44,8 @@ export default function OrdersV2Screen() {
         {key==='all'?'Tất cả':LABELS[key]}{key!=='all'?` · ${orders.filter(o=>o.status_v2===key).length}`:''}
       </button>)}
     </div>
-    {loading ? <div className="mock-empty">Đang tải đơn...</div> : shown.map(o => <button className="mock-order-card" key={o.id} onClick={()=>setSelectedId(o.id)}>
+    {error && <div className="mock-empty" role="alert"><span>⚠️</span><h2>Chưa tải được đơn hàng</h2><p>{error}</p><button onClick={load}>TẢI LẠI</button></div>}
+    {loading ? <div className="mock-empty">Đang tải đơn...</div> : !error && shown.map(o => <button className="mock-order-card" key={o.id} onClick={()=>setSelectedId(o.id)}>
       <div className="mock-order-top"><strong>#{o.order_code || 'CHƯA CÓ MÃ'}</strong><span>{LABELS[o.status_v2] || o.status_v2}</span></div>
       <h2>{o.customer_name || o.order_type || 'Đơn sản xuất'}</h2>
       <p>{o.total_quantity || 0} sản phẩm · {o.completed_package_count || 0}/{o.package_count || 0} phần đã xong</p>
@@ -45,7 +53,7 @@ export default function OrdersV2Screen() {
       <div className="mock-track-label"><span>Chờ nhận</span><b>{LABELS[o.status_v2] || o.status_v2}</b><span>Hoàn thành</span></div>
       <time>{o.required_at ? `Cần giao ${new Date(o.required_at).toLocaleString('vi-VN')}` : 'Chưa đặt giờ giao'}</time>
     </button>)}
-    {!loading && shown.length===0 && <div className="mock-empty"><span>📦</span><h2>Chưa có đơn trong mục này</h2><p>Bấm “Tạo đơn” để bắt đầu luồng công việc mới.</p></div>}
+    {!loading && !error && shown.length===0 && <div className="mock-empty"><span>📦</span><h2>Chưa có đơn trong mục này</h2><p>Bấm “Tạo đơn” để bắt đầu luồng công việc mới.</p></div>}
     {selectedId&&<OrderV2DetailModal orderId={selectedId} onClose={()=>setSelectedId(null)} onChanged={load}/>} 
   </div>;
 }
