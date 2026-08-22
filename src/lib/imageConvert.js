@@ -12,5 +12,8 @@ export async function toWebSafeImage(file) {
   const heic2any = (await import('heic2any')).default;
   const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.85 });
   const blob = Array.isArray(converted) ? converted[0] : converted;
-  return new File([blob], (file.name || 'anh').replace(/\.(heic|heif)$/i, '') + '.jpg', { type: 'image/jpeg' });
+  if (!blob || !blob.size) throw new Error('Điện thoại chưa chuyển được ảnh HEIC. Hãy đổi máy ảnh sang định dạng JPG rồi thử lại.');
+  const safe = new File([blob], (file.name || 'anh').replace(/\.(heic|heif)$/i, '') + '.jpg', { type: 'image/jpeg' });
+  if (looksLikeHeic(safe)) throw new Error('Ảnh vẫn còn định dạng HEIC nên chưa thể đăng.');
+  return safe;
 }

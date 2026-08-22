@@ -2,3 +2,4 @@
 .feed-avatar .sumi-user-avatar,.feed-avatar .sumi-user-avatar img{width:43px!important;height:43px!important;border-radius:14px;object-fit:cover}
 .feed-media-loading,.feed-media-error{grid-column:1/-1;min-height:170px;display:grid;place-items:center;background:#f1e8df;color:#7b6657;font-weight:850}
 .feed-media-error{background:#ffe8e4;color:#a12d25}
+.feed-post-menu{margin:9px 0 4px;padding:12px;border:2px solid #e2cdb9;border-radius:15px;background:#fff9f1}.feed-post-menu p{margin:0 0 9px;color:#735e4d;font-weight:800}.feed-post-menu button{min-height:46px;margin-right:7px;padding:0 13px;border:0;border-radius:12px;background:#eee4da;color:#4d382a;font-weight:950}.feed-post-menu button.delete{background:#c9362d;color:#fff}.feed-post-menu button:disabled{opacity:.55}
