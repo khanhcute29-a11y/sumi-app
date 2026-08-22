@@ -354,13 +354,22 @@ export async function fetchOrderNotes(orderId) {
   return data;
 }
 
-export async function addOrderNote({ orderId, orderCode, authorId, authorName, authorRole, message, attachments }) {
-  const { error } = await supabase.from('order_notes').insert({
-    order_id: orderId, order_code: orderCode || null, author_id: authorId || null,
-    author_name: authorName || null, author_role: authorRole || null, message,
-    attachments: attachments && attachments.length > 0 ? attachments : null,
+export async function addOrderNote({ orderId, message, attachments, noteType = 'normal', mentionedProfileIds = [] }) {
+  const { data, error } = await supabase.rpc('add_order_comment', {
+    p_order_id: orderId,
+    p_message: message || '',
+    p_attachments: attachments && attachments.length > 0 ? attachments : null,
+    p_note_type: noteType,
+    p_mentioned_profile_ids: mentionedProfileIds,
   });
   if (error) throw error;
+  return data;
+}
+
+export async function deleteOrderNote(commentId) {
+  const { data, error } = await supabase.rpc('soft_delete_order_comment', { p_comment_id: commentId });
+  if (error) throw error;
+  return data;
 }
 
 export async function deleteOrder(id, { reason, photoUrl, staffName, snapshot } = {}) {

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Input } from '../components/forms/Input';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { translateAuthError } from '../lib/authErrors';
-import { toAuthField, normalizePhoneDigits } from '../lib/authPhone';
+import { toAuthField, toLegacyAuthField, normalizePhoneDigits } from '../lib/authPhone';
 
 export default function LoginScreen() {
   const [mode, setMode] = useState('login');
@@ -22,7 +22,12 @@ export default function LoginScreen() {
     setError('');
     if (!phone || !pw) { setError('Nhập đầy đủ thông tin đăng nhập.'); return; }
     setLoading(true);
-    const { error: err } = await supabase.auth.signInWithPassword({ ...toAuthField(phone), password: pw });
+    let { error: err } = await supabase.auth.signInWithPassword({ ...toAuthField(phone), password: pw });
+    // Existing phone accounts may use the former `.internal` alias. Retry it
+    // only for phone identifiers; email users must never be redirected.
+    if (err && !phone.trim().includes('@')) {
+      ({ error: err } = await supabase.auth.signInWithPassword({ ...toLegacyAuthField(phone), password: pw }));
+    }
     setLoading(false);
     if (err) { console.error('Đăng nhập lỗi:', err); setError(translateAuthError(err.message)); }
   };

@@ -456,8 +456,16 @@ export default function ShiftsScreen() {
   useEffect(loadConfigs, []);
   useEffect(loadLogs, [date]);
   useEffect(loadMyToday, [profile?.id]);
+  useEffect(() => {
+    const open = (event) => {
+      if (event.detail?.action === 'checkin') setShowCheckin(true);
+      if (event.detail?.action === 'checkout') setShowCheckout(true);
+    };
+    window.addEventListener('sumi-open-shift-action', open);
+    return () => window.removeEventListener('sumi-open-shift-action', open);
+  }, []);
 
-  const refreshAfterAction = () => { loadLogs(); loadMyToday(); setPayrollRefreshKey((k) => k + 1); };
+  const refreshAfterAction = () => { loadLogs(); loadMyToday(); setPayrollRefreshKey((k) => k + 1); window.dispatchEvent(new Event('sumi-shift-changed')); };
 
   const myCheckinToday = myTodayLogs.find((l) => l.type === 'checkin');
   const myCheckoutToday = myTodayLogs.find((l) => l.type === 'checkout');

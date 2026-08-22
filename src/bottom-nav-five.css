@@ -1,0 +1,1 @@
+.sumi-bottom-nav{grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:2px!important;padding-inline:5px!important}.sumi-nav-item{min-width:0;padding-inline:2px}.sumi-nav-item>span:last-child{white-space:nowrap;font-size:11px}

@@ -1,0 +1,17 @@
+.sumi-brand-mark {
+  width: 62px;
+  height: 52px;
+  padding: 5px;
+  border: 1px solid #efd6ad;
+  border-radius: 16px;
+  background: #fffdf8;
+  box-shadow: 0 7px 16px rgba(91, 54, 20, 0.16), 0 2px 4px rgba(91, 54, 20, 0.09);
+  font-size: 0;
+}
+
+.sumi-brand-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}

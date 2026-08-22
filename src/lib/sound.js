@@ -41,3 +41,20 @@ export function playDeliveredSound() {
   beep({ freq: 880, duration: 0.1, delay: 0.11 });
   beep({ freq: 1108, duration: 0.22, delay: 0.22 });
 }
+
+export function playTingSound() {
+  beep({ freq: 1046, duration: 0.16, type: 'sine', volume: 0.25 });
+}
+
+export function playNotificationSound(soundKey) {
+  if (soundKey === 'new_order_voice') {
+    playNewOrderSound();
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const speech = new SpeechSynthesisUtterance('Có đơn mới');
+      speech.lang = 'vi-VN'; speech.rate = 0.9; speech.volume = 1;
+      window.speechSynthesis.speak(speech);
+    }
+  } else if (soundKey === 'cash_complete') playDeliveredSound();
+  else if (soundKey === 'ting') playTingSound();
+}

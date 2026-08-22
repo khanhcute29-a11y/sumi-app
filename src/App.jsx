@@ -17,10 +17,12 @@ import LoginScreen from './screens/LoginScreen';
 import ResetPasswordScreen from './screens/ResetPasswordScreen';
 import PendingApprovalScreen from './screens/PendingApprovalScreen';
 import OrdersScreen from './screens/OrdersScreen';
+import OrdersV2Screen from './screens/OrdersV2Screen';
 import KdsScreen from './screens/KdsScreen';
 import WarehouseScreen from './screens/WarehouseScreen';
 import CashbookScreen from './screens/CashbookScreen';
 import ShippingScreen from './screens/ShippingScreen';
+import ShippingV2Screen from './screens/ShippingV2Screen';
 import ReportsScreen from './screens/ReportsScreen';
 import CustomersScreen from './screens/CustomersScreen';
 import SettingsScreen from './screens/SettingsScreen';
@@ -32,19 +34,30 @@ import ApprovalRequestsScreen from './screens/ApprovalRequestsScreen';
 import TasksScreen from './screens/TasksScreen';
 import IncidentsScreen from './screens/IncidentsScreen';
 import KpiScreen from './screens/KpiScreen';
+import InboxV2Screen from './screens/InboxV2Screen';
+import KpiV2Screen from './screens/KpiV2Screen';
+import MobileHomeScreen from './screens/MobileHomeScreen';
+import MobileProfileScreen from './screens/MobileProfileScreen';
+import CompensationScreen from './screens/CompensationScreen';
+import FinanceRequestsScreen from './screens/FinanceRequestsScreen';
+import CompanyFeedScreen from './screens/CompanyFeedScreen';
 import { applyUiScale, getUiScale } from './lib/uiScale';
 import { NavBadge } from './components/navigation/NavBadge';
-import { IconDashboard, IconShipping, IconProducts, IconShifts, IconReports, IconCustomers, IconStaff, IconSettings, IconCheck, IconWarning, IconClipboard } from './components/icons/FrogIcons';
+import { IconDashboard, IconShipping, IconProducts, IconShifts, IconReports, IconCustomers, IconStaff, IconSettings, IconCheck, IconWarning, IconClipboard, IconMoney } from './components/icons/FrogIcons';
+import { loadFeatureFlags } from './lib/featureFlags';
 
 const MORE_ITEMS = [
   { key: 'dashboard', label: 'Tổng Quan', Icon: IconDashboard },
   { key: 'shipping', label: 'Vận Chuyển', Icon: IconShipping },
   { key: 'products', label: 'Sản Phẩm', Icon: IconProducts },
   { key: 'shifts', label: 'Ca Làm Việc', Icon: IconShifts },
+  { key: 'compensation', label: 'Tăng Ca & Lương', Icon: IconReports },
+  { key: 'financeRequests', label: 'Chi & Tạm Ứng', Icon: IconMoney },
   { key: 'approvals', label: 'Yêu Cầu Duyệt', Icon: IconCheck },
   { key: 'incidents', label: 'Báo Cáo Sự Cố', Icon: IconWarning },
   { key: 'reports', label: 'Báo Cáo', Icon: IconReports },
   { key: 'kpi', label: 'KPI', Icon: IconClipboard },
+  { key: 'inbox', label: 'Tin Nhắn', Icon: IconWarning },
   { key: 'crm', label: 'Khách Hàng', Icon: IconCustomers },
   { key: 'staff', label: 'Nhân Viên', Icon: IconStaff },
   { key: 'settings', label: 'Thiết lập', Icon: IconSettings },
@@ -83,11 +96,12 @@ const OFFLINE_HANDLERS = {
 
 function OpsApp({ onSignOut }) {
   const { profile } = useAuth();
-  const [tab, setTab] = useState('orders');
+  const [tab, setTab] = useState('home');
   const [showMore, setShowMore] = useState(false);
   const [kdsStation, setKdsStation] = useState('all');
   const [warehouseBranch, setWarehouseBranch] = useState('all');
   const [badgeCounts, setBadgeCounts] = useState({ orders: 0, kds: 0, approvals: 0, incidents: 0 });
+  const [featureFlags, setFeatureFlags] = useState({ orders_v2_read: false, delivery_v2: false, kpi_v2: false });
 
   useOrderNotifications();
 
@@ -96,6 +110,10 @@ function OpsApp({ onSignOut }) {
     initOfflineSync(OFFLINE_HANDLERS, () => window.dispatchEvent(new Event('sumi-queue-changed')));
     applyUiScale(getUiScale());
   }, []);
+
+  useEffect(() => { loadFeatureFlags().then(setFeatureFlags).catch(() => {}); }, [profile?.id]);
+  useEffect(() => { const go=e=>{setTab(e.detail?.tab||'orders'); if((e.detail?.tab||'orders')==='orders'&&e.detail?.entityId)setTimeout(()=>window.dispatchEvent(new CustomEvent('sumi-open-order',{detail:{entityId:e.detail.entityId}})),0);}; window.addEventListener('sumi-navigate',go); return()=>window.removeEventListener('sumi-navigate',go); }, []);
+  useEffect(() => { document.querySelector('.sb-content')?.scrollTo({ top: 0, behavior: 'instant' }); }, [tab]);
 
   useEffect(() => {
     const vis = navBadgeVisibility(profile);
@@ -120,10 +138,11 @@ function OpsApp({ onSignOut }) {
   }, [profile?.role, (profile?.extra_roles || []).join(',')]);
 
   const screens = {
-    dashboard: <DashboardScreen />, orders: <OrdersScreen />, kds: <KdsScreen initialStation={kdsStation} />, warehouse: <WarehouseScreen branch={warehouseBranch} onBranchChange={setWarehouseBranch} />, cashbook: <CashbookScreen />,
-    shipping: <ShippingScreen />, products: <ProductsScreen />, shifts: <ShiftsScreen />, approvals: <ApprovalRequestsScreen />, tasks: <TasksScreen />, incidents: <IncidentsScreen />, reports: <ReportsScreen />, kpi: <KpiScreen />, crm: <CustomersScreen />, staff: <StaffScreen />, settings: <SettingsScreen onSignOut={onSignOut} />,
+    home: <MobileHomeScreen onNavigate={setTab} />, feed: <CompanyFeedScreen />,
+    dashboard: <DashboardScreen />, orders: featureFlags.orders_v2_read ? <OrdersV2Screen /> : <OrdersScreen />, kds: <KdsScreen initialStation={kdsStation} />, warehouse: <WarehouseScreen branch={warehouseBranch} onBranchChange={setWarehouseBranch} />, cashbook: <CashbookScreen />,
+    shipping: featureFlags.delivery_v2 ? <ShippingV2Screen /> : <ShippingScreen />, products: <ProductsScreen />, shifts: <ShiftsScreen />, compensation: <CompensationScreen />, financeRequests: <FinanceRequestsScreen />, approvals: <ApprovalRequestsScreen />, tasks: <TasksScreen />, incidents: <IncidentsScreen />, reports: <ReportsScreen />, kpi: featureFlags.kpi_v2 ? <KpiV2Screen /> : <KpiScreen />, inbox: <InboxV2Screen />, crm: <CustomersScreen />, staff: <StaffScreen />, settings: <SettingsScreen onSignOut={onSignOut} />, profile: <MobileProfileScreen onSignOut={onSignOut} onNavigate={setTab} />,
   };
-  const isBottomKey = (k) => ['orders', 'kds', 'warehouse', 'cashbook'].includes(k);
+  const isBottomKey = (k) => ['home', 'feed', 'orders', 'tasks', 'profile'].includes(k);
   return (
     <div className="sb-shell">
       <ConnectivityBanner />

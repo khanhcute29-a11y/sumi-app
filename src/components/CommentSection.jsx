@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { fetchOrderNotes, addOrderNote, uploadPhoto, uploadFile } from '../lib/queries';
+import { fetchOrderNotes, addOrderNote, deleteOrderNote, uploadPhoto, uploadFile } from '../lib/queries';
+import { supabase } from '../lib/supabaseClient';
 import { toWebSafeImage } from '../lib/imageConvert';
 import { Input } from './forms/Input';
 import { Button } from './forms/Button';
@@ -32,6 +33,7 @@ export function CommentSection({ order, profile }) {
   const [comments, setComments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState('');
+  const [noteType, setNoteType] = useState('normal');
   const [photos, setPhotos] = useState([]);
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -39,6 +41,12 @@ export function CommentSection({ order, profile }) {
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const lastCommentCountRef = useRef(0);
+
+  const loadComments = async () => {
+    const data = await fetchOrderNotes(order.id);
+    setComments(data);
+    lastCommentCountRef.current = data.length;
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -51,7 +59,11 @@ export function CommentSection({ order, profile }) {
       })
       .catch((err) => { if (!cancelled) setError(err.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+    const channel = supabase.channel(`order-comments-${order.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_notes', filter: `order_id=eq.${order.id}` }, () => {
+        if (!cancelled) loadComments().catch(() => {});
+      }).subscribe();
+    return () => { cancelled = true; supabase.removeChannel(channel); };
   }, [order.id]);
 
   const handlePhotoSelect = async (files) => {
@@ -86,28 +98,29 @@ export function CommentSection({ order, profile }) {
     try {
       const attachments = photos.length > 0 ? photos : null;
 
-      await addOrderNote({
+      const saved = await addOrderNote({
         orderId: order.id, orderCode: order.order_code, authorId: profile?.id,
-        authorName: profile?.full_name, authorRole: profile?.role, message, attachments,
+        authorName: profile?.full_name, authorRole: profile?.role, message, attachments, noteType,
       });
-
-      // Simulate 3-4s delay before showing comment (real-time sync would show it)
-      setTimeout(() => {
-        setComments((prev) => [...prev, {
-          id: `local-${Date.now()}`, author_name: profile?.full_name, author_role: profile?.role,
-          message, attachments, created_at: new Date().toISOString(),
-        }]);
-        playNotificationSound();
-        lastCommentCountRef.current += 1;
-      }, 3000 + Math.random() * 1000);
-
+      setComments((prev) => prev.some((x) => x.id === saved?.id) ? prev : [...prev, saved]);
+      playNotificationSound();
       setDraft('');
       setPhotos([]);
+      setNoteType('normal');
     } catch (err) {
       setError(err.message);
     } finally {
       setSending(false);
     }
+  };
+
+  const handleDelete = async (comment) => {
+    if (!window.confirm('Xóa bình luận này? Nội dung sẽ được ẩn nhưng lịch sử vẫn được lưu.')) return;
+    setError('');
+    try {
+      const deleted = await deleteOrderNote(comment.id);
+      setComments((prev) => prev.map((item) => item.id === comment.id ? deleted : item));
+    } catch (err) { setError(err.message); }
   };
 
   // Historical comments (sent before the `attachments` column existed) embedded
@@ -131,22 +144,22 @@ export function CommentSection({ order, profile }) {
 
   return (
     <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}><IconChat size={16} /> Bình Luận</div>
+      <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}><IconChat size={18} /> Trao đổi trong đơn</div>
       {loading ? (
         <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Đang tải...</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 200, overflowY: 'auto' }}>
           {comments.length === 0 && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Chưa có bình luận nào.</div>}
           {comments.map((c) => (
-            <div key={c.id} style={{ background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '8px 10px' }}>
+            <div key={c.id} style={{ background: c.note_type === 'urgent' ? '#fff1f0' : c.note_type === 'customer_update' ? '#fff8df' : 'var(--surface-sunken)', border: c.note_type === 'urgent' ? '1px solid #f3aaa4' : '1px solid transparent', borderRadius: 14, padding: '10px 12px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, font: 'var(--text-caption)', color: 'var(--text-muted)', marginBottom: 4 }}>
-                <span><b style={{ color: 'var(--text-primary)' }}>{c.author_name || 'Không rõ'}</b> {NOTE_ROLE_LABELS[c.author_role] ? `· ${NOTE_ROLE_LABELS[c.author_role]}` : ''}</span>
+                <span><b style={{ color: 'var(--text-primary)' }}>{c.author_name || 'Không rõ'}</b> {NOTE_ROLE_LABELS[c.author_role] ? `· ${NOTE_ROLE_LABELS[c.author_role]}` : ''}{c.note_type === 'urgent' ? ' · 🔴 Gấp' : c.note_type === 'customer_update' ? ' · 🟠 Khách cập nhật' : ''}</span>
                 <span>{new Date(c.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' })}</span>
               </div>
-              <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                {c.message.split('[PHOTOS:')[0].split('[FILES:')[0]}
+              <div style={{ font: 'var(--text-body-sm)', color: c.deleted_at ? 'var(--text-muted)' : 'var(--text-secondary)', fontStyle: c.deleted_at ? 'italic' : 'normal', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                {c.deleted_at ? 'Bình luận đã được xóa' : c.message.split('[PHOTOS:')[0].split('[FILES:')[0]}
               </div>
-              {(() => {
+              {!c.deleted_at && (() => {
                 const attachments = (c.attachments && c.attachments.length > 0)
                   ? c.attachments
                   : legacyAttachmentsFromMessage(c.message);
@@ -191,12 +204,17 @@ export function CommentSection({ order, profile }) {
                   </div>
                 );
               })()}
+              {!c.deleted_at && (c.author_id === profile?.id || ['owner','admin'].includes(profile?.role) || (profile?.extra_roles || []).some((r) => ['owner','admin'].includes(r))) && <button onClick={() => handleDelete(c)} style={{marginTop:6,border:0,background:'none',padding:'5px 0',color:'#a33b32',fontWeight:700}}>Xóa</button>}
             </div>
           ))}
         </div>
       )}
 
       {error && <div style={{ font: 'var(--text-caption)', color: 'var(--status-danger)' }}>{error}</div>}
+
+      <div className="comment-kind-picker" role="group" aria-label="Loại trao đổi">
+        {[['normal','Trao đổi'],['customer_update','Khách cập nhật'],['urgent','Gấp']].map(([key,label]) => <button key={key} className={noteType === key ? 'active' : ''} onClick={() => setNoteType(key)}>{label}</button>)}
+      </div>
 
       {/* Photo upload buttons */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -259,7 +277,7 @@ export function CommentSection({ order, profile }) {
       <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={(e) => handlePhotoSelect(e.target.files)} style={{ display: 'none' }} />
       <input ref={fileInputRef} type="file" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx" multiple onChange={(e) => handlePhotoSelect(e.target.files)} style={{ display: 'none' }} />
 
-      <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconBell size={14} /> Có delay 3-4 giây và tiếng chuông thông báo cho mọi bình luận mới.</div>
+      <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconBell size={14} /> Người tạo đơn và các bếp liên quan sẽ nhận chuông báo.</div>
     </div>
   );
 }

@@ -1,0 +1,34 @@
+import React,{useEffect,useState} from 'react';
+import {supabase} from '../lib/supabaseClient';
+import {assignOrderPackage,acceptOrderPackage} from '../lib/featureFlags';
+import {useAuth} from '../lib/AuthContext';
+import PackageTaskPanel from './PackageTaskPanel';
+import {CommentSection} from './CommentSection';
+
+const box={padding:14,border:'1px solid var(--border-default)',borderRadius:16,background:'var(--surface-card)',marginBottom:10};
+export default function OrderV2DetailModal({orderId,onClose,onChanged}){
+ const {profile}=useAuth(); const [data,setData]=useState(null);const [units,setUnits]=useState([]);const [unit,setUnit]=useState('');const [busy,setBusy]=useState(false);const [error,setError]=useState('');
+ const director=['owner','admin'].includes(profile?.role)||(profile?.extra_roles||[]).some(x=>['owner','admin'].includes(x));
+ const load=async()=>{const [o,i,p,u,e]=await Promise.all([
+  supabase.from('orders').select('id,order_code,order_type,status_v2,required_at,fulfillment_method_v2,address,note,created_by_name,created_at,confidentiality,version').eq('id',orderId).single(),
+  supabase.from('order_items').select('id,name_snapshot,quantity,unit,specification,display_order').eq('order_id',orderId).order('display_order'),
+  supabase.from('order_work_packages').select('id,unit_id,status,due_at,version,organization_units(name,code),work_package_items(order_item_id,quantity)').eq('order_id',orderId),
+  supabase.from('organization_units').select('id,name,code').eq('unit_type','kitchen').eq('active',true),
+  supabase.from('domain_events').select('id,event_type,occurred_at,payload').eq('entity_type','order').eq('entity_id',orderId).order('occurred_at',{ascending:false})]);
+  if(o.error)throw o.error;setData({order:o.data,items:i.data||[],packages:p.data||[],events:e.data||[]});setUnits(u.data||[]);};
+ useEffect(()=>{load().catch(x=>setError(x.message));},[orderId]);
+ const assign=async()=>{setBusy(true);setError('');try{await assignOrderPackage({p_idempotency_key:crypto.randomUUID(),p_order_id:orderId,p_unit_id:unit,p_due_at:data.order.required_at,p_items:data.items.map(x=>({order_item_id:x.id,quantity:x.quantity})),p_expected_version:data.order.version});await load();onChanged?.();}catch(e){setError(e.message);}finally{setBusy(false);}};
+ const accept=async p=>{setBusy(true);setError('');try{await acceptOrderPackage({p_idempotency_key:crypto.randomUUID(),p_package_id:p.id,p_expected_version:p.version});await load();onChanged?.();}catch(e){setError(e.message);}finally{setBusy(false);}};
+ const approvePackage=async p=>{setBusy(true);setError('');try{const{error}=await supabase.rpc('approve_work_package_completion',{p_idempotency_key:crypto.randomUUID(),p_package_id:p.id,p_expected_version:p.version});if(error)throw error;await load();onChanged?.();}catch(e){setError(e.message);}finally{setBusy(false);}};
+ if(!data)return <div style={{position:'fixed',inset:0,zIndex:110,background:'rgba(0,0,0,.5)',display:'grid',placeItems:'center'}}><div style={box}>{error||'Đang tải...'}</div></div>;
+ const o=data.order;return <div onClick={onClose} style={{position:'fixed',inset:0,zIndex:110,background:'rgba(0,0,0,.55)',display:'flex',justifyContent:'center',alignItems:'flex-end'}}><div onClick={e=>e.stopPropagation()} style={{width:'100%',maxWidth:720,maxHeight:'94vh',overflowY:'auto',padding:18,borderRadius:'24px 24px 0 0',background:'var(--surface-app)'}}>
+  <div style={{display:'flex',justifyContent:'space-between'}}><div><h2 style={{margin:0}}>{o.order_code}</h2><div>{o.created_by_name} · {new Date(o.created_at).toLocaleString('vi-VN')}</div></div><button onClick={onClose} style={{border:0,background:'none',fontSize:28}}>×</button></div>
+  {o.confidentiality==='school_restricted'&&<div style={{...box,marginTop:12,background:'#fff3cd',fontWeight:800}}>🔒 Đơn trường học · Không hiển thị giá</div>}
+  <div style={{...box,marginTop:12}}><strong>📦 Sản phẩm và quy cách</strong>{data.items.map(x=><div key={x.id} style={{padding:'10px 0',borderBottom:'1px solid var(--border-default)'}}><b>{x.name_snapshot}</b> · {x.quantity} {x.unit}<div style={{color:'var(--text-muted)'}}>{Object.entries(x.specification||{}).filter(([,v])=>v).map(([k,v])=>`${k}: ${v}`).join(' · ')}</div></div>)}</div>
+  <div style={box}><strong>🚚 Giao nhận</strong><div>{o.fulfillment_method_v2==='pickup'?'Nhận tại quầy':o.address||'Chưa có địa chỉ'}</div><div>{o.required_at?new Date(o.required_at).toLocaleString('vi-VN'):'Chưa có giờ giao'}</div></div>
+  <div style={box}><strong>👨‍🍳 Các bếp thực hiện</strong>{data.packages.length===0&&<p>Chưa phân bếp</p>}{data.packages.map(p=><div key={p.id} style={{padding:'10px 0',borderBottom:'1px solid var(--border-default)'}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}><span>{p.organization_units?.name} · {p.status}</span><div>{['assigned'].includes(p.status)&&<button disabled={busy} onClick={()=>accept(p)} style={{minHeight:44,border:0,borderRadius:12,padding:'0 14px',fontWeight:800}}>Nhận phần đơn</button>}{['in_progress','awaiting_approval'].includes(p.status)&&<button disabled={busy} onClick={()=>approvePackage(p)} style={{minHeight:44,border:0,borderRadius:12,padding:'0 14px',fontWeight:800,background:'#087f5b',color:'white'}}>Duyệt hoàn thành</button>}</div></div>{['accepted','in_progress','awaiting_approval'].includes(p.status)&&<div style={{marginTop:10}}><PackageTaskPanel packageId={p.id} onChanged={load}/></div>}</div>)}</div>
+  {director&&<div style={box}><strong>Phân thêm bếp</strong><select value={unit} onChange={e=>setUnit(e.target.value)} style={{width:'100%',minHeight:50,marginTop:8,borderRadius:12,padding:8}}><option value="">Chọn bếp</option>{units.map(x=><option value={x.id} key={x.id}>{x.name}</option>)}</select><button disabled={!unit||busy} onClick={assign} style={{width:'100%',minHeight:50,marginTop:8,border:0,borderRadius:12,fontWeight:900,background:'var(--brand-primary)',color:'white'}}>Giao phần đơn cho bếp</button></div>}
+  <div style={box}><CommentSection order={o} profile={profile}/></div>
+  <div style={box}><strong>🕘 Lịch sử</strong>{data.events.map(e=><div key={e.id} style={{padding:'8px 0'}}>{new Date(e.occurred_at).toLocaleString('vi-VN')} · {e.event_type}</div>)}</div>{error&&<div style={{color:'#b42318'}}>{error}</div>}
+ </div></div>;
+}
