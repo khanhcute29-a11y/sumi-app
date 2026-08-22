@@ -40,6 +40,7 @@ import MobileProfileScreen from './screens/MobileProfileScreen';
 import CompensationScreen from './screens/CompensationScreen';
 import FinanceRequestsScreen from './screens/FinanceRequestsScreen';
 import CompanyFeedScreen from './screens/CompanyFeedScreen';
+import VisualGuidesScreen from './screens/VisualGuidesScreen';
 import { applyUiScale, getUiScale } from './lib/uiScale';
 import { NavBadge } from './components/navigation/NavBadge';
 import { IconDashboard, IconShipping, IconProducts, IconShifts, IconReports, IconCustomers, IconStaff, IconSettings, IconCheck, IconWarning, IconClipboard, IconMoney } from './components/icons/FrogIcons';
@@ -60,6 +61,7 @@ const MORE_ITEMS = [
   { key: 'crm', label: 'Khách Hàng', Icon: IconCustomers },
   { key: 'staff', label: 'Nhân Viên', Icon: IconStaff },
   { key: 'settings', label: 'Thiết lập', Icon: IconSettings },
+  { key: 'visualGuides', label: 'Hướng Dẫn Bằng Ảnh', Icon: IconClipboard },
 ];
 
 function MoreSheet({ onClose, onSelect, badges = {} }) {
@@ -139,7 +141,7 @@ function OpsApp({ onSignOut }) {
   const screens = {
     home: <MobileHomeScreen onNavigate={setTab} />, feed: <CompanyFeedScreen />,
     dashboard: <DashboardScreen />, orders: <OrdersV2Screen />, kds: <KdsScreen initialStation={kdsStation} />, warehouse: <WarehouseScreen branch={warehouseBranch} onBranchChange={setWarehouseBranch} />, cashbook: <CashbookScreen />,
-    shipping: featureFlags.delivery_v2 ? <ShippingV2Screen /> : <ShippingScreen />, products: <ProductsScreen />, shifts: <ShiftsScreen />, compensation: <CompensationScreen />, financeRequests: <FinanceRequestsScreen />, approvals: <ApprovalRequestsScreen />, tasks: <TasksScreen />, incidents: <IncidentsScreen />, reports: <ReportsScreen />, kpi: featureFlags.kpi_v2 ? <KpiV2Screen /> : <KpiScreen />, inbox: <InboxV2Screen />, crm: <CustomersScreen />, staff: <StaffScreen />, settings: <SettingsScreen onSignOut={onSignOut} />, profile: <MobileProfileScreen onSignOut={onSignOut} onNavigate={setTab} />,
+    shipping: featureFlags.delivery_v2 ? <ShippingV2Screen /> : <ShippingScreen />, products: <ProductsScreen />, shifts: <ShiftsScreen />, compensation: <CompensationScreen />, financeRequests: <FinanceRequestsScreen />, approvals: <ApprovalRequestsScreen />, tasks: <TasksScreen />, incidents: <IncidentsScreen />, reports: <ReportsScreen />, kpi: featureFlags.kpi_v2 ? <KpiV2Screen /> : <KpiScreen />, inbox: <InboxV2Screen />, crm: <CustomersScreen />, staff: <StaffScreen />, settings: <SettingsScreen onSignOut={onSignOut} />, visualGuides: <VisualGuidesScreen />, profile: <MobileProfileScreen onSignOut={onSignOut} onNavigate={setTab} />,
   };
   const isBottomKey = (k) => ['home', 'feed', 'orders', 'tasks', 'profile'].includes(k);
   return (
