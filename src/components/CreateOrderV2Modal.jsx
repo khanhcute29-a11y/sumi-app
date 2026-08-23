@@ -63,7 +63,25 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
   const customerNote=[customerName&&`Khách hàng: ${customerName}`,customerPhone&&`SĐT: ${customerPhone}`,type==='teabreak'&&guestCount&&`Số khách: ${guestCount}`,note,isReadyStock&&'⚡ BÁNH CÓ SẴN (XUẤT KHO THÀNH PHẨM NGAY)'].filter(Boolean).join(' · ');
   const normalizedItems=items.map((item,index)=>({...item,display_order:index,specification:{...(item.specification||{}),product_flow:item.flow_type||type,is_ready_stock:isReadyStock}}));
   const orderId=await createOrderV2({p_idempotency_key:key,p_order_code:orderCode,p_order_type:isMixed?'mixed':type,p_customer_id:null,p_required_at:requiredAt?new Date(requiredAt).toISOString():null,p_fulfillment_method:fulfillment,p_address:fulfillment==='delivery'?address:null,p_note:customerNote||null,p_confidentiality:type==='school'?'school_restricted':'normal',p_items:normalizedItems});
-  for(const file of photos){const path=`orders/${orderId}/customer/${newId()}-${file.name}`;const up=await supabase.storage.from('uploads').upload(path,file);if(up.error)throw up.error;const row=await supabase.from('order_attachments').insert({order_id:orderId,attachment_type:'customer_sample',storage_path:path,mime_type:file.type,size_bytes:file.size,created_by:profile.id});if(row.error)throw row.error;}
+  for(const file of photos){
+    try {
+      const cleanExt = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+      const safePath = `orders/${orderId}/customer/${newId()}.${cleanExt}`;
+      const up = await supabase.storage.from('uploads').upload(safePath, file, { contentType: file.type || 'image/jpeg' });
+      if (!up.error) {
+        await supabase.from('order_attachments').insert({
+          order_id: orderId,
+          attachment_type: 'customer_sample',
+          storage_path: safePath,
+          mime_type: file.type || 'image/jpeg',
+          size_bytes: file.size,
+          created_by: profile?.id || null
+        });
+      }
+    } catch (err) {
+      console.warn('Lỗi tải ảnh mẫu:', err);
+    }
+  }
   if(isReadyStock){await supabase.rpc('mark_order_ready_from_stock',{p_order_id:orderId}).catch(()=>{});}
   onCreated?.(orderId);onClose();
  }catch(e){setError(e.message||'Không thể tạo đơn');}finally{setSaving(false);}};
@@ -115,7 +133,22 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
    <label style={{display:'block',marginTop:14,fontWeight:800}}>Ngày giờ cần giao</label><input style={fieldStyle} type="datetime-local" value={requiredAt} onChange={e=>setRequiredAt(e.target.value)}/>
    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:12}}><button onClick={()=>setFulfillment('delivery')} style={{...fieldStyle,fontWeight:900,border:fulfillment==='delivery'?'3px solid #138a53':fieldStyle.border,background:fulfillment==='delivery'?'#e6f6ed':'#fff',color:fulfillment==='delivery'?'#09663d':'#2d1c10'}}>🛵 Giao tận nơi</button><button onClick={()=>setFulfillment('pickup')} style={{...fieldStyle,fontWeight:900,border:fulfillment==='pickup'?'3px solid #138a53':fieldStyle.border,background:fulfillment==='pickup'?'#e6f6ed':'#fff',color:fulfillment==='pickup'?'#09663d':'#2d1c10'}}>🏬 Nhận tại quầy</button></div>
    {fulfillment==='delivery'&&<input style={{...fieldStyle,marginTop:10}} placeholder="Địa chỉ giao" value={address} onChange={e=>setAddress(e.target.value)}/>}<textarea style={{...fieldStyle,marginTop:10,minHeight:82}} placeholder="Ghi chú" value={note} onChange={e=>setNote(e.target.value)}/>
-   <label style={{display:'block',marginTop:16,fontWeight:900,fontSize:18}}>Ảnh mẫu khách gửi</label><div className="sumi-upload-grid"><label>📷<span>Chụp ảnh</span><input hidden type="file" accept="image/*" capture="environment" multiple onChange={e=>setPhotos([...photos,...e.target.files])}/></label><label>🖼️<span>Chọn ảnh có sẵn</span><input hidden type="file" accept="image/*" multiple onChange={e=>setPhotos([...photos,...e.target.files])}/></label></div><div style={{color:'#725f50',fontWeight:700,marginBottom:8}}>{photos.length?`${photos.length} ảnh đã chọn`:'Chưa có ảnh'}</div>
+   <label style={{display:'block',marginTop:16,fontWeight:900,fontSize:18}}>Ảnh mẫu khách gửi</label>
+   <div className="sumi-upload-grid">
+     <label>📷<span>Chụp ảnh</span><input hidden type="file" accept="image/*" capture="environment" multiple onChange={e=>{const files=Array.from(e.target.files||[]);setPhotos([...photos,...files]);e.target.value='';}}/></label>
+     <label>🖼️<span>Chọn ảnh có sẵn</span><input hidden type="file" accept="image/*" multiple onChange={e=>{const files=Array.from(e.target.files||[]);setPhotos([...photos,...files]);e.target.value='';}}/></label>
+   </div>
+   {photos.length>0&&(
+     <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(80px,1fr))',gap:8,marginTop:10}}>
+       {photos.map((file,idx)=>(
+         <div key={idx} style={{position:'relative',width:80,height:80,borderRadius:12,overflow:'hidden',border:'1.5px solid var(--border-default)',background:'#000'}}>
+           <img src={URL.createObjectURL(file)} alt="Ảnh mẫu" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+           <button type="button" onClick={(e)=>{e.preventDefault();setPhotos(photos.filter((_,n)=>n!==idx));}} style={{position:'absolute',top:3,right:3,width:22,height:22,borderRadius:'50%',background:'rgba(0,0,0,0.7)',color:'#fff',border:0,fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900}}>✕</button>
+         </div>
+       ))}
+     </div>
+   )}
+   <div style={{color:'#725f50',fontWeight:700,marginTop:6,marginBottom:8}}>{photos.length?`${photos.length} ảnh đã chọn`:'Chưa có ảnh'}</div>
    {type==='school'&&<div style={{padding:12,marginTop:12,borderRadius:14,background:'#fff3cd',fontWeight:700}}>Đơn trường học không nhập và không hiển thị giá.</div>}
    <label style={{display:'flex',alignItems:'center',gap:10,marginTop:14,padding:'12px 14px',borderRadius:14,background:isReadyStock?'#e6f6ed':'#fcf9f5',border:isReadyStock?'2px solid #087f5b':'1px solid var(--border-default)',cursor:'pointer'}}>
      <input type="checkbox" checked={isReadyStock} onChange={e=>setIsReadyStock(e.target.checked)} style={{width:22,height:22,margin:0}}/>

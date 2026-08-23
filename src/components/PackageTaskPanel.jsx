@@ -148,8 +148,9 @@ export default function PackageTaskPanel({ packageId, packageUnit, defaultDueAt,
     if (!file) return;
     setBusy(true);
     try {
-      const path = `tasks/${t.id}/${crypto.randomUUID()}-${file.name}`;
-      const up = await supabase.storage.from('uploads').upload(path, file);
+      const cleanExt = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+      const path = `tasks/${t.id}/${crypto.randomUUID()}.${cleanExt}`;
+      const up = await supabase.storage.from('uploads').upload(path, file, { contentType: file.type || 'image/jpeg' });
       if (up.error) throw up.error;
       const ins = await supabase.from('task_proofs').insert({
         task_id: t.id,

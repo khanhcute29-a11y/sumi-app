@@ -406,8 +406,9 @@ function StopCard({ stop, runActive, onViewOrder, onDone, setError }) {
       // Bắt buộc lấy GPS
       const p = await gps();
 
-      const path = `orders/${stop.order_id}/delivery/${crypto.randomUUID()}-${file.name}`;
-      const up = await supabase.storage.from('uploads').upload(path, file);
+      const cleanExt = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+      const path = `orders/${stop.order_id}/delivery/${crypto.randomUUID()}.${cleanExt}`;
+      const up = await supabase.storage.from('uploads').upload(path, file, { contentType: file.type || 'image/jpeg' });
       if (up.error) throw up.error;
 
       const att = await supabase

@@ -214,8 +214,9 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
     try {
       let photoPath = null;
       if (photoFile) {
-        photoPath = `orders/${orderId}/production/${crypto.randomUUID()}-${photoFile.name}`;
-        const up = await supabase.storage.from('uploads').upload(photoPath, photoFile);
+        const cleanExt = (photoFile.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+        photoPath = `orders/${orderId}/production/${crypto.randomUUID()}.${cleanExt}`;
+        const up = await supabase.storage.from('uploads').upload(photoPath, photoFile, { contentType: photoFile.type || 'image/jpeg' });
         if (up.error) throw up.error;
       }
       const { error } = await supabase.rpc('complete_kitchen_work_package_with_proof', {
