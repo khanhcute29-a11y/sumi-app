@@ -5,11 +5,11 @@ import { useAuth } from '../lib/AuthContext';
 import UserAvatar from '../components/UserAvatar';
 import ShiftTodayCard from '../components/ShiftTodayCard';
 
-import { ROLE_META, KITCHEN_LEAD_ROLES } from '../lib/roles';
+import { ROLE_META, KITCHEN_LEAD_ROLES, getRoleMeta, formatStationLabel } from '../lib/roles';
 
 const isDirector = p => ['owner', 'admin'].includes(p?.role);
 const isLead = p => KITCHEN_LEAD_ROLES.includes(p?.role) || (p?.extra_roles || []).some(r => KITCHEN_LEAD_ROLES.includes(r));
-const getRoleLabel = r => ROLE_META[r]?.label || r;
+const getRoleLabel = (r, s) => getRoleMeta(r, s)?.label || r;
 
 export default function MobileHomeScreen({onNavigate}){
  const {profile}=useAuth(); const [tasks,setTasks]=useState([]),[orders,setOrders]=useState([]),[staff,setStaff]=useState([]),[unread,setUnread]=useState(0);

@@ -24,18 +24,27 @@ export function AuthProvider({ children }) {
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, []);
+  useEffect(() => {
+    load();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        fetchMyProfile().then(setProfile).catch(() => setProfile(null));
+      } else {
+        setProfile(null);
+        setLoading(false);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
-  // Nếu chủ sở hữu khoá tài khoản này khi đang có phiên mở, đăng xuất ngay thay vì
-  // chờ người dùng tải lại trang — is_approved() đã chặn ghi/đọc ở tầng RLS rồi,
-  // nhưng không tự động đẩy họ ra khỏi giao diện đang mở.
+  // Lắng nghe Realtime mọi cập nhật phân quyền (role, extra_roles, station, approved, active)
   useEffect(() => {
     if (!profile?.id) return undefined;
     const channel = supabase
       .channel(`own-profile-${profile.id}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${profile.id}` }, (payload) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${profile.id}` }, (payload) => {
         if (payload?.new) {
-          setProfile(payload.new);
+          setProfile(prev => ({ ...(prev || {}), ...payload.new }));
         }
       })
       .subscribe();
