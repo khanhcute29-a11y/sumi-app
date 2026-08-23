@@ -23,7 +23,12 @@ if (globalThis.crypto && !globalThis.crypto.randomUUID) {
   Object.defineProperty(globalThis.crypto, 'randomUUID', { value: newId, configurable: true })
 }
 
-registerSW({ immediate: true })
+const updateSW = registerSW({
+  immediate: true,
+  onNeedRefresh() {
+    updateSW(true);
+  },
+});
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
