@@ -38,26 +38,67 @@ function PendingStaffRow({ s, onApprove }) {
   );
 }
 
-function StaffRow({ s, isOwner, isMe, canDeactivate, onChangeRole, onChangeExtraRoles, onChangeStation, onDeactivate, onManageWork, expanded, onToggle }) {
+function StaffRow({ s, isOwner, isMe, canDeactivate, onSavePermissions, onDeactivate, onManageWork, expanded, onToggle }) {
   const perm = ROLE_PERMISSIONS.find((p) => p.role === s.role);
-  const extraRoles = s.extra_roles || [];
-  const [savingExtra, setSavingExtra] = useState(false);
+  const [role, setRole] = useState(s.role);
+  const [station, setStation] = useState(s.station || '');
+  const [extraRoles, setExtraRoles] = useState(s.extra_roles || []);
+  const [saving, setSaving] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
+  const [errMsg, setErrMsg] = useState('');
   const [confirmingDeactivate, setConfirmingDeactivate] = useState(false);
   const [deactivating, setDeactivating] = useState(false);
 
-  const toggleExtraRole = async (role) => {
-    const next = extraRoles.includes(role) ? extraRoles.filter((r) => r !== role) : [...extraRoles, role];
-    setSavingExtra(true);
-    try { await onChangeExtraRoles(s.id, next); } finally { setSavingExtra(false); }
+  // Đồng bộ lại khi prop s thay đổi
+  useEffect(() => {
+    setRole(s.role);
+    setStation(s.station || '');
+    setExtraRoles(s.extra_roles || []);
+  }, [s.role, s.station, JSON.stringify(s.extra_roles)]);
+
+  const toggleExtraRole = (r) => {
+    setExtraRoles(prev => prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r]);
+    setSuccessMsg('');
+  };
+
+  const handleClearAllExtra = () => {
+    setExtraRoles([]);
+    setSuccessMsg('');
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setErrMsg('');
+    setSuccessMsg('');
+    try {
+      await onSavePermissions(s.id, {
+        role,
+        station: station || null,
+        extraRoles
+      });
+      setSuccessMsg('✅ Đã cập nhật phân quyền thành công!');
+      setTimeout(() => setSuccessMsg(''), 3500);
+    } catch (e) {
+      setErrMsg(e.message || 'Lỗi khi lưu phân quyền');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDeactivate = async () => {
     setDeactivating(true);
-    try { await onDeactivate(s.id); } finally { setDeactivating(false); setConfirmingDeactivate(false); }
+    try {
+      await onDeactivate(s.id);
+    } finally {
+      setDeactivating(false);
+      setConfirmingDeactivate(false);
+    }
   };
 
+  const isDirty = role !== s.role || station !== (s.station || '') || JSON.stringify(extraRoles.sort()) !== JSON.stringify((s.extra_roles || []).sort());
+
   return (
-    <div style={{ borderBottom: '1px solid var(--border-subtle)', padding: '10px 0' }}>
+    <div style={{ borderBottom: '1px solid var(--border-subtle)', padding: '12px 0' }}>
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap'
       }}>
@@ -71,26 +112,32 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, onChangeRole, onChangeExtra
           title="Bấm để giao việc, theo dõi tiến độ và xem báo cáo"
         >
           <div style={{
-            width: 38, height: 38, borderRadius: '50%', background: 'var(--surface-sunken)',
+            width: 40, height: 40, borderRadius: '50%', background: 'var(--surface-sunken)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0
           }}>
-            {s.role === 'kitchen_lead' ? '👨‍🍳' : s.role === 'driver' ? '🛵' : '👤'}
+            {s.role?.includes('cold') ? '🎂' : s.role?.includes('hot') ? '🍞' : s.role?.includes('macaron') ? '🧁' : s.role?.includes('x42') ? '🏫' : s.role?.includes('lead') ? '👨‍🍳' : s.role === 'shipper' ? '🛵' : '👤'}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ font: 'var(--text-body)', fontWeight: 600, color: 'var(--text-primary)' }}>
+            <span style={{ font: 'var(--text-body)', fontWeight: 700, color: 'var(--text-primary)' }}>
               {s.full_name || '(chưa đặt tên)'}
             </span>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-              <Badge tone={ROLE_META[s.role]?.tone || 'neutral'}>{ROLE_META[s.role]?.label || s.role}</Badge>
+              <Badge tone={ROLE_META[s.role]?.tone || 'neutral'}>
+                {ROLE_META[s.role]?.label || s.role}
+              </Badge>
               {s.station && <Badge tone="neutral">{s.station}</Badge>}
-              {extraRoles.map((r) => <Badge key={r} tone="neutral">+{ROLE_META[r]?.label || r}</Badge>)}
+              {(s.extra_roles || []).map((r) => (
+                <Badge key={r} tone="neutral">
+                  +{ROLE_META[r]?.shortLabel || ROLE_META[r]?.label || r}
+                </Badge>
+              ))}
             </div>
           </div>
         </button>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Button variant="primary" size="sm" onClick={() => onManageWork(s)} style={{ fontWeight: 600 }}>
-            📋 Xem việc & Giao việc
+          <Button variant="primary" size="sm" onClick={() => onManageWork(s)} style={{ fontWeight: 700 }}>
+            📋 Xem & Giao việc
           </Button>
           {(isOwner || canDeactivate) && (
             <Button
@@ -98,9 +145,9 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, onChangeRole, onChangeExtra
               size="sm"
               onClick={onToggle}
               title="Phân quyền và cấu hình tài khoản"
-              style={{ color: 'var(--text-secondary)' }}
+              style={{ color: 'var(--text-secondary)', fontWeight: 600 }}
             >
-              ⚙️ {expanded ? 'Đóng' : 'Cài đặt'}
+              ⚙️ {expanded ? 'Đóng' : 'Phân quyền'}
             </Button>
           )}
         </div>
@@ -108,51 +155,142 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, onChangeRole, onChangeExtra
 
       {expanded && (
         <div style={{
-          marginTop: 12, padding: '12px', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-md)',
-          display: 'flex', flexDirection: 'column', gap: 10
+          marginTop: 12, padding: '14px', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-md)',
+          display: 'flex', flexDirection: 'column', gap: 12, border: '1px solid var(--border-default)'
         }}>
-          <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>⚙️ Phân quyền & Thiết lập tài khoản</div>
-          {s.created_at && (
-            <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>
-              Tham gia: {new Date(s.created_at).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ font: 'var(--text-label)', fontWeight: 800, color: 'var(--text-primary)' }}>
+              ⚙️ Phân quyền cho: {s.full_name}
+            </div>
+            {s.created_at && (
+              <span style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>
+                Tham gia: {new Date(s.created_at).toLocaleDateString('vi-VN')}
+              </span>
+            )}
+          </div>
+
+          {perm && (
+            <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', background: 'var(--surface-card)', borderRadius: 'var(--radius-sm)', padding: '8px 10px' }}>
+              {perm.desc}
             </div>
           )}
-          {perm && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', background: 'var(--surface-card)', borderRadius: 'var(--radius-sm)', padding: '8px 10px' }}>{perm.desc}</div>}
+
           {isOwner && !isMe && (
             <React.Fragment>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <span style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Đổi vai trò:</span>
-                <Select value={s.role} onChange={(e) => onChangeRole(s.id, e.target.value)} options={ROLE_OPTIONS} style={{ minWidth: 220, flex: '1 1 auto' }} />
-                <Select
-                  value={s.station || ''}
-                  onChange={(e) => onChangeStation(s.id, e.target.value || null)}
-                  options={STATION_OPTIONS}
-                  style={{ minWidth: 200, flex: '1 1 auto' }}
-                />
+              {/* Chọn vai trò chính & Khâu làm việc */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10 }}>
+                <div>
+                  <label style={{ font: 'var(--text-caption)', fontWeight: 700, color: 'var(--text-primary)', display: 'block', marginBottom: 4 }}>
+                    Vai trò chính (Bắt buộc):
+                  </label>
+                  <Select
+                    value={role}
+                    onChange={(e) => { setRole(e.target.value); setSuccessMsg(''); }}
+                    options={ROLE_OPTIONS}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ font: 'var(--text-caption)', fontWeight: 700, color: 'var(--text-primary)', display: 'block', marginBottom: 4 }}>
+                    Khâu làm việc / Nơi trực thuộc:
+                  </label>
+                  <Select
+                    value={station}
+                    onChange={(e) => { setStation(e.target.value); setSuccessMsg(''); }}
+                    options={STATION_OPTIONS}
+                    style={{ width: '100%' }}
+                  />
+                </div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Kiêm nhiệm thêm (tuỳ chọn):</span>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {ROLE_OPTIONS.filter((o) => o.value !== s.role).map((o) => {
+
+              {/* Chọn kiêm nhiệm thêm */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ font: 'var(--text-caption)', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    Kiêm nhiệm thêm ({extraRoles.length} vai trò):
+                  </span>
+                  {extraRoles.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearAllExtra}
+                      style={{
+                        border: 0, background: 'none', color: 'var(--status-danger)',
+                        fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0
+                      }}
+                    >
+                      ✖ Bỏ chọn tất cả kiêm nhiệm
+                    </button>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', maxHeight: 180, overflowY: 'auto', padding: '4px 0' }}>
+                  {ROLE_OPTIONS.filter((o) => o.value !== role).map((o) => {
                     const checked = extraRoles.includes(o.value);
                     return (
-                      <label key={o.value} style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 8px', borderRadius: 'var(--radius-pill)',
-                        border: `1px solid ${checked ? 'var(--action-primary)' : 'var(--border-subtle)'}`,
-                        background: checked ? 'var(--surface-primary-soft)' : 'var(--surface-card)',
-                        font: 'var(--text-caption)', color: checked ? 'var(--primary-700)' : 'var(--text-secondary)', cursor: savingExtra ? 'default' : 'pointer',
-                      }}>
-                        <input type="checkbox" checked={checked} disabled={savingExtra} onChange={() => toggleExtraRole(o.value)} style={{ margin: 0 }} />
+                      <label
+                        key={o.value}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 10px',
+                          borderRadius: 'var(--radius-pill)',
+                          border: `1px solid ${checked ? 'var(--brand-primary)' : 'var(--border-subtle)'}`,
+                          background: checked ? 'var(--surface-primary-soft)' : 'var(--surface-card)',
+                          font: 'var(--text-caption)', fontWeight: checked ? 700 : 500,
+                          color: checked ? 'var(--primary-700)' : 'var(--text-secondary)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleExtraRole(o.value)}
+                          style={{ margin: 0 }}
+                        />
                         {o.label}
                       </label>
                     );
                   })}
                 </div>
               </div>
+
+              {/* Nút lưu 1 chạm duy nhất */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  disabled={saving || !isDirty}
+                  onClick={handleSave}
+                  style={{
+                    minHeight: 44,
+                    padding: '0 20px',
+                    borderRadius: 12,
+                    border: 0,
+                    background: isDirty ? 'var(--brand-primary)' : 'var(--border-default)',
+                    color: isDirty ? '#fff' : 'var(--text-muted)',
+                    fontWeight: 900,
+                    fontSize: 15,
+                    cursor: isDirty && !saving ? 'pointer' : 'default',
+                    boxShadow: isDirty ? '0 3px 0 #b93e13' : 'none'
+                  }}
+                >
+                  {saving ? 'Đang lưu...' : '💾 Lưu & Cập nhật phân quyền'}
+                </button>
+
+                {successMsg && (
+                  <span style={{ fontSize: 13, color: '#087f5b', fontWeight: 800 }}>
+                    {successMsg}
+                  </span>
+                )}
+                {errMsg && (
+                  <span style={{ fontSize: 13, color: '#e03131', fontWeight: 800 }}>
+                    {errMsg}
+                  </span>
+                )}
+              </div>
             </React.Fragment>
           )}
+
           {canDeactivate && !isMe && !hasRole(s, 'owner') && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--border-subtle)' }}>
               {confirmingDeactivate ? (
                 <>
                   <span style={{ font: 'var(--text-caption)', color: 'var(--status-danger)' }}>Khoá tài khoản này? Nhân viên sẽ không đăng nhập được nữa.</span>
@@ -160,7 +298,9 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, onChangeRole, onChangeExtra
                   <Button variant="ghost" size="sm" onClick={() => setConfirmingDeactivate(false)} disabled={deactivating}>Huỷ</Button>
                 </>
               ) : (
-                <Button variant="danger" size="sm" onClick={() => setConfirmingDeactivate(true)}>Khoá tài khoản (nghỉ việc)</Button>
+                <Button variant="ghost" size="sm" onClick={() => setConfirmingDeactivate(true)} style={{ color: 'var(--status-danger)' }}>
+                  🚫 Khoá tài khoản (nghỉ việc)
+                </Button>
               )}
             </div>
           )}
@@ -228,20 +368,15 @@ export default function StaffScreen() {
     load();
   };
 
-  const handleChangeRole = async (id, role) => {
-    await updateProfileRole(id, role);
+  const handleSavePermissions = async (id, { role, station, extraRoles }) => {
+    await Promise.all([
+      updateProfileRole(id, role),
+      updateProfileStation(id, station),
+      updateProfileExtraRoles(id, extraRoles)
+    ]);
     load();
   };
 
-  const handleChangeExtraRoles = async (id, extraRoles) => {
-    await updateProfileExtraRoles(id, extraRoles);
-    load();
-  };
-
-  const handleChangeStation = async (id, station) => {
-    await updateProfileStation(id, station);
-    load();
-  };
   const handleManageWork = (s) => {
     sessionStorage.setItem('sumi_managed_staff_id', s.id);
     window.dispatchEvent(new CustomEvent('sumi-navigate', { detail: { tab: 'tasks' } }));
@@ -276,10 +411,18 @@ export default function StaffScreen() {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 {approved.map((s) => (
-                  <StaffRow key={s.id} s={s} isOwner={isOwner} isMe={s.id === me?.id} canDeactivate={canDeactivate}
-                    onChangeRole={handleChangeRole} onChangeExtraRoles={handleChangeExtraRoles} onChangeStation={handleChangeStation} onDeactivate={handleDeactivate}
+                  <StaffRow
+                    key={s.id}
+                    s={s}
+                    isOwner={isOwner}
+                    isMe={s.id === me?.id}
+                    canDeactivate={canDeactivate}
+                    onSavePermissions={handleSavePermissions}
+                    onDeactivate={handleDeactivate}
                     onManageWork={handleManageWork}
-                    expanded={expandedId === s.id} onToggle={() => setExpandedId(expandedId === s.id ? null : s.id)} />
+                    expanded={expandedId === s.id}
+                    onToggle={() => setExpandedId(expandedId === s.id ? null : s.id)}
+                  />
                 ))}
               </div>
             )}
