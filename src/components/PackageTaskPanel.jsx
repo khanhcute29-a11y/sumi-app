@@ -288,16 +288,29 @@ export default function PackageTaskPanel({ packageId, packageUnit, defaultDueAt,
                 <button
                   style={{ ...btn, background: '#087f5b', color: '#fff' }}
                   disabled={busy}
-                  onClick={() =>
-                    rpc('complete_task_v2', {
-                      p_idempotency_key: crypto.randomUUID(),
-                      p_task_id: t.id,
-                      p_expected_version: t.version,
-                      p_note: null
-                    })
-                  }
+                  onClick={async () => {
+                    setBusy(true);
+                    try {
+                      await supabase.rpc('complete_task_v2', {
+                        p_idempotency_key: crypto.randomUUID(),
+                        p_task_id: t.id,
+                        p_expected_version: t.version,
+                        p_note: null
+                      });
+                      await supabase.rpc('complete_kitchen_work_package_with_proof', {
+                        p_package_id: packageId,
+                        p_proof_storage_path: null
+                      }).catch(() => {});
+                      await load();
+                      onChanged?.();
+                    } catch (e) {
+                      setError(e.message);
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
                 >
-                  ✓ Hoàn thành
+                  ✓ Hoàn thành & Bàn giao Kho Thành Phẩm
                 </button>
               </div>
             )}
@@ -309,24 +322,29 @@ export default function PackageTaskPanel({ packageId, packageUnit, defaultDueAt,
       {isLead && showAssignForm && (
         <div style={{ marginTop: 10, padding: 14, borderRadius: 14, background: '#fff', border: '2px solid var(--brand-primary)' }}>
           <strong style={{ fontSize: 15, display: 'block', marginBottom: 10, color: 'var(--brand-primary)' }}>
-            ＋ Giao việc cho nhân sự dưới quyền
+            ＋ Giao việc cho nhân sự (hoặc Bếp trưởng tự nhận việc)
           </strong>
 
           <div style={{ display: 'grid', gap: 10 }}>
-            {/* 1. Chọn nhân sự dưới quyền */}
+            {/* 1. Chọn nhân sự thực hiện */}
             <div>
               <label style={{ fontSize: 13, fontWeight: 700, display: 'block', marginBottom: 4, color: 'var(--text-primary)' }}>
-                👤 Nhân sự thực hiện (Dưới quyền):
+                👤 Nhân sự thực hiện:
               </label>
               <select
                 value={assignee}
                 onChange={e => setAssignee(e.target.value)}
                 style={{ width: '100%', minHeight: 46, borderRadius: 10, padding: '0 10px', fontSize: 15, border: '1px solid var(--border-default)' }}
               >
-                <option value="">-- Chọn nhân sự dưới quyền phụ trách --</option>
-                {subordinates.map(x => (
+                <option value="">-- Chọn người làm (hoặc Tự nhận làm) --</option>
+                {profile?.id && (
+                  <option value={profile.id} style={{ fontWeight: 800, color: 'var(--brand-primary)' }}>
+                    🙋‍♂️ [Tôi tự làm] {profile.full_name} ({ROLE_META[profile.role]?.shortLabel || 'Bếp Trưởng'})
+                  </option>
+                )}
+                {subordinates.filter(x => x.id !== profile?.id).map(x => (
                   <option key={x.id} value={x.id}>
-                    {x.full_name} {x.role ? `[${ROLE_META[x.role]?.shortLabel || x.role}]` : ''} {x.station ? `· ${x.station}` : ''}
+                    👤 {x.full_name} {x.role ? `[${ROLE_META[x.role]?.shortLabel || x.role}]` : ''} {x.station ? `· ${x.station}` : ''}
                   </option>
                 ))}
               </select>

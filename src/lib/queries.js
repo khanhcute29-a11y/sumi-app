@@ -1043,10 +1043,21 @@ export async function createAdhocTask({ assigneeId, title, description, orderCod
 }
 
 export async function completeTask(id) {
-  const { data: task, error: findErr } = await supabase.from('tasks').select('deadline,version').eq('id', id).single();
+  const { data: task, error: findErr } = await supabase.from('tasks').select('deadline,version,work_package_id').eq('id', id).single();
   if (findErr) throw findErr;
-  const { error } = await supabase.rpc('complete_task_v2',{p_idempotency_key:`task-complete:${id}:${newId()}`,p_task_id:id,p_expected_version:task.version,p_note:null});
+  const { error } = await supabase.rpc('complete_task_v2', {
+    p_idempotency_key: `task-complete:${id}:${newId()}`,
+    p_task_id: id,
+    p_expected_version: task.version,
+    p_note: null
+  });
   if (error) throw error;
+  if (task.work_package_id) {
+    await supabase.rpc('complete_kitchen_work_package_with_proof', {
+      p_package_id: task.work_package_id,
+      p_proof_storage_path: null
+    }).catch(() => {});
+  }
   notifyBadgesChanged();
 }
 

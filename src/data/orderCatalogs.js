@@ -1,9 +1,9 @@
 export const ORDER_FLOWS = [
-  { key: 'cake', icon: '🎂', title: 'Bánh kem & bánh lạnh', subtitle: 'Bánh kem, Mousse, Tiramisu, su kem…' },
-  { key: 'bakery', icon: '🥐', title: 'Bánh mặn/ngọt & bánh khác', subtitle: 'Trung Thu, bánh pía, bánh quy, bánh mới…' },
-  { key: 'teabreak', icon: '🧁', title: 'Teabreak', subtitle: 'Tiệc từ vài chục đến 1.500 khách' },
-  { key: 'macaron', icon: '🌈', title: 'Macaron', subtitle: 'Có nhân, vỏ trang trí, đóng hộp' },
-  { key: 'school', icon: '🏫', title: 'Trường học', subtitle: 'Chọn trường, điểm giao, số lượng' },
+  { key: 'cake', icon: '🎂', title: 'Bánh kem & Bánh lạnh', subtitle: 'Bếp Lạnh: Bánh kem sinh nhật, Mousse, Tiramisu, su kem…' },
+  { key: 'bakery', icon: '🍞', title: 'Bánh mặn & Bánh ngọt', subtitle: 'Bếp Nóng: Bánh mì, bánh mặn, bánh ngọt, BTT, pía, quy, croissant…' },
+  { key: 'macaron', icon: '🧁', title: 'Macaron', subtitle: 'Xưởng 41: Macaron các vị, vỏ trang trí, đóng hộp' },
+  { key: 'school', icon: '🏫', title: 'Trường học', subtitle: 'Xưởng 42: Suất ăn học đường, điểm trường' },
+  { key: 'teabreak', icon: '☕', title: 'Teabreak', subtitle: 'Tiệc sự kiện từ vài chục đến 1.500 khách' },
 ];
 
 export const CAKE_LINES = [

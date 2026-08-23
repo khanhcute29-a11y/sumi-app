@@ -21,11 +21,12 @@ const FILTERS = [
 ];
 
 const FLOW_GROUPS = [
-  { key: 'bakery', label: 'Bakery & Bánh kem', icon: '🎂', desc: 'Bếp lạnh & Bếp nóng', match: o => ['bakery', 'cake'].includes(o.order_type) },
+  { key: 'cake', label: 'Bánh kem & Bánh lạnh', icon: '🎂', desc: 'Bếp Lạnh phụ trách', match: o => o.order_type === 'cake' },
+  { key: 'bakery', label: 'Bánh mặn & Bánh ngọt', icon: '🍞', desc: 'Bếp Nóng phụ trách', match: o => o.order_type === 'bakery' },
   { key: 'macaron', label: 'Macaron', icon: '🧁', desc: 'Xưởng 41 chuyên biệt', match: o => o.order_type === 'macaron' },
-  { key: 'teabreak', label: 'Teabreak', icon: '☕', desc: 'Tiệc & Sự kiện', match: o => o.order_type === 'teabreak' },
   { key: 'school', label: 'Trường học', icon: '🏫', desc: 'Xưởng 42 điểm trường', match: o => o.order_type === 'school' },
-  { key: 'mixed', label: 'Đơn tổng hợp', icon: '🧺', desc: 'Nhiều bếp cùng làm', match: o => o.order_type === 'mixed' || !['bakery', 'cake', 'macaron', 'teabreak', 'school'].includes(o.order_type) },
+  { key: 'teabreak', label: 'Teabreak', icon: '☕', desc: 'Tiệc & Sự kiện', match: o => o.order_type === 'teabreak' },
+  { key: 'mixed', label: 'Đơn tổng hợp', icon: '🧺', desc: 'Nhiều bếp cùng làm', match: o => o.order_type === 'mixed' || !['cake', 'bakery', 'macaron', 'teabreak', 'school'].includes(o.order_type) },
 ];
 
 const minutesText = value => {

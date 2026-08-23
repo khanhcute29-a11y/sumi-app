@@ -186,15 +186,41 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
     } catch (e) { setError(e.message); } finally { setBusy(false); }
   };
 
-  const approvePackage = async (p) => {
+  const markReadyStock = async () => {
     setBusy(true); setError('');
     try {
-      const { error } = await supabase.rpc('approve_work_package_completion', {
-        p_idempotency_key: crypto.randomUUID(),
-        p_package_id: p.id,
-        p_expected_version: p.version
-      });
+      const { error } = await supabase.rpc('mark_order_ready_from_stock', { p_order_id: orderId });
       if (error) throw error;
+      await load();
+      onChanged?.();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const approvePackage = async (p, photoFile = null) => {
+    setBusy(true); setError('');
+    try {
+      let photoPath = null;
+      if (photoFile) {
+        photoPath = `orders/${orderId}/production/${crypto.randomUUID()}-${photoFile.name}`;
+        const up = await supabase.storage.from('uploads').upload(photoPath, photoFile);
+        if (up.error) throw up.error;
+      }
+      const { error } = await supabase.rpc('complete_kitchen_work_package_with_proof', {
+        p_package_id: p.id,
+        p_proof_storage_path: photoPath
+      });
+      if (error) {
+        // Fallback to approve_work_package_completion
+        await supabase.rpc('approve_work_package_completion', {
+          p_idempotency_key: crypto.randomUUID(),
+          p_package_id: p.id,
+          p_expected_version: p.version
+        });
+      }
       await load();
       onChanged?.();
     } catch (e) { setError(e.message); } finally { setBusy(false); }
@@ -208,6 +234,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
 
   const o = data.order;
   const isSchool = o.confidentiality === 'school_restricted';
+  const isReady = ['ready_for_fulfillment', 'in_delivery', 'completed'].includes(o.status_v2);
 
   const customerSamplePhotos = attachments.filter(a => a.attachment_type === 'customer_sample' || !a.attachment_type);
   const proofPhotos = attachments.filter(a => a.attachment_type !== 'customer_sample' && !!a.attachment_type);
@@ -217,14 +244,53 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 720, maxHeight: '94vh', overflowY: 'auto', padding: 18, borderRadius: '24px 24px 0 0', background: 'var(--surface-app)' }}>
         
         {/* Header đơn hàng */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: 'var(--text-primary)' }}>{o.order_code}</h2>
-            <div style={{ color: 'var(--text-secondary)', fontSize: 14, marginTop: 3 }}>
-              Tạo bởi: {o.created_by_name || 'Hệ thống'} · {new Date(o.created_at).toLocaleString('vi-VN')}
+            <h2 style={{ margin: 0, fontSize: 20, color: 'var(--text-primary)' }}>
+              Đơn #{o.order_code || o.id.slice(0, 8)}
+            </h2>
+            <div style={{ marginTop: 4, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{
+                fontSize: 13, fontWeight: 800, padding: '3px 10px', borderRadius: 999,
+                background: isReady ? '#e6f6ed' : '#fff0d4',
+                color: isReady ? '#087f5b' : '#b93e13'
+              }}>
+                {o.status_v2 === 'ready_for_fulfillment' ? '📦 Đã vào Kho Thành Phẩm (Chờ giao)' :
+                 o.status_v2 === 'in_delivery' ? '🛵 Shipper đang giao' :
+                 o.status_v2 === 'completed' ? '✅ Đã giao thành công' :
+                 o.status_v2 === 'in_production' ? '👩‍🍳 Bếp đang làm bánh' : '📥 Đơn chờ làm'}
+              </span>
+              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                Loại đơn: {ORDER_TYPE_LABELS[o.order_type] || o.order_type}
+              </span>
             </div>
           </div>
-          <button onClick={onClose} style={{ border: 0, background: 'none', fontSize: 28, cursor: 'pointer', color: 'var(--text-muted)' }}>×</button>
+
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            {!isReady && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={markReadyStock}
+                style={{
+                  minHeight: 38, padding: '0 12px', borderRadius: 10, border: '1.5px solid #087f5b',
+                  background: '#e6f6ed', color: '#087f5b', fontWeight: 800, fontSize: 13, cursor: 'pointer'
+                }}
+                title="Bánh có sẵn tại kho thành phẩm/tủ - Bỏ qua khâu bếp và báo Vận tải nhận đơn"
+              >
+                ⚡ Bánh có sẵn (Vào kho ngay)
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              style={{
+                width: 36, height: 36, border: 0, borderRadius: '50%',
+                background: 'var(--surface-sunken)', fontSize: 16, cursor: 'pointer'
+              }}
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {isSchool && (

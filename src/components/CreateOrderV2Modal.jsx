@@ -31,6 +31,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
  const [customerName,setCustomerName]=useState(''); const [customerPhone,setCustomerPhone]=useState('');
  const [fulfillment,setFulfillment]=useState('delivery'); const [address,setAddress]=useState(''); const [note,setNote]=useState('');
  const [items,setItems]=useState([]); const [photos,setPhotos]=useState([]); const [saving,setSaving]=useState(false); const [error,setError]=useState('');
+ const [isReadyStock, setIsReadyStock] = useState(false);
  const [catalogSearch,setCatalogSearch]=useState(''); const [guestCount,setGuestCount]=useState('');
  const [schoolSearch,setSchoolSearch]=useState(''); const [selectedSchool,setSelectedSchool]=useState(null);
  const [entryMode,setEntryMode]=useState('manual'); const [cakeLine,setCakeLine]=useState('decorated_cake');
@@ -59,10 +60,11 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
   if(type==='school'&&!selectedSchool)throw new Error('Vui lòng chọn trường hoặc điểm giao.');
   if(!items.length||items.some(x=>!x.name||Number(x.quantity)<=0))throw new Error('Vui lòng nhập đủ tên bánh và số lượng.');
   const key=newId(); const orderCode=`SUMI-${new Date().toISOString().slice(2,10).replaceAll('-','')}-${Date.now().toString().slice(-4)}`;
-  const customerNote=[customerName&&`Khách hàng: ${customerName}`,customerPhone&&`SĐT: ${customerPhone}`,type==='teabreak'&&guestCount&&`Số khách: ${guestCount}`,note].filter(Boolean).join(' · ');
-  const normalizedItems=items.map((item,index)=>({...item,display_order:index,specification:{...(item.specification||{}),product_flow:item.flow_type||type}}));
+  const customerNote=[customerName&&`Khách hàng: ${customerName}`,customerPhone&&`SĐT: ${customerPhone}`,type==='teabreak'&&guestCount&&`Số khách: ${guestCount}`,note,isReadyStock&&'⚡ BÁNH CÓ SẴN (XUẤT KHO THÀNH PHẨM NGAY)'].filter(Boolean).join(' · ');
+  const normalizedItems=items.map((item,index)=>({...item,display_order:index,specification:{...(item.specification||{}),product_flow:item.flow_type||type,is_ready_stock:isReadyStock}}));
   const orderId=await createOrderV2({p_idempotency_key:key,p_order_code:orderCode,p_order_type:isMixed?'mixed':type,p_customer_id:null,p_required_at:requiredAt?new Date(requiredAt).toISOString():null,p_fulfillment_method:fulfillment,p_address:fulfillment==='delivery'?address:null,p_note:customerNote||null,p_confidentiality:type==='school'?'school_restricted':'normal',p_items:normalizedItems});
   for(const file of photos){const path=`orders/${orderId}/customer/${newId()}-${file.name}`;const up=await supabase.storage.from('uploads').upload(path,file);if(up.error)throw up.error;const row=await supabase.from('order_attachments').insert({order_id:orderId,attachment_type:'customer_sample',storage_path:path,mime_type:file.type,size_bytes:file.size,created_by:profile.id});if(row.error)throw row.error;}
+  if(isReadyStock){await supabase.rpc('mark_order_ready_from_stock',{p_order_id:orderId}).catch(()=>{});}
   onCreated?.(orderId);onClose();
  }catch(e){setError(e.message||'Không thể tạo đơn');}finally{setSaving(false);}};
  if(!type)return <div className={embedded?'sumi-order-create-page':'sumi-order-create-overlay'} onClick={embedded?undefined:onClose}>
@@ -114,7 +116,15 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:12}}><button onClick={()=>setFulfillment('delivery')} style={{...fieldStyle,fontWeight:900,border:fulfillment==='delivery'?'3px solid #138a53':fieldStyle.border,background:fulfillment==='delivery'?'#e6f6ed':'#fff',color:fulfillment==='delivery'?'#09663d':'#2d1c10'}}>🛵 Giao tận nơi</button><button onClick={()=>setFulfillment('pickup')} style={{...fieldStyle,fontWeight:900,border:fulfillment==='pickup'?'3px solid #138a53':fieldStyle.border,background:fulfillment==='pickup'?'#e6f6ed':'#fff',color:fulfillment==='pickup'?'#09663d':'#2d1c10'}}>🏬 Nhận tại quầy</button></div>
    {fulfillment==='delivery'&&<input style={{...fieldStyle,marginTop:10}} placeholder="Địa chỉ giao" value={address} onChange={e=>setAddress(e.target.value)}/>}<textarea style={{...fieldStyle,marginTop:10,minHeight:82}} placeholder="Ghi chú" value={note} onChange={e=>setNote(e.target.value)}/>
    <label style={{display:'block',marginTop:16,fontWeight:900,fontSize:18}}>Ảnh mẫu khách gửi</label><div className="sumi-upload-grid"><label>📷<span>Chụp ảnh</span><input hidden type="file" accept="image/*" capture="environment" multiple onChange={e=>setPhotos([...photos,...e.target.files])}/></label><label>🖼️<span>Chọn ảnh có sẵn</span><input hidden type="file" accept="image/*" multiple onChange={e=>setPhotos([...photos,...e.target.files])}/></label></div><div style={{color:'#725f50',fontWeight:700,marginBottom:8}}>{photos.length?`${photos.length} ảnh đã chọn`:'Chưa có ảnh'}</div>
-   {type==='school'&&<div style={{padding:12,marginTop:12,borderRadius:14,background:'#fff3cd',fontWeight:700}}>Đơn trường học không nhập và không hiển thị giá.</div>}{error&&<div style={{color:'#b42318',marginTop:10}}>{error}</div>}
-   <button disabled={saving} onClick={submit} style={{width:'100%',minHeight:66,marginTop:18,border:0,borderRadius:18,background:saving?'#c7b6a3':'#ef642b',color:'#fff',fontSize:20,fontWeight:950,boxShadow:saving?'none':'0 7px 0 #b93e13',opacity:1}}>{saving?'ĐANG TẠO...':'TẠO ĐƠN HÀNG'}</button>
+   {type==='school'&&<div style={{padding:12,marginTop:12,borderRadius:14,background:'#fff3cd',fontWeight:700}}>Đơn trường học không nhập và không hiển thị giá.</div>}
+   <label style={{display:'flex',alignItems:'center',gap:10,marginTop:14,padding:'12px 14px',borderRadius:14,background:isReadyStock?'#e6f6ed':'#fcf9f5',border:isReadyStock?'2px solid #087f5b':'1px solid var(--border-default)',cursor:'pointer'}}>
+     <input type="checkbox" checked={isReadyStock} onChange={e=>setIsReadyStock(e.target.checked)} style={{width:22,height:22,margin:0}}/>
+     <div>
+       <b style={{fontSize:15,color:isReadyStock?'#087f5b':'var(--text-primary)',display:'block'}}>⚡ Bánh có sẵn trong Kho Thành Phẩm (Xuất giao ngay)</b>
+       <span style={{fontSize:13,color:'var(--text-secondary)'}}>Bỏ qua khâu làm bánh của Bếp, đưa thẳng vào Kho Thành Phẩm và kích hoạt Shipper nhận đơn.</span>
+     </div>
+   </label>
+   {error&&<div style={{color:'#b42318',marginTop:10}}>{error}</div>}
+   <button disabled={saving} onClick={submit} style={{width:'100%',minHeight:66,marginTop:18,border:0,borderRadius:18,background:saving?'#c7b6a3':'#ef642b',color:'#fff',fontSize:20,fontWeight:950,boxShadow:saving?'none':'0 7px 0 #b93e13',opacity:1}}>{saving?'ĐANG TẠO...':(isReadyStock?'TẠO ĐƠN & BÁO VẬN TẢI NGAY':'TẠO ĐƠN HÀNG')}</button>
   </div></div>;
 }
