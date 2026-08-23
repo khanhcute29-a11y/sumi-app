@@ -3,7 +3,7 @@ import { Card } from '../components/data/Card';
 import { Badge } from '../components/feedback/Badge';
 import { Button } from '../components/forms/Button';
 import { Select } from '../components/forms/Select';
-import { fetchMyProfile, fetchAllProfiles, updateProfileRole, updateProfileExtraRoles, updateProfileStation, updateProfileActive, approveStaff } from '../lib/queries';
+import { fetchMyProfile, fetchAllProfiles, updateProfileRole, updateProfileExtraRoles, updateProfileStation, updateStaffPermissions, updateProfileActive, approveStaff } from '../lib/queries';
 import { ROLE_META, ROLE_OPTIONS, ROLE_PERMISSIONS, hasRole, hasAnyRole, resolveRoleAndStation, getRoleMeta, getUiRole } from '../lib/roles';
 import { supabase } from '../lib/supabaseClient';
 
@@ -403,11 +403,7 @@ export default function StaffScreen() {
   };
 
   const handleSavePermissions = async (id, { role, station, extraRoles }) => {
-    await Promise.all([
-      updateProfileRole(id, role),
-      updateProfileStation(id, station),
-      updateProfileExtraRoles(id, extraRoles)
-    ]);
+    await updateStaffPermissions(id, { role, station, extraRoles });
     load();
   };
 

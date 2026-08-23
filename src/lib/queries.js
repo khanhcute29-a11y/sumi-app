@@ -765,6 +765,15 @@ export async function updateProfileStation(id, station) {
   if (error) throw error;
 }
 
+export async function updateStaffPermissions(id, { role, station, extraRoles }) {
+  const { error } = await supabase.from('profiles').update({
+    role: role || null,
+    station: station || null,
+    extra_roles: extraRoles || []
+  }).eq('id', id);
+  if (error) throw error;
+}
+
 // ---- Chia công đoạn bếp (gán nhân viên đang trực vào công đoạn của đơn) ----
 
 export async function createOrderStages(rows) {
