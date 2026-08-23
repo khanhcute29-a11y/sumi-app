@@ -46,11 +46,29 @@ function isCheckinInPeriod(checkin, inMs, periodFrom, periodTo) {
   return true;
 }
 
-// Ghép cặp checkin/checkout theo thứ tự thời gian (không gom theo work_date, vì
-// checkout của ca qua đêm được ghi sang ngày hôm sau và một ngày có thể có nhiều ca)
-// để tính giờ làm, giờ tăng ca (so với shift_configs.end_time nếu đã cấu hình),
-// và giờ trễ (late_minutes trên dòng checkin).
-// periodFrom/periodTo (tuỳ chọn): chỉ tính những ca có checkin nằm trong khoảng này.
+// Tính trừ giờ nghỉ trưa cố định 11:30 - 12:30 nếu ca làm vắt qua khung giờ này
+function calculateLunchDeductionHours(inDate, outDate) {
+  if (!inDate || !outDate) return 0;
+  const start = new Date(inDate);
+  const end = new Date(outDate);
+  if (end <= start) return 0;
+
+  const lunchStart = new Date(start);
+  lunchStart.setHours(11, 30, 0, 0);
+  const lunchEnd = new Date(start);
+  lunchEnd.setHours(12, 30, 0, 0);
+
+  const overlapStart = Math.max(start.getTime(), lunchStart.getTime());
+  const overlapEnd = Math.min(end.getTime(), lunchEnd.getTime());
+
+  if (overlapEnd > overlapStart) {
+    return (overlapEnd - overlapStart) / (1000 * 60 * 60);
+  }
+  return 0;
+}
+
+// Ghép cặp checkin/checkout theo thứ tự thời gian để tính giờ làm thực tế,
+// tự động trừ 1 giờ nghỉ trưa cố định (11:30 - 12:30) nếu ca làm việc vắt qua khung giờ này.
 export function computeShiftHours(shiftLogs, shiftConfigs, staffId, periodFrom, periodTo) {
   const mine = shiftLogs.filter((l) => l.staff_id === staffId && l.checkin_time);
   const byTime = (a, b) => new Date(a.checkin_time) - new Date(b.checkin_time);
@@ -61,12 +79,12 @@ export function computeShiftHours(shiftLogs, shiftConfigs, staffId, periodFrom, 
   let hoursWorked = 0;
   let overtimeHours = 0;
   let lateHours = 0;
+  let totalLunchDeducted = 0;
   let hasUnconfiguredShift = false;
 
   for (const checkin of checkins) {
-    const inMs = new Date(checkin.checkin_time).getTime();
-    // Ca nằm ngoài kỳ đang xem: vẫn ghép cặp (để "tiêu thụ" checkout của nó,
-    // tránh checkout đó bị gán nhầm cho ca sau) nhưng không cộng vào tổng.
+    const inDate = new Date(checkin.checkin_time);
+    const inMs = inDate.getTime();
     const inPeriod = isCheckinInPeriod(checkin, inMs, periodFrom, periodTo);
 
     let matchIdx = -1;
@@ -74,33 +92,43 @@ export function computeShiftHours(shiftLogs, shiftConfigs, staffId, periodFrom, 
       if (usedCheckout.has(i)) continue;
       const outMs = new Date(checkouts[i].checkin_time).getTime();
       if (outMs <= inMs) continue;
-      if (outMs - inMs > MAX_SHIFT_PAIR_HOURS * MS_PER_HOUR) break; // đã sắp xếp tăng dần
+      if (outMs - inMs > MAX_SHIFT_PAIR_HOURS * MS_PER_HOUR) break;
       matchIdx = i;
       break;
     }
 
-    // Giờ trễ tính theo dòng checkin, độc lập với việc có checkout hay không.
     if (inPeriod) lateHours += (checkin.late_minutes || 0) / 60;
 
-    if (matchIdx === -1) continue; // chưa checkout (hoặc quá cửa sổ) → 0 giờ cho ca này
+    if (matchIdx === -1) continue;
     usedCheckout.add(matchIdx);
     if (!inPeriod) continue;
 
-    const actualHours = (new Date(checkouts[matchIdx].checkin_time) - new Date(checkin.checkin_time)) / MS_PER_HOUR;
-    if (actualHours <= 0) continue;
-    hoursWorked += actualHours;
-    const config = shiftConfigs.find((c) => c.label === checkin.shift_label && (c.branch || null) === (checkin.branch || null));
-    if (!config || !config.end_time || config.end_time === config.start_time) { hasUnconfiguredShift = true; continue; }
-    const startMin = timeStrToMinutes(config.start_time);
-    let endMin = timeStrToMinutes(config.end_time);
-    if (endMin < startMin) endMin += 24 * 60; // ca qua đêm
-    const expectedHours = (endMin - startMin) / 60;
-    overtimeHours += Math.max(0, actualHours - expectedHours);
+    const outDate = new Date(checkouts[matchIdx].checkin_time);
+    const grossHours = (outDate - inDate) / MS_PER_HOUR;
+    if (grossHours <= 0) continue;
+
+    // Trừ giờ nghỉ trưa cố định 11:30 - 12:30
+    const lunchDeduction = calculateLunchDeductionHours(inDate, outDate);
+    const actualNetHours = Math.max(0, grossHours - lunchDeduction);
+
+    hoursWorked += actualNetHours;
+    totalLunchDeducted += lunchDeduction;
+
+    const config = (shiftConfigs || []).find((c) => c.label === checkin.shift_label && (c.branch || null) === (checkin.branch || null));
+    if (config && config.end_time && config.end_time !== config.start_time) {
+      const startMin = timeStrToMinutes(config.start_time);
+      let endMin = timeStrToMinutes(config.end_time);
+      if (endMin < startMin) endMin += 24 * 60;
+      const expectedHours = (endMin - startMin) / 60;
+      overtimeHours += Math.max(0, actualNetHours - expectedHours);
+    }
   }
+
   return {
     hoursWorked: Math.round(hoursWorked * 10) / 10,
     overtimeHours: Math.round(overtimeHours * 10) / 10,
     lateHours: Math.round(lateHours * 10) / 10,
+    lunchDeductedHours: Math.round(totalLunchDeducted * 10) / 10,
     hasUnconfiguredShift,
   };
 }

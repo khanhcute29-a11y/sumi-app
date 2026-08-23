@@ -53,7 +53,14 @@ function ExtendedKpiCard({ name, kpi }) {
     <Card style={{ flex: '1 1 240px' }}>
       <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)', marginBottom: 10 }}>{name}</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ font: 'var(--text-body)', color: 'var(--text-secondary)' }}>Tổng giờ làm: <b style={{ color: 'var(--text-primary)' }}>{kpi.hoursWorked}h</b></div>
+        <div style={{ font: 'var(--text-body)', color: 'var(--text-secondary)' }}>
+          Tổng giờ làm thực tế: <b style={{ color: 'var(--text-primary)' }}>{kpi.hoursWorked}h</b>
+        </div>
+        {kpi.lunchDeductedHours > 0 && (
+          <div style={{ font: 'var(--text-caption)', color: '#b93e13' }}>
+            (Đã trừ {kpi.lunchDeductedHours}h nghỉ trưa 11:30–12:30)
+          </div>
+        )}
         <div style={{ font: 'var(--text-body)', color: 'var(--text-secondary)' }}>
           Giờ tăng ca: <b style={{ color: 'var(--text-primary)' }}>{kpi.overtimeHours}h</b>
           {kpi.hasUnconfiguredShift && <span style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}> (một số ca chưa cấu hình giờ kết thúc)</span>}
