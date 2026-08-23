@@ -104,6 +104,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
      {(it.flow_type||type)==='teabreak'&&<><input style={fieldStyle} value={it.specification?.catalog_specification||''} placeholder="Quy cách" onChange={e=>spec(i,'catalog_specification',e.target.value)}/><input style={fieldStyle} placeholder="Khay/ghi chú" onChange={e=>spec(i,'packing',e.target.value)}/></>}
      {(it.flow_type||type)==='macaron'&&<><input style={fieldStyle} placeholder="Màu" onChange={e=>spec(i,'color',e.target.value)}/><input style={fieldStyle} placeholder="Vị / có nhân" onChange={e=>spec(i,'flavor',e.target.value)}/></>}
      {(it.flow_type||type)==='school'&&<><input style={fieldStyle} placeholder="Quy cách" onChange={e=>spec(i,'spec',e.target.value)}/><input style={fieldStyle} placeholder="Khối/lớp/ghi chú" onChange={e=>spec(i,'grade_note',e.target.value)}/></>}
+     {(it.flow_type||type)!=='school'&&!((it.flow_type||type)==='bakery'&&it.specification?.product_line==='moon_cake')&&<input style={fieldStyle} inputMode="numeric" placeholder="Đơn giá (có thể để trống)" value={it.unit_price||''} onChange={e=>change(i,'unit_price',e.target.value?Number(e.target.value):null)}/>}
     </div>{items.length>1&&<button onClick={()=>setItems(x=>x.filter((_,n)=>n!==i))} style={{marginTop:8,color:'#b42318',border:0,background:'none'}}>Xóa sản phẩm</button>}
    </div>)}
    {items.length===0&&<div className="sumi-no-selection">Chưa chọn món. Tìm món phía trên hoặc thêm món tùy chỉnh.</div>}
