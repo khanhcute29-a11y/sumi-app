@@ -4,7 +4,7 @@ import { fetchTasks, startTask, completeTask, fetchApprovalRequests } from '../.
 import { AssignTaskModal } from './AssignTaskModal';
 import { ExemptionRequestModal } from './ExemptionRequestModal';
 
-export function AssignedTasksTab({ profile, isOwner, viewingStaffId, staffList, orderCodeFilter, refreshKey }) {
+export function AssignedTasksTab({ profile, isOwner, viewingStaffId, viewingStaffName, staffList, orderCodeFilter, refreshKey }) {
   const [tasks, setTasks] = useState([]);
   const [pendingExemptionTaskIds, setPendingExemptionTaskIds] = useState([]);
   const [error, setError] = useState('');
@@ -38,7 +38,11 @@ export function AssignedTasksTab({ profile, isOwner, viewingStaffId, staffList, 
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {isOwner && <Button size="sm" onClick={() => setShowAssign(true)} style={{ alignSelf: 'flex-start' }}>Giao việc mới</Button>}
+      {isOwner && (
+        <Button size="sm" onClick={() => setShowAssign(true)} style={{ alignSelf: 'flex-start' }}>
+          ＋ Giao việc {viewingStaffName ? `cho ${viewingStaffName}` : 'mới'}
+        </Button>
+      )}
       {visible.length === 0 && <div style={{ font: 'var(--text-body)', color: 'var(--text-muted)' }}>Không có việc được giao.</div>}
       {visible.map((t) => (
         <div key={t.id} style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: 10, background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)' }}>
@@ -67,7 +71,7 @@ export function AssignedTasksTab({ profile, isOwner, viewingStaffId, staffList, 
         </div>
       ))}
       {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
-      {showAssign && <AssignTaskModal staffList={staffList} profile={profile} onClose={() => setShowAssign(false)} onSaved={load} />}
+      {showAssign && <AssignTaskModal staffList={staffList} profile={profile} initialStaffId={viewingStaffId} onClose={() => setShowAssign(false)} onSaved={load} />}
       {exemptTarget && <ExemptionRequestModal task={exemptTarget} profile={profile} onClose={() => setExemptTarget(null)} onSent={load} />}
     </div>
   );

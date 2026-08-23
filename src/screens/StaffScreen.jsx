@@ -36,7 +36,7 @@ function PendingStaffRow({ s, onApprove }) {
   );
 }
 
-function StaffRow({ s, isOwner, isMe, canDeactivate, onChangeRole, onChangeExtraRoles, onChangeStation, onDeactivate, expanded, onToggle }) {
+function StaffRow({ s, isOwner, isMe, canDeactivate, onChangeRole, onChangeExtraRoles, onChangeStation, onDeactivate, onManageWork, expanded, onToggle }) {
   const perm = ROLE_PERMISSIONS.find((p) => p.role === s.role);
   const extraRoles = s.extra_roles || [];
   const [savingExtra, setSavingExtra] = useState(false);
@@ -55,29 +55,70 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, onChangeRole, onChangeExtra
   };
 
   return (
-    <div style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-      <button onClick={onToggle} style={{
-        width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10,
-        padding: '10px 0', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left',
+    <div style={{ borderBottom: '1px solid var(--border-subtle)', padding: '10px 0' }}>
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap'
       }}>
-        <span style={{ font: 'var(--text-body)', color: 'var(--text-primary)' }}>{s.full_name || '(chưa đặt tên)'}</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <Badge tone={ROLE_META[s.role]?.tone || 'neutral'}>{ROLE_META[s.role]?.label || s.role}</Badge>
-          {extraRoles.map((r) => <Badge key={r} tone="neutral">+{ROLE_META[r]?.label || r}</Badge>)}
-          <span style={{ color: 'var(--text-muted)' }}>{expanded ? '▲' : '▼'}</span>
+        {/* Bấm vào nhân viên để mở ngay mục Quản lý công việc & Giao việc */}
+        <button
+          onClick={() => onManageWork(s)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 200,
+            border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left', padding: 0
+          }}
+          title="Bấm để giao việc, theo dõi tiến độ và xem báo cáo"
+        >
+          <div style={{
+            width: 38, height: 38, borderRadius: '50%', background: 'var(--surface-sunken)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0
+          }}>
+            {s.role === 'kitchen_lead' ? '👨‍🍳' : s.role === 'driver' ? '🛵' : '👤'}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ font: 'var(--text-body)', fontWeight: 600, color: 'var(--text-primary)' }}>
+              {s.full_name || '(chưa đặt tên)'}
+            </span>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              <Badge tone={ROLE_META[s.role]?.tone || 'neutral'}>{ROLE_META[s.role]?.label || s.role}</Badge>
+              {s.station && <Badge tone="neutral">{s.station}</Badge>}
+              {extraRoles.map((r) => <Badge key={r} tone="neutral">+{ROLE_META[r]?.label || r}</Badge>)}
+            </div>
+          </div>
+        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Button variant="primary" size="sm" onClick={() => onManageWork(s)} style={{ fontWeight: 600 }}>
+            📋 Xem việc & Giao việc
+          </Button>
+          {(isOwner || canDeactivate) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onToggle}
+              title="Phân quyền và cấu hình tài khoản"
+              style={{ color: 'var(--text-secondary)' }}
+            >
+              ⚙️ {expanded ? 'Đóng' : 'Cài đặt'}
+            </Button>
+          )}
         </div>
-      </button>
+      </div>
+
       {expanded && (
-        <div style={{ padding: '0 0 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{
+          marginTop: 12, padding: '12px', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-md)',
+          display: 'flex', flexDirection: 'column', gap: 10
+        }}>
+          <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>⚙️ Phân quyền & Thiết lập tài khoản</div>
           {s.created_at && (
             <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>
               Tham gia: {new Date(s.created_at).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
             </div>
           )}
-          {perm && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '8px 10px' }}>{perm.desc}</div>}
+          {perm && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', background: 'var(--surface-card)', borderRadius: 'var(--radius-sm)', padding: '8px 10px' }}>{perm.desc}</div>}
           {isOwner && !isMe && (
             <React.Fragment>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Đổi vai trò:</span>
                 <Select value={s.role} onChange={(e) => onChangeRole(s.id, e.target.value)} options={ROLE_OPTIONS} style={{ width: 160 }} />
                 <Select
@@ -96,7 +137,7 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, onChangeRole, onChangeExtra
                       <label key={o.value} style={{
                         display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 8px', borderRadius: 'var(--radius-pill)',
                         border: `1px solid ${checked ? 'var(--action-primary)' : 'var(--border-subtle)'}`,
-                        background: checked ? 'var(--surface-primary-soft)' : 'transparent',
+                        background: checked ? 'var(--surface-primary-soft)' : 'var(--surface-card)',
                         font: 'var(--text-caption)', color: checked ? 'var(--primary-700)' : 'var(--text-secondary)', cursor: savingExtra ? 'default' : 'pointer',
                       }}>
                         <input type="checkbox" checked={checked} disabled={savingExtra} onChange={() => toggleExtraRole(o.value)} style={{ margin: 0 }} />
@@ -109,7 +150,7 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, onChangeRole, onChangeExtra
             </React.Fragment>
           )}
           {canDeactivate && !isMe && !hasRole(s, 'owner') && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
               {confirmingDeactivate ? (
                 <>
                   <span style={{ font: 'var(--text-caption)', color: 'var(--status-danger)' }}>Khoá tài khoản này? Nhân viên sẽ không đăng nhập được nữa.</span>
@@ -164,8 +205,6 @@ export default function StaffScreen() {
 
   useEffect(load, []);
 
-  // Chỉ Chủ sở hữu mới đổi được vai trò người khác ở database (chặn admin tự nâng quyền) —
-  // UI phải khớp đúng, nếu không admin bấm Duyệt/Đổi vai trò sẽ bị âm thầm không lưu được gì.
   const isOwner = hasRole(me, 'owner');
   const canDeactivate = hasAnyRole(me, ['owner', 'admin']);
   const pending = staff.filter((s) => s.approved === false);
@@ -201,12 +240,16 @@ export default function StaffScreen() {
     await updateProfileStation(id, station);
     load();
   };
+  const handleManageWork = (s) => {
+    sessionStorage.setItem('sumi_managed_staff_id', s.id);
+    window.dispatchEvent(new CustomEvent('sumi-navigate', { detail: { tab: 'tasks' } }));
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 720 }}>
       <div>
         <div style={{ font: 'var(--text-display-md)', color: 'var(--text-primary)' }}>Nhân Viên</div>
-        <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Tài khoản chờ duyệt và danh sách nhân viên toàn tiệm</div>
+        <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Bấm nhân viên để giao việc, theo dõi tiến độ và báo cáo công việc</div>
       </div>
 
       {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>Lỗi tải nhân viên: {error}</div>}
@@ -225,7 +268,7 @@ export default function StaffScreen() {
           )}
 
           <Card style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>Danh sách nhân viên</div>
+            <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>Danh sách nhân viên ({approved.length})</div>
             {approved.length === 0 ? (
               <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Chưa có nhân viên nào.</div>
             ) : (
@@ -233,12 +276,13 @@ export default function StaffScreen() {
                 {approved.map((s) => (
                   <StaffRow key={s.id} s={s} isOwner={isOwner} isMe={s.id === me?.id} canDeactivate={canDeactivate}
                     onChangeRole={handleChangeRole} onChangeExtraRoles={handleChangeExtraRoles} onChangeStation={handleChangeStation} onDeactivate={handleDeactivate}
+                    onManageWork={handleManageWork}
                     expanded={expandedId === s.id} onToggle={() => setExpandedId(expandedId === s.id ? null : s.id)} />
                 ))}
               </div>
             )}
             <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>
-              Nhân viên mới tự bấm "Đăng ký ngay" ở màn đăng nhập để tạo tài khoản — tài khoản sẽ ở trạng thái "Chờ duyệt" và không xem được dữ liệu cho tới khi chủ sở hữu duyệt và gán quyền ở đây.
+              Mẹo: Bấm trực tiếp vào nhân viên để xem toàn bộ việc đang làm, giao việc mới hoặc kiểm tra báo cáo của người đó.
             </div>
           </Card>
 

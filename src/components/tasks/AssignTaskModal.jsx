@@ -4,13 +4,13 @@ import { Input } from '../forms/Input';
 import { StaffMultiSelect } from '../StaffMultiSelect';
 import { createAssignedTasks } from '../../lib/queries';
 
-export function AssignTaskModal({ staffList, profile, onClose, onSaved }) {
+export function AssignTaskModal({ staffList, profile, onClose, onSaved, initialStaffId }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [orderCode, setOrderCode] = useState('');
   const [deadline, setDeadline] = useState('');
   const [reminderAt,setReminderAt]=useState('');
-  const [selectedIds, setSelectedIds] = useState([]);
+  const [selectedIds, setSelectedIds] = useState(initialStaffId ? [initialStaffId] : []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -23,7 +23,7 @@ export function AssignTaskModal({ staffList, profile, onClose, onSaved }) {
       const rows = selectedIds.map((assigneeId) => ({
         title, description: description || null, order_code: orderCode || null,
         deadline: deadline ? new Date(deadline).toISOString() : null,
-        reminder_at:reminderAt?new Date(reminderAt).toISOString():null,
+        reminder_at: reminderAt ? new Date(reminderAt).toISOString() : null,
         assignee_id: assigneeId, batch_id: batchId, created_by: profile?.id || null,
       }));
       await createAssignedTasks(rows);

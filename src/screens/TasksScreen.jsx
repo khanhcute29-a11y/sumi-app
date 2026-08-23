@@ -6,11 +6,13 @@ import { fetchAllProfiles } from '../lib/queries';
 import { Tabs } from '../components/navigation/Tabs';
 import { Input } from '../components/forms/Input';
 import { Select } from '../components/forms/Select';
+import { Button } from '../components/forms/Button';
 import { DailyChecklistTab } from '../components/tasks/DailyChecklistTab';
 import { AssignedTasksTab } from '../components/tasks/AssignedTasksTab';
 import { AdhocTasksTab } from '../components/tasks/AdhocTasksTab';
 
 const STATION_OPTIONS = [
+  { value: '', label: 'Tất cả khâu (Tổng quan)' },
   { value: 'bakery', label: 'Bakery' },
   { value: 'nong', label: 'Bếp nóng' },
   { value: 'lanh', label: 'Bếp lạnh' },
@@ -21,7 +23,7 @@ const STATION_OPTIONS = [
 export default function TasksScreen() {
   const { profile } = useAuth();
   const isOwner = hasAnyRole(profile, ['owner', 'admin']);
-  const [tab, setTab] = useState('daily');
+  const [tab, setTab] = useState('assigned');
   const [staffList, setStaffList] = useState([]);
   const [selectedStaffId, setSelectedStaffId] = useState('');
   const [stationFilter, setStationFilter] = useState('');
@@ -33,9 +35,17 @@ export default function TasksScreen() {
     fetchAllProfiles().then((data) => {
       const approved = data.filter((p) => p.approved && p.active !== false && p.full_name);
       setStaffList(approved);
-      setSelectedStaffId((prev) => prev || approved[0]?.id || '');
+      const requested = sessionStorage.getItem('sumi_managed_staff_id');
+      if (requested && approved.some((p) => p.id === requested)) {
+        setSelectedStaffId(requested);
+        setTab('assigned');
+      } else {
+        // Mặc định chọn chính mình (Quản lý) để có thể tự tạo việc / checklist hoặc xem việc của mình
+        setSelectedStaffId(profile?.id || approved[0]?.id || '');
+      }
+      sessionStorage.removeItem('sumi_managed_staff_id');
     }).catch(() => {});
-  }, [isOwner]);
+  }, [isOwner, profile?.id]);
 
   useEffect(() => {
     const channel = supabase
@@ -49,39 +59,170 @@ export default function TasksScreen() {
 
   const filteredStaff = stationFilter ? staffList.filter((p) => p.station === stationFilter) : staffList;
 
-  // Đổi bộ lọc khâu mà nhân viên đang chọn không còn trong danh sách → chọn lại người đầu tiên.
   useEffect(() => {
     if (!isOwner) return;
-    if (selectedStaffId && !filteredStaff.some((p) => p.id === selectedStaffId)) {
-      setSelectedStaffId(filteredStaff[0]?.id || '');
+    if (stationFilter && selectedStaffId && selectedStaffId !== profile?.id && !filteredStaff.some((p) => p.id === selectedStaffId)) {
+      setSelectedStaffId(filteredStaff[0]?.id || profile?.id || '');
     }
-  }, [stationFilter, staffList]);
+  }, [stationFilter, staffList, profile?.id]);
 
-  const viewingStaffId = isOwner ? selectedStaffId : profile?.id;
-  const viewingStaffName = isOwner ? (staffList.find((p) => p.id === selectedStaffId)?.full_name || '') : profile?.full_name;
-  const viewingStation = isOwner ? (staffList.find((p) => p.id === selectedStaffId)?.station || '') : profile?.station;
+  // Reset về trạng thái tổng quan ban đầu
+  const handleResetToOverview = () => {
+    setStationFilter('');
+    setOrderCodeFilter('');
+    setSelectedStaffId(profile?.id || '');
+    setTab('assigned');
+  };
+
+  const isViewingOtherStaff = isOwner && selectedStaffId && selectedStaffId !== profile?.id;
+  const viewingStaffId = isOwner ? (selectedStaffId || profile?.id) : profile?.id;
+  const viewingStaff = isOwner ? (staffList.find((p) => p.id === selectedStaffId) || (selectedStaffId === profile?.id ? profile : null)) : profile;
+  const viewingStaffName = viewingStaff?.full_name || (viewingStaffId === profile?.id ? 'Chính tôi' : '');
+  const viewingStation = viewingStaff?.station || '';
+
+  const hasActiveFilter = !!stationFilter || !!orderCodeFilter || isViewingOtherStaff;
+
+  const staffOptions = [
+    ...(profile?.id ? [{ value: profile.id, label: `👤 Việc của tôi (${profile.full_name || 'Quản lý'})` }] : []),
+    ...filteredStaff.filter((p) => p.id !== profile?.id).map((p) => ({
+      value: p.id,
+      label: `${p.full_name}${p.station ? ` (${p.station})` : ''}`
+    })),
+  ];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div>
-        <div style={{ font: 'var(--text-display-md)', color: 'var(--text-primary)' }}>Quản Lý Công Việc</div>
-        <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Việc hằng ngày, việc được giao, việc phát sinh</div>
+      {/* Header & Thanh điều hướng nhanh */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+        <div>
+          <div style={{ font: 'var(--text-display-md)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span>
+              {isViewingOtherStaff ? `Công việc · ${viewingStaffName}` : `Quản Lý Công Việc ${viewingStaffName ? `(${viewingStaffName})` : ''}`}
+            </span>
+            {viewingStation && (
+              <span style={{ fontSize: 13, padding: '2px 8px', borderRadius: 'var(--radius-pill)', background: 'var(--surface-sunken)', color: 'var(--text-secondary)' }}>
+                {viewingStation}
+              </span>
+            )}
+          </div>
+          <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>
+            {isViewingOtherStaff ? `Đang xem và giao việc cho ${viewingStaffName}` : 'Tự tạo việc, giao việc cho nhân viên và theo dõi tiến độ'}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {isOwner && hasActiveFilter && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleResetToOverview}
+              style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              🔄 ← Quay lại Tổng quan
+            </Button>
+          )}
+          {isOwner && (
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('sumi-navigate', { detail: { tab: 'staff' } }))}
+              style={{
+                padding: '6px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)',
+                background: 'var(--surface-card)', color: 'var(--text-primary)', font: 'var(--text-body-sm)',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
+              }}
+            >
+              👥 Danh sách nhân viên
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Bộ lọc Khâu & Chọn nhân viên */}
       {isOwner && (
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <Select label="Khâu" value={stationFilter} onChange={(e) => setStationFilter(e.target.value)} options={STATION_OPTIONS} placeholder="Tất cả khâu" style={{ maxWidth: 200 }} />
-          <Select label="Nhân viên" value={selectedStaffId} onChange={(e) => setSelectedStaffId(e.target.value)} options={filteredStaff.map((p) => ({ value: p.id, label: p.full_name }))} placeholder="Chọn nhân viên" style={{ maxWidth: 240 }} />
-          <Input label="Lọc theo mã đơn" placeholder="VD: DH001" value={orderCodeFilter} onChange={(e) => setOrderCodeFilter(e.target.value)} style={{ maxWidth: 200 }} />
+        <div style={{
+          display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end',
+          padding: '12px', background: 'var(--surface-card)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)'
+        }}>
+          <div style={{ flex: '1 1 180px', minWidth: 150 }}>
+            <Select
+              label="Lọc theo khâu"
+              value={stationFilter}
+              onChange={(e) => setStationFilter(e.target.value)}
+              options={STATION_OPTIONS}
+            />
+          </div>
+          <div style={{ flex: '1 1 240px', minWidth: 180 }}>
+            <Select
+              label="Người thực hiện"
+              value={selectedStaffId || profile?.id || ''}
+              onChange={(e) => setSelectedStaffId(e.target.value)}
+              options={staffOptions}
+            />
+          </div>
+          <div style={{ flex: '1 1 160px', minWidth: 130 }}>
+            <Input
+              label="Mã đơn"
+              placeholder="VD: DH001"
+              value={orderCodeFilter}
+              onChange={(e) => setOrderCodeFilter(e.target.value)}
+            />
+          </div>
+          {hasActiveFilter && (
+            <Button variant="ghost" size="sm" onClick={handleResetToOverview} style={{ alignSelf: 'flex-end', marginBottom: 2 }}>
+              Xóa bộ lọc
+            </Button>
+          )}
         </div>
       )}
-      <Tabs tabs={[{ key: 'daily', label: 'Hằng ngày' }, { key: 'assigned', label: 'Được giao' }, { key: 'adhoc', label: 'Phát sinh' }]} active={tab} onChange={setTab} />
+
+      {/* Tabs công việc */}
+      <Tabs
+        tabs={[
+          { key: 'assigned', label: 'Việc được giao' },
+          { key: 'daily', label: 'Hằng ngày' },
+          { key: 'adhoc', label: 'Phát sinh & Báo cáo' }
+        ]}
+        active={tab}
+        onChange={setTab}
+      />
+
+      {/* Nội dung theo tab */}
       {!viewingStaffId ? (
-        <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Chọn nhân viên để xem việc.</div>
+        <div style={{ font: 'var(--text-body)', color: 'var(--text-muted)', padding: 20, textAlign: 'center' }}>
+          Chọn một nhân viên hoặc bấm "Quay lại Tổng quan" để xem việc.
+        </div>
       ) : (
         <React.Fragment>
-          {tab === 'daily' && <DailyChecklistTab refreshKey={refreshKey} profile={profile} isOwner={isOwner} viewingStaffId={viewingStaffId} viewingStaffName={viewingStaffName} viewingStation={viewingStation} />}
-          {tab === 'assigned' && <AssignedTasksTab refreshKey={refreshKey} profile={profile} isOwner={isOwner} viewingStaffId={viewingStaffId} viewingStaffName={viewingStaffName} staffList={staffList} orderCodeFilter={orderCodeFilter} />}
-          {tab === 'adhoc' && <AdhocTasksTab refreshKey={refreshKey} profile={profile} isOwner={isOwner} viewingStaffId={viewingStaffId} viewingStaffName={viewingStaffName} orderCodeFilter={orderCodeFilter} />}
+          {tab === 'assigned' && (
+            <AssignedTasksTab
+              refreshKey={refreshKey}
+              profile={profile}
+              isOwner={isOwner}
+              viewingStaffId={viewingStaffId}
+              viewingStaffName={viewingStaffName}
+              staffList={staffList}
+              orderCodeFilter={orderCodeFilter}
+            />
+          )}
+          {tab === 'daily' && (
+            <DailyChecklistTab
+              refreshKey={refreshKey}
+              profile={profile}
+              isOwner={isOwner}
+              viewingStaffId={viewingStaffId}
+              viewingStaffName={viewingStaffName}
+              viewingStation={viewingStation}
+            />
+          )}
+          {tab === 'adhoc' && (
+            <AdhocTasksTab
+              refreshKey={refreshKey}
+              profile={profile}
+              isOwner={isOwner}
+              viewingStaffId={viewingStaffId}
+              viewingStaffName={viewingStaffName}
+              orderCodeFilter={orderCodeFilter}
+            />
+          )}
         </React.Fragment>
       )}
     </div>
