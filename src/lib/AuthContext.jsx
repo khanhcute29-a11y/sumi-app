@@ -47,8 +47,29 @@ export function AuthProvider({ children }) {
           setProfile(prev => ({ ...(prev || {}), ...payload.new }));
         }
       })
-      .subscribe();
+      .subscribe((status, err) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[AuthContext] Realtime profile subscription active');
+        } else if (status === 'CLOSED') {
+          console.warn('[AuthContext] Realtime profile subscription closed');
+        }
+        if (err) console.error('[AuthContext] Realtime error:', err);
+      });
     return () => { supabase.removeChannel(channel); };
+  }, [profile?.id]);
+
+  // Periodic refresh untuk memastikan role sync di mobile (setiap 45 detik)
+  useEffect(() => {
+    if (!profile?.id) return;
+    const interval = setInterval(() => {
+      fetchMyProfile().then(p => {
+        if (p?.id === profile.id && (p.role !== profile.role || JSON.stringify(p.extra_roles) !== JSON.stringify(profile.extra_roles))) {
+          setProfile(p);
+          console.log('[AuthContext] Role refreshed via interval', p.role);
+        }
+      }).catch(err => console.error('[AuthContext] Refresh failed:', err));
+    }, 45000);
+    return () => clearInterval(interval);
   }, [profile?.id]);
 
   const can = (permission) => profile?.role && hasPermission(profile.role, permission);
