@@ -4,18 +4,16 @@ import { Badge } from '../components/feedback/Badge';
 import { Button } from '../components/forms/Button';
 import { Select } from '../components/forms/Select';
 import { fetchMyProfile, fetchAllProfiles, updateProfileRole, updateProfileExtraRoles, updateProfileStation, updateStaffPermissions, updateProfileActive, approveStaff } from '../lib/queries';
-import { ROLE_META, ROLE_OPTIONS, ROLE_PERMISSIONS, hasRole, hasAnyRole, resolveRoleAndStation, getRoleMeta, getUiRole } from '../lib/roles';
+import { ROLE_META, ROLE_OPTIONS, ROLE_PERMISSIONS, hasRole, hasAnyRole, resolveRoleAndStation, getRoleMeta, getUiRole, normalizeStationForDb } from '../lib/roles';
 import { supabase } from '../lib/supabaseClient';
 
 const STATION_OPTIONS = [
-  { value: '', label: 'Chưa gán khâu' },
-  { value: 'Bếp Lạnh', label: '🎂 Bếp Lạnh (Bánh kem & bánh lạnh)' },
-  { value: 'Bếp Nóng', label: '🍞 Bếp Nóng (Bánh mặn/ngọt, BTT)' },
-  { value: 'Xưởng 41', label: '🧁 Xưởng 41 (Macaron)' },
-  { value: 'Xưởng 42', label: '🏫 Xưởng 42 (Trường học & Teabreak)' },
-  { value: 'Vận Tải', label: '🛵 Đội Vận Tải' },
-  { value: 'Bán Hàng', label: '🏬 Bán Hàng & Thu Ngân' },
-  { value: 'Kho', label: '📦 Kho Nguyên Liệu' },
+  { value: '', label: 'Chưa gán khâu (Mặc định / Không thuộc bếp)' },
+  { value: 'lanh', label: '🎂 Bếp Lạnh (Bánh kem & bánh lạnh)' },
+  { value: 'nong', label: '🍞 Bếp Nóng (Bánh mặn/ngọt, BTT)' },
+  { value: 'xuong41', label: '🧁 Xưởng 41 (Macaron)' },
+  { value: 'xuong42', label: '🏫 Xưởng 42 (Trường học & Teabreak)' },
+  { value: 'bakery', label: '🥖 Bakery (Chung)' },
 ];
 
 function PendingStaffRow({ s, onApprove }) {
@@ -47,8 +45,9 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, onSavePermissions, onDeacti
   const staffMeta = getRoleMeta(s.role, s.station);
   const perm = ROLE_PERMISSIONS.find((p) => p.role === s.role);
   const initialUiRole = getUiRole(s.role, s.station);
+  const initialStation = normalizeStationForDb(s.station) || '';
   const [role, setRole] = useState(initialUiRole);
-  const [station, setStation] = useState(s.station || '');
+  const [station, setStation] = useState(initialStation);
   const [extraRoles, setExtraRoles] = useState(s.extra_roles || []);
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
@@ -59,7 +58,7 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, onSavePermissions, onDeacti
   // Đồng bộ lại khi prop s thay đổi
   useEffect(() => {
     setRole(getUiRole(s.role, s.station));
-    setStation(s.station || '');
+    setStation(normalizeStationForDb(s.station) || '');
     setExtraRoles(s.extra_roles || []);
   }, [s.role, s.station, JSON.stringify(s.extra_roles)]);
 
@@ -67,9 +66,7 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, onSavePermissions, onDeacti
     setRole(newRoleKey);
     setSuccessMsg('');
     const { mappedStation } = resolveRoleAndStation(newRoleKey, station);
-    if (mappedStation) {
-      setStation(mappedStation);
-    }
+    setStation(mappedStation || '');
   };
 
   const toggleExtraRole = (r) => {

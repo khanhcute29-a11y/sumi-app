@@ -122,69 +122,105 @@ export const ROLE_PERMISSIONS = [
   },
 ];
 
-// Tự động map role UI về DB role an toàn (tránh check constraint error) và gán đúng station
+// Chuẩn hóa station cho cơ sở dữ liệu (tương thích 100% check constraint cũ lẫn mới)
+export function normalizeStationForDb(station) {
+  if (!station) return null;
+  const s = String(station).trim().toLowerCase();
+  if (s === 'lanh' || s.includes('lạnh') || s.includes('cold')) return 'lanh';
+  if (s === 'nong' || s.includes('nóng') || s.includes('hot')) return 'nong';
+  if (s === 'xuong41' || s.includes('41') || s.includes('macaron')) return 'xuong41';
+  if (s === 'xuong42' || s.includes('42') || s.includes('trường')) return 'xuong42';
+  if (s === 'bakery' || s.includes('bánh')) return 'bakery';
+  return null;
+}
+
+export function formatStationLabel(station) {
+  if (!station) return '';
+  const s = String(station).toLowerCase();
+  if (s === 'lanh' || s.includes('lạnh')) return 'Bếp Lạnh';
+  if (s === 'nong' || s.includes('nóng')) return 'Bếp Nóng';
+  if (s === 'xuong41' || s.includes('41')) return 'Xưởng 41';
+  if (s === 'xuong42' || s.includes('42')) return 'Xưởng 42';
+  if (s === 'bakery') return 'Bakery';
+  return station;
+}
+
+// Tự động map role UI về DB role an toàn (tránh check constraint error) và gán đúng station chuẩn DB
 export function resolveRoleAndStation(roleKey, currentStation) {
   let mappedRole = roleKey;
-  let mappedStation = currentStation;
+  let mappedStation = normalizeStationForDb(currentStation);
 
   switch (roleKey) {
     case 'kitchen_lead_cold':
       mappedRole = 'kitchen_lead';
-      mappedStation = 'Bếp Lạnh';
+      mappedStation = 'lanh';
       break;
     case 'kitchen_deputy_cold':
       mappedRole = 'kitchen_deputy';
-      mappedStation = 'Bếp Lạnh';
+      mappedStation = 'lanh';
       break;
     case 'baker_cold':
       mappedRole = 'bakery';
-      mappedStation = 'Bếp Lạnh';
+      mappedStation = 'lanh';
       break;
     case 'kitchen_lead_hot':
       mappedRole = 'kitchen_lead';
-      mappedStation = 'Bếp Nóng';
+      mappedStation = 'nong';
       break;
     case 'kitchen_deputy_hot':
       mappedRole = 'kitchen_deputy';
-      mappedStation = 'Bếp Nóng';
+      mappedStation = 'nong';
       break;
     case 'baker_hot':
       mappedRole = 'bakery';
-      mappedStation = 'Bếp Nóng';
+      mappedStation = 'nong';
       break;
     case 'kitchen_lead_macaron':
       mappedRole = 'kitchen_lead';
-      mappedStation = 'Xưởng 41';
+      mappedStation = 'xuong41';
       break;
     case 'baker_macaron':
       mappedRole = 'bakery';
-      mappedStation = 'Xưởng 41';
+      mappedStation = 'xuong41';
       break;
     case 'kitchen_lead_x42':
       mappedRole = 'kitchen_lead';
-      mappedStation = 'Xưởng 42';
+      mappedStation = 'xuong42';
       break;
     case 'baker_x42':
       mappedRole = 'bakery';
-      mappedStation = 'Xưởng 42';
+      mappedStation = 'xuong42';
       break;
     case 'transport_lead':
       mappedRole = 'shipper';
-      mappedStation = 'Vận Tải';
+      mappedStation = null;
+      break;
+    case 'shipper':
+      mappedRole = 'shipper';
+      mappedStation = null;
       break;
     case 'kho_bakery':
       mappedRole = 'warehouse';
-      mappedStation = 'Bếp Lạnh';
+      mappedStation = 'bakery';
       break;
     case 'kho_xuong41':
       mappedRole = 'warehouse';
-      mappedStation = 'Xưởng 41';
+      mappedStation = 'xuong41';
       break;
     case 'kho_xuong42':
       mappedRole = 'warehouse';
-      mappedStation = 'Xưởng 42';
+      mappedStation = 'xuong42';
+      break;
+    case 'owner':
+    case 'admin':
+    case 'accountant':
+    case 'sale':
+    case 'cashier':
+      mappedRole = roleKey;
+      mappedStation = null;
       break;
     default:
+      mappedStation = normalizeStationForDb(currentStation);
       break;
   }
 
@@ -193,27 +229,39 @@ export function resolveRoleAndStation(roleKey, currentStation) {
 
 // Lấy thông tin hiển thị chuẩn theo luồng món & khâu làm việc
 export function getRoleMeta(role, station) {
+  const s = String(station || '').toLowerCase();
+  const isLanh = s === 'lanh' || s.includes('lạnh') || s.includes('cold');
+  const isNong = s === 'nong' || s.includes('nóng') || s.includes('hot');
+  const isX41 = s === 'xuong41' || s.includes('41') || s.includes('macaron');
+  const isX42 = s === 'xuong42' || s.includes('42') || s.includes('trường');
+
   if (role === 'kitchen_lead') {
-    if (station === 'Bếp Lạnh') return ROLE_META.kitchen_lead_cold;
-    if (station === 'Bếp Nóng') return ROLE_META.kitchen_lead_hot;
-    if (station === 'Xưởng 41') return ROLE_META.kitchen_lead_macaron;
-    if (station === 'Xưởng 42') return ROLE_META.kitchen_lead_x42;
+    if (isLanh) return ROLE_META.kitchen_lead_cold;
+    if (isNong) return ROLE_META.kitchen_lead_hot;
+    if (isX41) return ROLE_META.kitchen_lead_macaron;
+    if (isX42) return ROLE_META.kitchen_lead_x42;
     return ROLE_META.kitchen_lead;
   }
   if (role === 'kitchen_deputy') {
-    if (station === 'Bếp Lạnh') return ROLE_META.kitchen_deputy_cold;
-    if (station === 'Bếp Nóng') return ROLE_META.kitchen_deputy_hot;
+    if (isLanh) return ROLE_META.kitchen_deputy_cold;
+    if (isNong) return ROLE_META.kitchen_deputy_hot;
     return ROLE_META.kitchen_deputy;
   }
   if (role === 'bakery' || role === 'kitchen') {
-    if (station === 'Bếp Lạnh') return ROLE_META.baker_cold;
-    if (station === 'Bếp Nóng') return ROLE_META.baker_hot;
-    if (station === 'Xưởng 41') return ROLE_META.baker_macaron;
-    if (station === 'Xưởng 42') return ROLE_META.baker_x42;
+    if (isLanh) return ROLE_META.baker_cold;
+    if (isNong) return ROLE_META.baker_hot;
+    if (isX41) return ROLE_META.baker_macaron;
+    if (isX42) return ROLE_META.baker_x42;
     return ROLE_META.bakery;
   }
-  if (role === 'shipper' && station === 'Vận Tải') {
-    return ROLE_META.shipper;
+  if (role === 'warehouse') {
+    if (isLanh || s === 'bakery') return ROLE_META.kho_bakery;
+    if (isX41) return ROLE_META.kho_xuong41;
+    if (isX42) return ROLE_META.kho_xuong42;
+    return ROLE_META.warehouse;
+  }
+  if (role === 'shipper' || role === 'transport_lead') {
+    return ROLE_META[role] || ROLE_META.shipper;
   }
   return ROLE_META[role] || { label: role, shortLabel: role, tone: 'neutral', level: 1 };
 }
@@ -221,29 +269,35 @@ export function getRoleMeta(role, station) {
 // Chuyển role DB + station thành role key trên giao diện để hiển thị đúng trong form chọn
 export function getUiRole(role, station) {
   if (!role) return 'bakery';
+  const s = String(station || '').toLowerCase();
+  const isLanh = s === 'lanh' || s.includes('lạnh') || s.includes('cold');
+  const isNong = s === 'nong' || s.includes('nóng') || s.includes('hot');
+  const isX41 = s === 'xuong41' || s.includes('41') || s.includes('macaron');
+  const isX42 = s === 'xuong42' || s.includes('42') || s.includes('trường');
+
   if (role === 'kitchen_lead') {
-    if (station === 'Bếp Lạnh') return 'kitchen_lead_cold';
-    if (station === 'Bếp Nóng') return 'kitchen_lead_hot';
-    if (station === 'Xưởng 41') return 'kitchen_lead_macaron';
-    if (station === 'Xưởng 42') return 'kitchen_lead_x42';
+    if (isLanh) return 'kitchen_lead_cold';
+    if (isNong) return 'kitchen_lead_hot';
+    if (isX41) return 'kitchen_lead_macaron';
+    if (isX42) return 'kitchen_lead_x42';
     return 'kitchen_lead';
   }
   if (role === 'kitchen_deputy') {
-    if (station === 'Bếp Lạnh') return 'kitchen_deputy_cold';
-    if (station === 'Bếp Nóng') return 'kitchen_deputy_hot';
+    if (isLanh) return 'kitchen_deputy_cold';
+    if (isNong) return 'kitchen_deputy_hot';
     return 'kitchen_deputy';
   }
   if (role === 'bakery' || role === 'kitchen') {
-    if (station === 'Bếp Lạnh') return 'baker_cold';
-    if (station === 'Bếp Nóng') return 'baker_hot';
-    if (station === 'Xưởng 41') return 'baker_macaron';
-    if (station === 'Xưởng 42') return 'baker_x42';
+    if (isLanh) return 'baker_cold';
+    if (isNong) return 'baker_hot';
+    if (isX41) return 'baker_macaron';
+    if (isX42) return 'baker_x42';
     return 'bakery';
   }
   if (role === 'warehouse') {
-    if (station === 'Bếp Lạnh') return 'kho_bakery';
-    if (station === 'Xưởng 41') return 'kho_xuong41';
-    if (station === 'Xưởng 42') return 'kho_xuong42';
+    if (isLanh || s === 'bakery') return 'kho_bakery';
+    if (isX41) return 'kho_xuong41';
+    if (isX42) return 'kho_xuong42';
     return 'warehouse';
   }
   return role;
