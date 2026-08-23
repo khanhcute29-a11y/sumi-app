@@ -20,6 +20,7 @@ import { WeeklyScheduleSection } from '../components/WeeklyScheduleSection';
 
 const LATE_THRESHOLD_MIN = 15;
 const BRANCHES = ['Vĩnh Phú 42', 'Quốc lộ 13'];
+const SHIFT_PERIODS = [{key:'sáng',label:'☀️ Ca Sáng'},{key:'chiều',label:'🌤️ Ca Chiều'},{key:'tối',label:'🌙 Ca Tối'}];
 
 function shiftOptionLabel(s) {
   return `${s.label}${s.branch ? ` — ${s.branch}` : ''} (${s.start_time.slice(0, 5)})`;
@@ -32,6 +33,7 @@ function minutesLate(expectedStart, workDate) {
   const now = new Date();
   return Math.round((now - expected) / 60000);
 }
+function workDateForShift(shift){const today=localDateStr();if(!shift?.end_time||shift.end_time>shift.start_time)return today;const now=new Date();const [h,m]=shift.end_time.split(':').map(Number);if(now.getHours()*60+now.getMinutes()>=h*60+m)return today;const d=new Date(`${today}T12:00:00`);d.setDate(d.getDate()-1);return localDateStr(d)}
 
 function CheckinModal({ shiftConfigs, staffName, staffId, onClose, onDone }) {
   const [shiftId, setShiftId] = useState(shiftConfigs[0]?.id || '');
@@ -87,7 +89,7 @@ function CheckinModal({ shiftConfigs, staffName, staffId, onClose, onDone }) {
         {step === 'pick' ? (
           <React.Fragment>
             <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>Bắt đầu ca</div>
-            <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Chỉ bấm được 1 lần mỗi ngày — bấm nhầm phải gửi "Yêu cầu chấm công lại" cho sếp.</div>
+            <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Mỗi ca Sáng, Chiều, Tối có giờ bắt đầu và kết thúc riêng.</div>
             <Select label="Ca làm việc" value={shiftId} onChange={(e) => setShiftId(e.target.value)}
               options={shiftConfigs.map((s) => ({ value: s.id, label: shiftOptionLabel(s) }))} />
             {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
@@ -130,7 +132,7 @@ function CheckoutModal({ shiftConfigs, staffName, staffId, onClose, onDone }) {
     if (!selected) { setError('Chọn ca làm việc.'); return; }
     setSaving(true);
     setError('');
-    const payload = { staffId, staffName, workDate: localDateStr(), shiftLabel: selected.label, branch: selected.branch || null, photoUrl: photoUrl || null };
+    const payload = { staffId, staffName, workDate: workDateForShift(selected), shiftLabel: selected.label, branch: selected.branch || null, photoUrl: photoUrl || null };
     try {
       if (!navigator.onLine) throw new Error('offline');
       await addShiftCheckout(payload);
@@ -155,7 +157,7 @@ function CheckoutModal({ shiftConfigs, staffName, staffId, onClose, onDone }) {
     <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 16 }} onClick={onClose}>
       <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: 380, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto', padding: 20, boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 12 }} onClick={(e) => e.stopPropagation()}>
         <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>Kết thúc ca</div>
-        <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Chỉ bấm được 1 lần mỗi ngày — bấm nhầm phải gửi "Yêu cầu chấm công lại" cho sếp.</div>
+        <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Chọn đúng ca đang làm để kết thúc ca đó.</div>
         <Select label="Ca làm việc" value={shiftId} onChange={(e) => setShiftId(e.target.value)}
           options={shiftConfigs.map((s) => ({ value: s.id, label: shiftOptionLabel(s) }))} />
         <CameraPhotoField url={photoUrl} onChange={setPhotoUrl} label="Ảnh minh chứng (chụp trực tiếp, không bắt buộc)" prefix="shift" />
@@ -449,6 +451,7 @@ export default function ShiftsScreen() {
   const [payrollRefreshKey, setPayrollRefreshKey] = useState(0);
   const [myTodayLogs, setMyTodayLogs] = useState([]);
   const [viewMode, setViewMode] = useState('checkin');
+  const [preferredShift, setPreferredShift] = useState('');
 
   const loadConfigs = () => { fetchShiftConfigs().then(setShiftConfigs).catch(() => {}); };
   const loadLogs = () => {
@@ -459,8 +462,9 @@ export default function ShiftsScreen() {
       .finally(() => setLoading(false));
   };
   const loadMyToday = () => {
-    fetchShiftLogs({ date: localDateStr() })
-      .then((data) => setMyTodayLogs(data.filter((l) => l.staff_id === profile?.id)))
+    const today=localDateStr();const prev=new Date(`${today}T12:00:00`);prev.setDate(prev.getDate()-1);
+    fetchShiftLogsRange(localDateStr(prev),today)
+      .then((data) => setMyTodayLogs(data.filter((l) => l.staff_id === profile?.id && (l.work_date===today||(l.type==='checkin'&&l.shift_label?.toLowerCase().includes('tối')&&!data.some(x=>x.staff_id===l.staff_id&&x.work_date===l.work_date&&x.shift_label===l.shift_label&&x.type==='checkout'))))))
       .catch(() => {});
   };
 
@@ -478,8 +482,8 @@ export default function ShiftsScreen() {
 
   const refreshAfterAction = () => { loadLogs(); loadMyToday(); setPayrollRefreshKey((k) => k + 1); window.dispatchEvent(new Event('sumi-shift-changed')); };
 
-  const myCheckinToday = myTodayLogs.find((l) => l.type === 'checkin');
-  const myCheckoutToday = myTodayLogs.find((l) => l.type === 'checkout');
+  const availableCheckinConfigs = shiftConfigs.filter(s=>!myTodayLogs.some(l=>l.type==='checkin'&&l.shift_label===s.label));
+  const availableCheckoutConfigs = shiftConfigs.filter(s=>myTodayLogs.some(l=>l.type==='checkin'&&l.shift_label===s.label)&&!myTodayLogs.some(l=>l.type==='checkout'&&l.shift_label===s.label));
   const recheckOptions = myTodayLogs.filter((l) => l.type === 'checkin' || l.type === 'checkout').map((l) => ({
     value: l.id, label: l.type === 'checkin' ? `Bắt đầu ca — đã chấm lúc ${new Date(l.checkin_time).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}` : `Kết thúc ca — đã chấm lúc ${new Date(l.checkin_time).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`,
   }));
@@ -499,13 +503,14 @@ export default function ShiftsScreen() {
 
       {viewMode === 'checkin' && (
       <>
+      <div className="sumi-shift-period-grid">{SHIFT_PERIODS.map(period=>{const config=shiftConfigs.find(s=>s.label.toLowerCase().includes(period.key));const started=config&&myTodayLogs.some(l=>l.type==='checkin'&&l.shift_label===config.label);const ended=config&&myTodayLogs.some(l=>l.type==='checkout'&&l.shift_label===config.label);return <button key={period.key} disabled={!config||ended} onClick={()=>{setPreferredShift(config?.label||'');started?setShowCheckout(true):setShowCheckin(true)}}><strong>{period.label}</strong><span>{!config?'Chưa thiết lập':ended?'Đã kết thúc':started?'Đang trong ca':'Chưa bắt đầu'}</span><small>{config?`${config.start_time.slice(0,5)} → ${config.end_time?.slice(0,5)||'--:--'}`:'Quản lý thêm giờ ca'}</small></button>})}</div>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <Input label="Xem ngày" type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ maxWidth: 200 }} />
-        <Button variant="primary" onClick={() => setShowCheckin(true)} disabled={shiftConfigs.length === 0 || !!myCheckinToday}>
-          {myCheckinToday ? <><IconCheck size={16} style={{ verticalAlign: '-3px', marginRight: 4 }} />Đã bắt đầu ca</> : <><IconClock size={16} style={{ verticalAlign: '-3px', marginRight: 4 }} />Bắt đầu ca</>}
+        <Button variant="primary" onClick={() => {setPreferredShift('');setShowCheckin(true)}} disabled={availableCheckinConfigs.length === 0}>
+          {availableCheckinConfigs.length===0 ? <><IconCheck size={16} style={{ verticalAlign: '-3px', marginRight: 4 }} />Đã bắt đầu đủ ca</> : <><IconClock size={16} style={{ verticalAlign: '-3px', marginRight: 4 }} />Bắt đầu ca</>}
         </Button>
-        <Button variant="secondary" onClick={() => setShowCheckout(true)} disabled={shiftConfigs.length === 0 || !myCheckinToday || !!myCheckoutToday}>
-          {myCheckoutToday ? <><IconCheck size={16} style={{ verticalAlign: '-3px', marginRight: 4 }} />Đã kết thúc ca</> : <><IconClock size={16} style={{ verticalAlign: '-3px', marginRight: 4 }} />Kết thúc ca</>}
+        <Button variant="secondary" onClick={() => {setPreferredShift('');setShowCheckout(true)}} disabled={availableCheckoutConfigs.length === 0}>
+          <><IconClock size={16} style={{ verticalAlign: '-3px', marginRight: 4 }} />{availableCheckoutConfigs.length?'Kết thúc ca':'Chưa có ca cần kết thúc'}</>
         </Button>
         <Button variant="warning" onClick={() => setShowLeave(true)} disabled={shiftConfigs.length === 0} icon={<IconQuestion size={16} />}>Xin nghỉ đột xuất</Button>
         {recheckOptions.length > 0 && (
@@ -553,11 +558,11 @@ export default function ShiftsScreen() {
       {viewMode === 'schedule' && <WeeklyScheduleSection profile={profile} />}
 
       {showCheckin && (
-        <CheckinModal shiftConfigs={shiftConfigs} staffId={profile?.id} staffName={profile?.full_name}
+        <CheckinModal shiftConfigs={preferredShift?availableCheckinConfigs.filter(s=>s.label===preferredShift):availableCheckinConfigs} staffId={profile?.id} staffName={profile?.full_name}
           onClose={() => setShowCheckin(false)} onDone={() => { setShowCheckin(false); refreshAfterAction(); }} />
       )}
       {showCheckout && (
-        <CheckoutModal shiftConfigs={shiftConfigs} staffId={profile?.id} staffName={profile?.full_name}
+        <CheckoutModal shiftConfigs={preferredShift?availableCheckoutConfigs.filter(s=>s.label===preferredShift):availableCheckoutConfigs} staffId={profile?.id} staffName={profile?.full_name}
           onClose={() => setShowCheckout(false)} onDone={() => { setShowCheckout(false); refreshAfterAction(); }} />
       )}
       {showRecheck && (

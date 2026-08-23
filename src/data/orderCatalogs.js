@@ -11,6 +11,8 @@ export const CAKE_LINES = [
   { key: 'cold_cake', label: '❄️ Bánh lạnh', note: 'Mousse, Tiramisu, su kem và món cần giữ lạnh' },
 ];
 
+export const MOONCAKE_CATALOG = ['Mè đen','Thập cẩm','Đậu xanh','Đậu xanh lá dứa','Đậu đỏ','Khoai môn','Sữa dừa','Hạt sen','Nam việt quất','Chanh dây','Phúc bồn tử','Dừa cốm'].map((flavor,index)=>({id:`btt-${index}`,name:`BTT ${flavor}`,category:'moon_cake',unit:'cái'}));
+
 const rawTeabreak = [
   ['SM01','Sandcheese kẹp','20g/cái','Mặn'],['SM02','Hotdog xúc xích cheese','20g/cái','Mặn'],
   ['SM03','Bánh mì xúc xích chà bông mini','20g/cái','Mặn'],['SM04','Hamburger bò mini','20g/cái','Mặn'],
