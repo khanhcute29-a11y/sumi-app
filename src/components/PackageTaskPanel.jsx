@@ -292,18 +292,23 @@ export default function PackageTaskPanel({ packageId, packageUnit, defaultDueAt,
                   onClick={async () => {
                     setBusy(true);
                     try {
-                      await supabase.rpc('complete_task_v2', {
+                      const {error: taskErr} = await supabase.rpc('complete_task_v2', {
                         p_idempotency_key: crypto.randomUUID(),
                         p_task_id: t.id,
                         p_expected_version: t.version,
                         p_note: null
                       });
-                      await supabase.rpc('complete_kitchen_work_package_with_proof', {
+                      if(taskErr) throw taskErr;
+                      const {error: pkgErr} = await supabase.rpc('complete_kitchen_work_package_with_proof', {
                         p_package_id: packageId,
                         p_proof_storage_path: null
-                      }).catch(() => {});
-                      await load();
-                      onChanged?.();
+                      });
+                      if(pkgErr) {
+                        setError(`Bàn giao kho thất bại: ${pkgErr.message}`);
+                      } else {
+                        await load();
+                        onChanged?.();
+                      }
                     } catch (e) {
                       setError(e.message);
                     } finally {

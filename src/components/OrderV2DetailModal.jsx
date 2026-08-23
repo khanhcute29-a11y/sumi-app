@@ -80,6 +80,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [zoomImage, setZoomImage] = useState(null);
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
 
   const director = ['owner', 'admin'].includes(profile?.role) || (profile?.extra_roles || []).some(x => ['owner', 'admin'].includes(x));
 
@@ -111,45 +112,6 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
     }));
 
     let currentPackages = p.data || [];
-    if (currentPackages.length === 0 && u.data && u.data.length > 0 && o.data?.status_v2 !== 'completed' && o.data?.status_v2 !== 'cancelled') {
-      const unitsList = u.data;
-      const coldUnit = unitsList.find(x => x.code === 'BAKERY_COLD' || x.name.toLowerCase().includes('lạnh')) || unitsList[0];
-      const hotUnit = unitsList.find(x => x.code === 'BAKERY_HOT' || x.name.toLowerCase().includes('nóng')) || unitsList[0];
-      const x41Unit = unitsList.find(x => x.code === 'X41_KITCHEN' || x.name.toLowerCase().includes('41')) || coldUnit;
-      const x42Unit = unitsList.find(x => x.code === 'X42_KITCHEN' || x.name.toLowerCase().includes('42')) || hotUnit;
-
-      const items = i.data || [];
-      const flows = items.length > 0
-        ? [...new Set(items.map(it => it.specification?.product_flow || o.data?.order_type || 'cake'))]
-        : [o.data?.order_type || 'cake'];
-
-      for (const flow of flows) {
-        const targetUnit = flow === 'cake' ? coldUnit : flow === 'bakery' ? hotUnit : flow === 'macaron' ? x41Unit : (flow === 'school' || flow === 'teabreak') ? x42Unit : coldUnit;
-        if (targetUnit) {
-          const flowItems = items.filter(it => (it.specification?.product_flow || o.data?.order_type || 'cake') === flow);
-          try {
-            await assignOrderPackage({
-              p_idempotency_key: crypto.randomUUID(),
-              p_order_id: orderId,
-              p_unit_id: targetUnit.id,
-              p_due_at: o.data?.required_at,
-              p_items: flowItems.map(it => ({ order_item_id: it.id, quantity: it.quantity })),
-              p_expected_version: o.data?.version
-            });
-          } catch (assignErr) {
-            console.warn('Auto assign package error:', assignErr);
-          }
-        }
-      }
-
-      const freshP = await supabase
-        .from('order_work_packages')
-        .select('id,unit_id,status,due_at,accepted_at,completed_at,version,organization_units(name,code),work_package_items(order_item_id,quantity)')
-        .eq('order_id', orderId);
-      if (freshP.data && freshP.data.length > 0) {
-        currentPackages = freshP.data;
-      }
-    }
 
     setData({
       order: o.data,
@@ -169,14 +131,15 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
   const assign = async () => {
     setBusy(true); setError('');
     try {
-      await assignOrderPackage({
-        p_idempotency_key: crypto.randomUUID(),
+      const {error: assignErr} = await supabase.rpc('assign_order_package',{
+        p_idempotency_key: idempotencyKey + '-assign',
         p_order_id: orderId,
         p_unit_id: unit,
         p_due_at: data.order.required_at,
         p_items: data.items.map(x => ({ order_item_id: x.id, quantity: x.quantity })),
         p_expected_version: data.order.version
       });
+      if(assignErr) throw assignErr;
       await load();
       onChanged?.();
     } catch (e) { setError(e.message); } finally { setBusy(false); }
@@ -185,11 +148,12 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
   const accept = async (p) => {
     setBusy(true); setError('');
     try {
-      await acceptOrderPackage({
-        p_idempotency_key: crypto.randomUUID(),
+      const {error: acceptErr} = await supabase.rpc('accept_order_package',{
+        p_idempotency_key: idempotencyKey + '-accept-' + p.id,
         p_package_id: p.id,
         p_expected_version: p.version
       });
+      if(acceptErr) throw acceptErr;
       await load();
       onChanged?.();
     } catch (e) { setError(e.message); } finally { setBusy(false); }
@@ -216,20 +180,20 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       if (photoFile) {
         const cleanExt = (photoFile.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
         photoPath = `orders/${orderId}/production/${crypto.randomUUID()}.${cleanExt}`;
-        const up = await supabase.storage.from('uploads').upload(photoPath, photoFile, { contentType: photoFile.type || 'image/jpeg' });
-        if (up.error) throw up.error;
+        const {error: upErr} = await supabase.storage.from('uploads').upload(photoPath, photoFile, { contentType: photoFile.type || 'image/jpeg' });
+        if (upErr) throw upErr;
       }
-      const { error } = await supabase.rpc('complete_kitchen_work_package_with_proof', {
+      const {error} = await supabase.rpc('complete_kitchen_work_package_with_proof', {
         p_package_id: p.id,
         p_proof_storage_path: photoPath
       });
       if (error) {
-        // Fallback to approve_work_package_completion
-        await supabase.rpc('approve_work_package_completion', {
-          p_idempotency_key: crypto.randomUUID(),
+        const {error: fallbackErr} = await supabase.rpc('approve_work_package_completion', {
+          p_idempotency_key: idempotencyKey + '-approve-' + p.id,
           p_package_id: p.id,
           p_expected_version: p.version
         });
+        if(fallbackErr) throw fallbackErr;
       }
       await load();
       onChanged?.();
@@ -237,8 +201,13 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
   };
 
   if (!data) return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 110, background: 'rgba(0,0,0,.5)', display: 'grid', placeItems: 'center' }}>
-      <div style={box}>{error || 'Đang tải chi tiết đơn...'}</div>
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 110, background: 'rgba(0,0,0,.55)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+      <div onClick={e => e.stopPropagation()} style={{...box, maxWidth: 400, position: 'relative'}}>
+        <button onClick={onClose} style={{position:'absolute',top:10,right:10,minHeight:44,minWidth:44,border:0,borderRadius:'50%',background:'var(--surface-sunken)',fontSize:16,cursor:'pointer'}}>✕</button>
+        <div style={{color: error ? '#b42318' : 'var(--text-muted)', fontWeight: error ? 700 : 400}}>
+          {error || '⏳ Đang tải chi tiết đơn...'}
+        </div>
+      </div>
     </div>
   );
 

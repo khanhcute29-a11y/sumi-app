@@ -266,7 +266,7 @@ export default function OrdersV2Screen() {
               {o.delivery_minutes !== null && o.delivery_minutes !== undefined && (
                 <p className="mock-order-metric">✅ Thời gian giao: {minutesText(o.delivery_minutes)}{o.driver_name || o.provider_label ? ` · ${o.driver_name || o.provider_label}` : ''}</p>
               )}
-              {o.shipping_fee !== null && o.shipping_fee !== undefined && (
+              {o.shipping_fee !== null && o.shipping_fee !== undefined && o.confidentiality !== 'school_restricted' && (
                 <p className="mock-order-metric">Phí giao: {Number(o.shipping_fee).toLocaleString('vi-VN')}đ</p>
               )}
               {o.production_started_at && <p className="mock-order-time">Nhận đơn: {new Date(o.production_started_at).toLocaleString('vi-VN')}</p>}
@@ -282,6 +282,14 @@ export default function OrdersV2Screen() {
               <time>{o.required_at ? `Cần giao ${new Date(o.required_at).toLocaleString('vi-VN')}` : 'Chưa đặt giờ giao'}</time>
             </button>
           ))}
+
+          {loading && (
+            <div className="mock-empty">
+              <span>⏳</span>
+              <h2>Đang tải đơn hàng...</h2>
+              <p>Vui lòng chờ một lát</p>
+            </div>
+          )}
 
           {!loading && !error && shownOrders.length === 0 && (
             <div className="mock-empty">

@@ -40,7 +40,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
  const change=(i,key,value)=>setItems(x=>x.map((it,n)=>n===i?{...it,[key]:value}:it));
  const changeMany=(i,fields)=>setItems(x=>x.map((it,n)=>n===i?{...it,...fields}:it));
  const spec=(i,key,value)=>setItems(x=>x.map((it,n)=>n===i?{...it,specification:{...it.specification,[key]:value}}:it));
- const blankItem=(key)=>({flow_type:key,name:'',quantity:1,unit:'cái',specification:{product_flow:key,...(key==='cake'?{cake_line:cakeLine}:{})}});
+ const blankItem=(key)=>({id:crypto.randomUUID(),flow_type:key,name:'',quantity:1,unit:'cái',specification:{product_flow:key,...(key==='cake'?{cake_line:cakeLine}:{})}});
  const selectFlow=(key)=>{setType(key);setItems(key==='teabreak'?[]:[blankItem(key)]);};
  const addFlow=(key)=>{if(type==='school'||key==='school'){setError('Đơn trường học cần tạo riêng để bảo vệ thông tin.');return}setError('');setItems(x=>[...x,blankItem(key)]);setTimeout(()=>document.querySelector('.sumi-mixed-summary')?.scrollIntoView({behavior:'smooth',block:'start'}),0)};
  const changeCakeLine=(key)=>{setCakeLine(key);setItems(current=>current.map(item=>(item.flow_type||type)==='cake'?{...item,specification:{...item.specification,cake_line:key}}:item));};
@@ -59,17 +59,31 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
  const submit=async()=>{setError('');setSaving(true);try{
   if(type==='school'&&!selectedSchool)throw new Error('Vui lòng chọn trường hoặc điểm giao.');
   if(!items.length||items.some(x=>!x.name||Number(x.quantity)<=0))throw new Error('Vui lòng nhập đủ tên bánh và số lượng.');
-  const key=newId(); const orderCode=`SUMI-${new Date().toISOString().slice(2,10).replaceAll('-','')}-${Date.now().toString().slice(-4)}`;
+  const key=newId();
+  const {data: {user}} = await supabase.auth.getUser();
+  const {data: {sequence_value: nextCode}} = await supabase.rpc('next_order_number') || {data: {sequence_value: 1}};
+  const orderCode=`SUMI-${String(nextCode).padStart(6,'0')}`;
+  let customerId=null;
+  if(customerName||customerPhone){
+    const {data: cust, error: custErr} = await supabase.from('customers').select('id').match({name: customerName || null, phone: customerPhone || null}).single();
+    if(!cust && !custErr) {
+      const {data: newCust} = await supabase.from('customers').insert({name: customerName || null, phone: customerPhone || null, created_by: user?.id}).select('id').single();
+      customerId = newCust?.id || null;
+    } else {
+      customerId = cust?.id || null;
+    }
+  }
   const customerNote=[customerName&&`Khách hàng: ${customerName}`,customerPhone&&`SĐT: ${customerPhone}`,type==='teabreak'&&guestCount&&`Số khách: ${guestCount}`,note,isReadyStock&&'⚡ BÁNH CÓ SẴN (XUẤT KHO THÀNH PHẨM NGAY)'].filter(Boolean).join(' · ');
   const normalizedItems=items.map((item,index)=>({...item,display_order:index,specification:{...(item.specification||{}),product_flow:item.flow_type||type,is_ready_stock:isReadyStock}}));
-  const orderId=await createOrderV2({p_idempotency_key:key,p_order_code:orderCode,p_order_type:isMixed?'mixed':type,p_customer_id:null,p_required_at:requiredAt?new Date(requiredAt).toISOString():null,p_fulfillment_method:fulfillment,p_address:fulfillment==='delivery'?address:null,p_note:customerNote||null,p_confidentiality:type==='school'?'school_restricted':'normal',p_items:normalizedItems});
+  const {data: orderId, error: orderErr} = await supabase.rpc('create_order_v2',{p_idempotency_key:key,p_order_code:orderCode,p_order_type:isMixed?'mixed':type,p_customer_id:customerId,p_required_at:requiredAt?new Date(requiredAt).toISOString():null,p_fulfillment_method:fulfillment,p_address:fulfillment==='delivery'?address:null,p_note:customerNote||null,p_confidentiality:type==='school'?'school_restricted':'normal',p_items:normalizedItems});
+  if(orderErr) throw orderErr;
   for(const file of photos){
     try {
       const cleanExt = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
       const safePath = `orders/${orderId}/customer/${newId()}.${cleanExt}`;
-      const up = await supabase.storage.from('uploads').upload(safePath, file, { contentType: file.type || 'image/jpeg' });
-      if (!up.error) {
-        await supabase.from('order_attachments').insert({
+      const {error: upErr} = await supabase.storage.from('uploads').upload(safePath, file, { contentType: file.type || 'image/jpeg' });
+      if (!upErr) {
+        const {error: insertErr} = await supabase.from('order_attachments').insert({
           order_id: orderId,
           attachment_type: 'customer_sample',
           storage_path: safePath,
@@ -77,12 +91,22 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
           size_bytes: file.size,
           created_by: profile?.id || null
         });
+        if(insertErr) throw insertErr;
+      } else {
+        throw upErr;
       }
     } catch (err) {
-      console.warn('Lỗi tải ảnh mẫu:', err);
+      setError(`Không tải được ảnh "${file.name}": ${err.message}`);
+      throw err;
     }
   }
-  if(isReadyStock){await supabase.rpc('mark_order_ready_from_stock',{p_order_id:orderId}).catch(()=>{});}
+  if(isReadyStock){
+    const {error: readyErr} = await supabase.rpc('mark_order_ready_from_stock',{p_order_id:orderId});
+    if(readyErr) {
+      setError(`Báo vận tải thất bại: ${readyErr.message}`);
+      throw readyErr;
+    }
+  }
   onCreated?.(orderId);onClose();
  }catch(e){setError(e.message||'Không thể tạo đơn');}finally{setSaving(false);}};
  if(!type)return <div className={embedded?'sumi-order-create-page':'sumi-order-create-overlay'} onClick={embedded?undefined:onClose}>
@@ -115,18 +139,18 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
    {type==='cake'&&<section className="sumi-cake-line"><label>Chọn dòng bánh</label><div>{CAKE_LINES.map(line=><button className={cakeLine===line.key?'active':''} key={line.key} onClick={()=>changeCakeLine(line.key)}><strong>{line.label}</strong><span>{line.note}</span></button>)}</div>{cakeLine==='cold_cake'&&<p>❄️ Bếp lạnh phụ trách · phải ghi điều kiện bảo quản và thời gian lấy khỏi tủ lạnh.</p>}</section>}
    <div className="sumi-selected-head"><strong>{type==='teabreak'?'Món đã chọn':'Sản phẩm và số lượng'}</strong><span>{items.length} món</span></div>
    {items.length>0&&<section className="sumi-mixed-summary"><header><div><small>ĐƠN HÀNG XUYÊN SUỐT</small><strong>{isMixed?'Nhiều bếp cùng thực hiện':'Một nhóm sản xuất'}</strong></div><b>{itemFlows.length} nhóm</b></header><div>{itemFlows.map(key=>{const meta=ORDER_FLOWS.find(x=>x.key===key);const count=items.filter(x=>(x.flow_type||type)===key).length;return <span key={key}><i>{meta?.icon}</i><b>{meta?.title}</b><small>{count} món · {routeFor[key]}</small></span>})}</div></section>}
-   {items.map((it,i)=><div key={i} style={{padding:12,border:'1px solid var(--border-default)',borderRadius:16,marginBottom:10,background:'var(--surface-card)'}}>
+   {items.map((it)=>{const itemIndex=items.indexOf(it);return <div key={it.id} style={{padding:12,border:'1px solid var(--border-default)',borderRadius:16,marginBottom:10,background:'var(--surface-card)'}}>
     <div className="sumi-item-flow"><span>{ORDER_FLOWS.find(x=>x.key===(it.flow_type||type))?.icon}</span><b>{ORDER_FLOWS.find(x=>x.key===(it.flow_type||type))?.title}</b><em>→ {routeFor[it.flow_type||type]}</em></div>
-    <div className="sumi-product-line"><ProductNameField item={it} products={productCatalog} flowType={it.flow_type||type} onChange={fields=>changeMany(i,fields)}/><input style={{...fieldStyle,width:90}} aria-label="Số lượng" type="number" min="1" value={it.quantity} onChange={e=>change(i,'quantity',Number(e.target.value))}/></div>
+    <div className="sumi-product-line"><ProductNameField item={it} products={productCatalog} flowType={it.flow_type||type} onChange={fields=>changeMany(itemIndex,fields)}/><input style={{...fieldStyle,width:90}} aria-label="Số lượng" type="number" min="1" value={it.quantity} onChange={e=>change(itemIndex,'quantity',Number(e.target.value))}/></div>
     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:8}}>
-     {(it.flow_type||type)==='cake'&&<><input style={fieldStyle} placeholder="Size (18cm...)" onChange={e=>spec(i,'size',e.target.value)}/><input style={fieldStyle} placeholder="Chữ trên bánh" onChange={e=>spec(i,'content',e.target.value)}/></>}
-     {(it.flow_type||type)==='bakery'&&<><select style={fieldStyle} value={it.specification?.product_line||''} onChange={e=>spec(i,'product_line',e.target.value)}><option value="">Chọn dòng bánh</option><option value="moon_cake">BTT · Bánh Trung Thu</option><option value="other">Bánh mặn/ngọt khác</option></select>{it.specification?.product_line==='moon_cake'?<><input style={fieldStyle} inputMode="numeric" placeholder="Quy cách (gram)" value={it.specification?.weight_gram||''} onChange={e=>spec(i,'weight_gram',e.target.value)}/><select style={fieldStyle} value={it.specification?.egg_count??''} onChange={e=>spec(i,'egg_count',Number(e.target.value))}><option value="">Số trứng</option><option value="0">0 trứng</option><option value="1">1 trứng</option><option value="2">2 trứng</option></select><input style={fieldStyle} inputMode="numeric" placeholder="Giá tùy nhập (không bắt buộc)" value={it.unit_price||''} onChange={e=>change(i,'unit_price',e.target.value?Number(e.target.value):null)}/><input style={fieldStyle} placeholder="Ghi chú linh hoạt" value={it.specification?.flex_note||''} onChange={e=>spec(i,'flex_note',e.target.value)}/></>:<input style={fieldStyle} placeholder="Quy cách/nhân/đóng gói" onChange={e=>spec(i,'packing',e.target.value)}/>}</>}
-     {(it.flow_type||type)==='teabreak'&&<><input style={fieldStyle} value={it.specification?.catalog_specification||''} placeholder="Quy cách" onChange={e=>spec(i,'catalog_specification',e.target.value)}/><input style={fieldStyle} placeholder="Khay/ghi chú" onChange={e=>spec(i,'packing',e.target.value)}/></>}
-     {(it.flow_type||type)==='macaron'&&<><input style={fieldStyle} placeholder="Màu" onChange={e=>spec(i,'color',e.target.value)}/><input style={fieldStyle} placeholder="Vị / có nhân" onChange={e=>spec(i,'flavor',e.target.value)}/></>}
-     {(it.flow_type||type)==='school'&&<><input style={fieldStyle} placeholder="Quy cách" onChange={e=>spec(i,'spec',e.target.value)}/><input style={fieldStyle} placeholder="Khối/lớp/ghi chú" onChange={e=>spec(i,'grade_note',e.target.value)}/></>}
-     {(it.flow_type||type)!=='school'&&!((it.flow_type||type)==='bakery'&&it.specification?.product_line==='moon_cake')&&<input style={fieldStyle} inputMode="numeric" placeholder="Đơn giá (có thể để trống)" value={it.unit_price||''} onChange={e=>change(i,'unit_price',e.target.value?Number(e.target.value):null)}/>}
-    </div>{items.length>1&&<button onClick={()=>setItems(x=>x.filter((_,n)=>n!==i))} style={{marginTop:8,color:'#b42318',border:0,background:'none'}}>Xóa sản phẩm</button>}
-   </div>)}
+     {(it.flow_type||type)==='cake'&&<><input style={fieldStyle} placeholder="Size (18cm...)" value={it.specification?.size||''} onChange={e=>spec(itemIndex,'size',e.target.value)}/><input style={fieldStyle} placeholder="Chữ trên bánh" value={it.specification?.content||''} onChange={e=>spec(itemIndex,'content',e.target.value)}/></>}
+     {(it.flow_type||type)==='bakery'&&<><select style={fieldStyle} value={it.specification?.product_line||''} onChange={e=>spec(itemIndex,'product_line',e.target.value)}><option value="">Chọn dòng bánh</option><option value="moon_cake">BTT · Bánh Trung Thu</option><option value="other">Bánh mặn/ngọt khác</option></select>{it.specification?.product_line==='moon_cake'?<><input style={fieldStyle} inputMode="numeric" placeholder="Quy cách (gram)" value={it.specification?.weight_gram||''} onChange={e=>spec(itemIndex,'weight_gram',e.target.value)}/><select style={fieldStyle} value={it.specification?.egg_count??''} onChange={e=>spec(itemIndex,'egg_count',Number(e.target.value))}><option value="">Số trứng</option><option value="0">0 trứng</option><option value="1">1 trứng</option><option value="2">2 trứng</option></select><input style={fieldStyle} inputMode="numeric" placeholder="Giá tùy nhập (không bắt buộc)" value={it.unit_price||''} onChange={e=>change(itemIndex,'unit_price',e.target.value?Number(e.target.value):null)}/><input style={fieldStyle} placeholder="Ghi chú linh hoạt" value={it.specification?.flex_note||''} onChange={e=>spec(itemIndex,'flex_note',e.target.value)}/></>:<input style={fieldStyle} placeholder="Quy cách/nhân/đóng gói" value={it.specification?.packing||''} onChange={e=>spec(itemIndex,'packing',e.target.value)}/>}</>}
+     {(it.flow_type||type)==='teabreak'&&<><input style={fieldStyle} value={it.specification?.catalog_specification||''} placeholder="Quy cách" onChange={e=>spec(itemIndex,'catalog_specification',e.target.value)}/><input style={fieldStyle} placeholder="Khay/ghi chú" value={it.specification?.packing||''} onChange={e=>spec(itemIndex,'packing',e.target.value)}/></>}
+     {(it.flow_type||type)==='macaron'&&<><input style={fieldStyle} placeholder="Màu" value={it.specification?.color||''} onChange={e=>spec(itemIndex,'color',e.target.value)}/><input style={fieldStyle} placeholder="Vị / có nhân" value={it.specification?.flavor||''} onChange={e=>spec(itemIndex,'flavor',e.target.value)}/></>}
+     {(it.flow_type||type)==='school'&&<><input style={fieldStyle} placeholder="Quy cách" value={it.specification?.spec||''} onChange={e=>spec(itemIndex,'spec',e.target.value)}/><input style={fieldStyle} placeholder="Khối/lớp/ghi chú" value={it.specification?.grade_note||''} onChange={e=>spec(itemIndex,'grade_note',e.target.value)}/></>}
+     {(it.flow_type||type)!=='school'&&!((it.flow_type||type)==='bakery'&&it.specification?.product_line==='moon_cake')&&<input style={fieldStyle} inputMode="numeric" placeholder="Đơn giá (có thể để trống)" value={it.unit_price||''} onChange={e=>change(itemIndex,'unit_price',e.target.value?Number(e.target.value):null)}/>}
+    </div>{items.length>1&&<button onClick={()=>setItems(x=>x.filter((_,n)=>n!==itemIndex))} style={{marginTop:8,minHeight:44,color:'#b42318',border:0,background:'none',cursor:'pointer',fontWeight:600}}>✕ Xóa sản phẩm</button>}
+   </div>;})}
    {items.length===0&&<div className="sumi-no-selection">Chưa chọn món. Tìm món phía trên hoặc thêm món tùy chỉnh.</div>}
    <button onClick={()=>{const key=itemFlows.at(-1)||type;setItems(x=>[...x,{...blankItem(key),specification:{...blankItem(key).specification,custom:true}}])}} style={{...fieldStyle,fontWeight:900,borderStyle:'dashed'}}>＋ Thêm món cùng nhóm</button>
    {type!=='school'&&<section className="sumi-add-flow"><strong>＋ Thêm nhóm sản phẩm khác</strong><p>Một mã đơn, mỗi nhóm tự chuyển tới đúng bếp.</p><div>{ORDER_FLOWS.filter(x=>x.key!=='school'&&!itemFlows.includes(x.key)).map(x=><button key={x.key} onClick={()=>addFlow(x.key)}><span>{x.icon}</span><b>{x.title}</b><small>{routeFor[x.key]}</small></button>)}</div></section>}
@@ -140,13 +164,12 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
    </div>
    {photos.length>0&&(
      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(80px,1fr))',gap:8,marginTop:10}}>
-       {photos.map((file,idx)=>(
-         <div key={idx} style={{position:'relative',width:80,height:80,borderRadius:12,overflow:'hidden',border:'1.5px solid var(--border-default)',background:'#000'}}>
-           <img src={URL.createObjectURL(file)} alt="Ảnh mẫu" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
-           <button type="button" onClick={(e)=>{e.preventDefault();setPhotos(photos.filter((_,n)=>n!==idx));}} style={{position:'absolute',top:3,right:3,width:22,height:22,borderRadius:'50%',background:'rgba(0,0,0,0.7)',color:'#fff',border:0,fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900}}>✕</button>
+       {photos.map((file,idx)=>{const blobUrl=URL.createObjectURL(file);return(
+         <div key={`photo-${idx}`} style={{position:'relative',width:80,height:80,borderRadius:12,overflow:'hidden',border:'1.5px solid var(--border-default)',background:'#000'}}>
+           <img src={blobUrl} alt="Ảnh mẫu" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+           <button type="button" onClick={(e)=>{e.preventDefault();setPhotos(photos.filter((_,n)=>n!==idx));URL.revokeObjectURL(blobUrl);}} style={{position:'absolute',top:3,right:3,minHeight:44,minWidth:44,borderRadius:'50%',background:'rgba(0,0,0,0.7)',color:'#fff',border:0,fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900}}>✕</button>
          </div>
-       ))}
-     </div>
+       );})}</div>
    )}
    <div style={{color:'#725f50',fontWeight:700,marginTop:6,marginBottom:8}}>{photos.length?`${photos.length} ảnh đã chọn`:'Chưa có ảnh'}</div>
    {type==='school'&&<div style={{padding:12,marginTop:12,borderRadius:14,background:'#fff3cd',fontWeight:700}}>Đơn trường học không nhập và không hiển thị giá.</div>}

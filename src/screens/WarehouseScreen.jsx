@@ -250,13 +250,12 @@ function HistorySection({ stock, effectiveBranch, onClose }) {
   );
 }
 
-const BRANCH_ROLE_MAP = { kho_bakery: 'bakery', kho_xuong41: 'xuong41', kho_xuong42: 'xuong42' };
-const WAREHOUSE_FULL_ACCESS_ROLES = ['owner', 'admin', 'warehouse'];
+const WAREHOUSE_FULL_ACCESS_ROLES = ['owner', 'admin'];
 
 export default function WarehouseScreen({ branch: viewBranch = 'all', onBranchChange }) {
   const { profile } = useAuth();
   const hasFullAccess = hasAnyRole(profile, WAREHOUSE_FULL_ACCESS_ROLES);
-  const myBranches = hasFullAccess ? [] : [...new Set([profile?.role, ...(profile?.extra_roles || [])].map((r) => BRANCH_ROLE_MAP[r]).filter(Boolean))];
+  const myBranches = hasFullAccess ? [] : (profile?.role === 'warehouse' && profile?.station ? [profile.station] : []);
   const lockedBranch = !hasFullAccess && myBranches.length === 1 ? myBranches[0] : null;
   const effectiveBranch = lockedBranch || (myBranches.length > 1 && !myBranches.includes(viewBranch) ? myBranches[0] : viewBranch);
   const [stock, setStock] = useState([]);
