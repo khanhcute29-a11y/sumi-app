@@ -4,7 +4,8 @@ import { Badge } from '../components/feedback/Badge';
 import { Button } from '../components/forms/Button';
 import { Select } from '../components/forms/Select';
 import { fetchMyProfile, fetchAllProfiles, updateProfileRole, updateProfileExtraRoles, updateProfileStation, updateProfileActive, approveStaff } from '../lib/queries';
-import { ROLE_META, ROLE_OPTIONS, ROLE_PERMISSIONS, hasRole, hasAnyRole, resolveRoleAndStation, getRoleMeta } from '../lib/roles';
+import { ROLE_META, ROLE_OPTIONS, ROLE_PERMISSIONS, hasRole, hasAnyRole, resolveRoleAndStation, getRoleMeta, getUiRole } from '../lib/roles';
+import { supabase } from '../lib/supabaseClient';
 
 const STATION_OPTIONS = [
   { value: '', label: 'Chưa gán khâu' },
@@ -18,7 +19,7 @@ const STATION_OPTIONS = [
 ];
 
 function PendingStaffRow({ s, onApprove }) {
-  const [role, setRole] = useState(s.role);
+  const [role, setRole] = useState(getUiRole(s.role, s.station));
   const [busy, setBusy] = useState(false);
   const handleApprove = async () => {
     setBusy(true);
@@ -45,7 +46,8 @@ function PendingStaffRow({ s, onApprove }) {
 function StaffRow({ s, isOwner, isMe, canDeactivate, onSavePermissions, onDeactivate, onManageWork, expanded, onToggle }) {
   const staffMeta = getRoleMeta(s.role, s.station);
   const perm = ROLE_PERMISSIONS.find((p) => p.role === s.role);
-  const [role, setRole] = useState(s.role);
+  const initialUiRole = getUiRole(s.role, s.station);
+  const [role, setRole] = useState(initialUiRole);
   const [station, setStation] = useState(s.station || '');
   const [extraRoles, setExtraRoles] = useState(s.extra_roles || []);
   const [saving, setSaving] = useState(false);
@@ -56,10 +58,19 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, onSavePermissions, onDeacti
 
   // Đồng bộ lại khi prop s thay đổi
   useEffect(() => {
-    setRole(s.role);
+    setRole(getUiRole(s.role, s.station));
     setStation(s.station || '');
     setExtraRoles(s.extra_roles || []);
   }, [s.role, s.station, JSON.stringify(s.extra_roles)]);
+
+  const handleRoleChange = (newRoleKey) => {
+    setRole(newRoleKey);
+    setSuccessMsg('');
+    const { mappedStation } = resolveRoleAndStation(newRoleKey, station);
+    if (mappedStation) {
+      setStation(mappedStation);
+    }
+  };
 
   const toggleExtraRole = (r) => {
     setExtraRoles(prev => prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r]);
@@ -104,7 +115,7 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, onSavePermissions, onDeacti
     }
   };
 
-  const isDirty = role !== s.role || station !== (s.station || '') || JSON.stringify(extraRoles.sort()) !== JSON.stringify((s.extra_roles || []).sort());
+  const isDirty = role !== initialUiRole || station !== (s.station || '') || JSON.stringify(extraRoles.sort()) !== JSON.stringify((s.extra_roles || []).sort());
 
   return (
     <div style={{ borderBottom: '1px solid var(--border-subtle)', padding: '12px 0' }}>
@@ -197,7 +208,7 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, onSavePermissions, onDeacti
                   </label>
                   <Select
                     value={role}
-                    onChange={(e) => { setRole(e.target.value); setSuccessMsg(''); }}
+                    onChange={(e) => handleRoleChange(e.target.value)}
                     options={ROLE_OPTIONS}
                     style={{ width: '100%' }}
                   />
@@ -357,7 +368,18 @@ export default function StaffScreen() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, []);
+  useEffect(() => {
+    load();
+    const channel = supabase
+      .channel('staff-screen-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+        Promise.all([fetchMyProfile(), fetchAllProfiles()])
+          .then(([myProfile, all]) => { setMe(myProfile); setStaff(all); setError(''); })
+          .catch((err) => setError(err.message));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
 
   const isOwner = hasRole(me, 'owner');
   const canDeactivate = hasAnyRole(me, ['owner', 'admin']);

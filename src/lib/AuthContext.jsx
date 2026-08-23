@@ -34,7 +34,7 @@ export function AuthProvider({ children }) {
     const channel = supabase
       .channel(`own-profile-${profile.id}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${profile.id}` }, (payload) => {
-        if (payload.new.active === false || payload.new.approved === false) {
+        if (payload?.new) {
           setProfile(payload.new);
         }
       })

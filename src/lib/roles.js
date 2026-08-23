@@ -218,6 +218,37 @@ export function getRoleMeta(role, station) {
   return ROLE_META[role] || { label: role, shortLabel: role, tone: 'neutral', level: 1 };
 }
 
+// Chuyển role DB + station thành role key trên giao diện để hiển thị đúng trong form chọn
+export function getUiRole(role, station) {
+  if (!role) return 'bakery';
+  if (role === 'kitchen_lead') {
+    if (station === 'Bếp Lạnh') return 'kitchen_lead_cold';
+    if (station === 'Bếp Nóng') return 'kitchen_lead_hot';
+    if (station === 'Xưởng 41') return 'kitchen_lead_macaron';
+    if (station === 'Xưởng 42') return 'kitchen_lead_x42';
+    return 'kitchen_lead';
+  }
+  if (role === 'kitchen_deputy') {
+    if (station === 'Bếp Lạnh') return 'kitchen_deputy_cold';
+    if (station === 'Bếp Nóng') return 'kitchen_deputy_hot';
+    return 'kitchen_deputy';
+  }
+  if (role === 'bakery' || role === 'kitchen') {
+    if (station === 'Bếp Lạnh') return 'baker_cold';
+    if (station === 'Bếp Nóng') return 'baker_hot';
+    if (station === 'Xưởng 41') return 'baker_macaron';
+    if (station === 'Xưởng 42') return 'baker_x42';
+    return 'bakery';
+  }
+  if (role === 'warehouse') {
+    if (station === 'Bếp Lạnh') return 'kho_bakery';
+    if (station === 'Xưởng 41') return 'kho_xuong41';
+    if (station === 'Xưởng 42') return 'kho_xuong42';
+    return 'warehouse';
+  }
+  return role;
+}
+
 // Mapping role to hierarchy level for report access
 export function canViewReports(userRole, targetUserRole) {
   if (!userRole || !targetUserRole) return false;
