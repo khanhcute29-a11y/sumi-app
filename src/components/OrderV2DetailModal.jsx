@@ -488,7 +488,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                       setBusy(false);
                     }
                   }}
-                  style={{ minHeight: 46, padding: '0 18px', borderRadius: 12, border: 0, background: 'var(--brand-primary)', color: '#fff', fontWeight: 900, fontSize: 15, cursor: 'pointer' }}
+                  style={{ minHeight: 46, padding: '0 18px', borderRadius: 12, border: 0, background: '#d96b43', color: '#2d1c10', fontWeight: 900, fontSize: 15, cursor: 'pointer' }}
                 >
                   ⚡ Kích hoạt bếp thực hiện ngay
                 </button>
@@ -508,7 +508,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                     <span style={{ fontWeight: 850, fontSize: 16, color: 'var(--text-primary)' }}>
                       {p.organization_units?.name || 'Bếp sản xuất'}
                     </span>
-                    <div style={{ fontSize: 13, color: isCompleted ? '#087f5b' : isInProgress ? '#b93e13' : 'var(--text-muted)', marginTop: 2, fontWeight: 700 }}>
+                    <div style={{ fontSize: 13, color: isCompleted ? '#087f5b' : isInProgress ? '#b93e13' : '#725f50', marginTop: 2, fontWeight: 700 }}>
                       {isCompleted ? '✅ Đã hoàn thành mẻ bánh' : isInProgress ? '👩‍🍳 Bếp đang thực hiện' : '⏳ Chờ bếp trưởng nhận đơn'}
                     </div>
                   </div>
@@ -587,7 +587,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
               <button
                 disabled={!unit || busy}
                 onClick={assign}
-                style={{ width: '100%', minHeight: 46, marginTop: 10, border: 0, borderRadius: 12, fontWeight: 900, background: 'var(--brand-primary)', color: 'white', fontSize: 15, cursor: 'pointer' }}
+                style={{ width: '100%', minHeight: 46, marginTop: 10, border: 0, borderRadius: 12, fontWeight: 900, background: '#d96b43', color: '#fff', fontSize: 15, cursor: 'pointer' }}
               >
                 ＋ Thêm bếp phụ trách phần đơn
               </button>

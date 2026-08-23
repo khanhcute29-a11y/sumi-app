@@ -1,8 +1,16 @@
 import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching';
+import { registerRoute } from 'workbox-routing';
+import { NetworkFirst } from 'workbox-strategies';
 
 self.__WB_MANIFEST;
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
+
+// Network-first for JS/CSS — luôn lấy mới từ server trước
+registerRoute(
+  ({ request }) => request.destination === 'script' || request.destination === 'style',
+  new NetworkFirst({ cacheName: 'assets-cache' })
+);
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));

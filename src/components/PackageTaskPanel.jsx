@@ -326,21 +326,21 @@ export default function PackageTaskPanel({ packageId, packageUnit, defaultDueAt,
 
       {/* Form giao việc cho thợ bếp */}
       {isLead && showAssignForm && (
-        <div style={{ marginTop: 10, padding: 14, borderRadius: 14, background: '#fff', border: '2px solid var(--brand-primary)' }}>
-          <strong style={{ fontSize: 15, display: 'block', marginBottom: 10, color: 'var(--brand-primary)' }}>
+        <div style={{ marginTop: 10, padding: 14, borderRadius: 14, background: '#fff', border: '2px solid #d96b43' }}>
+          <strong style={{ fontSize: 15, display: 'block', marginBottom: 10, color: '#d96b43' }}>
             ＋ Giao việc cho nhân sự (hoặc Bếp trưởng tự nhận việc)
           </strong>
 
           <div style={{ display: 'grid', gap: 10 }}>
             {/* 1. Chọn nhân sự thực hiện */}
             <div>
-              <label style={{ fontSize: 13, fontWeight: 700, display: 'block', marginBottom: 4, color: 'var(--text-primary)' }}>
+              <label style={{ fontSize: 13, fontWeight: 700, display: 'block', marginBottom: 4, color: '#2d1c10' }}>
                 👤 Nhân sự thực hiện:
               </label>
               <select
                 value={assignee}
                 onChange={e => setAssignee(e.target.value)}
-                style={{ width: '100%', minHeight: 46, borderRadius: 10, padding: '0 10px', fontSize: 15, border: '1px solid var(--border-default)' }}
+                style={{ width: '100%', minHeight: 46, borderRadius: 10, padding: '0 10px', fontSize: 15, border: '1px solid var(--border-default)', color: '#2d1c10', background: '#fff' }}
               >
                 <option value="">-- Chọn người làm (hoặc Tự nhận làm) --</option>
                 {profile?.id && (
@@ -358,7 +358,7 @@ export default function PackageTaskPanel({ packageId, packageUnit, defaultDueAt,
 
             {/* 2. Tên đầu việc */}
             <div>
-              <label style={{ fontSize: 13, fontWeight: 700, display: 'block', marginBottom: 4, color: 'var(--text-primary)' }}>
+              <label style={{ fontSize: 13, fontWeight: 700, display: 'block', marginBottom: 4, color: '#2d1c10' }}>
                 📝 Tên đầu việc:
               </label>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -366,7 +366,7 @@ export default function PackageTaskPanel({ packageId, packageUnit, defaultDueAt,
                   value={title}
                   onChange={e => setTitle(e.target.value)}
                   placeholder="Nhập tên đầu việc cần làm (hoặc bấm mic)"
-                  style={{ flex: 1, minHeight: 46, borderRadius: 10, padding: '0 12px', fontSize: 15, border: '1px solid var(--border-default)' }}
+                  style={{ flex: 1, minHeight: 46, borderRadius: 10, padding: '0 12px', fontSize: 15, border: '1px solid var(--border-default)', color: '#2d1c10', background: '#fff' }}
                 />
                 <VoiceMicButton onTranscript={x => setTitle(prev => `${prev ? `${prev} ` : ''}${x}`)} />
               </div>
@@ -374,7 +374,7 @@ export default function PackageTaskPanel({ packageId, packageUnit, defaultDueAt,
 
             {/* 3. Mô tả chi tiết nội dung */}
             <div>
-              <label style={{ fontSize: 13, fontWeight: 700, display: 'block', marginBottom: 4, color: 'var(--text-primary)' }}>
+              <label style={{ fontSize: 13, fontWeight: 700, display: 'block', marginBottom: 4, color: '#2d1c10' }}>
                 📋 Mô tả nội dung / Hướng dẫn thực hiện:
               </label>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -382,7 +382,7 @@ export default function PackageTaskPanel({ packageId, packageUnit, defaultDueAt,
                   value={description}
                   onChange={e => setDescription(e.target.value)}
                   placeholder="Mô tả kỹ yêu cầu, số lượng, lưu ý..."
-                  style={{ flex: 1, minHeight: 46, borderRadius: 10, padding: '0 12px', fontSize: 15, border: '1px solid var(--border-default)' }}
+                  style={{ flex: 1, minHeight: 46, borderRadius: 10, padding: '0 12px', fontSize: 15, border: '1px solid var(--border-default)', color: '#2d1c10', background: '#fff' }}
                 />
                 <VoiceMicButton onTranscript={x => setDescription(prev => `${prev ? `${prev} ` : ''}${x}`)} />
               </div>
@@ -390,20 +390,20 @@ export default function PackageTaskPanel({ packageId, packageUnit, defaultDueAt,
 
             {/* 4. Ngày & Giờ hoàn thành (Deadline đo lường KPI) */}
             <div>
-              <label style={{ fontSize: 13, fontWeight: 700, display: 'block', marginBottom: 4, color: 'var(--text-primary)' }}>
+              <label style={{ fontSize: 13, fontWeight: 700, display: 'block', marginBottom: 4, color: '#2d1c10' }}>
                 ⏰ Ngày & Giờ hoàn thành (Đo lường KPI đúng hạn):
               </label>
               <input
                 type="datetime-local"
                 value={deadline}
                 onChange={e => setDeadline(e.target.value)}
-                style={{ width: '100%', boxSizing: 'border-box', minHeight: 46, borderRadius: 10, padding: '0 12px', fontSize: 15, border: '1px solid var(--border-default)' }}
+                style={{ width: '100%', boxSizing: 'border-box', minHeight: 46, borderRadius: 10, padding: '0 12px', fontSize: 15, border: '1px solid var(--border-default)', color: '#2d1c10', background: '#fff' }}
               />
             </div>
 
             <button
               type="button"
-              style={{ ...btn, background: 'var(--brand-primary)', color: '#fff', fontSize: 16, marginTop: 4, minHeight: 48 }}
+              style={{ ...btn, background: '#d96b43', color: '#fff', fontSize: 16, marginTop: 4, minHeight: 48 }}
               disabled={!assignee || !title.trim() || busy}
               onClick={handleAssign}
             >
