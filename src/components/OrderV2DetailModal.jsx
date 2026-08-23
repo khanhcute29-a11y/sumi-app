@@ -5,6 +5,15 @@ import { useAuth } from '../lib/AuthContext';
 import PackageTaskPanel from './PackageTaskPanel';
 import { CommentSection } from './CommentSection';
 
+const ORDER_TYPE_LABELS = {
+  cake: '🎂 Bánh kem & Bánh lạnh',
+  bakery: '🍞 Bánh mặn & Bánh ngọt',
+  macaron: '🧁 Macaron',
+  school: '🏫 Trường học',
+  teabreak: '☕ Teabreak',
+  mixed: '🧺 Đơn tổng hợp'
+};
+
 const box = {
   padding: 16,
   border: '1px solid var(--border-default)',
