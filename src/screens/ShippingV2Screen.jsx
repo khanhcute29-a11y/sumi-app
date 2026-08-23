@@ -41,7 +41,7 @@ export default function ShippingV2Screen() {
   const load = async () => {
     const { data, error: runErr } = await supabase
       .from('delivery_runs')
-      .select('id,run_code,status,version,provider,provider_label,shipping_fee,planned_distance_km,started_at,completed_at,assigned_driver_id,profiles:assigned_driver_id(full_name),delivery_stops(id,order_id,sequence_no,status,destination_address,delivered_at,orders(id,order_code,phone,address,note,required_at,order_type,status_v2,customer:customers(id,name,phone),order_items(id,name_snapshot,quantity,unit,specification)))')
+      .select('id,run_code,status,version,provider,provider_label,shipping_fee,planned_distance_km,started_at,completed_at,assigned_driver_id,profiles:assigned_driver_id(full_name),delivery_stops(id,order_id,sequence_no,status,destination_address,delivered_at,orders(id,order_code,address,note,required_at,order_type,status_v2,customer:customers(id,name,phone),order_items(id,name_snapshot,quantity,unit,specification)))')
       .order('created_at', { ascending: false });
 
     if (runErr) throw runErr;
@@ -450,7 +450,7 @@ function StopCard({ stop, runActive, onViewOrder, onDone, setError }) {
   const order = stop.orders;
   const items = order?.order_items || [];
   const customerName = order?.customer?.name || 'Khách lẻ';
-  const customerPhone = order?.phone || order?.customer?.phone;
+  const customerPhone = order?.customer?.phone;
 
   return (
     <div style={{ marginTop: 12, padding: 14, borderRadius: 16, background: 'var(--surface-sunken)', border: '1px solid var(--border-default)' }}>
