@@ -61,8 +61,10 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
   if(!items.length||items.some(x=>!x.name||Number(x.quantity)<=0))throw new Error('Vui lòng nhập đủ tên bánh và số lượng.');
   const key=newId();
   const {data: {user}} = await supabase.auth.getUser();
-  const {data: {sequence_value: nextCode}} = await supabase.rpc('next_order_number') || {data: {sequence_value: 1}};
-  const orderCode=`SUMI-${String(nextCode).padStart(6,'0')}`;
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+  const timeStr = String(now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()).padStart(5,'0');
+  const orderCode = `SUMI-${dateStr}-${timeStr}`;
   let customerId=null;
   if(customerName||customerPhone){
     const {data: cust, error: custErr} = await supabase.from('customers').select('id').match({name: customerName || null, phone: customerPhone || null}).single();
