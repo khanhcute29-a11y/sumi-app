@@ -122,6 +122,102 @@ export const ROLE_PERMISSIONS = [
   },
 ];
 
+// Tự động map role UI về DB role an toàn (tránh check constraint error) và gán đúng station
+export function resolveRoleAndStation(roleKey, currentStation) {
+  let mappedRole = roleKey;
+  let mappedStation = currentStation;
+
+  switch (roleKey) {
+    case 'kitchen_lead_cold':
+      mappedRole = 'kitchen_lead';
+      mappedStation = 'Bếp Lạnh';
+      break;
+    case 'kitchen_deputy_cold':
+      mappedRole = 'kitchen_deputy';
+      mappedStation = 'Bếp Lạnh';
+      break;
+    case 'baker_cold':
+      mappedRole = 'bakery';
+      mappedStation = 'Bếp Lạnh';
+      break;
+    case 'kitchen_lead_hot':
+      mappedRole = 'kitchen_lead';
+      mappedStation = 'Bếp Nóng';
+      break;
+    case 'kitchen_deputy_hot':
+      mappedRole = 'kitchen_deputy';
+      mappedStation = 'Bếp Nóng';
+      break;
+    case 'baker_hot':
+      mappedRole = 'bakery';
+      mappedStation = 'Bếp Nóng';
+      break;
+    case 'kitchen_lead_macaron':
+      mappedRole = 'kitchen_lead';
+      mappedStation = 'Xưởng 41';
+      break;
+    case 'baker_macaron':
+      mappedRole = 'bakery';
+      mappedStation = 'Xưởng 41';
+      break;
+    case 'kitchen_lead_x42':
+      mappedRole = 'kitchen_lead';
+      mappedStation = 'Xưởng 42';
+      break;
+    case 'baker_x42':
+      mappedRole = 'bakery';
+      mappedStation = 'Xưởng 42';
+      break;
+    case 'transport_lead':
+      mappedRole = 'shipper';
+      mappedStation = 'Vận Tải';
+      break;
+    case 'kho_bakery':
+      mappedRole = 'warehouse';
+      mappedStation = 'Bếp Lạnh';
+      break;
+    case 'kho_xuong41':
+      mappedRole = 'warehouse';
+      mappedStation = 'Xưởng 41';
+      break;
+    case 'kho_xuong42':
+      mappedRole = 'warehouse';
+      mappedStation = 'Xưởng 42';
+      break;
+    default:
+      break;
+  }
+
+  return { mappedRole, mappedStation };
+}
+
+// Lấy thông tin hiển thị chuẩn theo luồng món & khâu làm việc
+export function getRoleMeta(role, station) {
+  if (role === 'kitchen_lead') {
+    if (station === 'Bếp Lạnh') return ROLE_META.kitchen_lead_cold;
+    if (station === 'Bếp Nóng') return ROLE_META.kitchen_lead_hot;
+    if (station === 'Xưởng 41') return ROLE_META.kitchen_lead_macaron;
+    if (station === 'Xưởng 42') return ROLE_META.kitchen_lead_x42;
+    return ROLE_META.kitchen_lead;
+  }
+  if (role === 'kitchen_deputy') {
+    if (station === 'Bếp Lạnh') return ROLE_META.kitchen_deputy_cold;
+    if (station === 'Bếp Nóng') return ROLE_META.kitchen_deputy_hot;
+    return ROLE_META.kitchen_deputy;
+  }
+  if (role === 'bakery' || role === 'kitchen') {
+    if (station === 'Bếp Lạnh') return ROLE_META.baker_cold;
+    if (station === 'Bếp Nóng') return ROLE_META.baker_hot;
+    if (station === 'Xưởng 41') return ROLE_META.baker_macaron;
+    if (station === 'Xưởng 42') return ROLE_META.baker_x42;
+    return ROLE_META.bakery;
+  }
+  if (role === 'shipper' && station === 'Vận Tải') {
+    return ROLE_META.shipper;
+  }
+  return ROLE_META[role] || { label: role, shortLabel: role, tone: 'neutral', level: 1 };
+}
+
 // Mapping role to hierarchy level for report access
 export function canViewReports(userRole, targetUserRole) {
   if (!userRole || !targetUserRole) return false;
@@ -156,3 +252,4 @@ export function navBadgeVisibility(profile) {
     incidentCategories,
   };
 }
+

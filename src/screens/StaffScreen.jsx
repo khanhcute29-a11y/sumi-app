@@ -4,7 +4,7 @@ import { Badge } from '../components/feedback/Badge';
 import { Button } from '../components/forms/Button';
 import { Select } from '../components/forms/Select';
 import { fetchMyProfile, fetchAllProfiles, updateProfileRole, updateProfileExtraRoles, updateProfileStation, updateProfileActive, approveStaff } from '../lib/queries';
-import { ROLE_META, ROLE_OPTIONS, ROLE_PERMISSIONS, hasRole, hasAnyRole } from '../lib/roles';
+import { ROLE_META, ROLE_OPTIONS, ROLE_PERMISSIONS, hasRole, hasAnyRole, resolveRoleAndStation, getRoleMeta } from '../lib/roles';
 
 const STATION_OPTIONS = [
   { value: '', label: 'Chưa gán khâu' },
@@ -22,7 +22,11 @@ function PendingStaffRow({ s, onApprove }) {
   const [busy, setBusy] = useState(false);
   const handleApprove = async () => {
     setBusy(true);
-    try { await onApprove(s.id, role); } finally { setBusy(false); }
+    try {
+      const { mappedRole, mappedStation } = resolveRoleAndStation(role, s.station);
+      await onApprove(s.id, mappedRole);
+      if (mappedStation) await updateProfileStation(s.id, mappedStation);
+    } finally { setBusy(false); }
   };
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '10px 0', flexWrap: 'wrap' }}>
@@ -31,7 +35,7 @@ function PendingStaffRow({ s, onApprove }) {
         <Badge tone="warning">Chờ duyệt</Badge>
       </div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <Select value={role} onChange={(e) => setRole(e.target.value)} options={ROLE_OPTIONS} style={{ width: 150 }} />
+        <Select value={role} onChange={(e) => setRole(e.target.value)} options={ROLE_OPTIONS} style={{ width: 180 }} />
         <Button variant="primary" size="sm" onClick={handleApprove} disabled={busy}>{busy ? 'Đang duyệt...' : 'Duyệt'}</Button>
       </div>
     </div>
@@ -39,6 +43,7 @@ function PendingStaffRow({ s, onApprove }) {
 }
 
 function StaffRow({ s, isOwner, isMe, canDeactivate, onSavePermissions, onDeactivate, onManageWork, expanded, onToggle }) {
+  const staffMeta = getRoleMeta(s.role, s.station);
   const perm = ROLE_PERMISSIONS.find((p) => p.role === s.role);
   const [role, setRole] = useState(s.role);
   const [station, setStation] = useState(s.station || '');
@@ -71,10 +76,14 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, onSavePermissions, onDeacti
     setErrMsg('');
     setSuccessMsg('');
     try {
+      // Map an toàn sang DB role và DB station để không vi phạm check constraint
+      const { mappedRole, mappedStation } = resolveRoleAndStation(role, station);
+      const safeExtraRoles = [...new Set(extraRoles.map(r => resolveRoleAndStation(r, '').mappedRole))].filter(r => r !== mappedRole);
+
       await onSavePermissions(s.id, {
-        role,
-        station: station || null,
-        extraRoles
+        role: mappedRole,
+        station: mappedStation || null,
+        extraRoles: safeExtraRoles
       });
       setSuccessMsg('✅ Đã cập nhật phân quyền thành công!');
       setTimeout(() => setSuccessMsg(''), 3500);
@@ -115,22 +124,25 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, onSavePermissions, onDeacti
             width: 40, height: 40, borderRadius: '50%', background: 'var(--surface-sunken)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0
           }}>
-            {s.role?.includes('cold') ? '🎂' : s.role?.includes('hot') ? '🍞' : s.role?.includes('macaron') ? '🧁' : s.role?.includes('x42') ? '🏫' : s.role?.includes('lead') ? '👨‍🍳' : s.role === 'shipper' ? '🛵' : '👤'}
+            {s.station?.includes('Lạnh') ? '🎂' : s.station?.includes('Nóng') ? '🍞' : s.station?.includes('41') ? '🧁' : s.station?.includes('42') ? '🏫' : s.role === 'kitchen_lead' ? '👨‍🍳' : s.role === 'shipper' ? '🛵' : '👤'}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <span style={{ font: 'var(--text-body)', fontWeight: 700, color: 'var(--text-primary)' }}>
               {s.full_name || '(chưa đặt tên)'}
             </span>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-              <Badge tone={ROLE_META[s.role]?.tone || 'neutral'}>
-                {ROLE_META[s.role]?.label || s.role}
+              <Badge tone={staffMeta.tone || 'neutral'}>
+                {staffMeta.shortLabel ? `[${staffMeta.shortLabel}] ` : ''}{staffMeta.label}
               </Badge>
               {s.station && <Badge tone="neutral">{s.station}</Badge>}
-              {(s.extra_roles || []).map((r) => (
-                <Badge key={r} tone="neutral">
-                  +{ROLE_META[r]?.shortLabel || ROLE_META[r]?.label || r}
-                </Badge>
-              ))}
+              {(s.extra_roles || []).map((r) => {
+                const em = getRoleMeta(r, '');
+                return (
+                  <Badge key={r} tone="neutral">
+                    +{em.shortLabel || em.label || r}
+                  </Badge>
+                );
+              })}
             </div>
           </div>
         </button>
