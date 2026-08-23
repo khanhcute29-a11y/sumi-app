@@ -1,14 +1,44 @@
 import { haversineKm } from './geo';
 import { localDateStr } from './date';
 
-export function computeShipperKpi(orders, staffFullName) {
-  const matched = orders.filter((o) => o.shipper_staff_name === staffFullName && o.status === 'hoan_thanh');
+export function computeShipperKpi(orders, staffFullName, shopSettings) {
+  const matched = orders.filter((o) => (o.shipper_staff_name === staffFullName || o.driver_name === staffFullName) && (o.status === 'hoan_thanh' || o.status_v2 === 'completed'));
   const orderCount = matched.length;
+
+  let totalMinutes = 0;
   const totalKm = matched.reduce((sum, o) => {
-    const km = haversineKm(o.pickup_lat, o.pickup_lng, o.delivery_lat, o.delivery_lng);
+    let km = 0;
+    if (o.pickup_lat != null && o.delivery_lat != null) {
+      km = haversineKm(o.pickup_lat, o.pickup_lng, o.delivery_lat, o.delivery_lng);
+    } else if (shopSettings?.shop_lat != null && o.delivery_lat != null) {
+      km = haversineKm(shopSettings.shop_lat, shopSettings.shop_lng, o.delivery_lat, o.delivery_lng);
+    } else if (o.planned_distance_km != null) {
+      km = Number(o.planned_distance_km);
+    }
+
+    // Tính thời gian di chuyển
+    const startIso = o.pickup_at || o.created_at;
+    const endIso = o.completed_at;
+    if (startIso && endIso) {
+      const mins = (new Date(endIso).getTime() - new Date(startIso).getTime()) / 60000;
+      if (mins > 0 && mins < 600) { // trong ngưỡng hợp lệ dưới 10 tiếng
+        totalMinutes += mins;
+      }
+    }
+
     return sum + (km || 0);
   }, 0);
-  return { orderCount, totalKm: Math.round(totalKm * 10) / 10 };
+
+  const ordersWithProof = matched.filter(o => o.delivery_photo_url || o.has_proof).length;
+  const avgMinutes = orderCount > 0 ? Math.round(totalMinutes / orderCount) : 0;
+
+  return {
+    orderCount,
+    totalKm: Math.round(totalKm * 10) / 10,
+    totalMinutes: Math.round(totalMinutes),
+    avgMinutesPerOrder: avgMinutes,
+    ordersWithProof
+  };
 }
 
 export function computeKitchenKpi(orders, productionLogs, staffFullName) {

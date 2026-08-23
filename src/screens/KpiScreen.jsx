@@ -28,8 +28,21 @@ function ShipperKpiCard({ name, kpi }) {
     <Card style={{ flex: '1 1 240px' }}>
       <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)', marginBottom: 10 }}>{name}</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ font: 'var(--text-body)', color: 'var(--text-secondary)' }}>Số đơn đã giao: <b style={{ color: 'var(--text-primary)' }}>{kpi.orderCount}</b></div>
-        <div style={{ font: 'var(--text-body)', color: 'var(--text-secondary)' }}>Tổng km đã chạy: <b style={{ color: 'var(--text-primary)' }}>{kpi.totalKm} km</b></div>
+        <div style={{ font: 'var(--text-body)', color: 'var(--text-secondary)' }}>
+          Số đơn đã giao: <b style={{ color: 'var(--text-primary)' }}>{kpi.orderCount}</b>
+          <span style={{ fontSize: 12, color: '#087f5b', marginLeft: 4 }}> (100% có ảnh chụp)</span>
+        </div>
+        <div style={{ font: 'var(--text-body)', color: 'var(--text-secondary)' }}>
+          Quãng đường GPS: <b style={{ color: 'var(--text-primary)' }}>{kpi.totalKm} km</b>
+        </div>
+        <div style={{ font: 'var(--text-body)', color: 'var(--text-secondary)' }}>
+          Thời gian di chuyển: <b style={{ color: 'var(--text-primary)' }}>{kpi.totalMinutes} phút</b>
+        </div>
+        {kpi.avgMinutesPerOrder > 0 && (
+          <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>
+            Trung bình: ~{kpi.avgMinutesPerOrder} phút/đơn
+          </div>
+        )}
       </div>
     </Card>
   );

@@ -203,6 +203,9 @@ function DeliveryCard({ order, onPickup, onComplete, onSignedDoc, isDedicatedShi
         {order.status === 'cho_giao' && (
           <React.Fragment>
             <Badge tone="neutral" style={{ alignSelf: 'flex-start' }}>Chờ xuất bến</Badge>
+            <div style={{ padding: '8px 10px', borderRadius: 10, background: '#fff0d4', color: '#b93e13', fontSize: 13, fontWeight: 700 }}>
+              ⚠️ KIỂM TRA BÁNH: Kiểm tra kỹ mẫu bánh & số lượng trước khi đi. Nếu đến nơi thiếu bánh sẽ tính lỗi cho người nhận giao!
+            </div>
             {canSelfClaim && !phoneVerified && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 10, background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)' }}>
                 <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Nhập 4 số cuối SĐT khách để xác thực trước khi nhận giao hộ.</div>
@@ -213,25 +216,35 @@ function DeliveryCard({ order, onPickup, onComplete, onSignedDoc, isDedicatedShi
                 {phoneError && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{phoneError}</div>}
               </div>
             )}
-            <Button variant="primary" size="sm" icon={<IconCamera size={16} />} disabled={busy || !canAct} onClick={() => setShowCamera(true)}>{busy ? 'Đang xử lý...' : canSelfClaim ? 'Chụp xuất bến & Nhận giao hộ' : 'Chụp xuất bến & Nhận giao'}</Button>
-            {navigator.onLine === false && <Button variant="ghost" size="sm" onClick={skipPhoto} disabled={busy || !canAct}>Mất mạng — bỏ qua ảnh, nhận giao luôn</Button>}
+            <Button variant="primary" size="sm" icon={<IconCamera size={16} />} disabled={busy || !canAct} onClick={() => setShowCamera(true)}>
+              {busy ? 'Đang xử lý...' : canSelfClaim ? 'Chụp xuất bến & Nhận giao hộ' : 'Chụp xuất bến & Nhận giao'}
+            </Button>
           </React.Fragment>
         )}
 
         {order.status === 'dang_giao' && (
           <React.Fragment>
             <Badge tone={isLate(order) ? 'danger' : 'warning'} style={{ alignSelf: 'flex-start' }}>
-              {isLate(order) ? 'Đang trễ giờ giao' : order.delivery_method === 'lay_tai_xuong' ? 'Chờ khách đến lấy' : 'Đang giao'}
+              {isLate(order) ? 'Đang trễ giờ giao' : order.delivery_method === 'lay_tai_xuong' ? 'Chờ khách đến lấy' : 'Đang trên đường giao'}
             </Badge>
-            <Button variant="primary" size="sm" icon={<IconCamera size={16} />} disabled={busy || !canAct} onClick={() => setShowCamera(true)}>
-              {busy ? 'Đang xử lý...' : order.delivery_method === 'lay_tai_xuong' ? 'Chụp đến nơi & Xác nhận khách đã lấy' : 'Chụp đến nơi & Hoàn thành'}
+            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+              Bắt buộc chụp ảnh bánh lúc giao đến khách để hệ thống ghi nhận vị trí GPS tính KPI.
+            </div>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<IconCamera size={16} />}
+              disabled={busy || !canAct}
+              onClick={() => setShowCamera(true)}
+              style={{ background: '#087f5b', color: '#fff', fontWeight: 900, minHeight: 44 }}
+            >
+              {busy ? 'Đang xử lý...' : '📸 Chụp ảnh bánh & Xác nhận giao xong (GPS)'}
             </Button>
             {order.delivery_method !== 'lay_tai_xuong' && (
               <Button variant="secondary" size="sm" icon={<IconEdit size={16} />} disabled={busy || !canAct} onClick={() => setShowSignedDocCamera(true)}>
                 {order.signed_doc_photo_url ? 'Chụp lại Biên Bản Ký Giấy' : 'Chụp Biên Bản Ký Giấy'}
               </Button>
             )}
-            {navigator.onLine === false && <Button variant="ghost" size="sm" onClick={skipPhoto} disabled={busy || !canAct}>Mất mạng — bỏ qua ảnh, hoàn thành luôn</Button>}
           </React.Fragment>
         )}
 
@@ -246,17 +259,24 @@ function DeliveryCard({ order, onPickup, onComplete, onSignedDoc, isDedicatedShi
               </div>
             )}
             {formatDuration(order.created_at, order.completed_at) && (
-              <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconClock size={13} /> Thời gian xử lý: {formatDuration(order.created_at, order.completed_at)}</div>
+              <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <IconClock size={13} /> Thời gian xử lý: {formatDuration(order.created_at, order.completed_at)}
+              </div>
+            )}
+            {order.delivery_lat != null && (
+              <div style={{ font: 'var(--text-caption)', color: '#087f5b', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <IconMapPin size={14} /> Tọa độ GPS giao: {Number(order.delivery_lat).toFixed(5)}, {Number(order.delivery_lng).toFixed(5)}
+              </div>
             )}
             {trip && (
               <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                <IconMapPin size={14} /> Khoảng cách tiệm↔điểm giao: {trip.distanceKm.toFixed(1)}km (đi+về {trip.roundTripKm.toFixed(1)}km) · ~{trip.roundTripMinutes} phút đi về · Xăng ước tính: {trip.gasCost.toLocaleString('vi-VN')}đ
+                <IconMapPin size={14} /> Khoảng cách tính KPI: {trip.distanceKm.toFixed(1)}km · ~{trip.roundTripMinutes} phút di chuyển
               </div>
             )}
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <Thumb url={order.kitchen_photo_url} label="Bếp làm xong" />
               <Thumb url={order.pickup_photo_url} label="Lúc xuất bến" />
-              <Thumb url={order.delivery_photo_url} label="Lúc đến nơi" />
+              <Thumb url={order.delivery_photo_url} label="Ảnh giao khách" />
               <Thumb url={order.signed_doc_photo_url} label="Biên bản ký giấy" />
             </div>
           </React.Fragment>
