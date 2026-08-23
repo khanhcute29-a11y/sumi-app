@@ -61,7 +61,9 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
   if(!items.length||items.some(x=>!x.name||Number(x.quantity)<=0))throw new Error('Vui lòng nhập đủ tên bánh và số lượng.');
   const key=newId();
   const {data: {user}} = await supabase.auth.getUser();
-  const {data: {sequence_value: nextCode}} = await supabase.rpc('next_order_number') || {data: {sequence_value: 1}};
+  const {data, error: rpcErr} = await supabase.rpc('next_order_number');
+  if(rpcErr) throw rpcErr;
+  const nextCode = data?.sequence_value || 1;
   const orderCode=`SUMI-${String(nextCode).padStart(6,'0')}`;
   let customerId=null;
   if(customerName||customerPhone){
