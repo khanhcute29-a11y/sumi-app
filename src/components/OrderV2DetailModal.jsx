@@ -4,6 +4,7 @@ import { assignOrderPackage, acceptOrderPackage } from '../lib/featureFlags';
 import { useAuth } from '../lib/AuthContext';
 import PackageTaskPanel from './PackageTaskPanel';
 import { CommentSection } from './CommentSection';
+import OrderStatusTimeline from './OrderStatusTimeline';
 
 const ORDER_TYPE_LABELS = {
   cake: '🎂 Bánh kem & Bánh lạnh',
@@ -277,6 +278,9 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
             🔒 Đơn trường học · Tuyệt đối không hiển thị giá
           </div>
         )}
+
+        {/* Status Timeline - hiển thị tiến trình đơn hàng */}
+        <OrderStatusTimeline order={data.order} packages={data.packages} tasks={data.allTasks || []} />
 
         {/* Danh sách sản phẩm & quy cách tiếng Việt */}
         <div style={{ ...box, marginTop: 12 }}>
