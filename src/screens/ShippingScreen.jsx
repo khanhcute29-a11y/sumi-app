@@ -195,6 +195,14 @@ function DeliveryCard({ order, onPickup, onComplete, onSignedDoc, isDedicatedShi
             {Number(order.deposit || 0) > 0 ? ` · Đã cọc: ${Number(order.deposit).toLocaleString('vi-VN')}đ` : ''}
           </div>
           {order.shipper_staff_name && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconTruck size={14} /> Người giao: {order.shipper_staff_name}</div>}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => window.dispatchEvent(new CustomEvent('sumi-open-order', { detail: { entityId: order.id } }))}
+            style={{ marginTop: 6, width: '100%', fontWeight: 700 }}
+          >
+            🔍 Xem chi tiết đơn hàng & Mẫu bánh
+          </Button>
         </div>
         {order.flagged && <Badge tone="danger" icon={<IconWarning size={14} />}>Cần Lưu Ý</Badge>}
       </div>

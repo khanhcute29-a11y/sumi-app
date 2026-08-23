@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../lib/AuthContext';
 import { VoiceMicButton } from '../components/VoiceMicButton';
+import OrderV2DetailModal from '../components/OrderV2DetailModal';
 
 const button = {
   minHeight: 48,
@@ -31,6 +32,7 @@ export default function ShippingV2Screen() {
   const [runs, setRuns] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [selectedOrderId, setSelectedOrderId] = useState(null);
 
   const manager = ['owner', 'admin', 'transport_lead'].some(
     r => r === profile?.role || (profile?.extra_roles || []).includes(r)
@@ -39,7 +41,7 @@ export default function ShippingV2Screen() {
   const load = async () => {
     const { data, error: runErr } = await supabase
       .from('delivery_runs')
-      .select('id,run_code,status,version,provider,provider_label,shipping_fee,planned_distance_km,started_at,completed_at,assigned_driver_id,profiles:assigned_driver_id(full_name),delivery_stops(id,order_id,sequence_no,status,destination_address,delivered_at,orders(order_code,required_at))')
+      .select('id,run_code,status,version,provider,provider_label,shipping_fee,planned_distance_km,started_at,completed_at,assigned_driver_id,profiles:assigned_driver_id(full_name),delivery_stops(id,order_id,sequence_no,status,destination_address,delivered_at,orders(id,order_code,customer_name,phone,address,note,required_at,order_type,status_v2,order_items(id,name_snapshot,quantity,unit,specification)))')
       .order('created_at', { ascending: false });
 
     if (runErr) throw runErr;
@@ -191,6 +193,7 @@ export default function ShippingV2Screen() {
                   key={s.id}
                   stop={s}
                   runActive={r.status === 'in_transit'}
+                  onViewOrder={id => setSelectedOrderId(id)}
                   onDone={load}
                   setError={setError}
                 />
@@ -203,6 +206,18 @@ export default function ShippingV2Screen() {
         <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
           Chưa có chuyến giao hàng nào
         </div>
+      )}
+
+      {/* Modal chi tiết toàn bộ luồng đơn hàng */}
+      {selectedOrderId && (
+        <OrderV2DetailModal
+          orderId={selectedOrderId}
+          onClose={() => {
+            setSelectedOrderId(null);
+            load();
+          }}
+          onChanged={load}
+        />
       )}
     </div>
   );
@@ -375,7 +390,7 @@ function DispatchPanel({ onCreated, setError }) {
   );
 }
 
-function StopCard({ stop, runActive, onDone, setError }) {
+function StopCard({ stop, runActive, onViewOrder, onDone, setError }) {
   const { profile } = useAuth();
   const [recipient, setRecipient] = useState('');
   const [file, setFile] = useState(null);
@@ -432,22 +447,74 @@ function StopCard({ stop, runActive, onDone, setError }) {
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(stop.destination_address)}`
     : '#';
 
+  const order = stop.orders;
+  const items = order?.order_items || [];
+
   return (
     <div style={{ marginTop: 12, padding: 14, borderRadius: 16, background: 'var(--surface-sunken)', border: '1px solid var(--border-default)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <b style={{ fontSize: 15, color: 'var(--text-primary)' }}>
-          Điểm {stop.sequence_no} · Đơn {stop.orders?.order_code}
+          Điểm {stop.sequence_no} · Đơn #{order?.order_code || stop.order_id?.slice(0, 8)}
         </b>
-        {stop.status === 'delivered' && (
+        {stop.status === 'delivered' ? (
           <span style={{ fontSize: 13, fontWeight: 800, color: '#087f5b' }}>
-            ✅ Đã giao lúc {stop.delivered_at ? new Date(stop.delivered_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : ''}
+            ✅ Đã giao {stop.delivered_at ? new Date(stop.delivered_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : ''}
+          </span>
+        ) : (
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#b93e13', background: '#fff0d4', padding: '2px 8px', borderRadius: 999 }}>
+            🛵 Đang đi giao
           </span>
         )}
       </div>
 
-      <div style={{ margin: '6px 0', fontSize: 14, color: 'var(--text-secondary)' }}>
-        📍 Địa chỉ: {stop.destination_address || 'Chưa có địa chỉ'}
+      {/* Thông tin khách hàng & Ghi chú */}
+      <div style={{ marginTop: 8, padding: '8px 10px', background: '#fff', borderRadius: 10, border: '1px solid var(--border-default)', fontSize: 13 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap', gap: 4 }}>
+          <span>👤 Khách: <b>{order?.customer_name || 'Khách hàng'}</b></span>
+          {order?.phone && (
+            <a
+              href={`tel:${order.phone}`}
+              style={{ color: '#087f5b', fontWeight: 800, textDecoration: 'none', background: '#e6f6ed', padding: '2px 8px', borderRadius: 6 }}
+            >
+              📞 Gọi: {order.phone}
+            </a>
+          )}
+        </div>
+
+        <div style={{ color: 'var(--text-secondary)', marginBottom: 4 }}>
+          📍 <b>Địa chỉ:</b> {stop.destination_address || order?.address || 'Chưa có địa chỉ'}
+        </div>
+
+        {items.length > 0 && (
+          <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px dashed var(--border-default)' }}>
+            <strong style={{ color: 'var(--brand-primary)', fontSize: 12 }}>🎂 BÁNH CẦN GIAO:</strong>
+            {items.map(it => (
+              <div key={it.id} style={{ fontSize: 13, color: 'var(--text-primary)', marginTop: 2 }}>
+                • <b>{it.quantity} {it.unit || 'cái'}</b> - {it.name_snapshot}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {order?.note && (
+          <div style={{ marginTop: 4, color: '#b93e13', fontSize: 12, fontStyle: 'italic' }}>
+            💬 Ghi chú: {order.note}
+          </div>
+        )}
       </div>
+
+      {/* Nút xem toàn bộ luồng đơn hàng */}
+      <button
+        type="button"
+        onClick={() => onViewOrder?.(stop.order_id)}
+        style={{
+          width: '100%', minHeight: 38, border: '1px solid var(--border-default)', borderRadius: 10,
+          background: '#fff', color: 'var(--brand-primary)', fontWeight: 800, fontSize: 13,
+          cursor: 'pointer', marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
+        }}
+      >
+        🔍 Xem chi tiết đơn hàng & Mẫu bánh
+      </button>
 
       {stop.status !== 'delivered' && runActive && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
