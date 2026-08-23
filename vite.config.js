@@ -28,6 +28,8 @@ export default defineConfig({
         // App shell (HTML/JS/CSS) luôn cache để mở được khi mất mạng.
         // API Supabase KHÔNG cache ở đây — dữ liệu ghi khi offline được xử lý riêng qua hàng đợi (offlineQueue.js).
         globPatterns: ['**/*.{js,css,html,png,svg}'],
+        // Ảnh hướng dẫn tải theo nhu cầu để không làm lần cập nhật app quá nặng.
+        globIgnores: ['visual-guides/**'],
       },
     }),
   ],
