@@ -122,12 +122,12 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, onChangeRole, onChangeExtra
             <React.Fragment>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Đổi vai trò:</span>
-                <Select value={s.role} onChange={(e) => onChangeRole(s.id, e.target.value)} options={ROLE_OPTIONS} style={{ width: 160 }} />
+                <Select value={s.role} onChange={(e) => onChangeRole(s.id, e.target.value)} options={ROLE_OPTIONS} style={{ minWidth: 220, flex: '1 1 auto' }} />
                 <Select
                   value={s.station || ''}
                   onChange={(e) => onChangeStation(s.id, e.target.value || null)}
                   options={STATION_OPTIONS}
-                  style={{ width: 150 }}
+                  style={{ minWidth: 200, flex: '1 1 auto' }}
                 />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>

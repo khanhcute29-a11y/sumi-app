@@ -504,7 +504,12 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                 {/* Bếp trưởng giao việc cho thợ bếp tuyến dưới */}
                 {isInProgress && (
                   <div style={{ marginTop: 10 }}>
-                    <PackageTaskPanel packageId={p.id} onChanged={load} />
+                    <PackageTaskPanel
+                      packageId={p.id}
+                      packageUnit={p.organization_units}
+                      defaultDueAt={p.due_at || data.order?.required_at}
+                      onChanged={load}
+                    />
                   </div>
                 )}
               </div>
