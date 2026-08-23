@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Button } from '../forms/Button';
-import { fetchTasks, completeTask, fetchApprovalRequests } from '../../lib/queries';
+import { fetchTasks, startTask, completeTask, fetchApprovalRequests } from '../../lib/queries';
 import { AssignTaskModal } from './AssignTaskModal';
 import { ExemptionRequestModal } from './ExemptionRequestModal';
 
@@ -34,6 +34,7 @@ export function AssignedTasksTab({ profile, isOwner, viewingStaffId, staffList, 
     setBusyId(id); setError('');
     try { await completeTask(id); load(); } catch (err) { setError(err.message); } finally { setBusyId(''); }
   };
+  const handleStart=async id=>{setBusyId(id);setError('');try{await startTask(id);load()}catch(err){setError(err.message)}finally{setBusyId('')}};
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -50,12 +51,14 @@ export function AssignedTasksTab({ profile, isOwner, viewingStaffId, staffList, 
           {t.description && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>{t.description}</div>}
           {t.order_code && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Mã đơn: {t.order_code}</div>}
           {t.deadline && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Hạn: {new Date(t.deadline).toLocaleString('vi-VN')}</div>}
+          {t.started_at&&<div style={{font:'var(--text-caption)',color:'var(--status-success)'}}>▶ Bắt đầu: {new Date(t.started_at).toLocaleString('vi-VN')}</div>}
+          {t.completed_at&&<div style={{font:'var(--text-caption)',color:'var(--status-success)'}}>✓ Hoàn thành: {new Date(t.completed_at).toLocaleString('vi-VN')}</div>}
           {pendingExemptionTaskIds.includes(t.id) && t.status === 'open' && (
             <div style={{ font: 'var(--text-caption)', color: 'var(--status-warning)' }}>Đang chờ duyệt miễn trừ</div>
           )}
           {t.assignee_id === profile?.id && t.status === 'open' && (
             <div style={{ display: 'flex', gap: 8 }}>
-              <Button size="sm" disabled={busyId === t.id} onClick={() => handleComplete(t.id)}>Hoàn thành</Button>
+              {!t.started_at?<Button size="sm" disabled={busyId===t.id} onClick={()=>handleStart(t.id)}>Bắt đầu</Button>:<Button size="sm" disabled={busyId === t.id} onClick={() => handleComplete(t.id)}>Hoàn thành</Button>}
               {!pendingExemptionTaskIds.includes(t.id) && (
                 <Button size="sm" variant="secondary" onClick={() => setExemptTarget(t)}>Xin miễn trừ</Button>
               )}

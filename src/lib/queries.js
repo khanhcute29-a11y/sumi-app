@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient';
 import { isSyntheticPhoneEmail } from './authPhone';
 import { branchForCategory, KEM_GROUP_CATEGORIES } from './cakePricing';
+import { newId } from './ids';
 
 // Báo cho App.jsx biết cần đếm lại chấm đỏ thông báo ngay — không chờ Supabase Realtime
 // (bảng mới có thể chưa bật Realtime replication, khiến chấm đỏ bị kẹt tới khi tải lại trang).
@@ -969,10 +970,18 @@ export async function fetchTaskTemplates({ active = true } = {}) {
   return data;
 }
 
-export async function createTaskTemplate({ title, station, createdBy }) {
-  const { error } = await supabase.from('task_templates').insert({ title, station: station || null, created_by: createdBy || null });
+export async function createTaskTemplate({ title, description, station, assigneeId, recurrence='daily', weekdays=[], dayOfMonth=null, scheduledTime=null, remindMinutes=15 }) {
+  const { error } = await supabase.rpc('create_recurring_todo', {
+    p_title:title,p_description:description||null,p_assignee_id:assigneeId||null,p_station:station||null,p_recurrence:recurrence,
+    p_weekdays:weekdays,p_day_of_month:dayOfMonth,p_scheduled_time:scheduledTime||null,p_remind_minutes:remindMinutes,
+  });
   if (error) throw error;
   notifyBadgesChanged();
+}
+
+export async function deleteTaskTemplate(id) {
+  const { error } = await supabase.rpc('delete_recurring_todo',{p_template_id:id});
+  if(error)throw error;notifyBadgesChanged();
 }
 
 export async function updateTaskTemplate(id, { title, station, active }) {
@@ -996,16 +1005,8 @@ export async function fetchTaskCompletions({ date, staffId } = {}) {
 }
 
 export async function setTaskCompletion({ templateId, staffId, date, completed }) {
-  const { data: existing, error: findErr } = await supabase
-    .from('task_completions').select('id').eq('template_id', templateId).eq('staff_id', staffId).eq('date', date).maybeSingle();
-  if (findErr) throw findErr;
-  if (existing) {
-    const { error } = await supabase.from('task_completions').update({ completed_at: completed ? new Date().toISOString() : null }).eq('id', existing.id);
-    if (error) throw error;
-  } else {
-    const { error } = await supabase.from('task_completions').insert({ template_id: templateId, staff_id: staffId, date, completed_at: completed ? new Date().toISOString() : null });
-    if (error) throw error;
-  }
+  const { error } = await supabase.rpc('set_daily_todo_completion',{p_template_id:templateId,p_date:date,p_completed:completed});
+  if (error) throw error;
   notifyBadgesChanged();
 }
 
@@ -1030,27 +1031,29 @@ export async function fetchTasks({ assigneeId, category, status, createdFrom, cr
 }
 
 export async function createAssignedTasks(rows) {
-  const { error } = await supabase.from('tasks').insert(rows.map((r) => ({ ...r, category: 'assigned' })));
-  if (error) throw error;
+  for(const r of rows){const{error}=await supabase.rpc('create_general_task',{p_category:'assigned',p_title:r.title,p_description:r.description||null,p_order_code:r.order_code||null,p_assignee_id:r.assignee_id,p_deadline:r.deadline||null,p_reminder_at:r.reminder_at||null});if(error)throw error;}
   notifyBadgesChanged();
 }
 
 export async function createAdhocTask({ assigneeId, title, description, orderCode, createdBy }) {
-  const { error } = await supabase.from('tasks').insert({
-    category: 'adhoc', assignee_id: assigneeId, title, description: description || null, order_code: orderCode || null, created_by: createdBy || null,
-  });
+  const { error } = await supabase.rpc('create_general_task',{p_category:'adhoc',p_title:title,p_description:description||null,p_order_code:orderCode||null,p_assignee_id:assigneeId,p_deadline:null,p_reminder_at:null});
   if (error) throw error;
   notifyBadgesChanged();
 }
 
 export async function completeTask(id) {
-  const { data: task, error: findErr } = await supabase.from('tasks').select('deadline').eq('id', id).single();
+  const { data: task, error: findErr } = await supabase.from('tasks').select('deadline,version').eq('id', id).single();
   if (findErr) throw findErr;
-  const completedAt = new Date();
-  const late = task.deadline ? completedAt.getTime() > new Date(task.deadline).getTime() : false;
-  const { error } = await supabase.from('tasks').update({ status: 'done', completed_at: completedAt.toISOString(), late }).eq('id', id);
+  const { error } = await supabase.rpc('complete_task_v2',{p_idempotency_key:`task-complete:${id}:${newId()}`,p_task_id:id,p_expected_version:task.version,p_note:null});
   if (error) throw error;
   notifyBadgesChanged();
+}
+
+export async function startTask(id) {
+  const {data:task,error:findErr}=await supabase.from('tasks').select('version').eq('id',id).single();
+  if(findErr)throw findErr;
+  const{error}=await supabase.rpc('start_task_v2',{p_idempotency_key:`task-start:${id}:${newId()}`,p_task_id:id,p_expected_version:task.version});
+  if(error)throw error;notifyBadgesChanged();
 }
 
 export async function updateTask(id, fields) {
@@ -1060,7 +1063,7 @@ export async function updateTask(id, fields) {
 }
 
 export async function deleteTask(id) {
-  const { error } = await supabase.from('tasks').delete().eq('id', id);
+  const { error } = await supabase.rpc('delete_personal_task',{p_task_id:id});
   if (error) throw error;
   notifyBadgesChanged();
 }

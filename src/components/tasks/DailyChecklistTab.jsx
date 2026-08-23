@@ -5,7 +5,7 @@ import { Input } from '../forms/Input';
 import { Select } from '../forms/Select';
 import {
   fetchTaskTemplates, fetchTaskCompletions, setTaskCompletion, confirmTaskCompletion,
-  createTaskTemplate, updateTaskTemplate,
+  createTaskTemplate, deleteTaskTemplate,
 } from '../../lib/queries';
 import { localDateStr } from '../../lib/date';
 
@@ -26,6 +26,10 @@ export function DailyChecklistTab({ profile, isOwner, viewingStaffId, viewingSta
   const [error, setError] = useState('');
   const [newTitle, setNewTitle] = useState('');
   const [newStation, setNewStation] = useState(ALL_STATIONS);
+  const [recurrence,setRecurrence]=useState('daily');
+  const [scheduledTime,setScheduledTime]=useState('');
+  const [weekdays,setWeekdays]=useState([]);
+  const [dayOfMonth,setDayOfMonth]=useState('1');
   const [savingTemplate, setSavingTemplate] = useState(false);
   const today = localDateStr(new Date());
 
@@ -37,7 +41,9 @@ export function DailyChecklistTab({ profile, isOwner, viewingStaffId, viewingSta
 
   useEffect(() => { load(); }, [viewingStaffId, refreshKey]);
 
-  const applicable = templates.filter((t) => !t.station || t.station === viewingStation);
+  const weekday=new Date(`${today}T12:00:00`).getDay(); const monthDay=Number(today.slice(-2));
+  const applicable = templates.filter((t) => (!t.assignee_id||t.assignee_id===viewingStaffId)&&(!t.station||t.station===viewingStation)
+   &&(t.recurrence==='weekly'?(t.weekdays||[]).includes(weekday):t.recurrence==='monthly'?Number(t.day_of_month)===monthDay:true));
   const completionFor = (templateId) => completions.find((c) => c.template_id === templateId && c.staff_id === viewingStaffId);
   const canToggle = profile?.id === viewingStaffId;
 
@@ -48,16 +54,16 @@ export function DailyChecklistTab({ profile, isOwner, viewingStaffId, viewingSta
       await createTaskTemplate({
         title: newTitle.trim(),
         station: newStation === ALL_STATIONS ? null : newStation,
-        createdBy: profile?.id,
+        assigneeId:viewingStaffId,recurrence,weekdays,dayOfMonth:recurrence==='monthly'?Number(dayOfMonth):null,scheduledTime:scheduledTime||null,remindMinutes:15,
       });
-      setNewTitle(''); setNewStation(ALL_STATIONS);
+      setNewTitle(''); setNewStation(ALL_STATIONS);setScheduledTime('');
       load();
     } catch (err) { setError(err.message); } finally { setSavingTemplate(false); }
   };
 
   const handleHideTemplate = async (id) => {
     setBusyId(id); setError('');
-    try { await updateTaskTemplate(id, { active: false }); load(); }
+    try { await deleteTaskTemplate(id); load(); }
     catch (err) { setError(err.message); } finally { setBusyId(''); }
   };
 
@@ -80,29 +86,30 @@ export function DailyChecklistTab({ profile, isOwner, viewingStaffId, viewingSta
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Checklist ngày {today}{viewingStaffName ? ` — ${viewingStaffName}` : ''}</div>
-      {isOwner && (
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap', padding: 10, background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)' }}>
-          <Input label="Việc hằng ngày mới" placeholder="VD: Vệ sinh bếp cuối ca" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} style={{ flex: '1 1 200px', minWidth: 0 }} />
-          <Select label="Khâu áp dụng" value={newStation} onChange={(e) => setNewStation(e.target.value)} options={STATION_OPTIONS} placeholder="Tất cả khâu" style={{ maxWidth: 180 }} />
-          <Button size="sm" disabled={savingTemplate} onClick={handleAddTemplate}>{savingTemplate ? 'Đang lưu...' : 'Thêm việc hằng ngày'}</Button>
-        </div>
-      )}
+      <div className="sumi-todo-builder">
+       <header><div><small>{isOwner?'GIAO CHECKLIST':'CHECKLIST CỦA TÔI'}</small><strong>＋ Thêm việc cần nhớ</strong></div><span>🔔 Nhắc trước 15 phút</span></header>
+       <Input label="Tên việc" placeholder="VD: Kiểm tra tủ bánh lúc 16 giờ" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />
+       <div className="sumi-todo-schedule"><Select label="Lặp lại" value={recurrence} onChange={e=>setRecurrence(e.target.value)} options={[{value:'daily',label:'Hàng ngày'},{value:'weekly',label:'Hàng tuần'},{value:'monthly',label:'Hàng tháng'}]}/><Input label="Giờ nhắc" type="time" value={scheduledTime} onChange={e=>setScheduledTime(e.target.value)}/></div>
+       {recurrence==='weekly'&&<div className="sumi-weekdays">{['CN','T2','T3','T4','T5','T6','T7'].map((x,i)=><button type="button" className={weekdays.includes(i)?'active':''} key={x} onClick={()=>setWeekdays(v=>v.includes(i)?v.filter(n=>n!==i):[...v,i])}>{x}</button>)}</div>}
+       {recurrence==='monthly'&&<Input label="Ngày trong tháng" type="number" min="1" max="31" value={dayOfMonth} onChange={e=>setDayOfMonth(e.target.value)}/>}
+       {isOwner&&<Select label="Khâu áp dụng" value={newStation} onChange={(e) => setNewStation(e.target.value)} options={STATION_OPTIONS} placeholder="Tất cả khâu" />}
+       <Button disabled={savingTemplate} onClick={handleAddTemplate}>{savingTemplate ? 'Đang lưu...' : isOwner?'Giao vào checklist':'Thêm vào checklist của tôi'}</Button>
+      </div>
       {applicable.length === 0 && <div style={{ font: 'var(--text-body)', color: 'var(--text-muted)' }}>Chưa có việc hằng ngày nào cho khâu này.</div>}
       {applicable.map((t) => {
         const c = completionFor(t.id);
         const done = !!c?.completed_at;
         const confirmed = !!c?.confirmed_at;
         return (
-          <div key={t.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', padding: 10, background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)' }}>
-            <Checkbox label={t.title} checked={done} onChange={canToggle ? () => handleToggle(t.id, done) : undefined} style={{ flex: '1 1 160px', minWidth: 0 }} />
+          <div key={t.id} className={`sumi-todo-row ${done?'done':''}`}>
+            <div className="sumi-todo-main"><Checkbox label={t.title} checked={done} onChange={canToggle ? () => handleToggle(t.id, done) : undefined}/><small>{t.recurrence==='weekly'?'Lặp hàng tuần':t.recurrence==='monthly'?`Ngày ${t.day_of_month} hàng tháng`:'Lặp hàng ngày'}{t.scheduled_time?` · ${String(t.scheduled_time).slice(0,5)}`:''}</small></div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              {t.locked&&<span title="Việc do quản lý tạo">🔒</span>}
               {confirmed && <span style={{ font: 'var(--text-caption)', color: 'var(--status-success)' }}>Đã xác nhận</span>}
               {isOwner && done && !confirmed && (
                 <Button size="sm" variant="secondary" disabled={busyId === c.id} onClick={() => handleConfirm(c.id)}>Xác nhận</Button>
               )}
-              {isOwner && (
-                <Button size="sm" variant="ghost" disabled={busyId === t.id} onClick={() => handleHideTemplate(t.id)}>Ẩn</Button>
-              )}
+              {(isOwner||(t.source==='personal'&&t.created_by===profile?.id))&&<Button size="sm" variant="ghost" disabled={busyId===t.id} onClick={()=>handleHideTemplate(t.id)}>Xóa</Button>}
             </div>
           </div>
         );

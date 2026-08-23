@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Button } from '../forms/Button';
-import { fetchTasks, deleteTask } from '../../lib/queries';
+import { fetchTasks, startTask, completeTask, deleteTask } from '../../lib/queries';
 import { AdhocReportModal } from './AdhocReportModal';
 
 export function AdhocTasksTab({ profile, isOwner, viewingStaffId, orderCodeFilter, refreshKey }) {
@@ -24,6 +24,7 @@ export function AdhocTasksTab({ profile, isOwner, viewingStaffId, orderCodeFilte
     setBusyId(id); setError('');
     try { await deleteTask(id); load(); } catch (err) { setError(err.message); } finally { setBusyId(''); }
   };
+  const act=async(fn,id)=>{setBusyId(id);setError('');try{await fn(id);load()}catch(err){setError(err.message)}finally{setBusyId('')}};
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -37,9 +38,10 @@ export function AdhocTasksTab({ profile, isOwner, viewingStaffId, orderCodeFilte
           </div>
           {t.description && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>{t.description}</div>}
           {t.order_code && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Mã đơn: {t.order_code}</div>}
-          {isOwner && (
-            <Button size="sm" variant="danger" disabled={busyId === t.id} onClick={() => handleDelete(t.id)} style={{ alignSelf: 'flex-start' }}>Xoá</Button>
-          )}
+          {t.started_at&&<div style={{font:'var(--text-caption)',color:'var(--status-success)'}}>▶ Bắt đầu: {new Date(t.started_at).toLocaleString('vi-VN')}</div>}
+          {t.completed_at&&<div style={{font:'var(--text-caption)',color:'var(--status-success)'}}>✓ Hoàn thành: {new Date(t.completed_at).toLocaleString('vi-VN')}</div>}
+          <div style={{display:'flex',gap:7,flexWrap:'wrap'}}>{canReport&&t.status==='open'&&(!t.started_at?<Button size="sm" onClick={()=>act(startTask,t.id)}>Bắt đầu</Button>:<Button size="sm" onClick={()=>act(completeTask,t.id)}>Hoàn thành</Button>)}
+          {(isOwner||(t.created_by===profile?.id&&t.category==='adhoc'))&&<Button size="sm" variant="danger" disabled={busyId === t.id} onClick={() => handleDelete(t.id)}>Xoá</Button>}</div>
         </div>
       ))}
       {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}

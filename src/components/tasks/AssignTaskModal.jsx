@@ -9,6 +9,7 @@ export function AssignTaskModal({ staffList, profile, onClose, onSaved }) {
   const [description, setDescription] = useState('');
   const [orderCode, setOrderCode] = useState('');
   const [deadline, setDeadline] = useState('');
+  const [reminderAt,setReminderAt]=useState('');
   const [selectedIds, setSelectedIds] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -22,6 +23,7 @@ export function AssignTaskModal({ staffList, profile, onClose, onSaved }) {
       const rows = selectedIds.map((assigneeId) => ({
         title, description: description || null, order_code: orderCode || null,
         deadline: deadline ? new Date(deadline).toISOString() : null,
+        reminder_at:reminderAt?new Date(reminderAt).toISOString():null,
         assignee_id: assigneeId, batch_id: batchId, created_by: profile?.id || null,
       }));
       await createAssignedTasks(rows);
@@ -38,6 +40,7 @@ export function AssignTaskModal({ staffList, profile, onClose, onSaved }) {
         <Input label="Mô tả (không bắt buộc)" value={description} onChange={(e) => setDescription(e.target.value)} />
         <Input label="Mã đơn liên quan (không bắt buộc)" value={orderCode} onChange={(e) => setOrderCode(e.target.value)} />
         <Input label="Hạn chót (không bắt buộc)" type="datetime-local" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+        <Input label="Nhắc chuông lúc (không bắt buộc)" type="datetime-local" value={reminderAt} onChange={e=>setReminderAt(e.target.value)} />
         <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>Giao cho</div>
         <StaffMultiSelect staff={staffList} selectedIds={selectedIds} onChange={setSelectedIds} />
         {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
