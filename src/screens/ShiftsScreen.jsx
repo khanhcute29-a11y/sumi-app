@@ -213,7 +213,13 @@ function RecheckRequestModal({ options, staffId, staffName, staffRole, onClose, 
 
 function LeaveModal({ shiftConfigs, staffName, staffId, onClose, onDone }) {
   const [shiftId, setShiftId] = useState(shiftConfigs[0]?.id || '');
+  const now = new Date();
+  const initialFrom = `${localDateStr(now)}T${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
+  const initialTo = `${localDateStr(oneHourLater)}T${String(oneHourLater.getHours()).padStart(2, '0')}:${String(oneHourLater.getMinutes()).padStart(2, '0')}`;
   const [reason, setReason] = useState('');
+  const [leaveFrom, setLeaveFrom] = useState(initialFrom);
+  const [leaveTo, setLeaveTo] = useState(initialTo);
   const [photoUrl, setPhotoUrl] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -221,9 +227,11 @@ function LeaveModal({ shiftConfigs, staffName, staffId, onClose, onDone }) {
 
   const submit = async () => {
     if (!reason.trim()) { setError('Nhập lý do xin nghỉ.'); return; }
+    if (!leaveFrom || !leaveTo) { setError('Chọn đầy đủ ngày giờ bắt đầu và kết thúc nghỉ.'); return; }
+    if (new Date(leaveTo) < new Date(leaveFrom)) { setError('Thời gian kết thúc phải sau thời gian bắt đầu.'); return; }
     setSaving(true);
     setError('');
-    const payload = { staffId, staffName, workDate: localDateStr(), shiftLabel: selected?.label || '', branch: selected?.branch || null, reason, photoUrl: photoUrl || null };
+    const payload = { staffId, staffName, workDate: leaveFrom.slice(0, 10), shiftLabel: selected?.label || '', branch: selected?.branch || null, reason, photoUrl: photoUrl || null, leaveFromAt: new Date(leaveFrom).toISOString(), leaveToAt: new Date(leaveTo).toISOString() };
     try {
       if (!navigator.onLine) throw new Error('offline');
       await addLeaveRequest(payload);
@@ -241,6 +249,8 @@ function LeaveModal({ shiftConfigs, staffName, staffId, onClose, onDone }) {
         <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>Xin nghỉ đột xuất</div>
         <Select label="Ca làm việc" value={shiftId} onChange={(e) => setShiftId(e.target.value)}
           options={shiftConfigs.map((s) => ({ value: s.id, label: shiftOptionLabel(s) }))} />
+        <Input label="Nghỉ từ ngày, giờ" type="datetime-local" value={leaveFrom} onChange={(e) => setLeaveFrom(e.target.value)} />
+        <Input label="Đến ngày, giờ" type="datetime-local" value={leaveTo} onChange={(e) => setLeaveTo(e.target.value)} />
         <Input label="Lý do xin nghỉ" placeholder="VD: Ốm đột xuất, việc gia đình gấp..." value={reason} onChange={(e) => setReason(e.target.value)} />
         <PhotoField url={photoUrl} onChange={setPhotoUrl} label="Ảnh minh chứng (có ảnh càng tốt, không bắt buộc)" prefix="shift" />
         {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
@@ -412,6 +422,7 @@ function LogRow({ log }) {
       {log.checkin_time && (
         <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>{log.type === 'checkout' ? 'Kết thúc ca lúc' : 'Bắt đầu ca lúc'}: {new Date(log.checkin_time).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</div>
       )}
+      {isLeave && log.leave_from_at && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Nghỉ từ: {new Date(log.leave_from_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}{log.leave_to_at ? ` → ${new Date(log.leave_to_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}` : ''}</div>}
       {log.reason && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}><IconClipboard size={14} /> {log.reason}</div>}
       {log.photo_url && (
         <a href={log.photo_url} target="_blank" rel="noreferrer">

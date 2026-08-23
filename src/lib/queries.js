@@ -710,10 +710,11 @@ export async function addShiftCheckin({ staffId, staffName, workDate, shiftLabel
   if (error) throw error;
 }
 
-export async function addLeaveRequest({ staffId, staffName, workDate, shiftLabel, branch, reason, photoUrl }) {
+export async function addLeaveRequest({ staffId, staffName, workDate, shiftLabel, branch, reason, photoUrl, leaveFromAt, leaveToAt }) {
   const { error } = await supabase.from('shift_logs').insert({
     staff_id: staffId, staff_name: staffName, work_date: workDate, shift_label: shiftLabel, branch: branch || null,
     type: 'leave_request', reason: reason || null, photo_url: photoUrl || null,
+    leave_from_at: leaveFromAt || null, leave_to_at: leaveToAt || null,
   });
   if (error) throw error;
 }
