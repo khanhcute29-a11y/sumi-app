@@ -348,66 +348,156 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
 
         {/* Các bếp thực hiện */}
         <div style={box}>
-          <strong style={{ fontSize: 16, display: 'block', marginBottom: 8, color: 'var(--text-primary)' }}>
-            👨‍🍳 Các bếp thực hiện
-          </strong>
-          {data.packages.length === 0 && <p style={{ color: 'var(--text-muted)' }}>Chưa phân bếp</p>}
-          {data.packages.map((p) => (
-            <div key={p.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--border-default)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
-                  {p.organization_units?.name} · {p.status === 'completed' ? '✅ Đã hoàn thành' : p.status === 'in_progress' ? '👩‍🍳 Đang làm' : '⏳ Chờ nhận'}
-                </span>
-                <div>
-                  {['assigned'].includes(p.status) && (
-                    <button disabled={busy} onClick={() => accept(p)} style={{ minHeight: 40, border: 0, borderRadius: 10, padding: '0 14px', fontWeight: 800, background: 'var(--brand-primary)', color: '#fff' }}>
-                      Nhận phần đơn
-                    </button>
-                  )}
-                  {['in_progress', 'awaiting_approval'].includes(p.status) && (
-                    <button disabled={busy} onClick={() => approvePackage(p)} style={{ minHeight: 40, border: 0, borderRadius: 10, padding: '0 14px', fontWeight: 800, background: '#087f5b', color: 'white' }}>
-                      Duyệt hoàn thành
-                    </button>
-                  )}
-                </div>
-              </div>
-              {p.accepted_at && (
-                <small style={{ display: 'block', marginTop: 6, color: 'var(--text-secondary)' }}>
-                  Nhận lúc {new Date(p.accepted_at).toLocaleString('vi-VN')}
-                  {p.completed_at ? ` · Xong lúc ${new Date(p.completed_at).toLocaleString('vi-VN')}` : ''}
-                </small>
-              )}
-              {['accepted', 'in_progress', 'awaiting_approval'].includes(p.status) && (
-                <div style={{ marginTop: 10 }}>
-                  <PackageTaskPanel packageId={p.id} onChanged={load} />
-                </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 6 }}>
+            <strong style={{ fontSize: 16, color: 'var(--text-primary)' }}>
+              👨‍🍳 Các bếp thực hiện ({data.packages.length})
+            </strong>
+            <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+              Tự động phân theo luồng món
+            </span>
+          </div>
+
+          {data.packages.length === 0 && (
+            <div style={{ padding: '14px', background: 'var(--surface-sunken)', borderRadius: 12, textAlign: 'center' }}>
+              <p style={{ color: 'var(--text-secondary)', margin: '0 0 10px', fontSize: 14 }}>
+                Đang sẵn sàng phân bếp tự động cho đơn này...
+              </p>
+              {units.length > 0 && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    try {
+                      // Tìm bếp phù hợp theo luồng
+                      const coldUnit = units.find(u => u.code === 'BAKERY_COLD' || u.name.toLowerCase().includes('lạnh')) || units[0];
+                      const hotUnit = units.find(u => u.code === 'BAKERY_HOT' || u.name.toLowerCase().includes('nóng')) || units[0];
+                      const x41Unit = units.find(u => u.code === 'X41_KITCHEN' || u.name.toLowerCase().includes('41')) || coldUnit;
+                      const x42Unit = units.find(u => u.code === 'X42_KITCHEN' || u.name.toLowerCase().includes('42')) || hotUnit;
+
+                      const flows = [...new Set(data.items.map(it => it.specification?.product_flow || o.order_type || 'cake'))];
+                      for (const flow of flows) {
+                        const targetUnit = flow === 'cake' ? coldUnit : flow === 'bakery' ? hotUnit : flow === 'macaron' ? x41Unit : (flow === 'school' || flow === 'teabreak') ? x42Unit : coldUnit;
+                        if (targetUnit) {
+                          const flowItems = data.items.filter(it => (it.specification?.product_flow || o.order_type || 'cake') === flow);
+                          await assignOrderPackage({
+                            p_idempotency_key: crypto.randomUUID(),
+                            p_order_id: orderId,
+                            p_unit_id: targetUnit.id,
+                            p_due_at: o.required_at,
+                            p_items: flowItems.map(it => ({ order_item_id: it.id, quantity: it.quantity })),
+                            p_expected_version: o.version
+                          });
+                        }
+                      }
+                      await load();
+                      onChanged?.();
+                    } catch (e) {
+                      setError(e.message);
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                  style={{ minHeight: 46, padding: '0 18px', borderRadius: 12, border: 0, background: 'var(--brand-primary)', color: '#fff', fontWeight: 900, fontSize: 15, cursor: 'pointer' }}
+                >
+                  ⚡ Kích hoạt bếp thực hiện ngay
+                </button>
               )}
             </div>
-          ))}
+          )}
+
+          {data.packages.map((p) => {
+            const isAssigned = p.status === 'assigned';
+            const isInProgress = ['accepted', 'in_progress', 'awaiting_approval'].includes(p.status);
+            const isCompleted = p.status === 'completed';
+
+            return (
+              <div key={p.id} style={{ padding: '14px 0', borderBottom: '1px solid var(--border-default)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <div>
+                    <span style={{ fontWeight: 850, fontSize: 16, color: 'var(--text-primary)' }}>
+                      {p.organization_units?.name || 'Bếp sản xuất'}
+                    </span>
+                    <div style={{ fontSize: 13, color: isCompleted ? '#087f5b' : isInProgress ? '#b93e13' : 'var(--text-muted)', marginTop: 2, fontWeight: 700 }}>
+                      {isCompleted ? '✅ Đã hoàn thành mẻ bánh' : isInProgress ? '👩‍🍳 Bếp đang thực hiện' : '⏳ Chờ bếp trưởng nhận đơn'}
+                    </div>
+                  </div>
+
+                  <div>
+                    {isAssigned && (
+                      <button
+                        disabled={busy}
+                        onClick={() => accept(p)}
+                        style={{
+                          minHeight: 48, border: 0, borderRadius: 14, padding: '0 20px', fontWeight: 950,
+                          background: '#ef642b', color: '#fff', fontSize: 16, cursor: 'pointer',
+                          boxShadow: '0 4px 0 #b93e13'
+                        }}
+                      >
+                        👩‍🍳 Nhận đơn & Bắt đầu làm
+                      </button>
+                    )}
+                    {['in_progress', 'awaiting_approval'].includes(p.status) && (
+                      <button
+                        disabled={busy}
+                        onClick={() => approvePackage(p)}
+                        style={{
+                          minHeight: 44, border: 0, borderRadius: 12, padding: '0 16px', fontWeight: 900,
+                          background: '#087f5b', color: 'white', fontSize: 15, cursor: 'pointer',
+                          boxShadow: '0 3px 0 #05523b'
+                        }}
+                      >
+                        ✓ Duyệt hoàn thành mẻ
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {p.accepted_at && (
+                  <small style={{ display: 'block', marginTop: 6, color: 'var(--text-secondary)', fontSize: 13 }}>
+                    Nhận lúc {new Date(p.accepted_at).toLocaleString('vi-VN')}
+                    {p.completed_at ? ` · Xong lúc ${new Date(p.completed_at).toLocaleString('vi-VN')}` : ''}
+                  </small>
+                )}
+
+                {/* Bếp trưởng giao việc cho thợ bếp tuyến dưới */}
+                {isInProgress && (
+                  <div style={{ marginTop: 10 }}>
+                    <PackageTaskPanel packageId={p.id} onChanged={load} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
 
-        {/* Phân thêm bếp cho Giám đốc */}
+        {/* Phân thêm bếp cùng làm (Tùy chọn dành riêng cho Quản lý) */}
         {director && (
-          <div style={box}>
-            <strong style={{ fontSize: 16, display: 'block', marginBottom: 8, color: 'var(--text-primary)' }}>
-              Phân thêm bếp
-            </strong>
-            <select
-              value={unit}
-              onChange={e => setUnit(e.target.value)}
-              style={{ width: '100%', minHeight: 48, borderRadius: 12, padding: '0 10px', fontSize: 16, border: '1px solid var(--border-default)', background: 'var(--surface-sunken)' }}
-            >
-              <option value="">Chọn bếp phụ trách</option>
-              {units.map(x => <option value={x.id} key={x.id}>{x.name}</option>)}
-            </select>
-            <button
-              disabled={!unit || busy}
-              onClick={assign}
-              style={{ width: '100%', minHeight: 48, marginTop: 10, border: 0, borderRadius: 12, fontWeight: 900, background: 'var(--brand-primary)', color: 'white', fontSize: 16, cursor: 'pointer' }}
-            >
-              Giao phần đơn cho bếp
-            </button>
-          </div>
+          <details style={{ ...box, padding: '12px 16px', cursor: 'pointer' }}>
+            <summary style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-secondary)' }}>
+              ＋ Thêm bếp phối hợp thực hiện (Tùy chọn Quản lý / Điều phối)
+            </summary>
+            <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px dashed var(--border-subtle)' }}>
+              <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 8px' }}>
+                Dùng khi đơn hàng lớn cần xưởng khác hoặc bếp khác cùng hỗ trợ làm thêm mẻ.
+              </p>
+              <select
+                value={unit}
+                onChange={e => setUnit(e.target.value)}
+                style={{ width: '100%', minHeight: 46, borderRadius: 12, padding: '0 10px', fontSize: 15, border: '1px solid var(--border-default)', background: 'var(--surface-sunken)' }}
+              >
+                <option value="">Chọn bếp muốn phân thêm</option>
+                {units.map(x => <option value={x.id} key={x.id}>{x.name}</option>)}
+              </select>
+              <button
+                disabled={!unit || busy}
+                onClick={assign}
+                style={{ width: '100%', minHeight: 46, marginTop: 10, border: 0, borderRadius: 12, fontWeight: 900, background: 'var(--brand-primary)', color: 'white', fontSize: 15, cursor: 'pointer' }}
+              >
+                ＋ Thêm bếp phụ trách phần đơn
+              </button>
+            </div>
+          </details>
         )}
 
         {/* Bình luận nội bộ đơn hàng */}
