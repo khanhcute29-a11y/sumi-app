@@ -1,18 +1,56 @@
 export const ROLE_META = {
-  admin: { label: 'Admin', tone: 'primary', level: 6 },
-  accountant: { label: 'Kế Toán', tone: 'info', level: 5 },
-  warehouse: { label: 'Thủ Kho', tone: 'info', level: 4 },
-  sale: { label: 'Nhân Viên Bán Hàng', tone: 'success', level: 3 },
-  kitchen_lead: { label: 'Bếp Trưởng', tone: 'warning', level: 3 },
-  kitchen_deputy: { label: 'Bếp Phó', tone: 'warning', level: 2 },
-  bakery: { label: 'Thợ Làm Bánh', tone: 'warning', level: 2 },
-  kho_bakery: { label: 'Nhân Viên Kho Bakery', tone: 'info', level: 2 },
-  kho_xuong41: { label: 'Nhân Viên Kho Xưởng 41', tone: 'info', level: 2 },
-  kho_xuong42: { label: 'Nhân Viên Kho Xưởng 42', tone: 'info', level: 2 },
-  shipper: { label: 'Vận Chuyển', tone: 'success', level: 1 },
+  owner: { label: 'Giám Đốc / Chủ Sở Hữu', shortLabel: 'Giám Đốc', tone: 'primary', level: 7 },
+  admin: { label: 'Quản Lý / Điều Hành', shortLabel: 'Quản Lý', tone: 'primary', level: 6 },
+  accountant: { label: 'Kế Toán', shortLabel: 'Kế Toán', tone: 'info', level: 5 },
+  warehouse: { label: 'Thủ Kho', shortLabel: 'Thủ Kho', tone: 'info', level: 4 },
+  sale: { label: 'Nhân Viên Bán Hàng', shortLabel: 'Bán Hàng', tone: 'success', level: 3 },
+  cashier: { label: 'Thu Ngân', shortLabel: 'Thu Ngân', tone: 'success', level: 3 },
+
+  // Bếp Lạnh (Bánh kem & bánh lạnh)
+  kitchen_lead_cold: { label: 'Bếp Trưởng Bếp Lạnh', shortLabel: 'BT Bếp Lạnh', tone: 'warning', level: 3, station: 'Bếp Lạnh' },
+  kitchen_deputy_cold: { label: 'Bếp Phó Bếp Lạnh', shortLabel: 'BP Bếp Lạnh', tone: 'warning', level: 2, station: 'Bếp Lạnh' },
+  baker_cold: { label: 'Thợ Bếp Lạnh', shortLabel: 'Thợ Bếp Lạnh', tone: 'warning', level: 2, station: 'Bếp Lạnh' },
+
+  // Bếp Nóng (Bánh mặn, bánh ngọt, bánh mì, BTT)
+  kitchen_lead_hot: { label: 'Bếp Trưởng Bếp Nóng', shortLabel: 'BT Bếp Nóng', tone: 'warning', level: 3, station: 'Bếp Nóng' },
+  kitchen_deputy_hot: { label: 'Bếp Phó Bếp Nóng', shortLabel: 'BP Bếp Nóng', tone: 'warning', level: 2, station: 'Bếp Nóng' },
+  baker_hot: { label: 'Thợ Bếp Nóng', shortLabel: 'Thợ Bếp Nóng', tone: 'warning', level: 2, station: 'Bếp Nóng' },
+
+  // Xưởng 41 (Macaron)
+  kitchen_lead_macaron: { label: 'Bếp Trưởng Macaron (X41)', shortLabel: 'BT Macaron', tone: 'warning', level: 3, station: 'Xưởng 41' },
+  baker_macaron: { label: 'Thợ Macaron (X41)', shortLabel: 'Thợ Macaron', tone: 'warning', level: 2, station: 'Xưởng 41' },
+
+  // Xưởng 42 (Trường học & Teabreak)
+  kitchen_lead_x42: { label: 'Bếp Trưởng Xưởng 42', shortLabel: 'BT Xưởng 42', tone: 'warning', level: 3, station: 'Xưởng 42' },
+  baker_x42: { label: 'Thợ Xưởng 42', shortLabel: 'Thợ X42', tone: 'warning', level: 2, station: 'Xưởng 42' },
+
+  // Vai trò Bếp chung
+  kitchen_lead: { label: 'Bếp Trưởng (Chung)', shortLabel: 'Bếp Trưởng', tone: 'warning', level: 3 },
+  kitchen_deputy: { label: 'Bếp Phó (Chung)', shortLabel: 'Bếp Phó', tone: 'warning', level: 2 },
+  bakery: { label: 'Thợ Làm Bánh (Chung)', shortLabel: 'Thợ Bánh', tone: 'warning', level: 2 },
+
+  // Vận chuyển & Kho phụ
+  transport_lead: { label: 'Trưởng Đội Vận Tải', shortLabel: 'Trưởng Vận Tải', tone: 'success', level: 3 },
+  shipper: { label: 'Nhân Viên Vận Chuyển', shortLabel: 'Shipper', tone: 'success', level: 1 },
+  kho_bakery: { label: 'Nhân Viên Kho Bakery', shortLabel: 'Kho Bakery', tone: 'info', level: 2 },
+  kho_xuong41: { label: 'Nhân Viên Kho Xưởng 41', shortLabel: 'Kho X41', tone: 'info', level: 2 },
+  kho_xuong42: { label: 'Nhân Viên Kho Xưởng 42', shortLabel: 'Kho X42', tone: 'info', level: 2 },
 };
 
-export const ROLE_OPTIONS = Object.entries(ROLE_META).map(([value, m]) => ({ value, label: m.label }));
+export const ROLE_OPTIONS = Object.entries(ROLE_META).map(([value, m]) => ({
+  value,
+  label: `${m.shortLabel ? `[${m.shortLabel}] ` : ''}${m.label}`
+}));
+
+export const KITCHEN_LEAD_ROLES = [
+  'kitchen_lead', 'kitchen_lead_cold', 'kitchen_lead_hot', 'kitchen_lead_macaron', 'kitchen_lead_x42',
+  'kitchen_deputy', 'kitchen_deputy_cold', 'kitchen_deputy_hot'
+];
+
+export const ALL_KITCHEN_ROLES = [
+  ...KITCHEN_LEAD_ROLES,
+  'bakery', 'baker_cold', 'baker_hot', 'baker_macaron', 'baker_x42'
+];
 
 export const ROLE_PERMISSIONS = [
   {
@@ -57,23 +95,8 @@ export const ROLE_PERMISSIONS = [
     ]
   },
   {
-    role: 'kho_bakery',
-    desc: 'Nhân viên Kho Bakery — chỉ xem/thao tác nguyên liệu thuộc Kho Bakery.',
-    permissions: ['view_inventory', 'edit_inventory']
-  },
-  {
-    role: 'kho_xuong41',
-    desc: 'Nhân viên Kho Xưởng 41 — chỉ xem/thao tác nguyên liệu thuộc Kho Xưởng 41.',
-    permissions: ['view_inventory', 'edit_inventory']
-  },
-  {
-    role: 'kho_xuong42',
-    desc: 'Nhân viên Kho Xưởng 42 — chỉ xem/thao tác nguyên liệu thuộc Kho Xưởng 42.',
-    permissions: ['view_inventory', 'edit_inventory']
-  },
-  {
     role: 'kitchen_lead',
-    desc: 'Bếp trưởng — như Thợ Làm Bánh, cộng thêm quyền chỉ đạo bếp phó & nhân viên bếp cấp dưới, can thiệp mọi đơn ở khu bếp.',
+    desc: 'Bếp trưởng — nhận đơn, phân công chỉ đạo thợ tuyến dưới, can thiệp mọi đơn ở khu bếp.',
     permissions: [
       'view_kitchen_orders', 'update_order_status', 'manage_kitchen_staff', 'intervene_kitchen_orders',
       'view_finished_inventory', 'report_inventory',
@@ -81,17 +104,8 @@ export const ROLE_PERMISSIONS = [
     ]
   },
   {
-    role: 'kitchen_deputy',
-    desc: 'Bếp phó — như Thợ Làm Bánh, cộng thêm quyền can thiệp đơn ở khu bếp khi bếp trưởng vắng mặt.',
-    permissions: [
-      'view_kitchen_orders', 'update_order_status', 'intervene_kitchen_orders',
-      'view_finished_inventory', 'report_inventory',
-      'request_ingredient_export', 'view_ingredient_inventory'
-    ]
-  },
-  {
     role: 'bakery',
-    desc: 'Xem đơn hàng cần làm, cập nhật trạng thái, quản lý tồn kho thành phẩm & yêu cầu xuất kho.',
+    desc: 'Xem đơn hàng cần làm, cập nhật trạng thái làm bánh, báo cáo thành phẩm.',
     permissions: [
       'view_kitchen_orders', 'update_order_status',
       'view_finished_inventory', 'report_inventory',
@@ -100,7 +114,7 @@ export const ROLE_PERMISSIONS = [
   },
   {
     role: 'shipper',
-    desc: 'Xem đơn sẵn giao, nhận hàng, cập nhật trạng thái giao, thu tiền COD.',
+    desc: 'Xem đơn sẵn giao, nhận hàng, chụp ảnh giao hàng kèm vị trí GPS, thu tiền COD.',
     permissions: [
       'view_ready_orders', 'update_delivery_status',
       'view_customer_contact', 'confirm_cod_receipt'
@@ -130,15 +144,15 @@ export function hasAnyRole(profile, roles) {
 export function navBadgeVisibility(profile) {
   const isManager = hasAnyRole(profile, ['owner', 'admin']);
   const incidentCategories = isManager ? null : [
-    hasAnyRole(profile, ['shipper']) && 'log',
-    hasAnyRole(profile, ['kitchen', 'bakery', 'kitchen_lead', 'kitchen_deputy']) && 'kit',
+    hasAnyRole(profile, ['shipper', 'transport_lead']) && 'log',
+    hasAnyRole(profile, ALL_KITCHEN_ROLES) && 'kit',
     hasAnyRole(profile, ['warehouse', 'kho_bakery', 'kho_xuong41', 'kho_xuong42']) && 'inv',
   ].filter(Boolean);
   return {
     orders: isManager || hasAnyRole(profile, ['sale', 'cashier']),
-    kds: isManager || hasAnyRole(profile, ['kitchen', 'bakery', 'kitchen_lead', 'kitchen_deputy']),
+    kds: isManager || hasAnyRole(profile, ALL_KITCHEN_ROLES),
     approvals: isManager,
     incidents: isManager || incidentCategories.length > 0,
-    incidentCategories, // null = tất cả (sếp/admin), mảng rỗng = không thấy mục nào
+    incidentCategories,
   };
 }

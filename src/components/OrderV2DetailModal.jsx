@@ -101,10 +101,51 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       return { ...a, url };
     }));
 
+    let currentPackages = p.data || [];
+    if (currentPackages.length === 0 && u.data && u.data.length > 0 && o.data?.status_v2 !== 'completed' && o.data?.status_v2 !== 'cancelled') {
+      const unitsList = u.data;
+      const coldUnit = unitsList.find(x => x.code === 'BAKERY_COLD' || x.name.toLowerCase().includes('lạnh')) || unitsList[0];
+      const hotUnit = unitsList.find(x => x.code === 'BAKERY_HOT' || x.name.toLowerCase().includes('nóng')) || unitsList[0];
+      const x41Unit = unitsList.find(x => x.code === 'X41_KITCHEN' || x.name.toLowerCase().includes('41')) || coldUnit;
+      const x42Unit = unitsList.find(x => x.code === 'X42_KITCHEN' || x.name.toLowerCase().includes('42')) || hotUnit;
+
+      const items = i.data || [];
+      const flows = items.length > 0
+        ? [...new Set(items.map(it => it.specification?.product_flow || o.data?.order_type || 'cake'))]
+        : [o.data?.order_type || 'cake'];
+
+      for (const flow of flows) {
+        const targetUnit = flow === 'cake' ? coldUnit : flow === 'bakery' ? hotUnit : flow === 'macaron' ? x41Unit : (flow === 'school' || flow === 'teabreak') ? x42Unit : coldUnit;
+        if (targetUnit) {
+          const flowItems = items.filter(it => (it.specification?.product_flow || o.data?.order_type || 'cake') === flow);
+          try {
+            await assignOrderPackage({
+              p_idempotency_key: crypto.randomUUID(),
+              p_order_id: orderId,
+              p_unit_id: targetUnit.id,
+              p_due_at: o.data?.required_at,
+              p_items: flowItems.map(it => ({ order_item_id: it.id, quantity: it.quantity })),
+              p_expected_version: o.data?.version
+            });
+          } catch (assignErr) {
+            console.warn('Auto assign package error:', assignErr);
+          }
+        }
+      }
+
+      const freshP = await supabase
+        .from('order_work_packages')
+        .select('id,unit_id,status,due_at,accepted_at,completed_at,version,organization_units(name,code),work_package_items(order_item_id,quantity)')
+        .eq('order_id', orderId);
+      if (freshP.data && freshP.data.length > 0) {
+        currentPackages = freshP.data;
+      }
+    }
+
     setData({
       order: o.data,
       items: i.data || [],
-      packages: p.data || [],
+      packages: currentPackages,
       events: e.data || [],
       operations: ops.data || {}
     });

@@ -1,0 +1,775 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SUMI — Vỏ thao tác nhân viên</title>
+  <style>
+    :root {
+      --butter: #fff7e8;
+      --paper: #ffffff;
+      --ink: #2d1c10;
+      --muted: #725f50;
+      --line: #eadcca;
+      --orange: #ef642b;
+      --orange-dark: #b93e13;
+      --green: #138a53;
+      --green-soft: #e6f6ed;
+      --blue: #2563eb;
+      --blue-soft: #eaf1ff;
+      --red: #d93636;
+      --red-soft: #fff0ef;
+      --yellow: #f5b82e;
+      --shadow: 0 14px 34px rgba(69, 39, 16, .13);
+      font-family: "Segoe UI", Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { margin: 0; background: #e9e4dc; color: var(--ink); }
+    button, input { font: inherit; }
+    button { -webkit-tap-highlight-color: transparent; }
+    button:focus-visible { outline: 4px solid #111; outline-offset: 3px; }
+
+    .showcase { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+    .phone {
+      position: relative; width: min(100%, 410px); min-height: 844px; background: var(--butter);
+      overflow: hidden; box-shadow: 0 28px 80px rgba(37, 25, 15, .24);
+    }
+
+    .topbar { padding: 18px 18px 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand-mark { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 15px; background: var(--ink); font-size: 25px; }
+    .brand-name { font-size: 13px; font-weight: 900; letter-spacing: .12em; }
+    .hello { font-size: 19px; line-height: 1.1; font-weight: 900; margin-top: 3px; }
+    .status-pill { display: flex; align-items: center; gap: 7px; min-height: 40px; padding: 0 12px; border: 2px solid #b7dcc8; border-radius: 999px; background: var(--green-soft); color: #09663d; font-weight: 800; font-size: 14px; }
+    .top-actions { display: flex; align-items: center; gap: 7px; }
+    .bell { position: relative; width: 44px; height: 44px; border: 2px solid var(--line); border-radius: 15px; background: white; font-size: 23px; cursor: pointer; }
+    .bell-count { position: absolute; top: -7px; right: -6px; min-width: 22px; height: 22px; display: grid; place-items: center; padding: 0 5px; border: 2px solid white; border-radius: 99px; background: var(--red); color: white; font-size: 11px; font-weight: 950; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 4px rgba(19,138,83,.14); }
+
+    main { padding: 4px 16px 112px; }
+    .eyebrow { display: flex; justify-content: space-between; align-items: center; margin: 10px 2px 9px; font-size: 14px; font-weight: 900; color: var(--muted); }
+    .counter { color: var(--orange-dark); }
+
+    .next-card { border-radius: 26px; overflow: hidden; background: var(--ink); color: white; box-shadow: var(--shadow); }
+    .next-card-head { padding: 20px 20px 13px; display: flex; justify-content: space-between; gap: 12px; }
+    .urgent { display: inline-flex; align-items: center; gap: 7px; border-radius: 999px; padding: 7px 10px; background: var(--red); font-size: 13px; font-weight: 900; }
+    .time { font-size: 15px; color: #f6d9bf; font-weight: 800; }
+    .task-body { padding: 0 20px 18px; }
+    .task-picture { height: 145px; margin: 4px 0 16px; border-radius: 18px; display: grid; place-items: center; background: radial-gradient(circle at 25% 20%, #ffd284, transparent 29%), linear-gradient(145deg,#ad481f,#62240f); font-size: 72px; }
+    .task-title { margin: 0; font-size: 27px; line-height: 1.05; letter-spacing: -.02em; }
+    .task-meta { margin: 10px 0 0; display: grid; gap: 7px; color: #f6dcc7; font-size: 17px; font-weight: 700; }
+    .task-actions { display: grid; grid-template-columns: 1fr 1.45fr; gap: 10px; padding: 13px; background: rgba(255,255,255,.08); }
+
+    .btn { min-height: 60px; border: 0; border-radius: 18px; padding: 10px 14px; display: inline-flex; justify-content: center; align-items: center; gap: 10px; font-weight: 950; font-size: 17px; cursor: pointer; }
+    .btn svg { width: 25px; height: 25px; stroke-width: 2.5; }
+    .btn-primary { background: var(--green); color: white; }
+    .btn-light { background: white; color: var(--ink); }
+    .btn-voice { width: 100%; min-height: 72px; background: var(--orange); color: white; font-size: 19px; box-shadow: 0 9px 0 var(--orange-dark); margin-bottom: 9px; }
+    .btn-voice:active { transform: translateY(5px); box-shadow: 0 4px 0 var(--orange-dark); }
+    .btn-danger { background: var(--red-soft); color: #a91f1f; border: 2px solid #efb0ad; }
+
+    .quick-title { margin: 23px 2px 11px; font-size: 18px; }
+    .quick-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .quick {
+      min-height: 112px; border: 2px solid var(--line); border-radius: 20px; background: var(--paper); color: var(--ink);
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; font-weight: 900; font-size: 15px; cursor: pointer;
+    }
+    .quick-icon { width: 48px; height: 48px; border-radius: 16px; display: grid; place-items: center; font-size: 27px; }
+    .quick:nth-child(1) .quick-icon { background: var(--blue-soft); }
+    .quick:nth-child(2) .quick-icon { background: var(--green-soft); }
+    .quick:nth-child(3) .quick-icon { background: var(--red-soft); }
+
+    .queue { display: grid; gap: 10px; margin-top: 11px; }
+    .queue-card { min-height: 75px; display: grid; grid-template-columns: 48px 1fr auto; align-items: center; gap: 11px; padding: 10px 12px; background: var(--paper); border: 2px solid var(--line); border-radius: 18px; }
+    .queue-num { width: 48px; height: 48px; border-radius: 15px; display: grid; place-items: center; background: #f5eadc; font-size: 22px; font-weight: 950; }
+    .queue-name { font-size: 16px; font-weight: 950; }
+    .queue-note { color: var(--muted); font-size: 14px; font-weight: 700; margin-top: 2px; }
+    .queue-state { padding: 7px 9px; border-radius: 10px; background: #fff0cf; color: #8b5900; font-size: 12px; font-weight: 950; }
+
+    .bottom-nav { position: absolute; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(4,1fr); padding: 9px 8px 15px; border-top: 1px solid var(--line); background: rgba(255,255,255,.96); backdrop-filter: blur(12px); }
+    .nav-item { min-height: 64px; border: 0; border-radius: 16px; background: transparent; color: var(--muted); display: grid; place-items: center; align-content: center; gap: 3px; font-size: 12px; font-weight: 850; cursor: pointer; }
+    .nav-item span:first-child { font-size: 24px; }
+    .nav-item.active { background: var(--ink); color: white; }
+
+    .sheet { position: absolute; inset: 0; z-index: 10; display: none; align-items: flex-end; background: rgba(32,19,10,.66); }
+    .sheet.open { display: flex; }
+    .sheet-card { width: 100%; border-radius: 28px 28px 0 0; background: white; padding: 18px 16px 25px; animation: rise .18s ease-out; }
+    @keyframes rise { from { transform: translateY(30px); opacity: .5; } }
+    .sheet-grab { width: 54px; height: 6px; border-radius: 99px; background: #d5c7b8; margin: 0 auto 17px; }
+    .sheet-title { text-align: center; font-size: 25px; margin: 0; }
+    .sheet-help { text-align: center; color: var(--muted); font-size: 16px; line-height: 1.35; margin: 7px 10px 18px; }
+    .mic-orb { width: 124px; height: 124px; margin: 7px auto 22px; border: 12px solid #ffe0d1; border-radius: 50%; display: grid; place-items: center; background: var(--orange); color: white; font-size: 51px; box-shadow: 0 0 0 12px #fff3ed; }
+    .sheet-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .heard { padding: 15px; border-radius: 16px; background: var(--butter); border: 2px solid var(--line); font-size: 18px; font-weight: 850; margin-bottom: 14px; }
+
+    .toast { position: absolute; z-index: 20; left: 16px; right: 16px; bottom: 95px; display: none; align-items: center; gap: 12px; padding: 15px; border-radius: 17px; background: #0f6d42; color: white; box-shadow: var(--shadow); font-size: 16px; font-weight: 900; }
+    .toast.show { display: flex; animation: rise .18s ease-out; }
+    .toast-icon { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: white; color: var(--green); font-size: 24px; }
+
+    .flow { position: absolute; inset: 0; z-index: 15; display: none; flex-direction: column; background: var(--butter); }
+    .flow.open { display: flex; }
+    .flow-head { min-height: 74px; display: grid; grid-template-columns: 58px 1fr 58px; align-items: center; padding: 10px 12px; background: white; border-bottom: 1px solid var(--line); }
+    .icon-btn { width: 52px; height: 52px; border: 0; border-radius: 17px; background: #f3eadf; font-size: 26px; font-weight: 900; cursor: pointer; }
+    .flow-head strong { text-align: center; font-size: 19px; }
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; padding: 15px 16px 4px; }
+    .step { height: 8px; border-radius: 99px; background: #dfd3c4; }
+    .step.done { background: var(--green); }
+    .flow-body { flex: 1; overflow-y: auto; padding: 15px 16px 120px; }
+    .instruction { margin: 3px 0 5px; text-align: center; font-size: 28px; line-height: 1.08; }
+    .big-help { margin: 8px auto 18px; max-width: 330px; text-align: center; color: var(--muted); font-size: 18px; line-height: 1.35; font-weight: 700; }
+    .guide-frame { position: relative; min-height: 300px; border: 4px dashed var(--blue); border-radius: 28px; display: grid; place-items: center; background: linear-gradient(145deg,#eaf1ff,#cddcff); overflow: hidden; }
+    .guide-frame .cake { font-size: 116px; filter: drop-shadow(0 12px 10px rgba(0,0,0,.14)); }
+    .guide-frame::after { content: "ĐƯA 2 BÁNH VÀO KHUNG"; position: absolute; bottom: 14px; left: 18px; right: 18px; padding: 10px; border-radius: 12px; background: rgba(29,20,12,.85); color: white; text-align: center; font-weight: 950; }
+    .proof-preview { min-height: 300px; border-radius: 28px; display: grid; place-items: center; background: radial-gradient(circle at 28% 22%,#ffe4a9,transparent 28%),linear-gradient(145deg,#9d431e,#4f1c0c); font-size: 108px; box-shadow: inset 0 0 0 4px white, 0 0 0 2px var(--line); }
+    .check-card { display: flex; align-items: center; gap: 13px; margin-top: 14px; padding: 14px; border: 2px solid #a6d5ba; border-radius: 18px; background: var(--green-soft); color: #09663d; font-size: 17px; font-weight: 900; }
+    .check-circle { flex: 0 0 auto; width: 43px; height: 43px; display: grid; place-items: center; border-radius: 50%; background: var(--green); color: white; font-size: 25px; }
+    .flow-actions { position: absolute; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: .75fr 1.4fr; gap: 10px; padding: 13px 16px 20px; background: white; border-top: 1px solid var(--line); }
+    .flow-actions.single { grid-template-columns: 1fr; }
+    .view { display: none; }
+    .view.active { display: block; }
+    .view-title { margin: 10px 2px 4px; font-size: 28px; }
+    .view-help { margin: 0 2px 18px; color: var(--muted); font-weight: 700; }
+    .filter-row { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-bottom: 14px; }
+    .filter { min-height: 54px; border: 2px solid var(--line); border-radius: 16px; background: white; color: var(--muted); font-weight: 900; }
+    .filter.active { border-color: var(--ink); background: var(--ink); color: white; }
+    .offline-banner { display: none; margin: 0 16px 8px; padding: 12px 14px; border-radius: 15px; background: #fff0cf; color: #754b00; font-weight: 900; text-align: center; }
+    .offline-banner.show { display: block; }
+    .workplace { display: inline-flex; align-items: center; gap: 7px; margin: 0 2px 8px; padding: 8px 11px; border-radius: 12px; background: #f0e3d2; color: #664a32; font-size: 14px; font-weight: 900; }
+    .role-list { display: grid; gap: 10px; margin: 16px 0; }
+    .role-choice { min-height: 76px; display: grid; grid-template-columns: 54px 1fr 30px; align-items: center; gap: 11px; padding: 10px 12px; border: 2px solid var(--line); border-radius: 19px; background: white; text-align: left; color: var(--ink); cursor: pointer; }
+    .role-choice.selected { border-color: var(--green); background: var(--green-soft); }
+    .role-emoji { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 16px; background: #f4e8d8; font-size: 29px; }
+    .role-choice strong { display: block; font-size: 18px; }
+    .role-choice small { display: block; margin-top: 3px; color: var(--muted); font-size: 14px; font-weight: 700; }
+    .role-tick { font-size: 25px; color: var(--green); }
+    .manager-hero { padding: 19px; border-radius: 25px; background: var(--ink); color: white; box-shadow: var(--shadow); }
+    .manager-hero small { color: #f4cfb0; font-size: 14px; font-weight: 800; }
+    .revenue { margin-top: 7px; font-size: 34px; font-weight: 950; letter-spacing: -.03em; }
+    .trend { display: inline-flex; margin-top: 8px; padding: 7px 10px; border-radius: 10px; background: rgba(59,196,122,.18); color: #84e7b1; font-weight: 900; }
+    .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0 21px; }
+    .metric { min-height: 104px; padding: 15px; border: 2px solid var(--line); border-radius: 19px; background: white; }
+    .metric-icon { font-size: 25px; }
+    .metric-value { margin-top: 7px; font-size: 25px; font-weight: 950; }
+    .metric-label { margin-top: 2px; color: var(--muted); font-size: 14px; font-weight: 800; }
+    .alert-card { display: grid; grid-template-columns: 46px 1fr auto; align-items: center; gap: 10px; margin-bottom: 10px; padding: 13px; border: 2px solid #efbbb5; border-radius: 18px; background: var(--red-soft); }
+    .alert-icon { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 14px; background: white; font-size: 25px; }
+    .alert-title { font-size: 16px; font-weight: 950; }
+    .alert-note { margin-top: 3px; color: #7f3d37; font-size: 13px; font-weight: 700; }
+    .approve { min-height: 42px; border: 0; border-radius: 12px; padding: 0 11px; background: var(--red); color: white; font-weight: 900; }
+    .branch-card { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 15px; border: 2px solid var(--line); border-radius: 18px; background: white; }
+    .branch-card + .branch-card { margin-top: 9px; }
+    .branch-name { font-size: 17px; font-weight: 950; }
+    .branch-note { margin-top: 4px; color: var(--muted); font-size: 14px; font-weight: 700; }
+    .health { align-self: center; padding: 7px 9px; border-radius: 11px; background: var(--green-soft); color: #09663d; font-size: 12px; font-weight: 950; }
+    .period-tabs { display: grid; grid-template-columns: repeat(4,1fr); gap: 7px; margin: 4px 0 12px; padding: 5px; border-radius: 17px; background: #eadfce; }
+    .period-tab { min-height: 44px; border: 0; border-radius: 13px; background: transparent; color: var(--muted); font-size: 13px; font-weight: 950; cursor: pointer; }
+    .period-tab.active { background: white; color: var(--ink); box-shadow: 0 3px 9px rgba(45,28,16,.12); }
+    .money-grid { display: grid; grid-template-columns: 1.35fr 1fr; gap: 10px; margin-bottom: 12px; }
+    .money-card { padding: 17px; border-radius: 21px; color: white; box-shadow: var(--shadow); }
+    .money-card.revenue-card { background: var(--ink); }
+    .money-card.cost-card { background: #8f381e; }
+    .money-card small { color: #f4cfb0; font-size: 12px; font-weight: 900; }
+    .money-value { margin-top: 7px; font-size: 24px; font-weight: 950; letter-spacing: -.03em; }
+    .order-status-list { display: grid; gap: 9px; }
+    .order-status-card { min-height: 76px; display: grid; grid-template-columns: 48px 1fr auto; align-items: center; gap: 11px; padding: 11px 13px; border: 2px solid var(--line); border-radius: 18px; background: white; }
+    .order-status-icon { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 15px; background: #f3e8da; font-size: 25px; }
+    .order-status-name { font-size: 16px; font-weight: 950; }
+    .order-status-note { margin-top: 3px; color: var(--muted); font-size: 13px; font-weight: 700; }
+    .order-status-value { font-size: 25px; font-weight: 950; }
+    .profile-card { display: flex; align-items: center; gap: 14px; padding: 17px; border-radius: 22px; background: var(--ink); color: white; }
+    .avatar { width: 68px; height: 68px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 22px; background: #f0bb83; font-size: 36px; }
+    .profile-name { font-size: 23px; font-weight: 950; }
+    .profile-role { margin-top: 4px; color: #f3d4b8; font-weight: 800; }
+    .kpi-strip { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin: 12px 0; }
+    .kpi-mini { min-height: 105px; display: grid; place-items: center; align-content: center; gap: 5px; padding: 10px 5px; border: 2px solid var(--line); border-radius: 18px; background: white; text-align: center; }
+    .kpi-mini strong { font-size: 25px; }
+    .kpi-mini span { color: var(--muted); font-size: 13px; font-weight: 800; line-height: 1.15; }
+    .progress-card { padding: 16px; border: 2px solid var(--line); border-radius: 19px; background: white; }
+    .progress-head { display: flex; justify-content: space-between; gap: 10px; font-weight: 900; }
+    .progress-track { height: 13px; margin-top: 12px; overflow: hidden; border-radius: 99px; background: #eadfce; }
+    .progress-fill { width: 78%; height: 100%; border-radius: inherit; background: var(--green); }
+    .menu-button { width: 100%; min-height: 64px; display: grid; grid-template-columns: 42px 1fr auto; align-items: center; gap: 10px; margin-top: 10px; padding: 9px 13px; border: 2px solid var(--line); border-radius: 18px; background: white; color: var(--ink); text-align: left; font-size: 17px; font-weight: 900; cursor: pointer; }
+    .menu-button .menu-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 13px; background: #f3e8da; font-size: 23px; }
+    .login-screen { position: absolute; inset: 0; z-index: 30; display: none; overflow-y: auto; padding: 42px 18px 28px; background: linear-gradient(180deg,#fff7e8 0%,#f2dfc6 100%); }
+    .login-screen.open { display: block; }
+    .login-logo { width: 82px; height: 82px; margin: 0 auto; display: grid; place-items: center; border-radius: 26px; background: var(--ink); color: white; font-size: 43px; box-shadow: var(--shadow); }
+    .login-title { margin: 16px 0 4px; text-align: center; font-size: 30px; }
+    .login-help { margin: 0 0 24px; text-align: center; color: var(--muted); font-size: 17px; font-weight: 700; }
+    .login-card { padding: 20px 17px; border: 2px solid var(--line); border-radius: 25px; background: white; box-shadow: var(--shadow); }
+    .field-label { display: block; margin: 0 0 7px 2px; font-weight: 900; }
+    .big-input { width: 100%; min-height: 62px; margin-bottom: 15px; padding: 0 15px; border: 2px solid #cdbda9; border-radius: 17px; background: #fffdfa; font-size: 18px; }
+    .login-note { margin-top: 18px; text-align: center; color: var(--muted); font-size: 14px; font-weight: 700; line-height: 1.4; }
+    .staff-search { width: 100%; min-height: 56px; margin-bottom: 10px; padding: 0 15px; border: 2px solid var(--line); border-radius: 17px; background: white; font-size: 17px; }
+    .staff-list { display: grid; gap: 9px; }
+    .staff-row { min-height: 76px; display: grid; grid-template-columns: 50px 1fr auto; align-items: center; gap: 11px; padding: 10px 12px; border: 2px solid var(--line); border-radius: 18px; background: white; color: var(--ink); text-align: left; cursor: pointer; }
+    .staff-avatar { width: 50px; height: 50px; display: grid; place-items: center; border-radius: 16px; background: #f2e4d2; font-size: 28px; }
+    .staff-name { font-size: 17px; font-weight: 950; }
+    .staff-job { margin-top: 3px; color: var(--muted); font-size: 13px; font-weight: 700; }
+    .staff-state { padding: 7px 8px; border-radius: 10px; background: var(--green-soft); color: #09663d; font-size: 11px; font-weight: 950; white-space: nowrap; }
+    .staff-state.busy { background: #fff0cf; color: #805400; }
+    .staff-detail-head { display: flex; align-items: center; gap: 13px; margin: 4px 0 16px; padding: 15px; border-radius: 19px; background: var(--ink); color: white; }
+    .detail-line { margin-bottom: 9px; padding: 13px; border: 2px solid var(--line); border-radius: 16px; background: white; font-size: 15px; font-weight: 800; }
+    .detail-line small { display: block; margin-bottom: 4px; color: var(--muted); font-weight: 800; }
+    .flow-note { margin: 10px 0; padding: 13px; border-left: 5px solid var(--blue); border-radius: 12px; background: var(--blue-soft); color: #183d91; font-size: 14px; font-weight: 800; line-height: 1.35; }
+    .org-path { margin: -2px 2px 10px; color: var(--muted); font-size: 13px; font-weight: 850; }
+    .lead-hero { padding: 18px; border-radius: 24px; background: linear-gradient(145deg,#173d68,#102642); color: white; box-shadow: var(--shadow); }
+    .lead-hero small { color: #bed7ef; font-weight: 900; }
+    .lead-title { margin-top: 7px; font-size: 27px; font-weight: 950; line-height: 1.08; }
+    .lead-meta { margin-top: 9px; color: #dceafb; font-size: 15px; font-weight: 800; }
+    .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0 21px; }
+    .lead-action { min-height: 108px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 7px; padding: 14px; border: 2px solid var(--line); border-radius: 19px; background: white; color: var(--ink); text-align: left; font-weight: 950; cursor: pointer; }
+    .lead-action span:first-child { font-size: 31px; }
+    .batch-card { margin-bottom: 10px; padding: 15px; border: 2px solid var(--line); border-radius: 19px; background: white; }
+    .batch-top { display: flex; justify-content: space-between; gap: 10px; }
+    .batch-name { font-size: 17px; font-weight: 950; }
+    .batch-status { padding: 6px 8px; border-radius: 9px; background: #fff0cf; color: #805400; font-size: 11px; font-weight: 950; }
+    .batch-info { margin-top: 6px; color: var(--muted); font-size: 14px; font-weight: 750; line-height: 1.35; }
+    .batch-people { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 14px; font-weight: 850; }
+    .notice-list { display: grid; gap: 9px; }
+    .notice-item { width: 100%; display: grid; grid-template-columns: 46px 1fr auto; align-items: center; gap: 10px; padding: 12px; border: 2px solid var(--line); border-radius: 17px; background: white; color: var(--ink); text-align: left; cursor: pointer; }
+    .notice-item.unread { border-color:#f2a984; background:#fff8f2; }
+    .notice-type { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 14px; background: #f3e8da; font-size: 25px; }
+    .notice-title { display:block; font-size:15px; font-weight:950; }
+    .notice-text { display:block; margin-top:3px; color:var(--muted); font-size:13px; font-weight:700; line-height:1.25; }
+    .notice-time { color:var(--muted); font-size:11px; font-weight:850; }
+    .order-flow { display:flex; align-items:center; gap:5px; overflow-x:auto; padding:10px 0 4px; }
+    .flow-node { flex:0 0 auto; padding:8px 9px; border-radius:11px; background:#eee2d3; color:var(--muted); font-size:12px; font-weight:900; }
+    .flow-node.done { background:var(--green-soft); color:#09663d; }
+    .flow-node.current { background:var(--blue); color:white; }
+    .flow-arrow { color:#9b8875; font-weight:950; }
+    .audit-box { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-bottom:16px; padding:13px; border-radius:17px; background:var(--blue-soft); color:#183d91; }
+    .audit-box small { display:block; margin-bottom:3px; font-size:11px; font-weight:900; }
+    .audit-box strong { font-size:14px; line-height:1.25; }
+    .order-choice { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-bottom:15px; }
+    .order-choice button { min-height:58px; border:2px solid var(--line); border-radius:16px; background:white; color:var(--muted); font-weight:900; }
+    .order-choice button.active { border-color:var(--green); background:var(--green-soft); color:#09663d; }
+    textarea.big-input { min-height:82px; padding-top:13px; resize:vertical; }
+    .page-head { display:flex; align-items:center; gap:12px; margin-bottom:15px; }
+    .page-head h1 { margin:0; font-size:25px; }
+    .upload-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:15px; }
+    .upload-box { min-height:126px; display:grid; place-items:center; align-content:center; gap:7px; border:3px dashed #c9b69f; border-radius:19px; background:white; color:var(--muted); text-align:center; font-weight:900; cursor:pointer; }
+    .upload-box span:first-child { font-size:38px; }
+    .order-board-tabs { display:flex; gap:8px; overflow-x:auto; padding:2px 0 12px; }
+    .board-tab { flex:0 0 auto; min-height:46px; padding:0 13px; border:2px solid var(--line); border-radius:14px; background:white; color:var(--muted); font-weight:900; }
+    .board-tab.active { background:var(--ink); color:white; border-color:var(--ink); }
+    .order-card { margin-bottom:11px; padding:15px; border:2px solid var(--line); border-radius:20px; background:white; }
+    .order-card-top { display:flex; justify-content:space-between; gap:10px; }
+    .order-code { font-size:17px; font-weight:950; }
+    .order-badge { padding:6px 8px; border-radius:9px; background:#fff0cf; color:#805400; font-size:11px; font-weight:950; }
+    .order-customer { margin-top:8px; font-size:18px; font-weight:950; }
+    .order-summary { margin-top:5px; color:var(--muted); font-size:14px; font-weight:750; line-height:1.35; }
+    .order-thumb { width:64px; height:64px; margin-top:10px; display:grid; place-items:center; border-radius:15px; background:linear-gradient(145deg,#ffdca1,#bc5b30); font-size:36px; }
+    .order-footer { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:12px; padding-top:11px; border-top:1px solid var(--line); }
+    .kitchen-part { margin-bottom:11px; padding:14px; border:2px solid var(--line); border-radius:18px; background:white; }
+    .part-head { display:flex; justify-content:space-between; gap:10px; align-items:center; }
+    .part-name { font-size:17px; font-weight:950; }
+    .part-state { padding:6px 8px; border-radius:9px; background:#fff0cf; color:#805400; font-size:11px; font-weight:950; }
+    .assigned-task { display:grid; grid-template-columns:36px 1fr auto; align-items:center; gap:9px; margin-top:9px; padding:9px; border-radius:13px; background:#f7efe5; font-size:13px; font-weight:800; }
+    .handoff-card { margin-top:12px; padding:14px; border:2px solid #a6d5ba; border-radius:17px; background:var(--green-soft); color:#09663d; font-weight:900; line-height:1.4; }
+    .compact-order { width:100%; margin-bottom:9px; padding:13px; border:2px solid var(--line); border-radius:18px; background:white; color:var(--ink); text-align:left; cursor:pointer; }
+    .compact-top { display:grid; grid-template-columns:1fr auto; gap:10px; align-items:start; }
+    .compact-code { font-size:16px; font-weight:950; }
+    .compact-customer { margin-top:3px; color:var(--muted); font-size:13px; font-weight:750; }
+    .compact-status { padding:6px 8px; border-radius:9px; background:#fff0cf; color:#805400; font-size:11px; font-weight:950; white-space:nowrap; }
+    .status-track { display:grid; grid-template-columns:repeat(5,1fr); gap:4px; margin-top:12px; }
+    .status-segment { height:7px; border-radius:99px; background:#dfd3c4; }
+    .status-segment.done { background:var(--green); }
+    .status-segment.current { background:var(--blue); }
+    .status-caption { margin-top:7px; color:#184493; font-size:13px; font-weight:900; }
+    .school-order { display:none; border-color:#2f4770; background:#f2f6ff; }
+    .school-order.allowed { display:block; }
+    .secret-badge { display:inline-flex; align-items:center; gap:5px; margin-top:6px; padding:6px 8px; border-radius:9px; background:#172f55; color:white; font-size:11px; font-weight:950; }
+    .product-types { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-bottom:17px; }
+    .product-type { min-height:90px; display:flex; flex-direction:column; align-items:flex-start; justify-content:center; gap:6px; padding:12px; border:2px solid var(--line); border-radius:18px; background:white; color:var(--ink); text-align:left; font-weight:950; cursor:pointer; }
+    .product-type span:first-child { font-size:29px; }
+    .product-type.active { border-color:var(--green); background:var(--green-soft); color:#09663d; }
+    .spec-panel { margin-bottom:15px; padding:14px; border:2px solid var(--line); border-radius:19px; background:#fffdfa; }
+    .copy-preview { padding:15px; border:2px solid var(--line); border-radius:17px; background:var(--butter); white-space:pre-line; font-size:15px; font-weight:750; line-height:1.45; }
+
+    @media (max-width: 450px) {
+      .showcase { padding: 0; place-items: start center; }
+      .phone { width: 100%; min-height: 100dvh; box-shadow: none; }
+      .bottom-nav { position: fixed; }
+      .sheet { position: fixed; }
+      .flow { position: fixed; }
+      .login-screen { position: fixed; }
+      .toast { position: fixed; }
+    }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="showcase">
+    <section class="phone" aria-label="Mockup ứng dụng nhân viên SUMI">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">🧁</div>
+          <div><div class="brand-name">SUMI BAKERY</div><div class="hello">Chào cô Lan</div></div>
+        </div>
+        <div class="top-actions"><button class="bell" onclick="openNotifications()" aria-label="Thông báo">🔔<span class="bell-count" id="bellCount">3</span></button><button class="status-pill" id="networkStatus" onclick="toggleNetwork()" aria-label="Đổi trạng thái mạng để xem bản mô phỏng"><span class="dot"></span><span>Có mạng</span></button></div>
+      </header>
+      <div class="offline-banner" id="offlineBanner">📴 Không có mạng — cô cứ làm, máy sẽ tự gửi sau</div>
+
+      <main>
+        <section class="view active" id="homeView">
+        <div class="workplace" id="workplace">🏪 Cửa hàng Vĩnh Phú 42 · Bếp lạnh</div><div class="org-path" id="homeOrgPath">Giám đốc Kinh doanh → Bếp trưởng → Bếp phó → Cô Lan</div>
+        <div class="eyebrow"><span>VIỆC TIẾP THEO</span><span class="counter">Còn 4 việc</span></div>
+        <article class="next-card">
+          <div class="next-card-head">
+            <span class="urgent" id="deadline">● LÀM TRƯỚC 10:30</span>
+            <span class="time" id="duration">18 phút</span>
+          </div>
+          <div class="task-body">
+            <div class="task-picture" id="taskPicture" role="img" aria-label="Công việc hiện tại">🎂</div>
+            <h1 class="task-title" id="taskTitle">Trang trí bánh kem dâu</h1>
+            <div class="task-meta"><span id="taskMeta1">① Số lượng: 2 bánh</span><span id="taskMeta2">② Size 18 · Chữ màu hồng</span></div>
+          </div>
+          <div class="task-actions">
+            <button class="btn btn-light" onclick="openSheet('photo')" aria-label="Xem ảnh mẫu">🖼️ Ảnh mẫu</button>
+            <button class="btn btn-primary" onclick="startProof()" aria-label="Xác nhận đã làm xong">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m5 12 4 4L19 6"/></svg>ĐÃ LÀM XONG
+            </button>
+          </div>
+        </article>
+
+        <h2 class="quick-title">Làm nhanh</h2>
+        <button class="btn btn-voice" onclick="openSheet('voice')" aria-label="Bấm để nhập bằng giọng nói">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></svg>
+          BẤM ĐỂ NÓI
+        </button>
+        <div class="quick-grid" style="grid-template-columns:repeat(2,1fr)">
+          <button class="quick" onclick="openOrderSheet()"><span class="quick-icon" style="background:#fff0cf">🧾</span><span>Tạo đơn</span></button>
+          <button class="quick" onclick="openSheet('photo')"><span class="quick-icon">📷</span><span>Chụp ảnh</span></button>
+          <button class="quick" onclick="showView('tasks')"><span class="quick-icon">✅</span><span>Việc của tôi</span></button>
+          <button class="quick" onclick="openSheet('incident')"><span class="quick-icon">⚠️</span><span>Báo sự cố</span></button>
+        </div>
+
+        <div class="eyebrow" style="margin-top:24px"><span>VIỆC SAU ĐÓ</span><span>3 việc</span></div>
+        <div class="queue" id="homeQueue">
+          <div class="queue-card"><div class="queue-num">2</div><div><div class="queue-name">Đóng hộp 12 bánh</div><div class="queue-note">Làm sau việc hiện tại</div></div><span class="queue-state">CHỜ</span></div>
+          <div class="queue-card"><div class="queue-num">3</div><div><div class="queue-name">Chụp ảnh bàn giao</div><div class="queue-note">Đơn DH-0258</div></div><span class="queue-state">CHỜ</span></div>
+        </div>
+        </section>
+
+        <section class="view" id="tasksView">
+          <h1 class="view-title" id="tasksTitle">Việc của cô Lan</h1>
+          <p class="view-help">Chỉ hiện đúng việc cần làm hôm nay.</p>
+          <div class="filter-row"><button class="filter active">ĐANG LÀM · 4</button><button class="filter">ĐÃ XONG · 7</button></div>
+          <div class="queue" id="tasksQueue">
+            <div class="queue-card"><div class="queue-num" style="background:#ffe1d4">🎂</div><div><div class="queue-name">Trang trí bánh kem dâu</div><div class="queue-note">Làm trước 10:30 · 2 bánh</div></div><span class="queue-state" style="background:#dff5e8;color:#08643b">ĐANG LÀM</span></div>
+            <div class="queue-card"><div class="queue-num">📦</div><div><div class="queue-name">Đóng hộp 12 bánh</div><div class="queue-note">Sau việc hiện tại</div></div><span class="queue-state">CHỜ</span></div>
+            <div class="queue-card"><div class="queue-num">📷</div><div><div class="queue-name">Chụp ảnh bàn giao</div><div class="queue-note">Đơn DH-0258</div></div><span class="queue-state">CHỜ</span></div>
+            <div class="queue-card"><div class="queue-num">🧹</div><div><div class="queue-name">Vệ sinh bàn bánh</div><div class="queue-note">Trước khi hết ca</div></div><span class="queue-state">CHỜ</span></div>
+          </div>
+        </section>
+
+        <section class="view" id="managerView">
+          <div class="workplace" id="managerPeriodLabel">📊 Toàn hệ thống · Hôm nay</div>
+          <div class="period-tabs"><button class="period-tab active" onclick="setManagerPeriod('day',this)">Hôm nay</button><button class="period-tab" onclick="setManagerPeriod('week',this)">7 ngày</button><button class="period-tab" onclick="setManagerPeriod('month',this)">Tháng</button><button class="period-tab" onclick="setManagerPeriod('custom',this)">Tuỳ chọn</button></div>
+          <div class="money-grid"><div class="money-card revenue-card"><small>DOANH THU</small><div class="money-value" id="managerRevenue">128,45tr</div><div class="trend" id="managerTrend">↗ 12%</div></div><div class="money-card cost-card"><small>CHI</small><div class="money-value" id="managerCost">46,20tr</div><div style="margin-top:8px;color:#ffd5c6;font-size:13px;font-weight:800">Đã ghi nhận</div></div></div>
+          <div class="eyebrow"><span>TÌNH TRẠNG ĐƠN HÀNG</span><span id="totalOrdersLabel">186 đơn</span></div>
+          <div class="order-status-list">
+            <div class="order-status-card"><span class="order-status-icon">🧾</span><span><span class="order-status-name">Tổng đơn hàng</span><span class="order-status-note">Tất cả đơn trong thời gian chọn</span></span><span class="order-status-value" data-order="total">186</span></div>
+            <div class="order-status-card"><span class="order-status-icon" style="background:#fff0cf">👩‍🍳</span><span><span class="order-status-name">Đơn đang làm</span><span class="order-status-note">Đang sản xuất hoặc chuẩn bị</span></span><span class="order-status-value" data-order="making">24</span></div>
+            <div class="order-status-card"><span class="order-status-icon" style="background:#eaf1ff">🛵</span><span><span class="order-status-name">Chờ vận chuyển</span><span class="order-status-note">Đã xong, chưa nhận giao</span></span><span class="order-status-value" data-order="shipping">11</span></div>
+            <div class="order-status-card"><span class="order-status-icon" style="background:var(--green-soft)">✅</span><span><span class="order-status-name">Đơn hoàn thành</span><span class="order-status-note">Đã giao hoặc đã nhận tại quầy</span></span><span class="order-status-value" data-order="done">146</span></div>
+            <div class="order-status-card"><span class="order-status-icon" style="background:var(--red-soft)">✕</span><span><span class="order-status-name">Đơn huỷ</span><span class="order-status-note">Có lý do và người xác nhận</span></span><span class="order-status-value" data-order="cancel">5</span></div>
+          </div>
+          <div class="eyebrow"><span>CẦN XỬ LÝ NGAY</span><span class="counter">2 việc</span></div>
+          <div class="alert-card"><span class="alert-icon">⏰</span><span><span class="alert-title">Trường Hoa Mai có nguy cơ trễ</span><span class="alert-note">Tài xế cách điểm giao 4,8 km</span></span><button class="approve" onclick="showToast('Đã mở chi tiết tuyến giao')">Xem</button></div>
+          <div class="alert-card"><span class="alert-icon">📉</span><span><span class="alert-title">Cửa hàng Vĩnh Phú thiếu 8 bánh</span><span class="alert-note">Đề nghị điều chuyển từ Đại Lộ</span></span><button class="approve" onclick="showToast('Đã duyệt điều chuyển 8 bánh')">Duyệt</button></div>
+          <div class="alert-card"><span class="alert-icon">🔄</span><span><span class="alert-title">Bếp phó xin kiêm nhiệm giao bánh</span><span class="alert-note">Đơn DH-0264 · vận tải đang kín</span></span><button class="approve" onclick="showToast('Đã duyệt việc kiêm nhiệm giao bánh')">Duyệt</button></div>
+          <div class="alert-card"><span class="alert-icon">🌾</span><span><span class="alert-title">Xuất NVL từ Xưởng 42</span><span class="alert-note">12 kg bột → Xưởng 41 Macaron</span></span><button class="approve" onclick="showToast('Đã duyệt phiếu xuất NVL liên kho')">Duyệt</button></div>
+          <div class="eyebrow" style="margin-top:22px"><span>NHÂN VIÊN</span><button style="border:0;background:transparent;color:var(--orange-dark);font-weight:950" onclick="openSheet('staff')">Xem tất cả ›</button></div>
+          <div class="staff-list">
+            <button class="staff-row" onclick="openStaff('lan')"><span class="staff-avatar">👩</span><span><span class="staff-name">Cô Lan</span><span class="staff-job">Cửa hàng · 1 việc đang làm</span></span><span class="staff-state">ĐANG LÀM</span></button>
+            <button class="staff-row" onclick="openStaff('hung')"><span class="staff-avatar">👨‍🍳</span><span><span class="staff-name">Chú Hùng</span><span class="staff-job">Bếp phó Xưởng 42 · 2 việc</span></span><span class="staff-state busy">KIÊM NHIỆM</span></button>
+            <button class="staff-row" onclick="openStaff('minh')"><span class="staff-avatar">🧑</span><span><span class="staff-name">Anh Minh</span><span class="staff-job">Vận tải · đang đi tuyến</span></span><span class="staff-state">ĐANG GIAO</span></button>
+          </div>
+        </section>
+
+        <section class="view" id="profileView">
+          <div class="profile-card"><div class="avatar" id="profileAvatar">👩</div><div><div class="profile-name" id="profileName">Cô Lan</div><div class="profile-role" id="profileRole">Nhân viên cửa hàng</div></div></div>
+          <div class="eyebrow" style="margin-top:22px"><span>KẾT QUẢ TUẦN NÀY</span><span class="counter">Chi tiết ›</span></div>
+          <div class="kpi-strip" id="personalKpis">
+            <div class="kpi-mini"><strong>28</strong><span>Việc đã xong</span></div><div class="kpi-mini"><strong>96%</strong><span>Đúng giờ</span></div><div class="kpi-mini"><strong>38h</strong><span>Giờ làm</span></div>
+          </div>
+          <div class="progress-card"><div class="progress-head"><span>Mục tiêu tuần</span><span id="goalText">28 / 36 việc</span></div><div class="progress-track"><div class="progress-fill" id="goalFill"></div></div></div>
+          <div class="eyebrow" style="margin-top:24px"><span>TÀI KHOẢN</span></div>
+          <button class="menu-button" onclick="openRoleSheet()"><span class="menu-icon">🔄</span><span>Đổi vai trò xem thử</span><span>›</span></button>
+          <button class="menu-button" onclick="showToast('Đã mở phần trợ giúp bằng hình ảnh')"><span class="menu-icon">❓</span><span>Hướng dẫn sử dụng</span><span>›</span></button>
+          <button class="menu-button" style="color:#a91f1f;border-color:#efb0ad" onclick="openSheet('logout')"><span class="menu-icon" style="background:var(--red-soft)">🚪</span><span>Đăng xuất</span><span>›</span></button>
+        </section>
+
+        <section class="view" id="leadView">
+          <div class="workplace" id="leadWorkplace">👨‍🍳 Xưởng 42 · Bếp sản xuất</div><div class="org-path" id="leadOrgPath">Giám đốc Kinh doanh → Bếp trưởng → Bếp phó → Thợ bánh</div>
+          <div class="lead-hero"><small id="leadEyebrow">CA SẢN XUẤT HÔM NAY</small><div class="lead-title" id="leadTitle">3 mẻ đang làm · 1 mẻ chờ</div><div class="lead-meta" id="leadMeta">8 nhân viên · 1 người đang kiêm nhiệm</div></div>
+          <div class="action-grid" id="leadActions"><button class="lead-action" onclick="openOrdersFlow()"><span>🧾</span><span>Đơn được giao cho bếp</span></button><button class="lead-action" onclick="showToast('Đã mở danh sách nhân viên trong bếp')"><span>👥</span><span>Giao người thực hiện</span></button><button class="lead-action" onclick="showToast('Đã tạo đề nghị xuất NVL từ Kho Xưởng 42')"><span>🌾</span><span>Yêu cầu nguyên liệu</span></button><button class="lead-action" onclick="showToast('Có 1 mẻ đang chờ Bếp trưởng duyệt')"><span>✅</span><span>Duyệt mẻ hoàn thành</span></button></div>
+          <div class="eyebrow"><span id="leadQueueTitle">TIẾN ĐỘ MẺ SẢN XUẤT</span><span class="counter">4 mẻ</span></div>
+          <div id="leadQueue"><div class="batch-card"><div class="batch-top"><span class="batch-name">TH-0822 · Bánh trường học</span><span class="batch-status">ĐANG NƯỚNG</span></div><div class="batch-info">6 khay · 175°C · còn 12 phút</div><div class="batch-people"><span>👨‍🍳 Chú Hùng + 2 thợ</span><span>›</span></div></div><div class="batch-card"><div class="batch-top"><span class="batch-name">BL-0264 · Bánh kem</span><span class="batch-status" style="background:var(--green-soft);color:#09663d">CHỜ DUYỆT</span></div><div class="batch-info">2 bánh · đã có ảnh hoàn thành</div><div class="batch-people"><span>👩 Cô Lan</span><button class="approve" onclick="showToast('Đã duyệt mẻ — tự động nhập kho 2 bánh')">Duyệt</button></div></div></div>
+          <div class="flow-note">Bếp trưởng duyệt “Hoàn thành” → hệ thống tạo phiếu nhập kho thành phẩm. Không cộng kho khi nhân viên mới chỉ báo đã làm xong.</div>
+        </section>
+
+        <section class="view" id="orderCreateView">
+          <div class="page-head"><button class="icon-btn" onclick="showView('home')">←</button><h1>Tạo đơn hàng</h1></div>
+          <div class="audit-box"><span><small>NGƯỜI TẠO</small><strong id="pageOrderCreator">Cô Lan</strong></span><span><small>NGÀY GIỜ TẠO</small><strong id="pageOrderCreatedAt">22/08/2026 · 10:05</strong></span></div>
+          <label class="field-label">Khách hàng</label><input class="big-input" id="pageCustomerName" value="Cô Hạnh" /><label class="field-label">Số điện thoại</label><input class="big-input" id="pageCustomerPhone" inputmode="tel" value="0909 123 456" />
+          <label class="field-label">Chọn loại đơn</label><div class="product-types"><button class="product-type active" data-type="cake" onclick="selectProductType('cake',this)"><span>🎂</span><span>Bánh kem</span></button><button class="product-type" data-type="bakery" onclick="selectProductType('bakery',this)"><span>🥐</span><span>Bánh mặn/ngọt</span></button><button class="product-type" data-type="teabreak" onclick="selectProductType('teabreak',this)"><span>🍽️</span><span>Teabreak</span></button><button class="product-type" data-type="macaron" onclick="selectProductType('macaron',this)"><span>🟣</span><span>Macaron</span></button></div>
+          <div class="spec-panel" id="orderSpecFields"></div>
+          <label class="field-label">Ảnh mẫu khách gửi</label><div class="upload-grid"><button class="upload-box" onclick="showToast('Đã mở máy ảnh')"><span>📷</span><span>Chụp ảnh</span></button><button class="upload-box" onclick="showToast('Đã mở thư viện ảnh')"><span>🖼️</span><span>Chọn ảnh có sẵn</span></button></div>
+          <label class="field-label">Giao hoặc nhận tại quầy</label><div class="order-choice"><button class="active" onclick="chooseOrderMethod(this)">🛵 Giao tận nơi</button><button onclick="chooseOrderMethod(this)">🏪 Nhận tại quầy</button></div>
+          <label class="field-label">Địa chỉ giao</label><textarea class="big-input">31/2 Vĩnh Phú 42, Phường Lái Thiêu, Bình Dương</textarea><label class="field-label">Ngày giờ khách cần</label><input class="big-input" type="datetime-local" value="2026-08-30T19:35" />
+          <div class="flow-note" id="priceHiddenNote" style="border-color:#172f55;background:#f2f6ff;color:#172f55">🔒 Giá và thanh toán là dữ liệu nhạy cảm, không hiển thị trong luồng vận hành.</div><div id="directorPriceFields" hidden><div class="eyebrow"><span>THÔNG TIN GIÁ · CHỈ GIÁM ĐỐC</span><span>Không bắt buộc</span></div><label class="field-label">Giá trị đơn</label><input class="big-input" id="directorOrderPrice" inputmode="numeric" placeholder="Có thể để trống" /><label class="field-label">Thanh toán</label><div class="order-choice"><button class="active" onclick="chooseOrderMethod(this)">COD</button><button onclick="chooseOrderMethod(this)">Chuyển khoản</button></div><label class="field-label">Đã cọc</label><input class="big-input" id="directorOrderDeposit" inputmode="numeric" placeholder="Có thể để trống" /></div><label class="field-label">Ghi chú sản xuất/giao hàng</label><textarea class="big-input">Nhiều kem lên em nhé.</textarea>
+          <div class="flow-note">Sau khi tạo, đơn ở trạng thái “Chờ Giám đốc phân bếp”. Người tạo không được chọn bếp tiếp nhận.</div><button class="btn btn-primary" style="width:100%;min-height:68px" onclick="createOrderFromPage()">✓ TẠO ĐƠN HÀNG</button>
+        </section>
+
+        <section class="view" id="ordersFlowView">
+          <div class="page-head"><button class="icon-btn" onclick="showView('home')">←</button><h1>Đơn hàng</h1></div><div class="org-path">Chạm vào một đơn để xem người làm, nguyên nhân và cách xử lý.</div>
+          <div class="order-board-tabs"><button class="board-tab active">Tất cả · 53</button><button class="board-tab">Chờ nhận · 7</button><button class="board-tab">Đang làm · 24</button><button class="board-tab">Chờ giao · 11</button><button class="board-tab">Đã xong</button></div>
+          <button class="compact-order school-order" id="schoolOrderRow" onclick="openSchoolOrderDetail()"><span class="compact-top"><span><span class="compact-code">🔒 TH-0822 · Đơn Trường học</span><span class="compact-customer">Xưởng 42 · thông tin giới hạn</span><span class="secret-badge">CHỈ GĐKD & BẾP TRƯỞNG</span></span><span class="compact-status" style="background:var(--blue-soft);color:#184493">ĐANG LÀM</span></span><span class="status-track"><span class="status-segment done"></span><span class="status-segment current"></span><span class="status-segment"></span><span class="status-segment"></span><span class="status-segment"></span></span><span class="status-caption">2/ Đang sản xuất · không hiển thị giá</span></button>
+          <button class="compact-order" onclick="openOrderDetail('#0822-0012','Chờ nhận')"><span class="compact-top"><span><span class="compact-code">#0822-0012 · Chị Mai</span><span class="compact-customer">10 Macaron · giao 14:00 hôm nay</span></span><span class="compact-status">CHỜ NHẬN</span></span><span class="status-track"><span class="status-segment current"></span><span class="status-segment"></span><span class="status-segment"></span><span class="status-segment"></span><span class="status-segment"></span></span><span class="status-caption">1/ Chờ Bếp trưởng nhận</span></button>
+          <button class="compact-order" onclick="openOrderDetail('#0822-0010','Đang làm')"><span class="compact-top"><span><span class="compact-code">#0822-0010 · Cô Hạnh</span><span class="compact-customer">Bánh kem + bánh su · 2 bếp cùng làm</span></span><span class="compact-status" style="background:var(--blue-soft);color:#184493">ĐANG LÀM</span></span><span class="status-track"><span class="status-segment done"></span><span class="status-segment current"></span><span class="status-segment"></span><span class="status-segment"></span><span class="status-segment"></span></span><span class="status-caption">2/ Đã làm bánh 32 phút · hoàn thành 1/2 phần</span></button>
+          <button class="compact-order" onclick="openOrderDetail('#0822-0009','Chờ vận chuyển')"><span class="compact-top"><span><span class="compact-code">#0822-0009 · Anh Phúc</span><span class="compact-customer">4 bánh sinh nhật · đã nhập kho TP</span></span><span class="compact-status" style="background:#eaf1ff;color:#184493">CHỜ VẬN CHUYỂN</span></span><span class="status-track"><span class="status-segment done"></span><span class="status-segment done"></span><span class="status-segment current"></span><span class="status-segment"></span><span class="status-segment"></span></span><span class="status-caption">3/ Chờ tài xế nhận · 8 phút</span></button>
+          <button class="compact-order" onclick="openOrderDetail('#0822-0008','Đang vận chuyển')"><span class="compact-top"><span><span class="compact-code">#0822-0008 · Trường Hoa Mai</span><span class="compact-customer">8 thùng · tài xế Anh Minh</span></span><span class="compact-status" style="background:#efe8ff;color:#6533a5">ĐANG GIAO</span></span><span class="status-track"><span class="status-segment done"></span><span class="status-segment done"></span><span class="status-segment done"></span><span class="status-segment current"></span><span class="status-segment"></span></span><span class="status-caption">4/ Đang vận chuyển 18 phút · còn 4,8 km</span></button>
+          <button class="compact-order" onclick="openOrderDetail('#0822-0007','Hoàn thành')"><span class="compact-top"><span><span class="compact-code">#0822-0007 · Chị Thảo</span><span class="compact-customer">2 bánh kem · giao thành công</span></span><span class="compact-status" style="background:var(--green-soft);color:#09663d">HOÀN THÀNH</span></span><span class="status-track"><span class="status-segment done"></span><span class="status-segment done"></span><span class="status-segment done"></span><span class="status-segment done"></span><span class="status-segment done"></span></span><span class="status-caption" style="color:#09663d">5/ Giao trong 26 phút · quãng đường 6,4 km</span></button>
+        </section>
+      </main>
+
+      <nav class="bottom-nav" aria-label="Điều hướng chính">
+        <button class="nav-item active" onclick="showView('home',this)"><span>🏠</span><span>Hôm nay</span></button>
+        <button class="nav-item" onclick="openOrdersFlow(this)"><span>🧾</span><span>Đơn hàng</span></button>
+        <button class="nav-item" onclick="showView('tasks',this)"><span>✅</span><span>Việc</span></button>
+        <button class="nav-item" onclick="showProfile(this)"><span>👤</span><span>Của tôi</span></button>
+      </nav>
+
+      <div class="sheet" id="voiceSheet" role="dialog" aria-modal="true" aria-label="Nhập bằng giọng nói" onclick="closeSheets(event)">
+        <div class="sheet-card" onclick="event.stopPropagation()"><div class="sheet-grab"></div><h2 class="sheet-title">Cô cứ nói tự nhiên</h2><p class="sheet-help">Ví dụ: “Bánh này thiếu dâu” hoặc “Tôi đã làm xong hai bánh”</p><div class="mic-orb">🎙️</div><div class="heard">Ứng dụng sẽ nghe và đọc lại trước khi lưu.</div><div class="sheet-actions"><button class="btn btn-light" onclick="closeAll()">Đóng</button><button class="btn btn-primary" onclick="showToast('Đã nghe: Tôi đã làm xong hai bánh');closeAll()">Bắt đầu nói</button></div></div>
+      </div>
+      <div class="sheet" id="photoSheet" role="dialog" aria-modal="true" aria-label="Chụp ảnh" onclick="closeSheets(event)">
+        <div class="sheet-card" onclick="event.stopPropagation()"><div class="sheet-grab"></div><h2 class="sheet-title">Chụp rõ toàn bộ bánh</h2><p class="sheet-help">Đưa bánh vào giữa khung. Ảnh phải sáng và nhìn rõ số lượng.</p><div class="mic-orb" style="background:var(--blue);border-color:#d7e5ff;box-shadow:0 0 0 12px #eef4ff">📷</div><div class="sheet-actions"><button class="btn btn-light" onclick="closeAll()">Đóng</button><button class="btn btn-primary" onclick="showToast('Ảnh đã được lưu');closeAll()">Chụp ảnh</button></div></div>
+      </div>
+      <div class="sheet" id="incidentSheet" role="dialog" aria-modal="true" aria-label="Báo sự cố" onclick="closeSheets(event)">
+        <div class="sheet-card" onclick="event.stopPropagation()"><div class="sheet-grab"></div><h2 class="sheet-title">Có chuyện gì?</h2><p class="sheet-help">Chọn bằng hình. Sau đó ứng dụng sẽ yêu cầu chụp ảnh.</p><div class="quick-grid" style="margin-bottom:16px"><button class="quick" onclick="incident('Bánh hỏng')"><span class="quick-icon">💥</span><span>Bánh hỏng</span></button><button class="quick" onclick="incident('Thiếu hàng')"><span class="quick-icon">📦</span><span>Thiếu hàng</span></button><button class="quick" onclick="incident('Trễ giờ')"><span class="quick-icon">⏰</span><span>Trễ giờ</span></button></div><button class="btn btn-light" style="width:100%" onclick="closeAll()">Đóng</button></div>
+      </div>
+      <div class="sheet" id="roleSheet" role="dialog" aria-modal="true" aria-label="Chọn vai trò để xem mockup" onclick="closeSheets(event)">
+        <div class="sheet-card" onclick="event.stopPropagation()"><div class="sheet-grab"></div><h2 class="sheet-title">Xem theo người sử dụng</h2><p class="sheet-help">Bản thật sẽ tự nhận đúng vai trò sau khi đăng nhập.</p>
+          <div class="role-list">
+            <button class="role-choice selected" data-role="store" onclick="selectRole('store')"><span class="role-emoji">🏪</span><span><strong>Nhân viên cửa hàng</strong><small>Bán hàng · đóng gói · bàn giao</small></span><span class="role-tick">✓</span></button>
+            <button class="role-choice" data-role="factory" onclick="selectRole('factory')"><span class="role-emoji">👩‍🍳</span><span><strong>Nhân viên xưởng</strong><small>Nhận mẻ · sản xuất · nhập kho</small></span><span class="role-tick"></span></button>
+            <button class="role-choice" data-role="driver" onclick="selectRole('driver')"><span class="role-emoji">🛵</span><span><strong>Nhân viên giao hàng</strong><small>Nhận hàng · đi tuyến · giao đơn</small></span><span class="role-tick"></span></button>
+            <button class="role-choice" data-role="kitchen_lead" onclick="selectRole('kitchen_lead')"><span class="role-emoji">👨‍🍳</span><span><strong>Bếp trưởng Xưởng 42</strong><small>Chia mẻ · giao việc · duyệt nhập kho</small></span><span class="role-tick"></span></button>
+            <button class="role-choice" data-role="kitchen_deputy" onclick="selectRole('kitchen_deputy')"><span class="role-emoji">🥐</span><span><strong>Bếp phó</strong><small>Thực hiện mẻ · có thể kiêm nhiệm</small></span><span class="role-tick"></span></button>
+            <button class="role-choice" data-role="warehouse_lead" onclick="selectRole('warehouse_lead')"><span class="role-emoji">🌾</span><span><strong>Trưởng kho NVL</strong><small>Xuất · nhận · điều chuyển liên kho</small></span><span class="role-tick"></span></button>
+            <button class="role-choice" data-role="transport_lead" onclick="selectRole('transport_lead')"><span class="role-emoji">🚚</span><span><strong>Đội trưởng vận tải</strong><small>Chia tuyến · giao tài xế · xử lý trễ</small></span><span class="role-tick"></span></button>
+            <button class="role-choice" data-role="manager" onclick="selectRole('manager')"><span class="role-emoji">📊</span><span><strong>Giám đốc Kinh doanh</strong><small>Doanh thu · vận hành · phê duyệt</small></span><span class="role-tick"></span></button>
+          </div><button class="btn btn-light" style="width:100%" onclick="closeAll()">Đóng</button>
+        </div>
+      </div>
+      <div class="sheet" id="logoutSheet" role="dialog" aria-modal="true" aria-label="Xác nhận đăng xuất" onclick="closeSheets(event)">
+        <div class="sheet-card" onclick="event.stopPropagation()"><div class="sheet-grab"></div><div style="font-size:64px;text-align:center">👋</div><h2 class="sheet-title">Muốn đăng xuất?</h2><p class="sheet-help">Các việc đã lưu vẫn được giữ an toàn.</p><div class="sheet-actions"><button class="btn btn-light" onclick="closeAll()">Ở lại</button><button class="btn btn-danger" onclick="logoutMock()">Đăng xuất</button></div></div>
+      </div>
+      <div class="sheet" id="staffSheet" role="dialog" aria-modal="true" aria-label="Danh sách nhân viên" onclick="closeSheets(event)">
+        <div class="sheet-card" style="max-height:88vh;overflow-y:auto" onclick="event.stopPropagation()"><div class="sheet-grab"></div><h2 class="sheet-title">Theo dõi nhân viên</h2><p class="sheet-help">Chọn một người để xem việc và hiệu suất.</p><input class="staff-search" placeholder="🔎 Tìm theo tên hoặc bộ phận" oninput="filterStaff(this.value)" />
+          <div class="staff-list" id="allStaffList"></div><button class="btn btn-light" style="width:100%;margin-top:14px" onclick="closeAll()">Đóng</button>
+        </div>
+      </div>
+      <div class="sheet" id="staffDetailSheet" role="dialog" aria-modal="true" aria-label="Chi tiết nhân viên" onclick="closeSheets(event)">
+        <div class="sheet-card" style="max-height:91vh;overflow-y:auto" onclick="event.stopPropagation()"><div class="sheet-grab"></div><div id="staffDetail"></div><div class="sheet-actions"><button class="btn btn-light" onclick="backToStaff()">Danh sách</button><button class="btn btn-primary" onclick="showToast('Đã mở màn giao việc cho nhân viên')">＋ Giao việc</button></div></div>
+      </div>
+      <div class="sheet" id="periodSheet" role="dialog" aria-modal="true" aria-label="Chọn khoảng thời gian" onclick="closeSheets(event)">
+        <div class="sheet-card" onclick="event.stopPropagation()"><div class="sheet-grab"></div><h2 class="sheet-title">Chọn thời gian xem</h2><p class="sheet-help">Doanh thu, chi và đơn hàng sẽ cùng đổi theo khoảng này.</p><label class="field-label" for="dateFrom">Từ ngày</label><input class="big-input" id="dateFrom" type="date" value="2026-08-01" /><label class="field-label" for="dateTo">Đến ngày</label><input class="big-input" id="dateTo" type="date" value="2026-08-22" /><div class="sheet-actions"><button class="btn btn-light" onclick="closeAll()">Đóng</button><button class="btn btn-primary" onclick="applyCustomPeriod()">XEM KẾT QUẢ</button></div></div>
+      </div>
+      <div class="sheet" id="notificationSheet" role="dialog" aria-modal="true" aria-label="Thông báo" onclick="closeSheets(event)">
+        <div class="sheet-card" style="max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()"><div class="sheet-grab"></div><h2 class="sheet-title">Thông báo</h2><p class="sheet-help">Bấm để đi thẳng đến đơn, việc hoặc sự cố.</p><div class="notice-list" id="noticeList"></div><button class="btn btn-light" style="width:100%;margin-top:14px" onclick="closeAll()">Đóng</button></div>
+      </div>
+      <div class="sheet" id="orderSheet" role="dialog" aria-modal="true" aria-label="Tạo đơn hàng" onclick="closeSheets(event)">
+        <div class="sheet-card" style="max-height:94vh;overflow-y:auto" onclick="event.stopPropagation()"><div class="sheet-grab"></div><h2 class="sheet-title">Tạo đơn hàng</h2><p class="sheet-help">Người có quyền tạo đơn sẽ được ghi nhận tự động.</p><div class="audit-box"><span><small>NGƯỜI TẠO</small><strong id="orderCreator">Cô Lan</strong></span><span><small>NGÀY GIỜ TẠO</small><strong id="orderCreatedAt">22/08/2026 · 10:05</strong></span></div><label class="field-label">Khách hàng</label><input class="big-input" id="orderCustomer" value="Cô Hạnh" /><label class="field-label">Số điện thoại</label><input class="big-input" inputmode="tel" value="0909 123 456" /><label class="field-label">Sản phẩm và số lượng</label><textarea class="big-input" id="orderProduct">2 bánh kem dâu size 18&#10;Chữ màu hồng</textarea><label class="field-label">Nhận hàng bằng cách nào?</label><div class="order-choice"><button class="active" onclick="chooseOrderMethod(this)">🛵 Giao tận nơi</button><button onclick="chooseOrderMethod(this)">🏪 Nhận tại quầy</button></div><label class="field-label">Thời gian khách cần</label><input class="big-input" type="datetime-local" value="2026-08-22T10:30" /><label class="field-label">Bếp tiếp nhận</label><select class="big-input"><option>Xưởng 42 · Bếp sản xuất</option><option>Xưởng 41 · Macaron</option><option>Bakery · Bếp nóng</option><option>Bakery · Bếp lạnh</option></select><label class="field-label">Ghi chú</label><textarea class="big-input" placeholder="Bấm micro để nói hoặc nhập ghi chú">Khách cần gọi trước khi giao.</textarea><div class="order-flow"><span class="flow-node current">Tạo đơn</span><span class="flow-arrow">›</span><span class="flow-node">Bếp trưởng nhận</span><span class="flow-arrow">›</span><span class="flow-node">Sản xuất</span><span class="flow-arrow">›</span><span class="flow-node">Giao/nhận</span><span class="flow-arrow">›</span><span class="flow-node">Xong</span></div><div class="sheet-actions"><button class="btn btn-light" onclick="closeAll()">Để sau</button><button class="btn btn-primary" onclick="createOrderMock()">✓ TẠO ĐƠN</button></div></div>
+      </div>
+      <div class="sheet" id="orderDetailSheet" role="dialog" aria-modal="true" aria-label="Chi tiết luồng đơn hàng" onclick="closeSheets(event)">
+        <div class="sheet-card" style="max-height:94vh;overflow-y:auto" onclick="event.stopPropagation()"><div class="sheet-grab"></div><div class="order-card-top"><h2 style="margin:0" id="detailOrderCode">Đơn #0822-0010</h2><span class="order-badge" id="detailOrderStatus" style="background:var(--blue-soft);color:#184493">ĐANG SẢN XUẤT</span></div><p class="sheet-help" id="detailSummary" style="text-align:left;margin-left:0">Cùng một đơn, mỗi bếp nhận đúng phần của mình.</p><div class="order-flow"><span class="flow-node done">Đã tạo</span><span class="flow-arrow">›</span><span class="flow-node done">GĐ đã phân</span><span class="flow-arrow">›</span><span class="flow-node current" id="detailFlowProduction">Sản xuất 1/2</span><span class="flow-arrow">›</span><span class="flow-node" id="detailFlowStock">Kho TP</span><span class="flow-arrow">›</span><span class="flow-node" id="detailFlowShipping">Vận tải</span></div>
+          <div class="kitchen-part"><div class="part-head"><span class="part-name">🔥 Bakery · Bếp nóng</span><span class="part-state" style="background:var(--green-soft);color:#09663d">ĐÃ XONG</span></div><div class="order-summary">20 bánh su · hoàn thành lúc 09:42</div><div class="assigned-task"><span>👩‍🍳</span><span>Chị Hoa · Nướng và đóng khay</span><span>✓</span></div></div>
+          <div class="kitchen-part" id="coldKitchenPart"><div class="part-head"><span class="part-name">❄️ Bakery · Bếp lạnh</span><span class="part-state" id="coldState">CHỜ BẾP TRƯỞNG NHẬN</span></div><div class="order-summary">2 bánh kem dâu size 18 · có 2 ảnh mẫu</div><div id="coldAssignments"></div><button class="btn btn-primary" id="acceptColdButton" style="width:100%;margin-top:12px" onclick="acceptColdKitchen()">NHẬN PHẦN BẾP LẠNH</button></div>
+          <div class="handoff-card" id="warehouseHandoff" hidden>📦 Tất cả phần sản xuất đã hoàn thành.<br>Đã nhập Kho thành phẩm: 20 bánh su + 2 bánh kem.</div><div class="handoff-card" id="shippingHandoff" hidden style="border-color:#b8c9ef;background:var(--blue-soft);color:#184493">🛵 Vận tải đã nhận thông báo: Đơn sẵn sàng giao.</div><button class="btn btn-light" style="width:100%;margin-top:14px" onclick="closeAll()">Đóng</button></div>
+      </div>
+      <div class="sheet" id="schoolOrderSheet" role="dialog" aria-modal="true" aria-label="Đơn Trường học bảo mật" onclick="closeSheets(event)">
+        <div class="sheet-card" style="max-height:94vh;overflow-y:auto" onclick="event.stopPropagation()"><div class="sheet-grab"></div><div class="order-card-top"><h2 style="margin:0">🔒 Đơn TH-0822</h2><span class="order-badge" style="background:#172f55;color:white">BẢO MẬT</span></div><p class="sheet-help" style="text-align:left;margin-left:0">Chỉ Giám đốc Kinh doanh và Bếp trưởng Xưởng 42 được xem hồ sơ này.</p><div class="flow-note" style="border-color:#172f55;background:#f2f6ff;color:#172f55">Giá bán, doanh thu và thông tin thương mại không tồn tại trên màn đơn vận hành này.</div><div class="detail-line"><small>ĐIỂM GIAO</small>Trường Hoa Mai · giao trước 08:30</div><div class="detail-line"><small>SẢN XUẤT</small>240 phần · 6 khay · Xưởng 42</div><div class="detail-line"><small>PHỤ TRÁCH</small>Bếp trưởng Hoa → Bếp phó Hùng → 2 thợ bánh</div><div class="detail-line"><small>TIẾN ĐỘ</small>Đang nướng · đã làm 32 phút · còn 12 phút</div><div class="detail-line"><small>GHI NHẬN</small>Không hiển thị giá · không hiển thị tiền cọc · không hiển thị doanh thu</div><button class="btn btn-light" style="width:100%;margin-top:10px" onclick="closeAll()">Đóng</button></div>
+      </div>
+      <div class="sheet" id="orderSuccessSheet" role="dialog" aria-modal="true" aria-label="Đơn đã được tạo" onclick="closeSheets(event)">
+        <div class="sheet-card" style="max-height:92vh;overflow-y:auto" onclick="event.stopPropagation()"><div class="sheet-grab"></div><div style="font-size:68px;text-align:center">✅</div><h2 class="sheet-title">Đã tạo đơn #0822-0013</h2><p class="sheet-help">Bản dưới đây dùng để gửi khách xác nhận và thanh toán.</p><div class="copy-preview" id="customerOrderCopy"></div><button class="btn btn-primary" style="width:100%;margin-top:13px" onclick="copyCustomerOrder()">📋 SAO CHÉP GỬI KHÁCH</button><button class="btn btn-light" style="width:100%;margin-top:9px" onclick="closeAll();openOrdersFlow()">Xem đơn trong danh sách</button></div>
+      </div>
+
+      <section class="flow" id="proofFlow" role="dialog" aria-modal="true" aria-label="Xác nhận hoàn thành công việc">
+        <header class="flow-head"><button class="icon-btn" onclick="closeProof()" aria-label="Quay lại">←</button><strong>Xác nhận hoàn thành</strong><span></span></header>
+        <div class="steps"><span class="step done"></span><span class="step" id="step2"></span><span class="step" id="step3"></span></div>
+        <div class="flow-body" id="proofCapture">
+          <h2 class="instruction">Chụp cả 2 bánh</h2>
+          <p class="big-help">Đặt hai bánh cạnh nhau, đủ sáng và không che sản phẩm.</p>
+          <div class="guide-frame"><span class="cake" id="proofEmoji">🎂 🎂</span></div>
+        </div>
+        <div class="flow-body" id="proofReview" hidden>
+          <h2 class="instruction">Ảnh này rõ chưa?</h2>
+          <p class="big-help">Cô nhìn lại số lượng trước khi gửi.</p>
+          <div class="proof-preview" id="proofPreview">🎂 🎂</div>
+          <div class="check-card"><span class="check-circle">✓</span><span id="proofCheck">Đã thấy đủ 2 bánh trong ảnh</span></div>
+        </div>
+        <div class="flow-body" id="proofDone" hidden>
+          <div style="font-size:105px;text-align:center;margin-top:55px">✅</div>
+          <h2 class="instruction">Cô đã làm xong!</h2>
+          <p class="big-help" id="syncMessage">Ảnh và thời gian đã được lưu. Việc tiếp theo đã sẵn sàng.</p>
+          <div class="check-card"><span class="check-circle">2</span><span>Tiếp theo: Đóng hộp 12 bánh</span></div>
+        </div>
+        <div class="flow-actions" id="captureActions"><button class="btn btn-light" onclick="closeProof()">Để sau</button><button class="btn btn-primary" onclick="takeProof()">📷 CHỤP ẢNH</button></div>
+        <div class="flow-actions" id="reviewActions" hidden><button class="btn btn-light" onclick="retakeProof()">Chụp lại</button><button class="btn btn-primary" onclick="confirmProof()">✓ ĐÚNG RỒI</button></div>
+        <div class="flow-actions single" id="doneActions" hidden><button class="btn btn-primary" onclick="closeProof(true)">LÀM VIỆC TIẾP THEO →</button></div>
+      </section>
+      <section class="login-screen" id="loginScreen" aria-label="Đăng nhập SUMI">
+        <div class="login-logo">🧁</div><h1 class="login-title">Chào mừng đến SUMI</h1><p class="login-help">Đăng nhập để xem đúng việc của mình</p>
+        <div class="login-card"><label class="field-label" for="loginId">Số điện thoại hoặc Email</label><input class="big-input" id="loginId" value="090 123 4567" inputmode="email" /><label class="field-label" for="loginPassword">Mật khẩu</label><input class="big-input" id="loginPassword" value="12345678" type="password" /><button class="btn btn-primary" style="width:100%;min-height:66px;font-size:19px" onclick="loginMock()">ĐĂNG NHẬP</button><button style="width:100%;min-height:52px;border:0;background:transparent;color:var(--orange-dark);font-weight:900" onclick="showToast('Khôi phục bằng email hoặc liên hệ quản lý')">Quên mật khẩu?</button></div>
+        <p class="login-note">Tài khoản do quản lý SUMI cấp.<br>Không chia sẻ mật khẩu cho người khác.</p>
+      </section>
+      <div class="toast" id="toast"><span class="toast-icon">✓</span><span id="toastText">Đã lưu</span></div>
+    </section>
+  </div>
+  <script>
+    const sheets = { voice: 'voiceSheet', photo: 'photoSheet', camera: 'photoSheet', incident: 'incidentSheet', role: 'roleSheet', logout: 'logoutSheet', staff: 'staffSheet', staffDetail: 'staffDetailSheet', period: 'periodSheet', notification:'notificationSheet', order:'orderSheet', orderDetail:'orderDetailSheet', schoolOrder:'schoolOrderSheet', orderSuccess:'orderSuccessSheet' };
+    const roleData = {
+      store: { hello:'Chào cô Lan', owner:'cô Lan', place:'🏪 Cửa hàng Vĩnh Phú 42 · Bếp lạnh', org:'Giám đốc Kinh doanh → Bếp trưởng → Bếp phó → Cô Lan', count:'Còn 4 việc', deadline:'● LÀM TRƯỚC 10:30', duration:'18 phút', picture:'🎂', title:'Trang trí bánh kem dâu', meta1:'① Số lượng: 2 bánh', meta2:'② Size 18 · Chữ màu hồng', proof:'Chụp cả 2 bánh', proofEmoji:'🎂 🎂', proofCheck:'Đã thấy đủ 2 bánh trong ảnh', next:'Đóng hộp 12 bánh', queue:[['📦','Đóng hộp 12 bánh','Làm sau việc hiện tại'],['📷','Chụp ảnh bàn giao','Đơn DH-0258'],['🧹','Vệ sinh bàn bánh','Trước khi hết ca']] },
+      factory: { hello:'Chào chú Hùng', owner:'chú Hùng', place:'👩‍🍳 Xưởng 42 · Bếp sản xuất · Thợ bánh', org:'Giám đốc Kinh doanh → Bếp trưởng → Bếp phó → Chú Hùng', count:'Còn 3 mẻ', deadline:'● XONG TRƯỚC 09:45', duration:'35 phút', picture:'🥖', title:'Nướng mẻ bánh trường học', meta1:'① Khay: 6 khay', meta2:'② Nhiệt 175° · 22 phút', proof:'Chụp đủ 6 khay bánh', proofEmoji:'🥖 🥖', proofCheck:'Đã thấy đủ khay và màu bánh', next:'Đóng gói và nhập kho', queue:[['🌡️','Kiểm tra nhiệt độ mẻ','Còn 12 phút'],['📦','Đóng gói và nhập kho','Mẻ TH-0822'],['🧾','Ghi nhận bột dư','Sau khi đóng gói']] },
+      driver: { hello:'Chào anh Minh', owner:'anh Minh', place:'🛵 Vận tải · Nhân viên giao hàng', org:'Giám đốc Kinh doanh → Đội trưởng → Đội phó → Anh Minh', count:'Còn 5 điểm', deadline:'● GIAO TRƯỚC 08:30', duration:'12 phút', picture:'🏫', title:'Giao hàng Trường Hoa Mai', meta1:'① 8 thùng · 240 phần', meta2:'② Cổng số 2 · Gọi cô Hạnh', proof:'Chụp hàng và phiếu đã ký', proofEmoji:'📦 📝', proofCheck:'Đã thấy hàng và chữ ký người nhận', next:'Điểm giao Trường Mầm Xanh', queue:[['🗺️','Trường Mầm Xanh','Cách 2,4 km'],['🏪','Cửa hàng Đại Lộ','Nhận 3 thùng trả về'],['⛽','Kiểm tra xe','Trước khi về kho']] },
+      kitchen_deputy: { hello:'Chào chú Hùng', owner:'chú Hùng', place:'🥐 Xưởng 42 · Bếp sản xuất · Bếp phó', org:'Giám đốc Kinh doanh → Bếp trưởng → Bếp phó Hùng', count:'Còn 3 việc', deadline:'● XONG TRƯỚC 09:45', duration:'35 phút', picture:'🥖', title:'Phụ trách mẻ TH-0822', meta1:'① 6 khay · 240 phần', meta2:'② Có 2 thợ cùng làm', proof:'Chụp đủ khay bánh hoàn thành', proofEmoji:'🥖 🥖', proofCheck:'Đã thấy đủ khay và màu bánh', next:'Chờ Bếp trưởng duyệt', queue:[['👥','Kiểm tra việc của 2 thợ','Trước khi đóng gói'],['🔄','Kiêm nhiệm giao DH-0264','Đang chờ quản lý duyệt'],['🧾','Báo bột dư cuối mẻ','Sau khi hoàn thành']] },
+      warehouse_lead: { hello:'Chào anh Tâm', owner:'anh Tâm', place:'🌾 Xưởng 42 · Kho nguyên vật liệu', org:'Giám đốc Kinh doanh → Trưởng kho NVL Tâm', count:'Còn 4 phiếu', deadline:'● XUẤT TRƯỚC 08:15', duration:'10 phút', picture:'🌾', title:'Xuất 12 kg bột cho Xưởng 41', meta1:'① Kho đi: NVL Xưởng 42', meta2:'② Kho nhận: NVL Xưởng 41', proof:'Chụp hàng trước khi xuất kho', proofEmoji:'🌾 📦', proofCheck:'Đã thấy nguyên liệu và số lượng xuất', next:'Chờ kho Xưởng 41 xác nhận nhận', queue:[['📥','Nhận 6 kg bơ từ Bakery','Phiếu CK-0422'],['🔢','Đối chiếu tồn bột','Cuối ca'],['⚠️','Báo lô sữa sắp hết hạn','Còn 3 ngày']] },
+      kitchen_lead: { hello:'Chào Bếp trưởng Hoa', owner:'Bếp trưởng Hoa', place:'👨‍🍳 Xưởng 42 · Bếp sản xuất' },
+      transport_lead: { hello:'Chào Đội trưởng Nam', owner:'Đội trưởng Nam', place:'🚚 Bộ phận Vận tải' },
+      manager: { hello:'Chào Giám đốc Nghĩa', owner:'Giám đốc', place:'📊 Toàn hệ thống' }
+    };
+    let currentRole = 'store';
+    const profileData = {
+      store: { avatar:'👩', name:'Cô Lan', role:'Nhân viên cửa hàng', kpis:[['28','Việc đã xong'],['96%','Đúng giờ'],['38h','Giờ làm']], goal:'28 / 36 việc', fill:'78%' },
+      factory: { avatar:'👨‍🍳', name:'Chú Hùng', role:'Nhân viên Xưởng 42', kpis:[['14','Mẻ đã xong'],['1.240','Sản phẩm'],['41h','Giờ làm']], goal:'14 / 18 mẻ', fill:'78%' },
+      driver: { avatar:'🧑', name:'Anh Minh', role:'Nhân viên giao hàng', kpis:[['46','Đơn đã giao'],['118km','Đã chạy'],['93%','Đúng giờ']], goal:'46 / 52 đơn', fill:'88%' },
+      kitchen_deputy: { avatar:'🥐', name:'Chú Hùng', role:'Bếp phó · Xưởng 42', kpis:[['14','Mẻ phụ trách'],['1','Việc kiêm nhiệm'],['97%','Đạt chuẩn']], goal:'14 / 18 mẻ', fill:'78%' },
+      warehouse_lead: { avatar:'🌾', name:'Anh Tâm', role:'Trưởng kho NVL · Xưởng 42', kpis:[['32','Phiếu kho'],['0,4%','Lệch kho'],['4','Chờ xử lý']], goal:'32 / 38 phiếu', fill:'84%' },
+      kitchen_lead: { avatar:'👨‍🍳', name:'Bếp trưởng Hoa', role:'Bếp trưởng · Xưởng 42', kpis:[['18','Mẻ hoàn thành'],['98%','Đạt chuẩn'],['8','Nhân viên']], goal:'18 / 21 mẻ', fill:'86%' },
+      transport_lead: { avatar:'🚚', name:'Đội trưởng Nam', role:'Đội trưởng Vận tải', kpis:[['82','Đơn đã giao'],['94%','Đúng giờ'],['5','Tài xế']], goal:'94% / 96% đúng giờ', fill:'94%' },
+      manager: { avatar:'👨‍💼', name:'Giám đốc Nghĩa', role:'Giám đốc Kinh doanh', kpis:[['128,4tr','Doanh thu'],['186','Đơn hàng'],['91%','Đúng giờ']], goal:'91% / 95% đúng giờ', fill:'91%' }
+    };
+    const staffData = [
+      { id:'lan', avatar:'👩', name:'Cô Lan', dept:'Bakery · Bếp lạnh', role:'Thợ làm bánh', state:'ĐANG LÀM', current:'Trang trí 2 bánh kem dâu', assigned:'Quản lý Cửa hàng', kpi:'28 việc · 96% đúng giờ', extra:'Không có việc kiêm nhiệm' },
+      { id:'hung', avatar:'👨‍🍳', name:'Chú Hùng', dept:'Xưởng 42 · Bếp sản xuất', role:'Bếp phó', state:'KIÊM NHIỆM', current:'Nướng mẻ trường học TH-0822', assigned:'Bếp trưởng Xưởng 42', kpi:'14 mẻ · 1.240 sản phẩm', extra:'Chờ duyệt: giao đơn DH-0264 sau khi hoàn thành mẻ' },
+      { id:'minh', avatar:'🧑', name:'Anh Minh', dept:'Vận tải', role:'Đội phó', state:'ĐANG GIAO', current:'Tuyến Trường Hoa Mai · 8 thùng', assigned:'Đội trưởng Vận tải', kpi:'46 đơn · 93% đúng giờ', extra:'Không có việc kiêm nhiệm' },
+      { id:'mai', avatar:'👩‍🍳', name:'Chị Mai', dept:'Xưởng 41 · Macaron', role:'Bếp trưởng', state:'ĐANG LÀM', current:'Mẻ Macaron sỉ MC-118', assigned:'Giám đốc Kinh doanh', kpi:'11 mẻ · 98% đạt chuẩn', extra:'Đang chờ nhận 12 kg bột từ Kho Xưởng 42' },
+      { id:'tam', avatar:'🧔', name:'Anh Tâm', dept:'Xưởng 42 · Kho NVL', role:'Trưởng kho', state:'CHỜ DUYỆT', current:'Chuẩn bị phiếu xuất NVL XK-0421', assigned:'Giám đốc Kinh doanh', kpi:'32 phiếu · lệch kho 0,4%', extra:'Xuất 12 kg bột: Xưởng 42 → Xưởng 41' },
+      { id:'hoa', avatar:'👩', name:'Chị Hoa', dept:'Bakery · Bếp nóng', role:'Bếp trưởng', state:'ĐANG LÀM', current:'Điều phối 4 đơn tại cửa hàng', assigned:'Giám đốc Kinh doanh', kpi:'41 việc · 97% đúng giờ', extra:'Đang giao 3 việc cho Bếp phó' },
+      { id:'phuc', avatar:'🧑‍🍳', name:'Anh Phúc', dept:'Xưởng 41 · Macaron', role:'Thợ làm bánh', state:'SẴN SÀNG', current:'Chờ nguyên liệu cho mẻ tiếp theo', assigned:'Bếp trưởng Xưởng 41', kpi:'860 sản phẩm · lỗi 1,2%', extra:'Có thể nhận việc kiêm nhiệm' },
+      { id:'thu', avatar:'👩‍💼', name:'Chị Thu', dept:'Kế toán', role:'Kế toán nội bộ', state:'ĐANG LÀM', current:'Đối chiếu phiếu nhập kho thành phẩm', assigned:'Giám đốc Kinh doanh', kpi:'18 phiếu · 100% đối chiếu', extra:'Chờ mẻ TH-0822 hoàn thành để ghi nhận kho' }
+    ];
+    const managerPeriods = {
+      day: { label:'Hôm nay', revenue:'128,45tr', cost:'46,20tr', trend:'↗ 12%', total:186, making:24, shipping:11, done:146, cancel:5 },
+      week: { label:'7 ngày gần nhất', revenue:'716,80tr', cost:'268,40tr', trend:'↗ 8%', total:1042, making:31, shipping:18, done:973, cancel:20 },
+      month: { label:'Tháng 8/2026', revenue:'2,84 tỷ', cost:'1,09 tỷ', trend:'↗ 15%', total:4186, making:31, shipping:18, done:4058, cancel:79 },
+      custom: { label:'01/08 – 22/08', revenue:'2,21 tỷ', cost:'846,30tr', trend:'↗ 10%', total:3264, making:31, shipping:18, done:3154, cancel:61 }
+    };
+    let notices = [
+      { type:'order', icon:'🧾', title:'Có đơn mới DH-0265', text:'Thu ngân Vĩnh Phú · 2 bánh kem · cần 10:30', time:'Vừa xong', unread:true },
+      { type:'task', icon:'✅', title:'Việc mới được giao', text:'Bếp trưởng giao kiểm tra mẻ TH-0822', time:'5 phút', unread:true },
+      { type:'incident', icon:'⚠️', title:'Sự cố cần xem', text:'Tuyến Trường Hoa Mai có nguy cơ giao trễ', time:'8 phút', unread:true }
+    ];
+    function speakNewOrder() { if ('speechSynthesis' in window) { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance('Có đơn mới'); u.lang='vi-VN'; u.rate=.9; u.volume=1; speechSynthesis.speak(u); } }
+    function playTone(kind='ting') { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const notes = kind === 'cash' ? [880,1320,1760,1100] : [1050,1450]; notes.forEach((freq,i) => { const o=ctx.createOscillator(), g=ctx.createGain(); o.frequency.value=freq; o.type=kind==='cash'?'square':'sine'; g.gain.setValueAtTime(.0001,ctx.currentTime+i*.1); g.gain.exponentialRampToValueAtTime(.16,ctx.currentTime+i*.1+.01); g.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+i*.1+.14); o.connect(g); g.connect(ctx.destination); o.start(ctx.currentTime+i*.1); o.stop(ctx.currentTime+i*.1+.16); }); } catch(e) {} }
+    function renderNotices() { document.getElementById('noticeList').innerHTML = notices.map((n,i) => `<button class="notice-item ${n.unread?'unread':''}" onclick="openNotice(${i})"><span class="notice-type">${n.icon}</span><span><span class="notice-title">${n.title}</span><span class="notice-text">${n.text}</span></span><span class="notice-time">${n.time}</span></button>`).join(''); document.getElementById('bellCount').textContent = notices.filter(n=>n.unread).length; document.getElementById('bellCount').hidden = !notices.some(n=>n.unread); }
+    function openNotifications() { renderNotices(); openSheet('notification'); }
+    function openNotice(index) { const n=notices[index]; n.unread=false; renderNotices(); closeAll(); if(n.type==='order') openOrdersFlow(); else if(n.type==='incident') openSheet('incident'); else { showView('tasks'); showToast('Đã mở việc liên quan'); } }
+    function showStandaloneView(id) { closeAll(); document.querySelectorAll('.view').forEach(v=>v.classList.remove('active')); document.getElementById(id).classList.add('active'); document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active')); window.scrollTo(0,0); }
+    let currentProductType='cake';
+    const productTypeNames={cake:'Bánh kem',bakery:'Bánh mặn/ngọt',teabreak:'Teabreak',macaron:'Macaron'};
+    function renderOrderSpec(type) { const fields={ cake:`<label class="field-label">Dòng bánh / vị bánh</label><input class="big-input spec-value" value="Mousse Vải" /><label class="field-label">Số lượng và kích thước</label><div class="filter-row"><input class="big-input spec-value" value="10 bánh" /><input class="big-input spec-value" value="Size 18cm" /></div><label class="field-label">Nội dung trên bánh</label><input class="big-input spec-value" value="Sinh nhật vui vẻ" /><label class="field-label">Phụ kiện</label><input class="big-input spec-value" value="Nến số 20" />`, bakery:`<label class="field-label">Chọn bánh và số lượng</label><textarea class="big-input spec-value">Bánh mì bơ tỏi ×20\nBánh xúc xích ×15\nBông lan trứng muối ×10</textarea><label class="field-label">Quy cách đóng gói</label><input class="big-input spec-value" value="Mỗi loại đóng riêng · ghi nhãn" />`, teabreak:`<label class="field-label">Số khách</label><input class="big-input spec-value" value="80 khách" /><label class="field-label">Thực đơn</label><textarea class="big-input spec-value">3 món bánh mặn · 2 món bánh ngọt\nTrà đào và cà phê</textarea><label class="field-label">Yêu cầu phục vụ</label><input class="big-input spec-value" value="Setup bàn · khăn trắng · có nhân viên phục vụ" />`, macaron:`<label class="field-label">Sỉ hoặc lẻ</label><div class="order-choice"><button class="active">Đơn sỉ</button><button>Đơn lẻ</button></div><label class="field-label">Số lượng / màu / vị</label><textarea class="big-input spec-value">200 bánh\nHồng dâu ×100 · Xanh việt quất ×100</textarea><label class="field-label">Quy cách hộp / logo</label><input class="big-input spec-value" value="Hộp 10 bánh · in logo khách" />` }; document.getElementById('orderSpecFields').innerHTML=fields[type]; }
+    function selectProductType(type,button) { currentProductType=type; document.querySelectorAll('.product-type').forEach(b=>b.classList.remove('active')); button.classList.add('active'); renderOrderSpec(type); }
+    function orderSpecText() { return Array.from(document.querySelectorAll('#orderSpecFields .spec-value')).map(el=>el.value).filter(Boolean).join(' · '); }
+    function openOrderSheet() { const p=profileData[currentRole] || profileData.store; const director=currentRole==='manager'; document.getElementById('pageOrderCreator').textContent=p.name; document.getElementById('pageOrderCreatedAt').textContent=new Date().toLocaleString('vi-VN',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}).replace(',',' ·'); document.getElementById('directorPriceFields').hidden=!director; document.getElementById('priceHiddenNote').textContent=director?'🔐 Giám đốc có thể nhập giá hoặc để trống. Giá không chuyển xuống bộ phận vận hành.':'🔒 Giá và thanh toán là dữ liệu nhạy cảm, không hiển thị trong luồng vận hành.'; renderOrderSpec(currentProductType); showStandaloneView('orderCreateView'); }
+    function canSeeSchoolOrders() { return currentRole === 'manager' || currentRole === 'kitchen_lead'; }
+    function openOrdersFlow(button) { document.getElementById('schoolOrderRow').classList.toggle('allowed',canSeeSchoolOrders()); showStandaloneView('ordersFlowView'); if(button) button.classList.add('active'); }
+    function openSchoolOrderDetail() { if(!canSeeSchoolOrders()) { playTone('ting'); showToast('Bạn không có quyền xem đơn Trường học'); return; } openSheet('schoolOrder'); }
+    function chooseOrderMethod(button) { button.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('active')); button.classList.add('active'); }
+    function createOrderMock() { const creator=document.getElementById('orderCreator').textContent; notices.unshift({type:'order',icon:'🧾',title:'Có đơn mới DH-0266',text:`${creator} tạo · ${document.getElementById('orderProduct').value.split('\n')[0]}`,time:'Vừa xong',unread:true}); renderNotices(); closeAll(); speakNewOrder(); showToast('Đã tạo đơn DH-0266 và chuyển Bếp trưởng'); }
+    function customerCopyText() { const price=document.getElementById('directorOrderPrice')?.value.trim(); const deposit=document.getElementById('directorOrderDeposit')?.value.trim(); return `SUMI BAKERY — XÁC NHẬN ĐƠN #0822-0013\nKhách: ${document.getElementById('pageCustomerName').value}\nĐiện thoại: ${document.getElementById('pageCustomerPhone').value}\nLoại đơn: ${productTypeNames[currentProductType]}\nQuy cách: ${orderSpecText()}\n${price?'Tổng thanh toán: '+price:'Thanh toán: chờ SUMI xác nhận'}${deposit?'\nĐã cọc: '+deposit:''}\nVui lòng kiểm tra thông tin và phản hồi xác nhận.`; }
+    function createOrderFromPage() { const creator=document.getElementById('pageOrderCreator').textContent; notices.unshift({type:'order',icon:'🧾',title:'Có đơn mới #0822-0013',text:`${creator} tạo đơn ${productTypeNames[currentProductType]} · chờ Giám đốc phân bếp`,time:'Vừa xong',unread:true}); renderNotices(); document.getElementById('customerOrderCopy').textContent=customerCopyText(); speakNewOrder(); openSheet('orderSuccess'); }
+    async function copyCustomerOrder() { const text=document.getElementById('customerOrderCopy').textContent; try { await navigator.clipboard.writeText(text); showToast('Đã sao chép — có thể dán gửi khách'); } catch(e) { showToast('Hãy nhấn giữ nội dung để sao chép'); } }
+    function assignOrderMock() { playTone('ting'); showToast('Giám đốc đã phân đơn cho Bakery · Bếp lạnh'); }
+    function acceptOrderMock() { playTone('ting'); showToast('Bếp trưởng đã nhận đơn — sẵn sàng chia mẻ'); }
+    let completedColdTasks = new Set();
+    function openOrderDetail(code='#0822-0010',status='Đang làm') { const notes={ 'Chờ nhận':'Chờ Bếp trưởng nhận phần được Giám đốc phân và giao nhân viên thực hiện.', 'Đang làm':'Cùng một đơn, mỗi bếp nhận đúng phần của mình. Đang hoàn thành 1/2 phần sản xuất.', 'Chờ vận chuyển':'Sản xuất đã xong, hàng đã vào kho thành phẩm; chưa có tài xế nhận.', 'Đang vận chuyển':'Anh Minh đang giao · đã đi 3,2 km · còn 4,8 km đến khách.', 'Hoàn thành':'Đã giao thành công trong 26 phút · tổng quãng đường 6,4 km · có ảnh bàn giao.' }; document.getElementById('detailOrderCode').textContent='Đơn '+code; document.getElementById('detailOrderStatus').textContent=status.toUpperCase(); document.getElementById('detailSummary').textContent=notes[status]||notes['Đang làm']; openSheet('orderDetail'); }
+    function acceptColdKitchen() { document.getElementById('coldState').textContent='ĐANG LÀM'; document.getElementById('coldState').style.background='var(--blue-soft)'; document.getElementById('coldState').style.color='#184493'; document.getElementById('acceptColdButton').hidden=true; document.getElementById('coldAssignments').innerHTML=`<div class="assigned-task"><span>👩</span><span>Cô Lan · Trang trí 2 bánh</span><button class="approve" id="taskDecorate" onclick="completeColdTask('decorate',this)">Xong</button></div><div class="assigned-task"><span>🥐</span><span>Chú Hùng · Đóng hộp và chụp ảnh</span><button class="approve" id="taskPack" onclick="completeColdTask('pack',this)">Xong</button></div>`; playTone('ting'); showToast('Bếp trưởng đã nhận và giao 2 phần việc'); }
+    function completeColdTask(key,button) { completedColdTasks.add(key); button.textContent='✓'; button.disabled=true; button.style.background='var(--green)'; showToast('Nhân viên đã hoàn thành phần việc'); if(completedColdTasks.size===2) finishProductionParts(); }
+    function finishProductionParts() { document.getElementById('coldState').textContent='ĐÃ XONG'; document.getElementById('coldState').style.background='var(--green-soft)'; document.getElementById('coldState').style.color='#09663d'; document.getElementById('detailFlowProduction').textContent='Sản xuất 2/2'; document.getElementById('detailFlowProduction').className='flow-node done'; document.getElementById('detailFlowStock').className='flow-node done'; document.getElementById('detailFlowShipping').className='flow-node current'; document.getElementById('detailOrderStatus').textContent='SẴN SÀNG GIAO'; document.getElementById('warehouseHandoff').hidden=false; document.getElementById('shippingHandoff').hidden=false; notices.unshift({type:'order',icon:'🛵',title:'Đơn #0822-0010 sẵn sàng giao',text:'Kho thành phẩm đã nhận đủ hàng',time:'Vừa xong',unread:true}); renderNotices(); playTone('ting'); }
+    function openSheet(type) { document.getElementById(sheets[type]).classList.add('open'); }
+    function closeAll() { document.querySelectorAll('.sheet').forEach((s) => s.classList.remove('open')); }
+    function closeSheets(event) { if (event.target.classList.contains('sheet')) closeAll(); }
+    function openRoleSheet() { openSheet('role'); }
+    function renderStaff(items = staffData) {
+      document.getElementById('allStaffList').innerHTML = items.map((s) => `<button class="staff-row" onclick="openStaff('${s.id}')"><span class="staff-avatar">${s.avatar}</span><span><span class="staff-name">${s.name}</span><span class="staff-job">${s.dept} · ${s.role}</span></span><span class="staff-state ${s.state === 'KIÊM NHIỆM' || s.state === 'CHỜ DUYỆT' ? 'busy' : ''}">${s.state}</span></button>`).join('') || '<div class="detail-line">Không tìm thấy nhân viên.</div>';
+    }
+    function filterStaff(value) { const q = value.trim().toLowerCase(); renderStaff(staffData.filter((s) => `${s.name} ${s.dept} ${s.role}`.toLowerCase().includes(q))); }
+    function backToStaff() { closeAll(); openSheet('staff'); }
+    function renderManagerPeriod(key) {
+      const d = managerPeriods[key];
+      document.getElementById('managerPeriodLabel').textContent = '📊 Toàn hệ thống · ' + d.label;
+      document.getElementById('managerRevenue').textContent = d.revenue;
+      document.getElementById('managerCost').textContent = d.cost;
+      document.getElementById('managerTrend').textContent = d.trend;
+      document.getElementById('totalOrdersLabel').textContent = d.total + ' đơn';
+      Object.keys(d).forEach((keyName) => { const el = document.querySelector(`[data-order="${keyName}"]`); if (el) el.textContent = d[keyName]; });
+    }
+    function setManagerPeriod(key, button) {
+      document.querySelectorAll('.period-tab').forEach((item) => item.classList.remove('active')); button.classList.add('active');
+      if (key === 'custom') { openSheet('period'); return; }
+      renderManagerPeriod(key);
+    }
+    function applyCustomPeriod() {
+      const from = document.getElementById('dateFrom').value.split('-').reverse().join('/'); const to = document.getElementById('dateTo').value.split('-').reverse().join('/');
+      managerPeriods.custom.label = `${from} – ${to}`; renderManagerPeriod('custom'); closeAll(); showToast('Đã lọc báo cáo theo thời gian chọn');
+    }
+    function openStaff(id) {
+      const s = staffData.find((item) => item.id === id); if (!s) return;
+      document.getElementById('staffDetail').innerHTML = `<div class="staff-detail-head"><span class="staff-avatar">${s.avatar}</span><span><span class="profile-name">${s.name}</span><span class="profile-role">${s.dept} · ${s.role}</span></span></div><div class="detail-line"><small>VIỆC ĐANG LÀM</small>${s.current}</div><div class="detail-line"><small>NGƯỜI GIAO VIỆC</small>${s.assigned}</div><div class="detail-line"><small>KPI TUẦN NÀY</small>${s.kpi}</div><div class="detail-line"><small>KIÊM NHIỆM / ĐIỀU CHUYỂN</small>${s.extra}</div><div class="flow-note">Khi hoàn thành đơn sản xuất, hệ thống tự tạo phiếu nhập kho thành phẩm. Nếu người này chuyển sang giao hàng, nhiệm vụ kiêm nhiệm phải được quản lý duyệt và ghi nhận riêng.</div>`;
+      closeAll(); openSheet('staffDetail');
+    }
+    function showProfile(button) {
+      const p = profileData[currentRole];
+      document.getElementById('profileAvatar').textContent = p.avatar;
+      document.getElementById('profileName').textContent = p.name;
+      document.getElementById('profileRole').textContent = p.role;
+      document.getElementById('personalKpis').innerHTML = p.kpis.map((k) => `<div class="kpi-mini"><strong>${k[0]}</strong><span>${k[1]}</span></div>`).join('');
+      document.getElementById('goalText').textContent = p.goal;
+      document.getElementById('goalFill').style.width = p.fill;
+      document.querySelectorAll('.view').forEach((view) => view.classList.remove('active'));
+      document.getElementById('profileView').classList.add('active');
+      document.querySelectorAll('.nav-item').forEach((item) => item.classList.remove('active'));
+      (button || document.querySelector('.nav-item:last-child')).classList.add('active');
+      window.scrollTo(0,0);
+    }
+    function logoutMock() { closeAll(); document.getElementById('loginScreen').classList.add('open'); }
+    function loginMock() {
+      const id = document.getElementById('loginId').value.trim(); const password = document.getElementById('loginPassword').value;
+      if (!id || !password) { showToast('Hãy nhập đủ thông tin đăng nhập'); return; }
+      document.getElementById('loginScreen').classList.remove('open'); showView(currentRole === 'manager' ? 'home' : 'home'); showToast('Đăng nhập thành công');
+    }
+    renderStaff();
+    function selectRole(role) {
+      currentRole = role; const data = roleData[role];
+      document.querySelector('.hello').textContent = data.hello;
+      document.querySelectorAll('.role-choice').forEach((choice) => { const selected = choice.dataset.role === role; choice.classList.toggle('selected', selected); choice.querySelector('.role-tick').textContent = selected ? '✓' : ''; });
+      closeAll();
+      if (role === 'manager') {
+        document.querySelectorAll('.view').forEach((view) => view.classList.remove('active'));
+        document.getElementById('managerView').classList.add('active');
+        document.querySelectorAll('.nav-item').forEach((item) => item.classList.remove('active'));
+        document.querySelector('.nav-item:last-child').classList.add('active');
+        showToast('Đã mở tổng quan Giám đốc Kinh doanh'); window.scrollTo(0,0); return;
+      }
+      if (role === 'kitchen_lead' || role === 'transport_lead') {
+        renderLead(role);
+        document.querySelectorAll('.view').forEach((view) => view.classList.remove('active'));
+        document.getElementById('leadView').classList.add('active');
+        document.querySelectorAll('.nav-item').forEach((item) => item.classList.remove('active'));
+        document.querySelector('.nav-item').classList.add('active');
+        showToast(role === 'kitchen_lead' ? 'Đã mở màn Bếp trưởng Xưởng 42' : 'Đã mở màn Đội trưởng Vận tải'); window.scrollTo(0,0); return;
+      }
+      document.getElementById('workplace').textContent = data.place;
+      document.getElementById('homeOrgPath').textContent = data.org || data.place;
+      document.querySelector('.counter').textContent = data.count;
+      document.getElementById('deadline').textContent = data.deadline;
+      document.getElementById('duration').textContent = data.duration;
+      document.getElementById('taskPicture').textContent = data.picture;
+      document.getElementById('taskTitle').textContent = data.title;
+      document.getElementById('taskMeta1').textContent = data.meta1;
+      document.getElementById('taskMeta2').textContent = data.meta2;
+      document.getElementById('tasksTitle').textContent = 'Việc của ' + data.owner;
+      document.getElementById('homeQueue').innerHTML = data.queue.map((item,index) => `<div class="queue-card"><div class="queue-num">${item[0]}</div><div><div class="queue-name">${item[1]}</div><div class="queue-note">${item[2]}</div></div><span class="queue-state">CHỜ</span></div>`).join('');
+      document.getElementById('tasksQueue').innerHTML = `<div class="queue-card"><div class="queue-num" style="background:#ffe1d4">${data.picture}</div><div><div class="queue-name">${data.title}</div><div class="queue-note">${data.meta1.replace('① ','')}</div></div><span class="queue-state" style="background:#dff5e8;color:#08643b">ĐANG LÀM</span></div>` + data.queue.map((item) => `<div class="queue-card"><div class="queue-num">${item[0]}</div><div><div class="queue-name">${item[1]}</div><div class="queue-note">${item[2]}</div></div><span class="queue-state">CHỜ</span></div>`).join('');
+      showView('home'); showToast('Đã chuyển sang ' + data.place.replace(/^.. /,''));
+    }
+    function renderLead(role) {
+      const kitchen = role === 'kitchen_lead';
+      document.getElementById('leadWorkplace').textContent = kitchen ? '👨‍🍳 Xưởng 42 · Bếp sản xuất' : '🚚 Bộ phận Vận tải · Bình Dương';
+      document.getElementById('leadOrgPath').textContent = kitchen ? 'Giám đốc Kinh doanh → Bếp trưởng → Bếp phó → Thợ bánh' : 'Giám đốc Kinh doanh → Đội trưởng → Đội phó → Nhân viên giao hàng';
+      document.getElementById('leadEyebrow').textContent = kitchen ? 'CA SẢN XUẤT HÔM NAY' : 'TUYẾN GIAO HÔM NAY';
+      document.getElementById('leadTitle').textContent = kitchen ? '3 mẻ đang làm · 1 mẻ chờ' : '5 tuyến đang chạy · 2 đơn chờ';
+      document.getElementById('leadMeta').textContent = kitchen ? '8 nhân viên · 1 người đang kiêm nhiệm' : '5 tài xế · 1 chuyến có nguy cơ trễ';
+      document.getElementById('leadQueueTitle').textContent = kitchen ? 'TIẾN ĐỘ MẺ SẢN XUẤT' : 'TIẾN ĐỘ TUYẾN GIAO';
+      document.getElementById('leadActions').innerHTML = kitchen ? `<button class="lead-action" onclick="openOrdersFlow()"><span>🧾</span><span>Đơn được giao cho bếp</span></button><button class="lead-action" onclick="showToast('Đã mở nhân sự trong bếp')"><span>👥</span><span>Giao người thực hiện</span></button><button class="lead-action" onclick="showToast('Đã tạo yêu cầu NVL')"><span>🌾</span><span>Yêu cầu nguyên liệu</span></button><button class="lead-action" onclick="showToast('Có 1 mẻ chờ duyệt')"><span>✅</span><span>Duyệt mẻ hoàn thành</span></button>` : `<button class="lead-action" onclick="openOrdersFlow()"><span>📦</span><span>Đơn chờ vận chuyển</span></button><button class="lead-action" onclick="showToast('Đã mở tài xế sẵn sàng')"><span>👥</span><span>Chia tài xế & tuyến</span></button><button class="lead-action" onclick="showToast('Đã mở bản đồ chuyến đi')"><span>🗺️</span><span>Theo dõi tuyến giao</span></button><button class="lead-action" onclick="showToast('Có 1 yêu cầu giao hộ')"><span>🔄</span><span>Duyệt người giao hộ</span></button>`;
+      document.getElementById('leadQueue').innerHTML = kitchen ? `<div class="batch-card"><div class="batch-top"><span class="batch-name">TH-0822 · Bánh trường học</span><span class="batch-status">ĐANG NƯỚNG</span></div><div class="batch-info">6 khay · 175°C · còn 12 phút</div><div class="batch-people"><span>👨‍🍳 Chú Hùng + 2 thợ</span><span>›</span></div></div><div class="batch-card"><div class="batch-top"><span class="batch-name">BL-0264 · Bánh kem</span><span class="batch-status" style="background:var(--green-soft);color:#09663d">CHỜ DUYỆT</span></div><div class="batch-info">2 bánh · đã có ảnh hoàn thành</div><div class="batch-people"><span>👩 Cô Lan</span><button class="approve" onclick="showToast('Đã duyệt mẻ — tự động nhập kho 2 bánh')">Duyệt</button></div></div>` : `<div class="batch-card"><div class="batch-top"><span class="batch-name">Tuyến 01 · Trường Hoa Mai</span><span class="batch-status">CÓ NGUY CƠ TRỄ</span></div><div class="batch-info">8 thùng · cách điểm giao 4,8 km</div><div class="batch-people"><span>🛵 Anh Minh</span><span>›</span></div></div><div class="batch-card"><div class="batch-top"><span class="batch-name">DH-0264 · Giao bánh kem</span><span class="batch-status" style="background:var(--blue-soft);color:#184493">CHỜ GIAO</span></div><div class="batch-info">Bếp phó xin giao hộ vì thiếu tài xế</div><div class="batch-people"><span>🥐 Chú Hùng</span><button class="approve" onclick="showToast('Đã xác nhận Bếp phó giao hộ')">Duyệt</button></div></div>`;
+      document.querySelector('#leadView .flow-note').textContent = kitchen ? 'Bếp trưởng duyệt “Hoàn thành” → hệ thống tạo phiếu nhập kho thành phẩm. Không cộng kho khi nhân viên mới chỉ báo đã làm xong.' : 'Đội trưởng phân công người giao chính hoặc người kiêm nhiệm. Mỗi lần đổi người giao đều lưu người duyệt và thời gian.';
+    }
+    function showToast(message) { const toast = document.getElementById('toast'); document.getElementById('toastText').textContent = message; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 2400); }
+    let online = true;
+    function showView(name, button) {
+      if (currentRole === 'manager') {
+        document.querySelectorAll('.view').forEach((view) => view.classList.remove('active'));
+        document.getElementById('managerView').classList.add('active');
+        document.querySelectorAll('.nav-item').forEach((item) => item.classList.remove('active'));
+        (button || document.querySelector('.nav-item')).classList.add('active');
+        if (name === 'tasks') showToast('Đã lọc các việc cần Giám đốc xử lý');
+        window.scrollTo(0,0); return;
+      }
+      if (currentRole === 'kitchen_lead' || currentRole === 'transport_lead') {
+        document.querySelectorAll('.view').forEach((view) => view.classList.remove('active'));
+        document.getElementById('leadView').classList.add('active');
+        document.querySelectorAll('.nav-item').forEach((item) => item.classList.remove('active'));
+        (button || document.querySelector('.nav-item')).classList.add('active'); window.scrollTo(0,0); return;
+      }
+      document.querySelectorAll('.view').forEach((view) => view.classList.remove('active'));
+      document.getElementById(name + 'View').classList.add('active');
+      document.querySelectorAll('.nav-item').forEach((item) => item.classList.remove('active'));
+      const target = button || document.querySelectorAll('.nav-item')[name === 'tasks' ? 1 : 0];
+      target.classList.add('active');
+      window.scrollTo(0, 0);
+    }
+    function toggleNetwork() {
+      online = !online;
+      const status = document.getElementById('networkStatus');
+      status.querySelector('span:last-child').textContent = online ? 'Có mạng' : 'Mất mạng';
+      status.querySelector('.dot').style.background = online ? 'var(--green)' : 'var(--yellow)';
+      document.getElementById('offlineBanner').classList.toggle('show', !online);
+      showToast(online ? 'Đã có mạng — dữ liệu đang được gửi' : 'Không sao — dữ liệu vẫn được giữ trong máy');
+    }
+    function startProof() {
+      closeAll(); const data = roleData[currentRole];
+      document.querySelector('#proofCapture .instruction').textContent = data.proof;
+      document.getElementById('proofEmoji').textContent = data.proofEmoji;
+      document.getElementById('proofPreview').textContent = data.proofEmoji;
+      document.getElementById('proofCheck').textContent = data.proofCheck;
+      document.querySelector('#proofDone .check-card span:last-child').textContent = 'Tiếp theo: ' + data.next;
+      document.getElementById('proofFlow').classList.add('open'); retakeProof();
+    }
+    function takeProof() {
+      document.getElementById('proofCapture').hidden = true;
+      document.getElementById('proofReview').hidden = false;
+      document.getElementById('captureActions').hidden = true;
+      document.getElementById('reviewActions').hidden = false;
+      document.getElementById('step2').classList.add('done');
+    }
+    function retakeProof() {
+      document.getElementById('proofCapture').hidden = false;
+      document.getElementById('proofReview').hidden = true;
+      document.getElementById('proofDone').hidden = true;
+      document.getElementById('captureActions').hidden = false;
+      document.getElementById('reviewActions').hidden = true;
+      document.getElementById('doneActions').hidden = true;
+      document.getElementById('step2').classList.remove('done'); document.getElementById('step3').classList.remove('done');
+    }
+    function confirmProof() {
+      document.getElementById('proofReview').hidden = true;
+      document.getElementById('proofDone').hidden = false;
+      document.getElementById('reviewActions').hidden = true;
+      document.getElementById('doneActions').hidden = false;
+      document.getElementById('step3').classList.add('done');
+      document.getElementById('syncMessage').textContent = online ? 'Ảnh và thời gian đã được lưu. Việc tiếp theo đã sẵn sàng.' : 'Đã giữ an toàn trong máy. Khi có mạng, ứng dụng sẽ tự gửi.';
+    }
+    function closeProof(done) { document.getElementById('proofFlow').classList.remove('open'); if (done) { if (currentRole === 'driver' || currentRole === 'transport_lead') playTone('cash'); showToast(online ? 'Đã hoàn thành và gửi quản lý' : 'Đã hoàn thành — đang chờ có mạng'); } }
+    function incident(label) { closeAll(); playTone('ting'); notices.unshift({type:'incident',icon:'⚠️',title:'Sự cố: '+label,text:'Có ảnh minh chứng đang chờ xử lý',time:'Vừa xong',unread:true}); renderNotices(); showToast(label + ' — hãy chụp ảnh minh chứng'); setTimeout(() => openSheet('photo'), 700); }
+    renderNotices();
+  </script>
+</body>
+</html>

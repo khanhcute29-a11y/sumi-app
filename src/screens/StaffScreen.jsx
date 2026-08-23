@@ -8,11 +8,13 @@ import { ROLE_META, ROLE_OPTIONS, ROLE_PERMISSIONS, hasRole, hasAnyRole } from '
 
 const STATION_OPTIONS = [
   { value: '', label: 'Chưa gán khâu' },
-  { value: 'bakery', label: 'Bakery' },
-  { value: 'nong', label: 'Bếp Nóng' },
-  { value: 'lanh', label: 'Bếp Lạnh' },
-  { value: 'xuong41', label: 'Xưởng 41' },
-  { value: 'xuong42', label: 'Xưởng 42' },
+  { value: 'Bếp Lạnh', label: '🎂 Bếp Lạnh (Bánh kem & bánh lạnh)' },
+  { value: 'Bếp Nóng', label: '🍞 Bếp Nóng (Bánh mặn/ngọt, BTT)' },
+  { value: 'Xưởng 41', label: '🧁 Xưởng 41 (Macaron)' },
+  { value: 'Xưởng 42', label: '🏫 Xưởng 42 (Trường học & Teabreak)' },
+  { value: 'Vận Tải', label: '🛵 Đội Vận Tải' },
+  { value: 'Bán Hàng', label: '🏬 Bán Hàng & Thu Ngân' },
+  { value: 'Kho', label: '📦 Kho Nguyên Liệu' },
 ];
 
 function PendingStaffRow({ s, onApprove }) {
