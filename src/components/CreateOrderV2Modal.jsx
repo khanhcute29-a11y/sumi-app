@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { createOrderV2 } from '../lib/featureFlags';
 import { useAuth } from '../lib/AuthContext';
@@ -8,6 +8,22 @@ import { SCHOOL_DELIVERY_POINTS } from '../data/schoolCatalog';
 
 const fieldStyle={width:'100%',minHeight:58,border:'2px solid #d7c3aa',borderRadius:17,padding:'11px 14px',fontSize:18,background:'#fff',color:'#2d1c10',boxSizing:'border-box',opacity:1};
 
+const categoryLabel=(value='')=>value.replaceAll('_',' ').replace(/\b\w/g,x=>x.toUpperCase());
+function ProductNameField({item,products,onChange}){
+ const [open,setOpen]=useState(false); const wrap=useRef(null); const query=normalizeSearch(item.name||'');
+ useEffect(()=>{if(!open)return;const close=e=>{if(wrap.current&&!wrap.current.contains(e.target))setOpen(false)};document.addEventListener('pointerdown',close);return()=>document.removeEventListener('pointerdown',close)},[open]);
+ const matches=products.filter(p=>!query||normalizeSearch(`${p.name} ${p.category||''}`).includes(query)).slice(0,10);
+ const choose=p=>{onChange({name:p.name,product_id:p.id,unit:p.unit||item.unit||'cái',specification:{...(item.specification||{}),catalog_category:p.category||null,catalog_price:p.price??null}});setOpen(false)};
+ return <div className="sumi-product-combobox" ref={wrap}>
+  <input style={fieldStyle} autoComplete="off" placeholder="Gõ tên bánh để tìm hoặc nhập mới" value={item.name||''} onFocus={()=>setOpen(true)} onChange={e=>{onChange({name:e.target.value,product_id:null});setOpen(true)}} aria-expanded={open}/>
+  {open&&<div className="sumi-product-options">
+   {matches.map(p=><button type="button" key={p.id} onClick={()=>choose(p)}><span>🍰</span><b>{p.name}</b><small>{categoryLabel(p.category||'Sản phẩm')} · {p.unit||'cái'}</small></button>)}
+   {item.name?.trim()&&<button type="button" className="manual" onClick={()=>setOpen(false)}><span>✍️</span><b>Dùng tên “{item.name.trim()}”</b><small>Chưa có trong danh sách · vẫn tạo đơn bình thường</small></button>}
+   {!matches.length&&!item.name?.trim()&&<p>Gõ một phần tên bánh để tìm.</p>}
+  </div>}
+ </div>;
+}
+
 export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
  const {profile}=useAuth(); const [type,setType]=useState(null); const [requiredAt,setRequiredAt]=useState('');
  const [customerName,setCustomerName]=useState(''); const [customerPhone,setCustomerPhone]=useState('');
@@ -16,7 +32,10 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
  const [catalogSearch,setCatalogSearch]=useState(''); const [guestCount,setGuestCount]=useState('');
  const [schoolSearch,setSchoolSearch]=useState(''); const [selectedSchool,setSelectedSchool]=useState(null);
  const [entryMode,setEntryMode]=useState('manual'); const [cakeLine,setCakeLine]=useState('decorated_cake');
+ const [productCatalog,setProductCatalog]=useState([]);
+ useEffect(()=>{let active=true;supabase.from('products').select('id,name,category,unit,price').eq('active',true).order('name').limit(500).then(({data,error})=>{if(active&&!error)setProductCatalog(data||[])});return()=>{active=false}},[]);
  const change=(i,key,value)=>setItems(x=>x.map((it,n)=>n===i?{...it,[key]:value}:it));
+ const changeMany=(i,fields)=>setItems(x=>x.map((it,n)=>n===i?{...it,...fields}:it));
  const spec=(i,key,value)=>setItems(x=>x.map((it,n)=>n===i?{...it,specification:{...it.specification,[key]:value}}:it));
  const blankItem=(key)=>({flow_type:key,name:'',quantity:1,unit:'cái',specification:{product_flow:key,...(key==='cake'?{cake_line:cakeLine}:{})}});
  const selectFlow=(key)=>{setType(key);setItems(key==='teabreak'?[]:[blankItem(key)]);};
@@ -76,7 +95,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
    {items.length>0&&<section className="sumi-mixed-summary"><header><div><small>ĐƠN HÀNG XUYÊN SUỐT</small><strong>{isMixed?'Nhiều bếp cùng thực hiện':'Một nhóm sản xuất'}</strong></div><b>{itemFlows.length} nhóm</b></header><div>{itemFlows.map(key=>{const meta=ORDER_FLOWS.find(x=>x.key===key);const count=items.filter(x=>(x.flow_type||type)===key).length;return <span key={key}><i>{meta?.icon}</i><b>{meta?.title}</b><small>{count} món · {routeFor[key]}</small></span>})}</div></section>}
    {items.map((it,i)=><div key={i} style={{padding:12,border:'1px solid var(--border-default)',borderRadius:16,marginBottom:10,background:'var(--surface-card)'}}>
     <div className="sumi-item-flow"><span>{ORDER_FLOWS.find(x=>x.key===(it.flow_type||type))?.icon}</span><b>{ORDER_FLOWS.find(x=>x.key===(it.flow_type||type))?.title}</b><em>→ {routeFor[it.flow_type||type]}</em></div>
-    <div style={{display:'flex',gap:8}}><input style={fieldStyle} placeholder="Tên bánh/sản phẩm" value={it.name} onChange={e=>change(i,'name',e.target.value)}/><input style={{...fieldStyle,width:90}} type="number" min="1" value={it.quantity} onChange={e=>change(i,'quantity',Number(e.target.value))}/></div>
+    <div className="sumi-product-line"><ProductNameField item={it} products={productCatalog} onChange={fields=>changeMany(i,fields)}/><input style={{...fieldStyle,width:90}} aria-label="Số lượng" type="number" min="1" value={it.quantity} onChange={e=>change(i,'quantity',Number(e.target.value))}/></div>
     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:8}}>
      {(it.flow_type||type)==='cake'&&<><input style={fieldStyle} placeholder="Size (18cm...)" onChange={e=>spec(i,'size',e.target.value)}/><input style={fieldStyle} placeholder="Chữ trên bánh" onChange={e=>spec(i,'content',e.target.value)}/></>}
      {(it.flow_type||type)==='bakery'&&<><input style={fieldStyle} placeholder="Dòng bánh: Trung Thu, bánh pía…" onChange={e=>spec(i,'product_line',e.target.value)}/><input style={fieldStyle} placeholder="Quy cách/nhân/đóng gói" onChange={e=>spec(i,'packing',e.target.value)}/></>}
