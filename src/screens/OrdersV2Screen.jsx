@@ -55,11 +55,11 @@ export default function OrdersV2Screen() {
       <div><small>THEO DÕI XUYÊN SUỐT</small><h1>Đơn hàng</h1><p>{orders.length} đơn đang hiển thị</p></div>
       {(canCreate||roleCanCreate)&&<button onClick={()=>setShowCreate(true)}>＋ TẠO ĐƠN</button>}
     </div>
-    <div className="mock-order-overview">
+    {!filter&&<div className="mock-order-overview">
       {FILTERS.map(item => <button className={filter===item.key?'active':''} key={item.key} onClick={()=>setFilter(item.key)}>
         <span>{item.key==='waiting'?'📥':item.key==='production'?'👩‍🍳':item.key==='ready'?'📦':item.key==='delivery'?'🛵':item.key==='completed'?'✅':'⚠️'}</span><strong>{item.label}</strong><b>{orders.filter(item.match).length}</b>
       </button>)}
-    </div>
+    </div>}
     {filter&&<div className="mock-list-head"><button onClick={()=>setFilter(null)}>← Tổng quan</button><strong>{FILTERS.find(x=>x.key===filter)?.label}</strong></div>}
     {error && <div className="mock-empty" role="alert"><span>⚠️</span><h2>Chưa tải được đơn hàng</h2><p>{error}</p><button onClick={load}>TẢI LẠI</button></div>}
     {loading ? <div className="mock-empty">Đang tải đơn...</div> : !error && filter && shown.map(o => <button className="mock-order-card" key={o.id} onClick={()=>setSelectedId(o.id)}>
