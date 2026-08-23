@@ -6,15 +6,30 @@ import OrderV2DetailModal from '../components/OrderV2DetailModal';
 import { useAuth } from '../lib/AuthContext';
 
 const LABELS = {
-  awaiting_assignment: 'Chờ nhận', awaiting_acceptance: 'Chờ bếp nhận', in_production: 'Đang làm',
-  ready_for_fulfillment: 'Chờ vận chuyển', in_delivery: 'Đang vận chuyển', completed: 'Hoàn thành', cancelled: 'Đã huỷ',
+  awaiting_assignment: 'Đơn chờ làm', awaiting_acceptance: 'Đơn chờ làm', in_production: 'Bếp đang làm',
+  ready_for_fulfillment: 'Chờ vận chuyển', in_delivery: 'Đang vận chuyển', completed: 'Giao thành công', cancelled: 'Đã huỷ',
+};
+
+const FILTERS = [
+  { key: 'waiting', label: 'Đơn chờ làm', match: o => ['awaiting_assignment','awaiting_acceptance'].includes(o.status_v2) && !o.is_overdue },
+  { key: 'production', label: 'Bếp đang làm', match: o => o.status_v2 === 'in_production' && !o.is_overdue },
+  { key: 'ready', label: 'Chờ vận chuyển', match: o => o.status_v2 === 'ready_for_fulfillment' && !o.is_overdue },
+  { key: 'delivery', label: 'Đang vận chuyển', match: o => o.status_v2 === 'in_delivery' && !o.is_overdue },
+  { key: 'completed', label: 'Giao thành công', match: o => o.status_v2 === 'completed' },
+  { key: 'overdue', label: 'Chưa thực hiện', match: o => Boolean(o.is_overdue) },
+];
+
+const minutesText = value => {
+  if (value === null || value === undefined) return '';
+  const hours = Math.floor(value / 60); const minutes = value % 60;
+  return hours ? `${hours} giờ ${minutes} phút` : `${minutes} phút`;
 };
 
 export default function OrdersV2Screen() {
   const { profile } = useAuth();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState('waiting');
   const [canCreate, setCanCreate] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
@@ -30,8 +45,7 @@ export default function OrdersV2Screen() {
   useEffect(() => { const open=()=>setShowCreate(true); window.addEventListener('sumi-create-order',open); return()=>window.removeEventListener('sumi-create-order',open); }, []);
   useEffect(() => { const open=(event)=>{ if(event.detail?.entityId) setSelectedId(event.detail.entityId); }; window.addEventListener('sumi-open-order',open); return()=>window.removeEventListener('sumi-open-order',open); }, []);
   const roleCanCreate=['owner','admin','cashier','sale','kitchen_lead'].includes(profile?.role)||(profile?.extra_roles||[]).some(r=>['owner','admin','cashier','sale','kitchen_lead'].includes(r));
-  const shown = useMemo(() => filter === 'all' ? orders : orders.filter(o => o.status_v2 === filter), [orders, filter]);
-  const filters = ['all','awaiting_assignment','in_production','ready_for_fulfillment','in_delivery','completed'];
+  const shown = useMemo(() => orders.filter(FILTERS.find(x => x.key === filter)?.match || (()=>true)), [orders, filter]);
   const stage=(s)=>s==='completed'?5:s==='in_delivery'?4:s==='ready_for_fulfillment'?3:s==='in_production'?2:1;
   if(showCreate)return <CreateOrderV2Modal embedded onClose={()=>setShowCreate(false)} onCreated={load}/>;
   return <div className="mock-orders">
@@ -40,17 +54,23 @@ export default function OrdersV2Screen() {
       {(canCreate||roleCanCreate)&&<button onClick={()=>setShowCreate(true)}>＋ TẠO ĐƠN</button>}
     </div>
     <div className="mock-order-tabs">
-      {filters.map(key => <button className={filter===key?'active':''} key={key} onClick={()=>setFilter(key)}>
-        {key==='all'?'Tất cả':LABELS[key]}{key!=='all'?` · ${orders.filter(o=>o.status_v2===key).length}`:''}
+      {FILTERS.map(item => <button className={filter===item.key?'active':''} key={item.key} onClick={()=>setFilter(item.key)}>
+        {item.label} · {orders.filter(item.match).length}
       </button>)}
     </div>
     {error && <div className="mock-empty" role="alert"><span>⚠️</span><h2>Chưa tải được đơn hàng</h2><p>{error}</p><button onClick={load}>TẢI LẠI</button></div>}
     {loading ? <div className="mock-empty">Đang tải đơn...</div> : !error && shown.map(o => <button className="mock-order-card" key={o.id} onClick={()=>setSelectedId(o.id)}>
-      <div className="mock-order-top"><strong>#{o.order_code || 'CHƯA CÓ MÃ'}</strong><span>{LABELS[o.status_v2] || o.status_v2}</span></div>
+      <div className="mock-order-top"><strong>#{o.order_code || 'CHƯA CÓ MÃ'}</strong><span className={o.is_overdue?'is-overdue':''}>{o.is_overdue?'⚠️ Chưa thực hiện':(LABELS[o.status_v2] || o.status_v2)}</span></div>
       <h2>{o.customer_name || o.order_type || 'Đơn sản xuất'}</h2>
       <p>{o.total_quantity || 0} sản phẩm · {o.completed_package_count || 0}/{o.package_count || 0} phần đã xong</p>
       <div className="mock-track">{[1,2,3,4,5].map(n=><i key={n} className={n<=stage(o.status_v2)?'done':''}/>)}</div>
       <div className="mock-track-label"><span>Chờ nhận</span><b>{LABELS[o.status_v2] || o.status_v2}</b><span>Hoàn thành</span></div>
+      {o.status_v2==='in_production'&&o.production_started_at&&<p className="mock-order-metric">👨‍🍳 Bếp đã làm {minutesText(Math.max(0,Math.floor((Date.now()-new Date(o.production_started_at))/60000)))}</p>}
+      {o.production_minutes!==null&&o.production_minutes!==undefined&&<p className="mock-order-metric">✅ Thời gian bếp: {minutesText(o.production_minutes)}</p>}
+      {o.status_v2==='in_delivery'&&o.delivery_started_at&&<p className="mock-order-metric">🚚 Đang giao {minutesText(Math.max(0,Math.floor((Date.now()-new Date(o.delivery_started_at))/60000)))} · {o.driver_name||o.provider_label||'Chưa rõ người giao'}</p>}
+      {o.delivery_minutes!==null&&o.delivery_minutes!==undefined&&<p className="mock-order-metric">✅ Thời gian giao: {minutesText(o.delivery_minutes)}{o.driver_name||o.provider_label?` · ${o.driver_name||o.provider_label}`:''}</p>}
+      {o.shipping_fee!==null&&o.shipping_fee!==undefined&&<p className="mock-order-metric">Phí giao: {Number(o.shipping_fee).toLocaleString('vi-VN')}đ</p>}
+      {o.is_overdue&&<div className="mock-order-overdue"><b>Quá giờ {minutesText(o.overdue_minutes)}</b><span>{o.overdue_stage}</span></div>}
       <time>{o.required_at ? `Cần giao ${new Date(o.required_at).toLocaleString('vi-VN')}` : 'Chưa đặt giờ giao'}</time>
     </button>)}
     {!loading && !error && shown.length===0 && <div className="mock-empty"><span>📦</span><h2>Chưa có đơn trong mục này</h2><p>Bấm “Tạo đơn” để bắt đầu luồng công việc mới.</p></div>}
