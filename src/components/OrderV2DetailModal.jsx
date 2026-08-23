@@ -447,54 +447,6 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
             </span>
           </div>
 
-          {data.packages.length === 0 && (
-            <div style={{ padding: '14px', background: 'var(--surface-sunken)', borderRadius: 12, textAlign: 'center' }}>
-              <p style={{ color: 'var(--text-secondary)', margin: '0 0 10px', fontSize: 14 }}>
-                Đang sẵn sàng phân bếp tự động cho đơn này...
-              </p>
-              {units.length > 0 && (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={async () => {
-                    setBusy(true);
-                    try {
-                      // Tìm bếp phù hợp theo luồng
-                      const coldUnit = units.find(u => u.code === 'BAKERY_COLD' || u.name.toLowerCase().includes('lạnh')) || units[0];
-                      const hotUnit = units.find(u => u.code === 'BAKERY_HOT' || u.name.toLowerCase().includes('nóng')) || units[0];
-                      const x41Unit = units.find(u => u.code === 'X41_KITCHEN' || u.name.toLowerCase().includes('41')) || coldUnit;
-                      const x42Unit = units.find(u => u.code === 'X42_KITCHEN' || u.name.toLowerCase().includes('42')) || hotUnit;
-
-                      const flows = [...new Set(data.items.map(it => it.specification?.product_flow || o.order_type || 'cake'))];
-                      for (const flow of flows) {
-                        const targetUnit = flow === 'cake' ? coldUnit : flow === 'bakery' ? hotUnit : flow === 'macaron' ? x41Unit : (flow === 'school' || flow === 'teabreak') ? x42Unit : coldUnit;
-                        if (targetUnit) {
-                          const flowItems = data.items.filter(it => (it.specification?.product_flow || o.order_type || 'cake') === flow);
-                          await assignOrderPackage({
-                            p_idempotency_key: crypto.randomUUID(),
-                            p_order_id: orderId,
-                            p_unit_id: targetUnit.id,
-                            p_due_at: o.required_at,
-                            p_items: flowItems.map(it => ({ order_item_id: it.id, quantity: it.quantity })),
-                            p_expected_version: o.version
-                          });
-                        }
-                      }
-                      await load();
-                      onChanged?.();
-                    } catch (e) {
-                      setError(e.message);
-                    } finally {
-                      setBusy(false);
-                    }
-                  }}
-                  style={{ minHeight: 46, padding: '0 18px', borderRadius: 12, border: 0, background: '#d96b43', color: '#2d1c10', fontWeight: 900, fontSize: 15, cursor: 'pointer' }}
-                >
-                  ⚡ Kích hoạt bếp thực hiện ngay
-                </button>
-              )}
-            </div>
-          )}
 
           {data.packages.map((p) => {
             const isAssigned = p.status === 'assigned';
