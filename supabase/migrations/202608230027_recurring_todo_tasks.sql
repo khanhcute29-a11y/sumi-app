@@ -1,4 +1,4 @@
--- SUMI APP M27 — recurring personal/managed to-do lists and secured task commands.
+﻿-- SUMI APP M27 â€” recurring personal/managed to-do lists and secured task commands.
 begin;
 
 alter table public.task_templates add column if not exists assignee_id uuid references public.profiles(id) on delete cascade;
@@ -80,7 +80,7 @@ begin
  returning id into v_id;
  if p_category='assigned' then
   insert into public.notifications(event_key,recipient_profile_id,notification_type,sound_key,title,body,entity_type,entity_id,deep_link)
-  values('general-task:'||v_id,p_assignee_id,'task_assigned','ting','Bạn có việc mới',p_title,'task',v_id,'/tasks/'||v_id)
+  values('general-task:'||v_id,p_assignee_id,'task_assigned','ting','Báº¡n cÃ³ viá»‡c má»›i',p_title,'task',v_id,'/tasks/'||v_id)
   on conflict(event_key) do nothing;
  end if;
  return v_id;
@@ -103,12 +103,12 @@ returns integer language plpgsql security definer set search_path=public as $$
 declare v_count integer:=0;v_added integer:=0;v_today date:=(now() at time zone 'Asia/Bangkok')::date;v_dow integer:=extract(dow from (now() at time zone 'Asia/Bangkok'));
 begin
  insert into public.notifications(event_key,recipient_profile_id,notification_type,sound_key,title,body,entity_type,entity_id,deep_link)
- select 'task-reminder:'||t.id,t.assignee_id,'task_reminder','ting','Đến giờ làm việc',t.title,'task',t.id,'/tasks/'||t.id
+ select 'task-reminder:'||t.id,t.assignee_id,'task_reminder','ting','Äáº¿n giá» lÃ m viá»‡c',t.title,'task',t.id,'/tasks/'||t.id
  from public.tasks t where t.status='open' and t.reminder_at is not null and t.reminder_at<=now()
  on conflict(event_key) do nothing;
  get diagnostics v_count=row_count;
  insert into public.notifications(event_key,recipient_profile_id,notification_type,sound_key,title,body,entity_type,entity_id,deep_link)
- select 'todo-reminder:'||tt.id||':'||p.id||':'||v_today,p.id,'task_reminder','ting','Checklist cần làm',tt.title,'task_template',tt.id,'/tasks'
+ select 'todo-reminder:'||tt.id||':'||p.id||':'||v_today,p.id,'task_reminder','ting','Checklist cáº§n lÃ m',tt.title,'task_template',tt.id,'/tasks'
  from public.task_templates tt join public.profiles p on p.approved and p.active
   and (tt.assignee_id=p.id or (tt.assignee_id is null and (tt.station is null or tt.station=p.station)))
  where tt.active and tt.scheduled_time is not null
@@ -144,3 +144,4 @@ insert into public.migration_runs(migration_key,status,finished_at,notes)
 values('202608230027_recurring_todo_tasks','completed',now(),'Added recurring personal/managed to-do lists and secured task creation/deletion commands.')
 on conflict(migration_key) do update set status='completed',finished_at=now(),notes=excluded.notes;
 commit;
+

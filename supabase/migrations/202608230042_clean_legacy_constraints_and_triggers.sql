@@ -44,7 +44,7 @@ grant all on public.order_notes to authenticated;
 grant all on public.profiles to authenticated;
 
 -- Create open RLS policies for authenticated users on operational tables if RLS is enabled
-do 
+do $
 begin
   -- orders
   drop policy if exists allow_authenticated_all_orders on public.orders;
@@ -87,10 +87,11 @@ begin
   create policy allow_authenticated_all_profiles on public.profiles for all to authenticated using (true) with check (true);
 exception when others then
   null;
-end ;
+end $;
 
 insert into public.migration_runs(migration_key, status, finished_at, notes)
 values('202608230042_clean_legacy_constraints_and_triggers', 'completed', now(), 'Removed all legacy triggers, restrictive check constraints, and opened operational RLS policies for smooth app interaction.')
 on conflict(migration_key) do update set status='completed', finished_at=now(), notes=excluded.notes;
 
 commit;
+

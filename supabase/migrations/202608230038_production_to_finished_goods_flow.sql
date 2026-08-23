@@ -3,7 +3,7 @@ begin;
 
 -- 1. RPC: Chuyển đơn thành phẩm có sẵn thẳng vào Kho Thành Phẩm & Báo Vận Tải
 create or replace function public.mark_order_ready_from_stock(p_order_id uuid)
-returns uuid language plpgsql security definer set search_path=public as 
+returns uuid language plpgsql security definer set search_path=public as $
 declare
   v_actor uuid := auth.uid();
   v_order public.orders%rowtype;
@@ -59,14 +59,14 @@ begin
          'ready-stock:' || p_order_id || ':' || extract(epoch from now())::bigint, v_order.confidentiality);
 
   return p_order_id;
-end ;
+end $;
 
 -- 2. RPC: Hoàn tất gói bếp -> Bàn giao Kho Thành Phẩm -> Chốt KPI Bếp -> Báo Vận Tải
 create or replace function public.complete_kitchen_work_package_with_proof(
   p_package_id uuid,
   p_proof_storage_path text default null
 )
-returns uuid language plpgsql security definer set search_path=public as 
+returns uuid language plpgsql security definer set search_path=public as $
 declare
   v_actor uuid := auth.uid();
   v_wp public.order_work_packages%rowtype;
@@ -157,7 +157,7 @@ begin
          p_package_id::text || ':event:' || extract(epoch from now())::bigint, v_order.confidentiality);
 
   return p_package_id;
-end ;
+end $;
 
 grant execute on function public.mark_order_ready_from_stock(uuid) to authenticated;
 grant execute on function public.complete_kitchen_work_package_with_proof(uuid, text) to authenticated;
@@ -167,3 +167,4 @@ values('202608230038_production_to_finished_goods_flow', 'completed', now(), 'St
 on conflict(migration_key) do update set status='completed', finished_at=now(), notes=excluded.notes;
 
 commit;
+

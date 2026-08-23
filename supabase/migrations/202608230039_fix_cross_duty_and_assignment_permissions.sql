@@ -11,7 +11,7 @@ create or replace function public.assign_package_task(
   p_deadline timestamptz,
   p_required_proof_types text[] default '{}'
 )
-returns uuid language plpgsql security definer set search_path=public as 
+returns uuid language plpgsql security definer set search_path=public as $
 declare
   v_actor uuid := auth.uid();
   v_unit uuid;
@@ -82,7 +82,7 @@ begin
   on conflict(idempotency_key, actor_id) do nothing;
 
   return v_task;
-end ;
+end $;
 
 -- 2. Đảm bảo approve_work_package_completion linh hoạt
 create or replace function public.approve_work_package_completion(
@@ -90,12 +90,12 @@ create or replace function public.approve_work_package_completion(
   p_package_id uuid,
   p_expected_version integer
 )
-returns uuid language plpgsql security definer set search_path=public as 
+returns uuid language plpgsql security definer set search_path=public as $
 declare
   v_actor uuid := auth.uid();
 begin
   return public.complete_kitchen_work_package_with_proof(p_package_id, null);
-end ;
+end $;
 
 grant execute on function public.assign_package_task(text,uuid,uuid,text,text,timestamptz,text[]) to authenticated;
 grant execute on function public.approve_work_package_completion(text,uuid,integer) to authenticated;
@@ -105,3 +105,4 @@ values('202608230039_fix_cross_duty_and_assignment_permissions', 'completed', no
 on conflict(migration_key) do update set status='completed', finished_at=now(), notes=excluded.notes;
 
 commit;
+

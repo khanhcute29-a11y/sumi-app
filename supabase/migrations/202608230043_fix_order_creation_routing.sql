@@ -1,4 +1,4 @@
--- SUMI APP M43 — Fix Order Creation Routing and Cleanup Phantom Packages
+﻿-- SUMI APP M43 â€” Fix Order Creation Routing and Cleanup Phantom Packages
 begin;
 
 -- 1. Drop the premature trigger
@@ -26,11 +26,11 @@ begin
   if v_actor is null then raise exception 'not authorized'; end if;
   select * into v_actor_profile from public.profiles where id = v_actor;
   if v_actor_profile.id is null or not v_actor_profile.approved or v_actor_profile.active = false then
-    raise exception 'Tài khoản chưa được kích hoạt hoặc đã bị khóa';
+    raise exception 'TÃ i khoáº£n chÆ°a Ä‘Æ°á»£c kÃ­ch hoáº¡t hoáº·c Ä‘Ã£ bá»‹ khÃ³a';
   end if;
 
   if p_order_type not in ('cake', 'bakery', 'teabreak', 'macaron', 'school', 'mixed') then
-    raise exception 'Loại đơn hàng không hợp lệ: %', p_order_type;
+    raise exception 'Loáº¡i Ä‘Æ¡n hÃ ng khÃ´ng há»£p lá»‡: %', p_order_type;
   end if;
 
   select result_entity_id into v_order
@@ -56,11 +56,11 @@ begin
     values(
       v_order,
       case when (v_item->>'product_id') is not null and (v_item->>'product_id') <> '' then (v_item->>'product_id')::uuid else null end,
-      coalesce(v_item->>'name', 'Sản phẩm'),
+      coalesce(v_item->>'name', 'Sáº£n pháº©m'),
       greatest(1, ceil(coalesce((v_item->>'quantity')::numeric, 1))::int),
       coalesce((v_item->>'quantity')::numeric, 1),
-      coalesce(v_item->>'unit', 'cái'),
-      coalesce(v_item->>'name', 'Sản phẩm'),
+      coalesce(v_item->>'unit', 'cÃ¡i'),
+      coalesce(v_item->>'name', 'Sáº£n pháº©m'),
       coalesce(v_item->'specification', '{}'::jsonb),
       coalesce((v_item->>'display_order')::int, 0)
     );
@@ -79,7 +79,7 @@ begin
   values(p_idempotency_key, 'create_order_v2', v_actor, v_order, now())
   on conflict(idempotency_key, actor_id) do nothing;
 
-  -- BƯỚC QUAN TRỌNG: Gọi tự động chia bếp sau khi đã có đầy đủ danh sách order_items!
+  -- BÆ¯á»šC QUAN TRá»ŒNG: Gá»i tá»± Ä‘á»™ng chia báº¿p sau khi Ä‘Ã£ cÃ³ Ä‘áº§y Ä‘á»§ danh sÃ¡ch order_items!
   perform public.auto_create_kitchen_work_packages(v_order);
 
   return v_order;
@@ -105,3 +105,4 @@ values('202608230043_fix_order_creation_routing', 'completed', now(), 'Moved aut
 on conflict(migration_key) do update set status='completed', finished_at=now(), notes=excluded.notes;
 
 commit;
+

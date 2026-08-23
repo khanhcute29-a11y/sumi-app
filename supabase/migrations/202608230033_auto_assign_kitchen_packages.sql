@@ -5,7 +5,7 @@ create or replace function public.create_order_v2(
   p_idempotency_key text,p_order_code text,p_order_type text,p_customer_id uuid,
   p_required_at timestamptz,p_fulfillment_method text,p_address text,p_note text,
   p_confidentiality text,p_items jsonb
-) returns uuid language plpgsql security definer set search_path=public as 
+) returns uuid language plpgsql security definer set search_path=public as $$
 declare
   v_actor uuid:=auth.uid();
   v_order uuid;
@@ -100,11 +100,11 @@ begin
 
   insert into public.command_idempotency values(p_idempotency_key,'create_order_v2',v_actor,v_order,now());
   return v_order;
-end ;
+end $$;
 
 -- Nâng cấp accept_order_package: cho phép Bếp trưởng / Thợ bếp / Quản lý nhận đơn mượt mà
 create or replace function public.accept_order_package(p_idempotency_key text,p_package_id uuid,p_expected_version integer)
-returns uuid language plpgsql security definer set search_path=public as 
+returns uuid language plpgsql security definer set search_path=public as $$
 declare
   v_actor uuid:=auth.uid();
   v_unit uuid;
@@ -139,10 +139,10 @@ begin
   on conflict(idempotency_key) do nothing;
 
   return p_package_id;
-end ;
+end $$;
 
 -- Backfill: Tự động phân công work package cho tất cả các đơn chưa có package
-do 
+do $$
 declare
   r record;
   v_unit_cold uuid;
@@ -195,7 +195,7 @@ begin
       update public.orders set status_v2='awaiting_acceptance' where id=r.order_id and status_v2='awaiting_assignment';
     end if;
   end loop;
-end ;
+end $$;
 
 revoke all on function public.create_order_v2(text,text,text,uuid,timestamptz,text,text,text,text,jsonb) from public,anon;
 revoke all on function public.accept_order_package(text,uuid,integer) from public,anon;

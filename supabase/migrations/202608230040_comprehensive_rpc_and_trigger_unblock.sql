@@ -3,7 +3,7 @@ begin;
 
 -- 1. is_business_director: Nhận diện chính xác 100% Owner / Admin qua role hoặc extra_roles
 create or replace function public.is_business_director()
-returns boolean language sql stable security definer set search_path = public as 
+returns boolean language sql stable security definer set search_path = public as $
   select coalesce(
     auth.uid() is not null and exists (
       select 1 from public.profiles p
@@ -31,7 +31,7 @@ create or replace function public.create_order_v2(
   p_note text,
   p_confidentiality text,
   p_items jsonb
-) returns uuid language plpgsql security definer set search_path=public as 
+) returns uuid language plpgsql security definer set search_path=public as $
 declare
   v_actor uuid := auth.uid();
   v_order uuid;
@@ -95,7 +95,7 @@ begin
   on conflict(idempotency_key, actor_id) do nothing;
 
   return v_order;
-end ;
+end $;
 
 -- 3. assign_order_package: Không chặn quyền cứng nhắc
 create or replace function public.assign_order_package(
@@ -105,7 +105,7 @@ create or replace function public.assign_order_package(
   p_due_at timestamptz,
   p_items jsonb,
   p_expected_version integer
-) returns uuid language plpgsql security definer set search_path=public as 
+) returns uuid language plpgsql security definer set search_path=public as $
 declare
   v_actor uuid := auth.uid();
   v_package uuid;
@@ -161,14 +161,14 @@ begin
   on conflict(idempotency_key, actor_id) do nothing;
 
   return v_package;
-end ;
+end $;
 
 -- 4. accept_order_package: Cho phép bếp trưởng / quản lý nhận đơn làm bánh
 create or replace function public.accept_order_package(
   p_idempotency_key text,
   p_package_id uuid,
   p_expected_version integer
-) returns uuid language plpgsql security definer set search_path=public as 
+) returns uuid language plpgsql security definer set search_path=public as $
 declare
   v_actor uuid := auth.uid();
   v_unit uuid;
@@ -201,7 +201,7 @@ begin
   on conflict(idempotency_key) do nothing;
 
   return p_package_id;
-end ;
+end $;
 
 -- 5. complete_task_v2: Cho phép người được giao hoặc Quản lý/Bếp trưởng hoàn thành việc
 create or replace function public.complete_task_v2(
@@ -209,7 +209,7 @@ create or replace function public.complete_task_v2(
   p_task_id uuid,
   p_expected_version integer,
   p_note text default null
-) returns uuid language plpgsql security definer set search_path=public as 
+) returns uuid language plpgsql security definer set search_path=public as $
 declare
   v_actor uuid := auth.uid();
   v_task public.tasks%rowtype;
@@ -232,7 +232,7 @@ begin
   on conflict(idempotency_key) do nothing;
 
   return p_task_id;
-end ;
+end $;
 
 -- 6. Delivery commands: start_delivery_run_v3, create_delivery_run_v2, complete_delivery_stop
 create or replace function public.create_delivery_run_v2(
@@ -240,7 +240,7 @@ create or replace function public.create_delivery_run_v2(
   p_driver_id uuid,
   p_order_ids uuid[],
   p_planned_distance_km numeric default null
-) returns uuid language plpgsql security definer set search_path=public as 
+) returns uuid language plpgsql security definer set search_path=public as $
 declare
   v_actor uuid := auth.uid();
   v_run uuid;
@@ -286,19 +286,19 @@ begin
   on conflict(idempotency_key, actor_id) do nothing;
 
   return v_run;
-end ;
+end $;
 
 create or replace function public.accept_delivery_run_v2(
   p_idempotency_key text,
   p_run_id uuid,
   p_expected_version integer
-) returns uuid language plpgsql security definer set search_path=public as 
+) returns uuid language plpgsql security definer set search_path=public as $
 declare
   v_actor uuid := auth.uid();
 begin
   update public.delivery_runs set status = 'accepted', version = version + 1 where id = p_run_id;
   return p_run_id;
-end ;
+end $;
 
 create or replace function public.start_delivery_run_v3(
   p_idempotency_key text,
@@ -306,7 +306,7 @@ create or replace function public.start_delivery_run_v3(
   p_expected_version integer,
   p_lat numeric,
   p_lng numeric
-) returns uuid language plpgsql security definer set search_path=public as 
+) returns uuid language plpgsql security definer set search_path=public as $
 declare
   v_actor uuid := auth.uid();
 begin
@@ -321,7 +321,7 @@ begin
   where id in (select order_id from public.delivery_stops where delivery_run_id = p_run_id);
 
   return p_run_id;
-end ;
+end $;
 
 create or replace function public.complete_delivery_stop(
   p_idempotency_key text,
@@ -330,7 +330,7 @@ create or replace function public.complete_delivery_stop(
   p_lat numeric,
   p_lng numeric,
   p_recipient text
-) returns uuid language plpgsql security definer set search_path=public as 
+) returns uuid language plpgsql security definer set search_path=public as $
 declare
   v_actor uuid := auth.uid();
   v_stop public.delivery_stops%rowtype;
@@ -383,11 +383,11 @@ begin
   on conflict(event_key) do nothing;
 
   return p_stop_id;
-end ;
+end $;
 
 -- 7. enforce_order_update_permissions: Cởi bỏ hoàn toàn ràng buộc chặn cứng cột
 create or replace function public.enforce_order_update_permissions()
-returns trigger language plpgsql security definer set search_path = public as 
+returns trigger language plpgsql security definer set search_path = public as $
 begin
   if auth.uid() is not null then
     return new;
@@ -411,3 +411,4 @@ values('202608230040_comprehensive_rpc_and_trigger_unblock', 'completed', now(),
 on conflict(migration_key) do update set status='completed', finished_at=now(), notes=excluded.notes;
 
 commit;
+

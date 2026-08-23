@@ -1,4 +1,4 @@
--- SUMI APP M29 — operational timing, overdue accountability and external delivery.
+﻿-- SUMI APP M29 â€” operational timing, overdue accountability and external delivery.
 begin;
 
 alter table public.delivery_runs add column if not exists provider text not null default 'internal';
@@ -23,12 +23,12 @@ select o.id,o.order_code,o.order_type,o.status_v2,o.required_at,o.fulfillment_me
  delivery.provider as delivery_provider,delivery.provider_label,delivery.shipping_fee,delivery.driver_name,
  (o.status_v2 not in ('completed','cancelled') and o.required_at is not null and o.required_at<now()) as is_overdue,
  case when o.status_v2 not in ('completed','cancelled') and o.required_at is not null and o.required_at<now() then case o.status_v2
-  when 'awaiting_assignment' then 'Chưa phân bếp'
-  when 'awaiting_acceptance' then 'Bếp chưa nhận'
-  when 'in_production' then 'Bếp chưa hoàn thành'
-  when 'ready_for_fulfillment' then 'Vận tải chưa nhận'
-  when 'in_delivery' then 'Vận tải chưa hoàn thành'
-  else 'Chưa thực hiện' end end as overdue_stage,
+  when 'awaiting_assignment' then 'ChÆ°a phÃ¢n báº¿p'
+  when 'awaiting_acceptance' then 'Báº¿p chÆ°a nháº­n'
+  when 'in_production' then 'Báº¿p chÆ°a hoÃ n thÃ nh'
+  when 'ready_for_fulfillment' then 'Váº­n táº£i chÆ°a nháº­n'
+  when 'in_delivery' then 'Váº­n táº£i chÆ°a hoÃ n thÃ nh'
+  else 'ChÆ°a thá»±c hiá»‡n' end end as overdue_stage,
  case when o.status_v2 not in ('completed','cancelled') and o.required_at is not null and o.required_at<now() then floor(extract(epoch from (now()-o.required_at))/60)::int else 0 end as overdue_minutes
 from public.orders o
 left join lateral(select min(wp.accepted_at) started_at,case when count(*)>0 and bool_and(wp.completed_at is not null) then max(wp.completed_at) end completed_at from public.order_work_packages wp where wp.order_id=o.id and wp.status<>'cancelled') prod on true
@@ -57,7 +57,7 @@ begin
   update public.orders set status_v2='ready_for_fulfillment',shipper_staff_name=case when v_provider='internal' then (select full_name from public.profiles where id=p_driver_id) else coalesce(nullif(trim(p_provider_label),''),upper(v_provider)) end,version=version+1 where id=v_order;
   insert into public.domain_events(event_type,entity_type,entity_id,actor_id,payload,idempotency_key,confidentiality) select 'delivery_assigned','order',id,v_actor,jsonb_build_object('delivery_run_id',v_run,'driver_id',p_driver_id,'provider',v_provider,'provider_label',p_provider_label,'shipping_fee',p_shipping_fee),p_idempotency_key||':event:'||id,confidentiality from public.orders where id=v_order;
  end loop;
- if v_provider='internal' then insert into public.notifications(event_key,recipient_profile_id,notification_type,sound_key,title,body,entity_type,entity_id,deep_link) values(p_idempotency_key||':notify',p_driver_id,'delivery_assigned','ting','Bạn có chuyến giao mới',v_seq||' điểm giao','delivery_run',v_run,'/shipping/'||v_run); end if;
+ if v_provider='internal' then insert into public.notifications(event_key,recipient_profile_id,notification_type,sound_key,title,body,entity_type,entity_id,deep_link) values(p_idempotency_key||':notify',p_driver_id,'delivery_assigned','ting','Báº¡n cÃ³ chuyáº¿n giao má»›i',v_seq||' Ä‘iá»ƒm giao','delivery_run',v_run,'/shipping/'||v_run); end if;
  insert into public.command_idempotency values(p_idempotency_key,'create_delivery_run_v3',v_actor,v_run,now());return v_run;
 end $$;
 
@@ -85,7 +85,7 @@ begin
  select confidentiality into v_conf from public.orders where id=v_stop.order_id;select count(*) into v_remaining from public.delivery_stops where delivery_run_id=v_run.id and id<>p_stop_id and status<>'delivered';
  if v_remaining=0 then update public.delivery_runs set status='completed',completed_at=now(),end_lat=p_lat,end_lng=p_lng,version=version+1 where id=v_run.id; end if;
  insert into public.domain_events(event_type,entity_type,entity_id,actor_id,payload,idempotency_key,confidentiality) values('delivery_completed','order',v_stop.order_id,v_actor,jsonb_build_object('delivery_stop_id',p_stop_id,'recipient',p_recipient,'delivery_minutes',case when v_run.started_at is null then null else floor(extract(epoch from (now()-v_run.started_at))/60)::int end),p_idempotency_key||':event',v_conf);
- insert into public.notifications(event_key,recipient_role,notification_type,sound_key,title,body,entity_type,entity_id,deep_link) values(p_idempotency_key||':cash','owner','delivery_completed','cash_complete','Giao hàng thành công','Đơn đã giao và hoàn thành','order',v_stop.order_id,'/orders/'||v_stop.order_id);return p_stop_id;
+ insert into public.notifications(event_key,recipient_role,notification_type,sound_key,title,body,entity_type,entity_id,deep_link) values(p_idempotency_key||':cash','owner','delivery_completed','cash_complete','Giao hÃ ng thÃ nh cÃ´ng','ÄÆ¡n Ä‘Ã£ giao vÃ  hoÃ n thÃ nh','order',v_stop.order_id,'/orders/'||v_stop.order_id);return p_stop_id;
 end $$;
 
 revoke all on function public.create_delivery_run_v3(text,uuid,uuid[],numeric,text,text,numeric) from public,anon;
@@ -95,3 +95,4 @@ grant execute on function public.start_delivery_run_v3(text,uuid,integer,numeric
 
 insert into public.migration_runs(migration_key,status,finished_at,notes) values('202608230029_order_operational_timing','completed',now(),'Added order timing, overdue accountability, delivery providers and shipping fees.') on conflict(migration_key) do update set status='completed',finished_at=now(),notes=excluded.notes;
 commit;
+

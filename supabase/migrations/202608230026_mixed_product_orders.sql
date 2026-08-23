@@ -1,4 +1,4 @@
--- SUMI APP M26 — one order may contain products for several production flows.
+﻿-- SUMI APP M26 â€” one order may contain products for several production flows.
 begin;
 
 create or replace function public.create_order_v2(
@@ -32,8 +32,8 @@ begin
   v_flow:=coalesce(v_item->'specification'->>'product_flow',p_order_type);
   if v_flow not in ('cake','bakery','teabreak','macaron','school') then raise exception 'invalid product flow'; end if;
   insert into public.order_items(order_id,product_id,name,qty,quantity,unit,name_snapshot,specification,display_order)
-  values(v_order,(v_item->>'product_id')::uuid,coalesce(v_item->>'name','Sản phẩm'),greatest(1,ceil((v_item->>'quantity')::numeric)::int),
-   (v_item->>'quantity')::numeric,coalesce(v_item->>'unit','cái'),coalesce(v_item->>'name','Sản phẩm'),
+  values(v_order,(v_item->>'product_id')::uuid,coalesce(v_item->>'name','Sáº£n pháº©m'),greatest(1,ceil((v_item->>'quantity')::numeric)::int),
+   (v_item->>'quantity')::numeric,coalesce(v_item->>'unit','cÃ¡i'),coalesce(v_item->>'name','Sáº£n pháº©m'),
    coalesce(v_item->'specification','{}'::jsonb)||jsonb_build_object('product_flow',v_flow),coalesce((v_item->>'display_order')::int,0));
  end loop;
  insert into public.domain_events(event_type,entity_type,entity_id,actor_id,occurred_at,payload,idempotency_key,confidentiality)
@@ -51,3 +51,4 @@ insert into public.migration_runs(migration_key,status,finished_at,notes)
 values('202608230026_mixed_product_orders','completed',now(),'Enabled multi-flow orders with per-item production routing; school orders remain isolated.')
 on conflict(migration_key) do update set status='completed',finished_at=now(),notes=excluded.notes;
 commit;
+
