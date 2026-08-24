@@ -140,14 +140,14 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, onSavePermissions, onDeacti
             </span>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
               <Badge tone={staffMeta.tone || 'neutral'}>
-                {staffMeta.shortLabel ? `[${staffMeta.shortLabel}] ` : ''}{staffMeta.label}
+                {staffMeta.label}
               </Badge>
               {s.station && <Badge tone="neutral">{s.station}</Badge>}
               {(s.extra_roles || []).map((r) => {
                 const em = getRoleMeta(r, '');
                 return (
                   <Badge key={r} tone="neutral">
-                    +{em.shortLabel || em.label || r}
+                    +{em.label || r}
                   </Badge>
                 );
               })}
