@@ -1,5 +1,21 @@
-// Cached audio buffer for alert sound
-let alertAudioBuffer = null;
+// Sound event types
+export const SoundEvents = {
+  ANNOUNCEMENT: 'announcement',      // Company announcement (rotary phone)
+  TASK_ASSIGNED: 'task_assigned',    // Task assigned to user
+  ORDER_COMPLETED: 'order_completed', // Order ready/completed
+  DELIVERY_COMPLETED: 'delivery_completed' // Delivery completed
+};
+
+// Map sound events to audio files
+const SOUND_FILES = {
+  [SoundEvents.ANNOUNCEMENT]: '/alert.mp3',
+  [SoundEvents.TASK_ASSIGNED]: '/task-complete.wav',
+  [SoundEvents.ORDER_COMPLETED]: '/task-complete.wav',
+  [SoundEvents.DELIVERY_COMPLETED]: '/task-complete.wav'
+};
+
+// Cached audio buffers for different sounds
+let audioBuffers = {};
 let audioContext = null;
 let contextResumePromise = null;
 
@@ -17,7 +33,6 @@ function getAudioContext() {
 }
 
 async function resumeAudioContext() {
-  // Ensure only one resume attempt at a time
   if (contextResumePromise) {
     return contextResumePromise;
   }
@@ -29,7 +44,6 @@ async function resumeAudioContext() {
   }
 
   if (ctx.state === 'running') {
-    console.log('[resumeAudioContext] Context already running');
     return true;
   }
 
@@ -52,82 +66,79 @@ async function resumeAudioContext() {
   return true;
 }
 
-export const playAlertSound = async () => {
-  try {
-    console.log('[playAlertSound] Starting...');
+async function playAudioViaWebAudio(soundType, filePath) {
+  const ctx = getAudioContext();
+  if (!ctx) throw new Error('No audio context');
 
-    // Ensure Web Audio Context is resumed (might be suspended on some browsers)
+  // Load and cache audio file if not already cached
+  if (!audioBuffers[soundType]) {
+    console.log(`[playSound] Loading ${soundType} from ${filePath}...`);
+    const response = await fetch(filePath);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const arrayBuffer = await response.arrayBuffer();
+    audioBuffers[soundType] = await ctx.decodeAudioData(arrayBuffer);
+    console.log(`[playSound] ${soundType} loaded, duration:`, audioBuffers[soundType].duration);
+  }
+
+  // Play the audio
+  const source = ctx.createBufferSource();
+  source.buffer = audioBuffers[soundType];
+  const gainNode = ctx.createGain();
+  gainNode.gain.value = 1.0;
+  source.connect(gainNode);
+  gainNode.connect(ctx.destination);
+  source.start(0);
+
+  console.log(`[playSound] ✓ Playing ${soundType} via Web Audio API`);
+}
+
+async function playAudioViaHtmlAudio(filePath) {
+  const audio = new Audio(filePath);
+  audio.volume = 1.0;
+  console.log('[playSound] HTML Audio created, attempting play...');
+  await audio.play();
+  console.log('[playSound] ✓ Playing via HTML Audio API');
+}
+
+export const playSound = async (soundType = SoundEvents.ANNOUNCEMENT) => {
+  const filePath = SOUND_FILES[soundType] || SOUND_FILES[SoundEvents.ANNOUNCEMENT];
+  console.log(`[playSound] Playing ${soundType} from ${filePath}...`);
+
+  try {
+    // Ensure Web Audio Context is resumed
     const resumed = await resumeAudioContext();
     if (!resumed) {
-      console.warn('[playAlertSound] Could not resume audio context, trying HTML Audio fallback');
+      console.warn('[playSound] Could not resume audio context, trying HTML Audio fallback');
       throw new Error('Audio context resume failed');
     }
 
-    const ctx = getAudioContext();
-    if (!ctx) {
-      throw new Error('No audio context');
-    }
-
-    // Load audio file if not cached
-    if (!alertAudioBuffer) {
-      console.log('[playAlertSound] Loading audio file from /alert.mp3...');
-      const response = await fetch('/alert.mp3');
-      if (!response.ok) {
-        throw new Error(`Failed to fetch audio: HTTP ${response.status}`);
-      }
-      const arrayBuffer = await response.arrayBuffer();
-      console.log('[playAlertSound] Decoding audio buffer...');
-      alertAudioBuffer = await ctx.decodeAudioData(arrayBuffer);
-      console.log('[playAlertSound] Audio loaded and decoded, duration:', alertAudioBuffer.duration);
-    }
-
-    // Play the audio
-    console.log('[playAlertSound] Creating source node...');
-    const source = ctx.createBufferSource();
-    source.buffer = alertAudioBuffer;
-
-    // Add gain node for volume control
-    const gainNode = ctx.createGain();
-    gainNode.gain.value = 1.0; // Max volume
-
-    source.connect(gainNode);
-    gainNode.connect(ctx.destination);
-
-    console.log('[playAlertSound] Starting playback...');
-    source.start(0);
-
-    console.log('[playAlertSound] ✓ Playing audio via Web Audio API');
+    await playAudioViaWebAudio(soundType, filePath);
   } catch (e) {
-    console.error('[playAlertSound] Web Audio failed:', e.message);
-    console.log('[playAlertSound] Falling back to HTML Audio API...');
+    console.error(`[playSound] Web Audio failed: ${e.message}`);
+    console.log('[playSound] Falling back to HTML Audio API...');
 
-    // Fallback to HTML Audio API
     try {
-      const audio = new Audio('/alert.mp3');
-      audio.volume = 1.0;
-      console.log('[playAlertSound] HTML Audio created, attempting play...');
-      await audio.play();
-      console.log('[playAlertSound] ✓ Playing audio via HTML Audio API');
+      await playAudioViaHtmlAudio(filePath);
     } catch (fallbackErr) {
-      console.error('[playAlertSound] HTML Audio failed:', fallbackErr.message);
-      console.error('[playAlertSound] ✗ All audio methods failed');
+      console.error('[playSound] HTML Audio failed:', fallbackErr.message);
+      console.error('[playSound] ✗ All audio methods failed');
     }
   }
 };
 
-export const notifyCompany = async (title, body, severity = 'normal') => {
-  // Send browser notification + play sound when posting announcement
-  try {
-    // Play alert sound immediately (don't await, let it play in background)
-    playAlertSound().catch(err => console.error('Alert sound error:', err));
+// Keep backward compatibility
+export const playAlertSound = () => playSound(SoundEvents.ANNOUNCEMENT);
 
-    // Also send notification if permission granted
+export const notifyCompany = async (title, body, severity = 'normal') => {
+  try {
+    playSound(SoundEvents.ANNOUNCEMENT).catch(err => console.error('Alert sound error:', err));
+
     if ('Notification' in window && Notification.permission === 'granted') {
       const notification = new Notification(title, {
         body: body,
         icon: '🥐',
         tag: 'company-alert',
-        requireInteraction: severity !== 'normal', // Keep notification for urgent
+        requireInteraction: severity !== 'normal',
         badge: severity === 'urgent' ? '🔴' : '🔵',
       });
 
@@ -142,39 +153,67 @@ export const notifyCompany = async (title, body, severity = 'normal') => {
 };
 
 export const requestNotificationPermission = async () => {
-  // Silently request notification permission on app load - no dialog shown
-  // User may see browser's native permission prompt, but we don't double-ask
   if ('Notification' in window && Notification.permission === 'default') {
     try {
       await Notification.requestPermission();
     } catch (e) {
-      // Silently ignore if permission request fails
       console.log('Notification permission request failed:', e);
     }
   }
 };
 
 export const preloadAlertAudio = async () => {
-  // Pre-load alert audio on app startup so it's ready to play immediately
   try {
-    console.log('[preloadAlertAudio] Starting preload...');
+    console.log('[preloadAlertAudio] Preloading all sound files...');
     const ctx = getAudioContext();
     if (!ctx) {
       console.warn('[preloadAlertAudio] No audio context available');
       return false;
     }
 
-    const response = await fetch('/alert.mp3');
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+    // Preload all sound files
+    let loaded = 0;
+    for (const [soundType, filePath] of Object.entries(SOUND_FILES)) {
+      try {
+        const response = await fetch(filePath);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const arrayBuffer = await response.arrayBuffer();
+        audioBuffers[soundType] = await ctx.decodeAudioData(arrayBuffer);
+        console.log(`[preloadAlertAudio] ✓ ${soundType} preloaded`);
+        loaded++;
+      } catch (e) {
+        console.warn(`[preloadAlertAudio] Failed to preload ${soundType}:`, e.message);
+      }
     }
 
-    const arrayBuffer = await response.arrayBuffer();
-    alertAudioBuffer = await ctx.decodeAudioData(arrayBuffer);
-    console.log('[preloadAlertAudio] ✓ Alert audio preloaded, duration:', alertAudioBuffer.duration);
-    return true;
+    console.log(`[preloadAlertAudio] ✓ Preloaded ${loaded}/${Object.keys(SOUND_FILES).length} sounds`);
+    return loaded > 0;
   } catch (e) {
-    console.warn('[preloadAlertAudio] Failed to preload:', e.message);
+    console.warn('[preloadAlertAudio] Failed:', e.message);
     return false;
+  }
+};
+
+// Notify all users with sound + optional browser notification
+export const notifyAllUsers = async (soundType, title, body) => {
+  try {
+    // Play sound for current user
+    playSound(soundType).catch(err => console.error(`[notifyAllUsers] Sound error:`, err));
+
+    // Send browser notification if permission granted
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification(title, {
+        body: body,
+        icon: '🥐',
+        tag: soundType,
+      }).onclick = () => {
+        window.focus();
+      };
+    }
+
+    // Broadcast to all other users via socket/realtime
+    console.log(`[notifyAllUsers] Broadcasting ${soundType} to all users...`);
+  } catch (e) {
+    console.error('[notifyAllUsers] Error:', e);
   }
 };

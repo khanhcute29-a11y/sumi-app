@@ -11,7 +11,7 @@ import {
 import { navBadgeVisibility } from './lib/roles';
 import { initAudioUnlock } from './lib/sound';
 import { useOrderNotifications } from './lib/useOrderNotifications';
-import { requestNotificationPermission, playAlertSound, preloadAlertAudio } from './lib/alarmSound';
+import { requestNotificationPermission, playAlertSound, preloadAlertAudio, playSound, SoundEvents } from './lib/alarmSound';
 import { setupAutoRefresh, cleanupAllSubscriptions, subscribeToMultipleTables, subscribeToBroadcast, BroadcastEvents } from './lib/realtimeSync';
 import { ConnectivityBanner } from './components/ConnectivityBanner';
 import { AuthProvider, useAuth } from './lib/AuthContext';
@@ -128,15 +128,23 @@ function OpsApp({ onSignOut }) {
       }
     );
 
-    // Global listener for feed announcements - ALWAYS LISTENING
+    // Global listener for feed announcements
     const unsubFeedBroadcast = subscribeToBroadcast(BroadcastEvents.FEED_POST_CREATED, (data) => {
       console.log('[App] Announcement broadcast received! Playing sound...');
       playAlertSound().catch(err => console.error('[App] Alert sound error:', err));
     });
 
+    // Global listener for all sound notifications (tasks, orders, deliveries)
+    const unsubSoundNotifications = subscribeToBroadcast(BroadcastEvents.SOUND_NOTIFICATION, (data) => {
+      console.log('[App] Sound notification received:', data);
+      const soundType = data?.soundType || SoundEvents.TASK_ASSIGNED;
+      playSound(soundType).catch(err => console.error('[App] Sound notification error:', err));
+    });
+
     return () => {
       unsubscribe();
       unsubFeedBroadcast();
+      unsubSoundNotifications();
       cleanupAllSubscriptions();
     };
   }, []);
