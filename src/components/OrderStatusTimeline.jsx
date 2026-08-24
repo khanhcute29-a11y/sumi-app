@@ -26,14 +26,15 @@ export default function OrderStatusTimeline({ order, packages = [], tasks = [], 
     });
 
     // Stage 3: Đang làm (In Progress)
-    const inProgressPkg = packages.find(p => p?.assigned_to_staff_id && !p?.completed_at);
-    const assignedStaff = packages.find(p => p?.assigned_to_staff_id)?.assigned_to_staff_name;
+    const inProgressPkg = packages.find(p => p?.accepted_at && !p?.completed_at);
+    const workPackageAcceptedLog = kpiLogs.find(log => log?.event_type === 'work_package_accepted');
+    const assignedStaff = workPackageAcceptedLog?.staff_name || packages.find(p => p?.accepted_at)?.organization_units?.name;
     stageList.push({
       id: 'in_progress',
       icon: '🔨',
       title: 'Đang làm',
       status: inProgressPkg ? 'doing' : (packages.some(p => p?.completed_at) ? 'done' : 'pending'),
-      who: inProgressPkg ? assignedStaff || 'Chỉ định' : (packages.some(p => p?.completed_at) ? 'Đã xong' : 'Chờ'),
+      who: inProgressPkg ? assignedStaff || 'Đang làm' : (packages.some(p => p?.completed_at) ? 'Đã xong' : 'Chờ'),
       when: '-'
     });
 
