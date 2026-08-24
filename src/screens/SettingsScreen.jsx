@@ -388,6 +388,24 @@ export default function SettingsScreen({ onSignOut }) {
         )}
       </Section>
 
+      <Section title="📢 Nhận thông báo công ty">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>
+            Bật thông báo để nhận chuông và popup khi có thông báo quan trọng từ công ty (Bảng tin), đơn hàng mới, hoặc giao hàng xong.
+          </div>
+          <Switch
+            label={<><IconBell size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Bật nhận thông báo</>}
+            checked={pushStatus === 'subscribed'}
+            onChange={handleTogglePush}
+            disabled={pushBusy || pushStatus === 'unsupported' || pushStatus === 'ios_add_to_home'}
+          />
+          {pushStatus === 'unsupported' && <div style={{ font: 'var(--text-caption)', color: 'var(--status-warning)' }}>⚠️ Trình duyệt này không hỗ trợ thông báo. Dùng Chrome, Edge, Firefox, hoặc Safari trên iOS 16.4+.</div>}
+          {pushStatus === 'ios_add_to_home' && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>📱 iPhone/iPad: Bấm ⬆️ (Chia sẻ) trong Safari → "Thêm vào Màn hình chính" → mở app từ icon → quay lại đây bật công tắc.</div>}
+          {pushStatus === 'denied' && <div style={{ font: 'var(--text-caption)', color: 'var(--status-danger)' }}>🚫 Bạn đã chặn thông báo. Vào cài đặt trình duyệt để cho phép lại.</div>}
+          {pushError && <div style={{ font: 'var(--text-caption)', color: 'var(--status-danger)' }}>❌ Lỗi: {pushError}</div>}
+        </div>
+      </Section>
+
       <Section title="Quyền của vai trò">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {ROLE_PERMISSIONS.map((r) => (
@@ -404,13 +422,6 @@ export default function SettingsScreen({ onSignOut }) {
           options={[{ value: 'small', label: 'Nhỏ' }, { value: 'normal', label: 'Vừa (mặc định)' }, { value: 'large', label: 'Lớn' }]} />
         <Switch label="Bật Offline-First (lưu đơn khi mất mạng)" checked={offlineFirst} onChange={setOfflineFirst} />
         <Switch label="Bắt buộc chốt ca cuối ngày (Z-Report)" checked={forceCloseShift} onChange={setForceCloseShift} />
-        <Switch label={<><IconBell size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Nhận thông báo đẩy trên thiết bị này (đơn mới, giao hàng xong)</>}
-          checked={pushStatus === 'subscribed'} onChange={handleTogglePush}
-          disabled={pushBusy || pushStatus === 'unsupported' || pushStatus === 'ios_add_to_home'} />
-        {pushStatus === 'unsupported' && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Trình duyệt này không hỗ trợ thông báo đẩy.</div>}
-        {pushStatus === 'ios_add_to_home' && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>iPhone/iPad chỉ nhận được thông báo đẩy khi mở app từ Màn hình chính (không phải tab Safari thường). Bấm nút Chia sẻ (⬆️) trong Safari → "Thêm vào Màn hình chính" → mở lại app từ icon vừa thêm, rồi quay lại đây bật công tắc này. Cần iOS 16.4 trở lên.</div>}
-        {pushStatus === 'denied' && <div style={{ font: 'var(--text-caption)', color: 'var(--status-danger)' }}>Bạn đã chặn thông báo cho trang này — vào cài đặt trình duyệt để bật lại.</div>}
-        {pushError && <div style={{ font: 'var(--text-caption)', color: 'var(--status-danger)' }}>{pushError}</div>}
       </Section>
 
       {isOwner && <AdminSection />}
