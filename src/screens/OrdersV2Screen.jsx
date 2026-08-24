@@ -5,6 +5,7 @@ import CreateOrderV2Modal from '../components/CreateOrderV2Modal';
 import OrderV2DetailModal from '../components/OrderV2DetailModal';
 import { useAuth } from '../lib/AuthContext';
 import { supabase } from '../lib/supabaseClient';
+import { canUserViewOrder, getUserWorkflows } from '../lib/orderVisibility';
 
 const LABELS = {
   awaiting_assignment: 'Đơn chờ làm', awaiting_acceptance: 'Đơn chờ làm', in_production: 'Bếp đang làm',
@@ -35,18 +36,6 @@ const minutesText = value => {
   return hours ? `${hours} giờ ${minutes} phút` : `${minutes} phút`;
 };
 
-// Visibility check: Hot/Cold/Teabreak are public, others are restricted by assignment
-const isOrderVisibleToUser = (order, userProfile) => {
-  // Public kitchens: Hot (Bếp Nóng), Cold (Bếp Lạnh), Teabreak
-  const publicFlows = ['bakery', 'cake', 'teabreak'];
-  if (publicFlows.includes(order.order_type)) {
-    return true; // All staff can see
-  }
-
-  // Private flows: School, Macaron, Mixed (only assigned staff can see)
-  // For now, show to all (can be restricted further if needed per user assignment)
-  return true;
-};
 
 export default function OrdersV2Screen() {
   const { profile } = useAuth();
@@ -88,11 +77,18 @@ export default function OrdersV2Screen() {
 
   const roleCanCreate = ['owner', 'admin', 'cashier', 'sale', 'kitchen_lead'].includes(profile?.role) || (profile?.extra_roles || []).some(r => ['owner', 'admin', 'cashier', 'sale', 'kitchen_lead'].includes(r));
 
+  // Lọc luồng có sẵn dựa trên quyền của user
+  const userWorkflows = useMemo(() => getUserWorkflows(profile), [profile]);
+  const availableFlowGroups = useMemo(
+    () => FLOW_GROUPS.filter(fg => fg.key === 'mixed' || userWorkflows.includes(fg.key)),
+    [userWorkflows]
+  );
+
   // Lọc theo trạng thái trước + visibility rules
   const statusOrders = useMemo(() => {
     if (!filter) return [];
     const filtered = orders.filter(FILTERS.find(x => x.key === filter)?.match || (() => true));
-    return filtered.filter(o => isOrderVisibleToUser(o, profile));
+    return filtered.filter(o => canUserViewOrder(o, profile));
   }, [orders, filter, profile]);
 
   // Lọc tiếp theo 5 luồng và tìm kiếm
@@ -166,7 +162,7 @@ export default function OrdersV2Screen() {
           </div>
 
           <div className="mock-flow-grid">
-            {FLOW_GROUPS.map(g => {
+            {availableFlowGroups.map(g => {
               const count = statusOrders.filter(g.match).length;
               return (
                 <button
@@ -219,7 +215,7 @@ export default function OrdersV2Screen() {
               <span>Tất cả</span>
               <b>{statusOrders.length}</b>
             </button>
-            {FLOW_GROUPS.map(g => {
+            {availableFlowGroups.map(g => {
               const count = statusOrders.filter(g.match).length;
               return (
                 <button
