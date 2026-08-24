@@ -1,103 +1,70 @@
-export const playAlarmSound = (type = 'urgent', duration = 5000) => {
+export const playCompanyBell = (longDuration = true) => {
+  // Long, loud bell sound for company announcements
   try {
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
     const now = audioContext.currentTime;
+    const duration = longDuration ? 8 : 3; // 8 seconds for long, 3 seconds for short
 
-    if (type === 'urgent') {
-      // URGENT: Siren-like alarm - very loud, alternating frequencies
-      const oscillator1 = audioContext.createOscillator();
-      const oscillator2 = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-      const lfo = audioContext.createOscillator();
+    // Create bell sound with multiple harmonics
+    const frequencies = [
+      { freq: 262, amp: 0.3 },  // Middle C
+      { freq: 330, amp: 0.25 }, // E
+      { freq: 392, amp: 0.25 }, // G
+      { freq: 523, amp: 0.2 },  // High C
+    ];
 
-      // Set up oscillators
-      oscillator1.frequency.setValueAtTime(1000, now);
-      oscillator2.frequency.setValueAtTime(500, now);
-      lfo.frequency.setValue(4); // 4 Hz wobble
+    const oscillators = [];
+    const gains = [];
+    const masterGain = audioContext.createGain();
 
-      // Create modulation
-      const lfoGain = audioContext.createGain();
-      lfoGain.gain.setValueAtTime(200, now);
-      lfo.connect(lfoGain);
-      lfoGain.connect(oscillator1.frequency);
+    // Create multiple oscillators for rich bell tone
+    frequencies.forEach(({ freq, amp }) => {
+      const osc = audioContext.createOscillator();
+      const gain = audioContext.createGain();
 
-      // Frequency sweep for siren effect
-      oscillator1.frequency.exponentialRampToValueAtTime(1500, now + 0.3);
-      oscillator1.frequency.exponentialRampToValueAtTime(500, now + 0.6);
-      oscillator1.frequency.exponentialRampToValueAtTime(1000, now + duration / 1000);
+      osc.frequency.setValueAtTime(freq, now);
+      osc.type = 'sine';
 
-      // Master volume - EXTREMELY LOUD
-      gainNode.gain.setValueAtTime(0.5, now);
+      // Fade in quickly, then slow decay
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(amp, now + 0.2);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
 
-      // Connect and play
-      oscillator1.connect(gainNode);
-      oscillator2.connect(gainNode);
-      lfo.connect(gainNode);
-      gainNode.connect(audioContext.destination);
+      osc.connect(gain);
+      gain.connect(masterGain);
 
-      oscillator1.start(now);
-      oscillator2.start(now);
-      lfo.start(now);
+      oscillators.push(osc);
+      gains.push(gain);
 
-      setTimeout(() => {
-        oscillator1.stop();
-        oscillator2.stop();
-        lfo.stop();
-      }, duration);
+      osc.start(now);
+      osc.stop(now + duration);
+    });
 
-    } else if (type === 'important') {
-      // IMPORTANT: Beep pattern
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
+    // Master volume - EXTREMELY LOUD (0.6 = very loud)
+    masterGain.gain.setValueAtTime(0.6, now);
+    masterGain.connect(audioContext.destination);
 
-      oscillator.frequency.setValueAtTime(800, now);
-      oscillator.type = 'sine';
-      gainNode.gain.setValueAtTime(0.4, now);
-
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-
-      // Beep pattern
-      for (let i = 0; i < 5; i++) {
-        gainNode.gain.setValueAtTime(0.4, now + i * 0.3);
-        gainNode.gain.setValueAtTime(0, now + i * 0.3 + 0.15);
-      }
-
-      oscillator.start(now);
-      oscillator.stop(now + 1.5);
-
-    } else if (type === 'notification') {
-      // NORMAL: Single beep
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-
-      oscillator.frequency.setValueAtTime(600, now);
-      gainNode.gain.setValueAtTime(0.2, now);
-      gainNode.gain.setValueAtTime(0, now + 0.3);
-
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-
-      oscillator.start(now);
-      oscillator.stop(now + 0.3);
+    // Repeat bell sound 2 more times for emphasis
+    if (longDuration) {
+      setTimeout(() => playCompanyBell(false), duration * 1000 + 500);
+      setTimeout(() => playCompanyBell(false), (duration * 2) * 1000 + 1000);
     }
+
   } catch (e) {
-    console.error('Alarm sound error:', e);
+    console.error('Bell sound error:', e);
   }
 };
 
 export const playUrgentAlert = () => {
-  // Play LOUD urgent alert - max volume
-  // Call this 3 times with delays for maximum impact
-  playAlarmSound('urgent', 3000);
-  setTimeout(() => playAlarmSound('urgent', 3000), 3200);
-  setTimeout(() => playAlarmSound('urgent', 3000), 6400);
+  // Same as company bell - long loud chime
+  playCompanyBell(true);
 };
 
 export const playImportantAlert = () => {
-  playAlarmSound('important', 1500);
+  // Shorter bell for important
+  playCompanyBell(false);
 };
 
 export const playNotification = () => {
-  playAlarmSound('notification', 300);
+  playCompanyBell(false);
 };
