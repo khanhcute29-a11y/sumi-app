@@ -10,7 +10,8 @@ export default function OrderStatusTimeline({ order, packages = [], tasks = [], 
       icon: '📋',
       title: 'Đơn hàng',
       status: order?.created_at ? 'done' : 'pending',
-      content: order?.created_at ? `Người tạo: ${order.created_by_name || 'N/A'} · ${new Date(order.created_at).toLocaleString('vi-VN')}` : 'Chưa tạo'
+      who: order?.created_by_name || 'N/A',
+      when: order?.created_at ? new Date(order.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '-'
     });
 
     // Stage 2: Nhận đơn (Kitchen Lead Received)
@@ -19,10 +20,9 @@ export default function OrderStatusTimeline({ order, packages = [], tasks = [], 
       id: 'kitchen_accepted',
       icon: '👨‍🍳',
       title: 'Nhận đơn',
-      status: kitchenAcceptedPkg?.accepted_at ? 'done' : (packages.length > 0 ? 'pending' : 'pending'),
-      content: kitchenAcceptedPkg?.accepted_at
-        ? `BT ${kitchenAcceptedPkg.organization_units?.name || 'Bếp'} · ${new Date(kitchenAcceptedPkg.accepted_at).toLocaleString('vi-VN')}`
-        : 'Chờ bếp trưởng nhận'
+      status: kitchenAcceptedPkg?.accepted_at ? 'done' : 'pending',
+      who: kitchenAcceptedPkg ? `BT ${kitchenAcceptedPkg.organization_units?.name || 'Bếp'}` : 'Chờ',
+      when: kitchenAcceptedPkg?.accepted_at ? new Date(kitchenAcceptedPkg.accepted_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '-'
     });
 
     // Stage 3: Đang làm (In Progress)
@@ -33,9 +33,8 @@ export default function OrderStatusTimeline({ order, packages = [], tasks = [], 
       icon: '🔨',
       title: 'Đang làm',
       status: inProgressPkg ? 'doing' : (packages.some(p => p?.completed_at) ? 'done' : 'pending'),
-      content: inProgressPkg
-        ? `Người: ${assignedStaff || 'Đang chỉ định'}`
-        : (packages.some(p => p?.completed_at) ? 'Đã hoàn thành' : 'Chờ xác nhận')
+      who: inProgressPkg ? assignedStaff || 'Chỉ định' : (packages.some(p => p?.completed_at) ? 'Đã xong' : 'Chờ'),
+      when: '-'
     });
 
     // Stage 4: Hoàn thành nhập kho (Kitchen Completed)
@@ -45,9 +44,8 @@ export default function OrderStatusTimeline({ order, packages = [], tasks = [], 
       icon: '✅',
       title: 'Hoàn thành nhập kho',
       status: completedPkg?.completed_at ? 'done' : 'pending',
-      content: completedPkg?.completed_at
-        ? `Người: ${completedPkg.assigned_to_staff_name || completedPkg.organization_units?.name || 'N/A'} · ${new Date(completedPkg.completed_at).toLocaleString('vi-VN')}`
-        : 'Chờ hoàn thành'
+      who: completedPkg ? completedPkg.assigned_to_staff_name || completedPkg.organization_units?.name || 'N/A' : 'Chờ',
+      when: completedPkg?.completed_at ? new Date(completedPkg.completed_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '-'
     });
 
     // Stage 5: Nhận giao (Delivery Accepted)
@@ -57,9 +55,9 @@ export default function OrderStatusTimeline({ order, packages = [], tasks = [], 
       icon: '🚚',
       title: 'Nhận giao',
       status: deliveryAssignedLog?.created_at ? 'done' : 'pending',
-      content: deliveryAssignedLog?.created_at
-        ? `Người: ${deliveryAssignedLog.staff_name || 'N/A'} · GPS: ${deliveryAssignedLog.gps_latitude?.toFixed(4)}, ${deliveryAssignedLog.gps_longitude?.toFixed(4)} · ${new Date(deliveryAssignedLog.created_at).toLocaleString('vi-VN')}`
-        : 'Chờ nhân viên nhận'
+      who: deliveryAssignedLog?.staff_name || 'Chờ',
+      when: deliveryAssignedLog?.created_at ? new Date(deliveryAssignedLog.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '-',
+      gps: deliveryAssignedLog ? `${deliveryAssignedLog.gps_latitude?.toFixed(4)}, ${deliveryAssignedLog.gps_longitude?.toFixed(4)}` : null
     });
 
     // Stage 6: Đang giao (In Delivery)
@@ -69,7 +67,8 @@ export default function OrderStatusTimeline({ order, packages = [], tasks = [], 
       icon: '🚗',
       title: 'Đang giao',
       status: inDelivery ? 'doing' : (kpiLogs.find(log => log?.event_type === 'delivery_completed') ? 'done' : 'pending'),
-      content: inDelivery ? 'Đang vận chuyển...' : 'Chờ bắt đầu giao'
+      who: inDelivery ? 'Đang chuyển' : (kpiLogs.find(log => log?.event_type === 'delivery_completed') ? 'Xong' : 'Chờ'),
+      when: '-'
     });
 
     // Stage 7: Hoàn thành (Delivery Completed)
@@ -79,9 +78,9 @@ export default function OrderStatusTimeline({ order, packages = [], tasks = [], 
       icon: '✅',
       title: 'Hoàn thành',
       status: deliveryCompletedLog?.created_at ? 'done' : 'pending',
-      content: deliveryCompletedLog?.created_at
-        ? `Người: ${deliveryCompletedLog.staff_name || 'N/A'} · GPS: ${deliveryCompletedLog.gps_latitude?.toFixed(4)}, ${deliveryCompletedLog.gps_longitude?.toFixed(4)} · ${new Date(deliveryCompletedLog.created_at).toLocaleString('vi-VN')}`
-        : 'Chờ hoàn thành giao'
+      who: deliveryCompletedLog?.staff_name || 'Chờ',
+      when: deliveryCompletedLog?.created_at ? new Date(deliveryCompletedLog.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '-',
+      gps: deliveryCompletedLog ? `${deliveryCompletedLog.gps_latitude?.toFixed(4)}, ${deliveryCompletedLog.gps_longitude?.toFixed(4)}` : null
     });
 
     return stageList;
@@ -96,62 +95,49 @@ export default function OrderStatusTimeline({ order, packages = [], tasks = [], 
     }
   };
 
-  const getStatusBgColor = (status) => {
-    switch (status) {
-      case 'done': return '#e6f6ed';
-      case 'doing': return '#fff3e0';
-      case 'pending': return '#f5f1eb';
-      default: return '#f5f1eb';
-    }
-  };
-
   return (
-    <div style={{ marginTop: 16, padding: '12px', background: 'var(--surface-sunken)', borderRadius: 14 }}>
-      <strong style={{ fontSize: 14, display: 'block', marginBottom: 12, color: 'var(--text-primary)' }}>
-        📍 Tiến trình đơn hàng
-      </strong>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {stages.map((stage, idx) => (
+    <div style={{ marginTop: 12, padding: '8px 0', background: 'transparent' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {stages.map((stage) => (
           <div
             key={stage.id}
             style={{
-              padding: '12px',
-              background: getStatusBgColor(stage.status),
-              border: `2px solid ${getStatusColor(stage.status)}`,
-              borderRadius: 10,
-              transition: 'all 0.2s'
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '6px 8px',
+              background: getStatusColor(stage.status) === '#087f5b' ? '#e6f6ed' : getStatusColor(stage.status) === '#b93e13' ? '#fff3e0' : '#f5f1eb',
+              borderLeft: `3px solid ${getStatusColor(stage.status)}`,
+              borderRadius: 6
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-              <span style={{ fontSize: 20 }}>{stage.icon}</span>
-              <strong style={{ fontSize: 13, color: 'var(--text-primary)' }}>
+            {/* Icon + Title */}
+            <span style={{ fontSize: 14, minWidth: '16px' }}>{stage.icon}</span>
+            <div style={{ flex: 1 }}>
+              <strong style={{ fontSize: 12, color: 'var(--text-primary)', display: 'block' }}>
                 {stage.title}
               </strong>
-              <span style={{
-                fontSize: 11,
-                fontWeight: 700,
-                padding: '2px 8px',
-                borderRadius: 6,
-                background: getStatusColor(stage.status),
-                color: '#fff',
-                marginLeft: 'auto'
-              }}>
-                {stage.status === 'done' ? '✅ Xong' : stage.status === 'doing' ? '🔄 Đang làm' : '⏳ Chờ'}
-              </span>
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
+                {stage.who}
+                {stage.gps && ` · GPS: ${stage.gps}`}
+                {stage.when !== '-' && ` · ${stage.when}`}
+              </div>
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginLeft: '28px' }}>
-              {stage.content}
-            </div>
+
+            {/* Status badge */}
+            <span style={{
+              fontSize: 10,
+              fontWeight: 700,
+              padding: '2px 6px',
+              borderRadius: 4,
+              background: getStatusColor(stage.status),
+              color: '#fff',
+              whiteSpace: 'nowrap'
+            }}>
+              {stage.status === 'done' ? '✅' : stage.status === 'doing' ? '🔄' : '⏳'}
+            </span>
           </div>
         ))}
-      </div>
-
-      {/* Legend */}
-      <div style={{ display: 'flex', gap: 16, marginTop: 12, fontSize: 12, color: 'var(--text-muted)', paddingTop: 8, borderTop: '1px solid var(--border-default)' }}>
-        <div><span style={{ color: '#087f5b', fontWeight: 900 }}>●</span> Xong</div>
-        <div><span style={{ color: '#b93e13', fontWeight: 900 }}>●</span> Đang làm</div>
-        <div><span style={{ color: '#ccc', fontWeight: 900 }}>●</span> Chờ</div>
       </div>
     </div>
   );
