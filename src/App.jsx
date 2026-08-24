@@ -130,7 +130,7 @@ function OpsApp({ onSignOut }) {
     // Global listener for feed announcements - ALWAYS LISTENING
     const unsubFeedBroadcast = subscribeToBroadcast(BroadcastEvents.FEED_POST_CREATED, (data) => {
       console.log('[App] Announcement broadcast received! Playing sound...');
-      playAlertSound();
+      playAlertSound().catch(err => console.error('[App] Alert sound error:', err));
     });
 
     return () => {
