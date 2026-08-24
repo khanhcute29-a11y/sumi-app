@@ -93,11 +93,12 @@ export async function fetchProducts({ activeOnly } = {}) {
   return data;
 }
 
-export async function addProductionLog({ productId, productName, qty, size, price, staffId, staffName, workDate }) {
+export async function addProductionLog({ productId, productName, qty, size, price, staffId, staffName, workDate, photoUrl }) {
   const { error } = await supabase.from('production_logs').insert({
     product_id: productId || null, product_name: productName, qty,
     size: size || null, price: price || null,
     staff_id: staffId || null, staff_name: staffName, work_date: workDate,
+    photo_url: photoUrl || null,
   });
   if (error) throw error;
 
