@@ -1,6 +1,7 @@
 export const ROLE_META = {
   owner: { label: 'Giám Đốc / Chủ Sở Hữu', shortLabel: 'Giám Đốc', tone: 'primary', level: 7 },
   admin: { label: 'Quản Lý / Điều Hành', shortLabel: 'Quản Lý', tone: 'primary', level: 6 },
+  deputy_director: { label: 'Trợ Lý Giám Đốc', shortLabel: 'TL Giám Đốc', tone: 'primary', level: 6 },
   accountant: { label: 'Kế Toán', shortLabel: 'Kế Toán', tone: 'info', level: 5 },
   warehouse: { label: 'Thủ Kho', shortLabel: 'Thủ Kho', tone: 'info', level: 4 },
   sale: { label: 'Nhân Viên Bán Hàng', shortLabel: 'Bán Hàng', tone: 'success', level: 3 },
@@ -64,6 +65,18 @@ export const ROLE_PERMISSIONS = [
       'manage_staff', 'manage_roles', 'manage_settings',
       'view_revenue', 'view_costs', 'view_profit',
       'view_audit_log', 'manage_system'
+    ]
+  },
+  {
+    role: 'deputy_director',
+    desc: 'Trợ lý Giám đốc — gần như toàn quyền như Quản lý (đơn hàng, kho, nhân viên, tạo đơn Macaron/Bánh Quy riêng), NGOẠI TRỪ duyệt chi tiêu và xem doanh thu.',
+    permissions: [
+      'view_all_orders', 'create_order', 'edit_order', 'delete_order',
+      'view_all_customers', 'create_customer', 'edit_customer',
+      'view_all_inventory', 'edit_inventory',
+      'view_all_reports', 'create_report',
+      'manage_staff', 'manage_roles', 'manage_settings',
+      'view_audit_log'
     ]
   },
   {
@@ -213,6 +226,7 @@ export function resolveRoleAndStation(roleKey, currentStation) {
       break;
     case 'owner':
     case 'admin':
+    case 'deputy_director':
     case 'accountant':
     case 'sale':
     case 'cashier':
