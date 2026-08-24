@@ -16,6 +16,12 @@ const ORDER_TYPE_LABELS = {
   mixed: '🧺 Đơn tổng hợp'
 };
 
+const PAYMENT_METHOD_LABELS = {
+  cod: 'COD (thu khi giao)',
+  bank_transfer: 'Chuyển khoản',
+  cash: 'Tiền mặt'
+};
+
 const box = {
   padding: 16,
   border: '1px solid var(--border-default)',
@@ -106,7 +112,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
 
   const load = async () => {
     const [o, i, p, u, e, kpi, ops, att] = await Promise.all([
-      supabase.from('orders').select('id,order_code,order_type,status_v2,required_at,fulfillment_method_v2,address,note,created_by_name,created_at,confidentiality,version').eq('id', orderId).single(),
+      supabase.from('orders').select('id,order_code,order_type,status_v2,required_at,fulfillment_method_v2,address,note,created_by_name,created_at,confidentiality,version,ship_fee,deposit,payment_method,total,customers(name,phone)').eq('id', orderId).single(),
       supabase.from('order_items').select('id,name_snapshot,quantity,unit,specification,unit_price,display_order').eq('order_id', orderId).order('display_order'),
       supabase.from('order_work_packages').select('id,unit_id,status,due_at,accepted_at,completed_at,version,assigned_by_staff_id,assigned_to_staff_id,assigned_to_staff_name,assigned_at,completed_by_staff_id,completed_by_staff_name,organization_units(name,code),work_package_items(order_item_id,quantity)').eq('order_id', orderId),
       supabase.from('organization_units').select('id,name,code').eq('unit_type', 'kitchen').eq('active', true),
@@ -783,6 +789,11 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
             )}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 15 }}>
+            {o.customers && (o.customers.name || o.customers.phone) && (
+              <div>
+                <b>Khách hàng:</b> {o.customers.name || '—'}{o.customers.phone ? ` · ${o.customers.phone}` : ''}
+              </div>
+            )}
             <div>
               <b>Phương thức:</b> {o.fulfillment_method_v2 === 'pickup' ? '🏬 Nhận tại quầy' : '🛵 Giao tận nơi'}
             </div>
@@ -794,6 +805,24 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
             <div>
               <b>Hẹn giờ:</b> {o.required_at ? new Date(o.required_at).toLocaleString('vi-VN') : 'Chưa có giờ hẹn'}
             </div>
+            {o.ship_fee > 0 && (
+              <div>
+                <b>Phí ship:</b> {Number(o.ship_fee).toLocaleString('vi-VN')}đ
+              </div>
+            )}
+            <div>
+              <b>Thanh toán:</b> {PAYMENT_METHOD_LABELS[o.payment_method] || o.payment_method || 'COD (thu khi giao)'}
+            </div>
+            {o.deposit > 0 && (
+              <div>
+                <b>Đặt cọc:</b> {Number(o.deposit).toLocaleString('vi-VN')}đ
+              </div>
+            )}
+            {o.total > 0 && (
+              <div>
+                <b>Tổng tiền đơn:</b> {Number(o.total).toLocaleString('vi-VN')}đ
+              </div>
+            )}
             {o.note && (
               <div style={{ marginTop: 4, padding: '8px 10px', borderRadius: 10, background: 'var(--surface-sunken)', color: 'var(--text-primary)' }}>
                 <b>Ghi chú đơn:</b> {o.note}
