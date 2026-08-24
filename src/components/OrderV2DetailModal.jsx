@@ -305,12 +305,30 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
     setBusy(true);
     setError('');
     try {
-      const { error } = await supabase
-        .from('orders')
-        .update({ status_v2: 'completed' })
-        .eq('id', orderId);
+      if (!gpsCoords) throw new Error('Chưa lấy được GPS');
+      if (!photoFile) throw new Error('Chưa chụp ảnh hoàn thành');
+
+      // Upload completion photo
+      const cleanExt = (photoFile.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+      const photoPath = `orders/${orderId}/delivery/completion-${crypto.randomUUID()}.${cleanExt}`;
+      const { error: upErr } = await supabase.storage.from('uploads').upload(photoPath, photoFile, { contentType: photoFile.type || 'image/jpeg' });
+      if (upErr) throw upErr;
+
+      // Get signed URL for completion photo
+      const { data: { publicUrl } } = supabase.storage.from('uploads').getPublicUrl(photoPath);
+
+      // Call RPC to complete delivery
+      const { data, error } = await supabase.rpc('complete_delivery_assignment', {
+        p_order_id: orderId,
+        p_staff_id: profile.id,
+        p_staff_name: profile.full_name || profile.email,
+        p_gps_latitude: gpsCoords.lat,
+        p_gps_longitude: gpsCoords.lng,
+        p_photo_url: publicUrl
+      });
 
       if (error) throw error;
+      if (!data.success) throw new Error(data.message || 'Failed to complete delivery');
 
       // Play notification sound
       const { playNotificationSound } = await import('../lib/notificationSound.js');
