@@ -17,6 +17,13 @@ const categoryLabel=(value='')=>value.replaceAll('_',' ').replace(/\b\w/g,x=>x.t
 const FLOW_WORDS={macaron:['macaron'],cake:['kem','mousse','mouse','tiramisu','su kem','banh lanh'],bakery:['banh mi','banh pia','banh quy','trung thu','btt','croissant','donut'],school:['banh mi','banh ngot','banh man'],teabreak:['teabreak']};
 const MACARON_COLORS=['Đỏ','Hồng','Xanh dương nhạt','Trắng','Tím','Cam','Vàng đậm','Xanh lá','Đen','Nâu','Vàng nhạt','Xanh dương đậm'];
 const MACARON_FILLINGS=['Việt quất','Chanh dây','Đào','Dưa lưới','Vải','Socola','Kiwi','Thơm','Dâu','Chanh','Xoài','Phúc bồn tử'];
+function parseTierRange(label=''){
+ const s=label.toLowerCase();
+ let m=s.match(/(\d+)\s*-\s*(\d+)/); if(m) return [Number(m[1]),Number(m[2])];
+ m=s.match(/[≥>=]{1,2}\s*(\d+)/); if(m) return [Number(m[1]),Infinity];
+ m=s.match(/<\s*(\d+)/); if(m) return [0,Number(m[1])-1];
+ return null;
+}
 function MultiChipPicker({options,selected,onToggle}){
  return <div style={{display:'flex',flexWrap:'wrap',gap:6}}>{options.map(o=>{const active=selected.includes(o);return <button type="button" key={o} onClick={()=>onToggle(o)} style={{minHeight:38,padding:'6px 12px',borderRadius:999,fontSize:13,fontWeight:700,cursor:'pointer',border:active?'2px solid #d96b43':'1px solid var(--border-default)',background:active?'#fdece3':'#fff',color:active?'#b93e13':'#2d1c10'}}>{active?'✓ ':''}{o}</button>})}</div>;
 }
@@ -116,6 +123,11 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
  const submit=async()=>{setError('');setSaving(true);try{
   if(type==='school'&&!selectedSchool)throw new Error('Vui lòng chọn trường hoặc điểm giao.');
   if(!items.length||items.some(x=>!x.name||Number(x.quantity)<=0))throw new Error('Vui lòng nhập đủ tên bánh và số lượng.');
+  for(const it of items){
+   if((it.flow_type||type)!=='macaron'||!it.specification?.priceTier)continue;
+   const range=parseTierRange(it.specification.priceTier);
+   if(range&&(Number(it.quantity)<range[0]||Number(it.quantity)>range[1]))throw new Error(`"${it.name}": số lượng ${it.quantity} không khớp mức giá đã chọn (${it.specification.priceTier}). Chọn lại đúng mức giá.`);
+  }
   const key=newId();
   const {data: {user}} = await supabase.auth.getUser();
   const now = new Date();
@@ -209,6 +221,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
     <div className="sumi-item-flow"><span>{ORDER_FLOWS.find(x=>x.key===(it.flow_type||type))?.icon}</span><b>{ORDER_FLOWS.find(x=>x.key===(it.flow_type||type))?.title}</b><em>→ {routeFor[it.flow_type||type]}</em></div>
     <div className="sumi-product-line"><ProductNameField item={it} products={productCatalog} flowType={it.flow_type||type} onChange={fields=>changeMany(itemIndex,{...fields,unit_price:fields.unit_price??fields.specification?.catalog_price})}/><input style={{...fieldStyle,width:90}} aria-label="Số lượng" type="number" min="1" value={it.quantity} onChange={e=>change(itemIndex,'quantity',Number(e.target.value))}/></div>
     {itemPrice>0&&<div style={{fontSize:13,color:'#d96b43',fontWeight:700,marginTop:6}}>{itemPrice.toLocaleString('vi-VN')}đ × {it.quantity}{it.unit&&it.unit!=='cái'?` ${it.unit}`:''} = {itemTotal.toLocaleString('vi-VN')}đ</div>}
+    {(it.flow_type||type)==='macaron'&&it.specification?.priceTier&&(()=>{const range=parseTierRange(it.specification.priceTier);if(!range)return null;const[min,max]=range;if(Number(it.quantity)>=min&&Number(it.quantity)<=max)return null;return <div style={{fontSize:13,color:'#b42318',fontWeight:700,marginTop:4}}>⚠️ Số lượng ({it.quantity}) không khớp mức giá đã chọn ({it.specification.priceTier}) — chọn lại đúng mức giá cho số lượng này.</div>})()}
     <div className="sumi-item-fields" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:8}}>
      {(it.flow_type||type)==='cake'&&<>{it.variants?.length?<select style={fieldStyle} value={it.specification?.size||''} onChange={e=>{const v=it.variants.find(x=>x.label===e.target.value);changeMany(itemIndex,{unit_price:v?.price??null,specification:{...it.specification,size:e.target.value}})}}><option value="">Chọn size...</option>{it.variants.map(v=><option key={v.id} value={v.label}>{v.label} — {Number(v.price).toLocaleString('vi-VN')}đ</option>)}</select>:<input style={fieldStyle} placeholder="Size (18cm...)" value={it.specification?.size||''} onChange={e=>spec(itemIndex,'size',e.target.value)}/>}
       <select style={fieldStyle} value={it.specification?.cot||''} onChange={e=>spec(itemIndex,'cot',e.target.value)}><option value="">Chọn cốt bánh...</option>{CAKE_BASES.map(b=><option key={b} value={b}>{baseSurcharge(b)?`${b} (+${baseSurcharge(b).toLocaleString('vi-VN')}đ)`:b}</option>)}</select>
