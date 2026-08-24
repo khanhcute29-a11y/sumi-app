@@ -11,7 +11,8 @@ import {
 import { navBadgeVisibility } from './lib/roles';
 import { initAudioUnlock } from './lib/sound';
 import { useOrderNotifications } from './lib/useOrderNotifications';
-import { requestNotificationPermission, playAlertSound, preloadAlertAudio, playSound, SoundEvents } from './lib/alarmSound';
+import { requestNotificationPermission, playAlertSound, preloadAlertAudio } from './lib/alarmSound';
+import { playKitchenReceiveSound, playKitchenCompleteSound, playShipperReceiveSound, playShipperCompleteSound } from './lib/sound';
 import { setupAutoRefresh, cleanupAllSubscriptions, subscribeToMultipleTables, subscribeToBroadcast, BroadcastEvents } from './lib/realtimeSync';
 import { ConnectivityBanner } from './components/ConnectivityBanner';
 import { AuthProvider, useAuth } from './lib/AuthContext';
@@ -136,9 +137,16 @@ function OpsApp({ onSignOut }) {
 
     // Global listener for all sound notifications (tasks, orders, deliveries)
     const unsubSoundNotifications = subscribeToBroadcast(BroadcastEvents.SOUND_NOTIFICATION, (data) => {
-      console.log('[App] Sound notification received:', data);
-      const soundType = data?.soundType || SoundEvents.TASK_ASSIGNED;
-      playSound(soundType).catch(err => console.error('[App] Sound notification error:', err));
+      console.log('[App] Sound notification received:', data?.soundType);
+      const soundType = data?.soundType;
+      switch (soundType) {
+        case 'kitchen_receive': playKitchenReceiveSound(); break;      // TING TING TING
+        case 'kitchen_complete': playKitchenCompleteSound(); break;   // TING TING TING TING
+        case 'shipper_receive': playShipperReceiveSound(); break;     // TING TING
+        case 'shipper_complete': playShipperCompleteSound(); break;   // TING TING TING TING TING
+        case 'task_assigned': playShipperReceiveSound(); break;       // TING TING
+        default: console.log('[App] Unknown sound type:', soundType);
+      }
     });
 
     return () => {

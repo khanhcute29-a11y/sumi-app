@@ -16,7 +16,7 @@ import { useAuth } from '../lib/AuthContext';
 import { hasAnyRole } from '../lib/roles';
 import { enqueue } from '../lib/offlineQueue';
 import { supabase } from '../lib/supabaseClient';
-import { playSound, SoundEvents } from '../lib/alarmSound';
+import { playKitchenCompleteSound } from '../lib/sound';
 import { broadcastEvent, BroadcastEvents } from '../lib/realtimeSync';
 import {
   IconStationHot, IconStationCold, IconStationWorkshop, IconStationSparkle,
@@ -513,19 +513,33 @@ export default function KdsScreen({ initialStation }) {
   };
 
   const handleStageComplete = async (order, stage, isLastStage, photoUrl) => {
-    await completeOrderStage(stage.id);
-    if (isLastStage) {
-      const fields = { status: 'cho_giao', kitchen_staff_name: stage.assignee_name };
-      if (photoUrl) fields.kitchen_photo_url = photoUrl;
-      await applyFields(order, fields);
+    try {
+      console.log('[KDS] handleStageComplete - isLastStage:', isLastStage);
+      await completeOrderStage(stage.id);
+      if (isLastStage) {
+        const fields = { status: 'cho_giao', kitchen_staff_name: stage.assignee_name };
+        if (photoUrl) fields.kitchen_photo_url = photoUrl;
+        await applyFields(order, fields);
 
-      // 🎵 Phát âm thanh hoàn thành đơn cho tất cả người dùng
-      playSound(SoundEvents.ORDER_COMPLETED).catch(e => console.error('Order complete sound error:', e));
-      broadcastEvent(BroadcastEvents.SOUND_NOTIFICATION, {
-        soundType: SoundEvents.ORDER_COMPLETED
-      }).catch(e => console.error('Order complete broadcast error:', e));
-    } else {
-      load();
+        // 🎵 TING TING TING TING - Phát âm thanh hoàn thành đơn cho tất cả người dùng
+        console.log('[KDS] Playing kitchen complete sound...');
+        try {
+          playKitchenCompleteSound();
+          console.log('[KDS] ✓ Sound played successfully');
+        } catch (soundErr) {
+          console.error('[KDS] Sound play error:', soundErr);
+        }
+
+        console.log('[KDS] Broadcasting sound notification...');
+        broadcastEvent(BroadcastEvents.SOUND_NOTIFICATION, {
+          soundType: 'kitchen_complete'
+        }).catch(e => console.error('[KDS] Broadcast error:', e));
+      } else {
+        load();
+      }
+    } catch (err) {
+      console.error('[KDS] handleStageComplete error:', err);
+      throw err;
     }
   };
 
