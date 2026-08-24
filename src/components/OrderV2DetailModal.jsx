@@ -101,6 +101,8 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
   const [editReason, setEditReason] = useState('');
 
   const director = ['owner', 'admin'].includes(profile?.role) || (profile?.extra_roles || []).some(x => ['owner', 'admin'].includes(x));
+  const isKitchenLead = ['kitchen_lead', 'bep_truong'].includes(profile?.role) || (profile?.extra_roles || []).some(x => ['kitchen_lead', 'bep_truong'].includes(x));
+  const canEditOrder = o?.created_by_id === profile?.id || isKitchenLead;
 
   const load = async () => {
     const [o, i, p, u, e, kpi, ops, att] = await Promise.all([
@@ -637,7 +639,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                 ⚡ Bánh có sẵn (Vào kho ngay)
               </button>
             )}
-            {o.created_by_id === profile.id && o.status_v2 === 'pending' && (
+            {canEditOrder && o.status_v2 === 'pending' && (
               <button
                 type="button"
                 disabled={busy}
@@ -646,7 +648,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                   minHeight: 38, padding: '0 12px', borderRadius: 10, border: '1.5px solid #d96b43',
                   background: '#fde8de', color: '#d96b43', fontWeight: 800, fontSize: 13, cursor: 'pointer'
                 }}
-                title="Chỉnh sửa thông tin đơn hàng"
+                title="Chỉnh sửa thông tin đơn hàng (creator hoặc bếp trưởng)"
               >
                 ✏️ Chỉnh sửa
               </button>
