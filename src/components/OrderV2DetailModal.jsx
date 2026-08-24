@@ -331,7 +331,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
         staff_name: p.assigned_to_staff_name || profile.full_name || profile.email,
         event_type: 'work_package_completed',
         notes: 'Nhân viên hoàn thành đơn hàng'
-      }).catch(() => {}); // Fail silently if kpi_logs insert fails
+      }); // Fire-and-forget KPI logging
 
       await load();
       onChanged?.();
@@ -363,7 +363,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
         staff_name: profile.full_name || profile.email,
         event_type: 'work_package_accepted',
         notes: 'Bếp trưởng tự nhận đơn để làm'
-      }).catch(() => {}); // Fail silently if kpi_logs insert fails
+      }); // Fire-and-forget KPI logging
 
       setShowAcceptPackageModal(false);
       setSelectedPackage(null);
@@ -399,7 +399,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
         staff_name: staffName,
         event_type: 'work_package_accepted',
         notes: 'Nhân viên nhận đơn từ bếp trưởng'
-      }).catch(() => {}); // Fail silently if kpi_logs insert fails
+      }); // Fire-and-forget KPI logging
 
       setShowAcceptPackageModal(false);
       setSelectedPackage(null);
