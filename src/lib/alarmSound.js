@@ -36,7 +36,14 @@ export const notifyCompany = (title, body, severity = 'normal') => {
 };
 
 export const requestNotificationPermission = async () => {
+  // Silently request notification permission on app load - no dialog shown
+  // User may see browser's native permission prompt, but we don't double-ask
   if ('Notification' in window && Notification.permission === 'default') {
-    await Notification.requestPermission();
+    try {
+      await Notification.requestPermission();
+    } catch (e) {
+      // Silently ignore if permission request fails
+      console.log('Notification permission request failed:', e);
+    }
   }
 };
