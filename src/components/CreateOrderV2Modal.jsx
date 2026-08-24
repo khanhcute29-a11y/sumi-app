@@ -85,6 +85,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
  const [customerName,setCustomerName]=useState(''); const [customerPhone,setCustomerPhone]=useState('');
  const [fulfillment,setFulfillment]=useState('delivery'); const [address,setAddress]=useState(''); const [note,setNote]=useState('');
  const [items,setItems]=useState([]); const [photos,setPhotos]=useState([]); const [saving,setSaving]=useState(false); const [error,setError]=useState('');
+ const [showLibraryPicker,setShowLibraryPicker]=useState(false); const [libraryPhotos,setLibraryPhotos]=useState([]); const [libraryLoading,setLibraryLoading]=useState(false); const [selectedLibraryPhotos,setSelectedLibraryPhotos]=useState([]); const [libraryUploading,setLibraryUploading]=useState(false);
  const [isReadyStock, setIsReadyStock] = useState(false);
  const [catalogSearch,setCatalogSearch]=useState(''); const [guestCount,setGuestCount]=useState('');
  const [schoolSearch,setSchoolSearch]=useState(''); const [selectedSchool,setSelectedSchool]=useState(null);
@@ -118,6 +119,31 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
  const suggestions=TEABREAK_CATALOG.filter(x=>!catalogSearch||normalizeSearch(`${x.code} ${x.name} ${x.group}`).includes(normalizeSearch(catalogSearch))).slice(0,8);
  const schoolSuggestions=SCHOOL_DELIVERY_POINTS.filter(x=>!schoolSearch||normalizeSearch(`${x.code} ${x.name} ${x.address} ${x.type}`).includes(normalizeSearch(schoolSearch))).slice(0,10);
  const chooseSchool=(school)=>{setSelectedSchool(school);setCustomerName(school.name);setAddress(school.address);setSchoolSearch('');};
+ const loadLibraryPhotos=async()=>{setLibraryLoading(true);try{const {data,error:err}=await supabase.from('macaron_photo_library').select('id,storage_path,caption,created_at').order('created_at',{ascending:false});if(err)throw err;setLibraryPhotos((data||[]).map(p=>({...p,url:supabase.storage.from('uploads').getPublicUrl(p.storage_path).data?.publicUrl})));}catch(e){setError(e.message);}finally{setLibraryLoading(false);}};
+ const openLibraryPicker=()=>{setShowLibraryPicker(true);loadLibraryPhotos();};
+ const toggleLibraryPhoto=(p)=>{setSelectedLibraryPhotos(x=>x.some(y=>y.id===p.id)?x.filter(y=>y.id!==p.id):[...x,p]);};
+ const deleteLibraryPhoto=async(p)=>{
+  if(!window.confirm('Xoá ảnh này khỏi kho? Không thể hoàn tác.'))return;
+  try{
+   await supabase.storage.from('uploads').remove([p.storage_path]);
+   const {error:err}=await supabase.from('macaron_photo_library').delete().eq('id',p.id);
+   if(err)throw err;
+   setSelectedLibraryPhotos(x=>x.filter(y=>y.id!==p.id));
+   await loadLibraryPhotos();
+  }catch(e){setError(e.message);}
+ };
+ const uploadToLibrary=async(file)=>{
+  setLibraryUploading(true);setError('');
+  try{
+   const cleanExt=(file.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';
+   const safePath=`macaron-library/${newId()}.${cleanExt}`;
+   const {error:upErr}=await supabase.storage.from('uploads').upload(safePath,file,{contentType:file.type||'image/jpeg'});
+   if(upErr)throw upErr;
+   const {error:insErr}=await supabase.from('macaron_photo_library').insert({storage_path:safePath,uploaded_by:profile?.id||null,uploaded_by_name:profile?.full_name||null});
+   if(insErr)throw insErr;
+   await loadLibraryPhotos();
+  }catch(e){setError(e.message);}finally{setLibraryUploading(false);}
+ };
  const startVoiceInput=async()=>{if(isRecording)return;setIsRecording(true);setVoiceLoading(true);try{const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SpeechRecognition){setError('Trình duyệt không hỗ trợ nhập giọng nói');setIsRecording(false);setVoiceLoading(false);return}const recognition=new SpeechRecognition();recognition.lang='vi-VN';recognition.interimResults=true;let transcript='';recognition.onresult=(event)=>{transcript=Array.from(event.results).map(r=>r[0].transcript).join('')};recognition.onerror=(event)=>{setError(`Lỗi: ${event.error}`)};recognition.onend=async()=>{setIsRecording(false);if(transcript.trim()){await parseVoiceInput(transcript)}else{setError('Không ghi âm được. Thử lại?')}setVoiceLoading(false)};recognition.start();setTimeout(()=>recognition.stop(),8000)}catch(e){setError(`Lỗi: ${e.message}`);setIsRecording(false);setVoiceLoading(false)}};const parseVoiceInput=async(text)=>{try{setVoiceLoading(true);const{data,error}=await supabase.functions.invoke('parse-voice-order',{body:{transcript:text,orderType:type,locale:'vi-VN'}});if(error)throw error;if(data?.customerName)setCustomerName(data.customerName);if(data?.customerPhone)setCustomerPhone(data.customerPhone);if(data?.address)setAddress(data.address);if(data?.items?.length)setItems(data.items.map(it=>({...it,id:crypto.randomUUID()})));if(data?.note)setNote(data.note)}catch(e){console.error('Parse error:',e);setError(`Phân tích không thành công: ${e.message}`)}finally{setVoiceLoading(false)}};
  const itemFlows=[...new Set(items.map(x=>x.flow_type||type))];
  const isMixed=itemFlows.length>1;
@@ -172,6 +198,16 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
       setError(`Không tải được ảnh "${file.name}": ${err.message}`);
       throw err;
     }
+  }
+  for(const p of selectedLibraryPhotos){
+    const {error: insertErr} = await supabase.from('order_attachments').insert({
+      order_id: orderId,
+      attachment_type: 'customer_sample',
+      storage_path: p.storage_path,
+      mime_type: 'image/jpeg',
+      created_by: profile?.id || null
+    });
+    if(insertErr) throw insertErr;
   }
   if(isReadyStock){
     const {error: readyErr} = await supabase.rpc('mark_order_ready_from_stock',{p_order_id:orderId});
@@ -255,7 +291,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
    </div>;})}
    {items.length===0&&<div className="sumi-no-selection">Chưa chọn món. Tìm món phía trên hoặc thêm món tùy chỉnh.</div>}
    <button onClick={()=>{const key=itemFlows.at(-1)||type;setItems(x=>[...x,{...blankItem(key),specification:{...blankItem(key).specification,custom:true}}])}} style={{...fieldStyle,fontWeight:900,borderStyle:'dashed'}}>＋ Thêm món cùng nhóm</button>
-   {type!=='school'&&<section className="sumi-add-flow"><strong>＋ Thêm nhóm sản phẩm khác</strong><p>Một mã đơn, mỗi nhóm tự chuyển tới đúng bếp.</p><div>{ORDER_FLOWS.filter(x=>x.key!=='school'&&(x.key!=='macaron'||isMacaronCreator)&&!itemFlows.includes(x.key)).map(x=><button key={x.key} onClick={()=>addFlow(x.key)}><span>{x.icon}</span><b>{x.title}</b><small>{routeFor[x.key]}</small></button>)}</div></section>}
+   {type!=='school'&&type!=='macaron'&&<section className="sumi-add-flow"><strong>＋ Thêm nhóm sản phẩm khác</strong><p>Một mã đơn, mỗi nhóm tự chuyển tới đúng bếp.</p><div>{ORDER_FLOWS.filter(x=>x.key!=='school'&&(x.key!=='macaron'||isMacaronCreator)&&!itemFlows.includes(x.key)).map(x=><button key={x.key} onClick={()=>addFlow(x.key)}><span>{x.icon}</span><b>{x.title}</b><small>{routeFor[x.key]}</small></button>)}</div></section>}
    <label style={{display:'block',marginTop:14,fontWeight:800}}>Ngày giờ cần giao</label><input style={fieldStyle} type="datetime-local" value={requiredAt} onChange={e=>setRequiredAt(e.target.value)}/>
    {type==='school'?
     <div style={{marginTop:12,padding:'12px 14px',borderRadius:14,background:'#f5f1eb',border:'1px solid #e0d5c7',fontSize:14,color:'#725f50'}}>🚚 Giao tận nơi đến địa chỉ trường đã chọn — không thu ship, không thu tiền tại chỗ (trường thanh toán riêng).</div>
@@ -276,6 +312,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
    <div className="sumi-upload-grid">
      <label>📷<span>Chụp ảnh</span><input hidden type="file" accept="image/*" capture="environment" multiple onChange={e=>{const files=Array.from(e.target.files||[]);setPhotos([...photos,...files]);e.target.value='';}}/></label>
      <label>🖼️<span>Chọn ảnh có sẵn</span><input hidden type="file" accept="image/*" multiple onChange={e=>{const files=Array.from(e.target.files||[]);setPhotos([...photos,...files]);e.target.value='';}}/></label>
+     {type==='macaron'&&<button type="button" onClick={openLibraryPicker} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4,minHeight:70,border:'2px dashed #d96b43',borderRadius:14,background:'#fdf6ef',cursor:'pointer'}}>🎨<span>Ảnh mẫu đã lưu</span></button>}
    </div>
    {photos.length>0&&(
      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(80px,1fr))',gap:8,marginTop:10}}>
@@ -286,7 +323,40 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
          </div>
        );})}</div>
    )}
-   <div style={{color:'#725f50',fontWeight:700,marginTop:6,marginBottom:8}}>{photos.length?`${photos.length} ảnh đã chọn`:'Chưa có ảnh'}</div>
+   {selectedLibraryPhotos.length>0&&(
+     <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(80px,1fr))',gap:8,marginTop:10}}>
+       {selectedLibraryPhotos.map(p=>(
+         <div key={p.id} style={{position:'relative',width:80,height:80,borderRadius:12,overflow:'hidden',border:'1.5px solid #d96b43',background:'#000'}}>
+           <img src={p.url} alt="Ảnh mẫu đã lưu" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+           <button type="button" onClick={(e)=>{e.preventDefault();toggleLibraryPhoto(p);}} style={{position:'absolute',top:3,right:3,minHeight:44,minWidth:44,borderRadius:'50%',background:'rgba(0,0,0,0.7)',color:'#fff',border:0,fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900}}>✕</button>
+         </div>
+       ))}</div>
+   )}
+   <div style={{color:'#725f50',fontWeight:700,marginTop:6,marginBottom:8}}>{(photos.length+selectedLibraryPhotos.length)?`${photos.length+selectedLibraryPhotos.length} ảnh đã chọn`:'Chưa có ảnh'}</div>
+   {showLibraryPicker&&(
+     <div className="sumi-order-create-overlay" onClick={()=>setShowLibraryPicker(false)}>
+       <div className="sumi-order-create-body" onClick={e=>e.stopPropagation()}>
+         <div className="sumi-create-head"><button onClick={()=>setShowLibraryPicker(false)} aria-label="Đóng">←</button><h2>🎨 Ảnh mẫu Macaron đã lưu</h2></div>
+         <label style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,minHeight:50,border:'2px dashed #d96b43',borderRadius:14,background:'#fdf6ef',cursor:'pointer',fontWeight:800,color:'#b93e13',marginBottom:14}}>
+           {libraryUploading?'Đang tải lên...':'+ Thêm ảnh mới vào kho'}
+           <input hidden type="file" accept="image/*" disabled={libraryUploading} onChange={e=>{const f=e.target.files?.[0];if(f)uploadToLibrary(f);e.target.value='';}}/>
+         </label>
+         {libraryLoading?<p>Đang tải ảnh...</p>:libraryPhotos.length===0?<p style={{color:'#725f50'}}>Chưa có ảnh nào trong kho. Bấm "Thêm ảnh mới vào kho" để lưu ảnh đầu tiên.</p>:
+         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(100px,1fr))',gap:10}}>
+           {libraryPhotos.map(p=>{const active=selectedLibraryPhotos.some(x=>x.id===p.id);return(
+             <div key={p.id} style={{position:'relative',width:'100%',aspectRatio:'1',borderRadius:14,overflow:'hidden',border:active?'3px solid #087f5b':'1.5px solid var(--border-default)',background:'#000'}}>
+               <button type="button" onClick={()=>toggleLibraryPhoto(p)} style={{padding:0,border:0,width:'100%',height:'100%',cursor:'pointer',display:'block'}}>
+                 <img src={p.url} alt="Ảnh mẫu macaron" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+               </button>
+               {active&&<div style={{position:'absolute',top:4,right:4,width:26,height:26,borderRadius:'50%',background:'#087f5b',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900,pointerEvents:'none'}}>✓</div>}
+               <button type="button" onClick={()=>deleteLibraryPhoto(p)} title="Xoá khỏi kho" style={{position:'absolute',top:4,left:4,width:26,height:26,borderRadius:'50%',background:'rgba(0,0,0,0.7)',color:'#fff',border:0,fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900}}>✕</button>
+             </div>
+           );})}
+         </div>}
+         <button onClick={()=>setShowLibraryPicker(false)} style={{width:'100%',minHeight:54,marginTop:16,border:0,borderRadius:14,background:'#087f5b',color:'#fff',fontSize:16,fontWeight:900,cursor:'pointer'}}>Xong ({selectedLibraryPhotos.length} ảnh đã chọn)</button>
+       </div>
+     </div>
+   )}
    {type!=='school'&&<label style={{display:'flex',alignItems:'center',gap:10,marginTop:14,padding:'12px 14px',borderRadius:14,background:isReadyStock?'#e6f6ed':'#fcf9f5',border:isReadyStock?'2px solid #087f5b':'1px solid var(--border-default)',cursor:'pointer'}}>
      <input type="checkbox" checked={isReadyStock} onChange={e=>setIsReadyStock(e.target.checked)} style={{width:22,height:22,margin:0}}/>
      <div>
