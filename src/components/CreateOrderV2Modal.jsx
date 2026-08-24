@@ -6,6 +6,7 @@ import { newId } from '../lib/ids';
 import { ORDER_FLOWS, CAKE_LINES, TEABREAK_CATALOG, MOONCAKE_CATALOG, normalizeSearch } from '../data/orderCatalogs';
 import { SCHOOL_DELIVERY_POINTS } from '../data/schoolCatalog';
 import { CAKE_BASES, CAKE_FILLINGS, baseSurcharge } from '../lib/cakePricing';
+import { broadcastEvent, BroadcastEvents, notifyOtherTabs } from '../lib/realtimeSync';
 
 const PAYMENT_METHODS = [{ value: 'cod', label: 'COD (thu khi giao)' }, { value: 'bank_transfer', label: 'Chuyển khoản' }, { value: 'cash', label: 'Tiền mặt' }];
 
@@ -217,6 +218,15 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
     }
   }
   console.log('✅ Order created:', orderId);
+  // Broadcast order creation to all listeners
+  await broadcastEvent(BroadcastEvents.ORDER_CREATED, {
+    orderId,
+    orderCode,
+    orderType: isMixed ? 'mixed' : type,
+    customerName,
+    createdAt: new Date().toISOString(),
+  });
+  notifyOtherTabs(BroadcastEvents.ORDER_CREATED, { orderId });
   onCreated?.(orderId);
   setTimeout(() => {
     console.log('🔔 Closing modal...');

@@ -12,6 +12,7 @@ import { navBadgeVisibility } from './lib/roles';
 import { initAudioUnlock } from './lib/sound';
 import { useOrderNotifications } from './lib/useOrderNotifications';
 import { requestNotificationPermission } from './lib/alarmSound';
+import { setupAutoRefresh, cleanupAllSubscriptions, subscribeToMultipleTables, BroadcastEvents } from './lib/realtimeSync';
 import { ConnectivityBanner } from './components/ConnectivityBanner';
 import { AuthProvider, useAuth } from './lib/AuthContext';
 import LoginScreen from './screens/LoginScreen';
@@ -116,6 +117,20 @@ function OpsApp({ onSignOut }) {
     initOfflineSync(OFFLINE_HANDLERS, () => window.dispatchEvent(new Event('sumi-queue-changed')));
     applyUiScale(getUiScale());
     requestNotificationPermission();
+
+    // Setup real-time subscriptions for critical tables
+    const unsubscribe = subscribeToMultipleTables(
+      ['orders', 'kitchen_work_packages', 'delivery_runsheets', 'company_feed_posts', 'kpi_logs'],
+      () => {
+        // Dispatch event to trigger UI refresh
+        window.dispatchEvent(new Event('sumi-data-changed'));
+      }
+    );
+
+    return () => {
+      unsubscribe();
+      cleanupAllSubscriptions();
+    };
   }, []);
 
   useEffect(() => { loadFeatureFlags().then(setFeatureFlags).catch(() => {}); }, [profile?.id]);
