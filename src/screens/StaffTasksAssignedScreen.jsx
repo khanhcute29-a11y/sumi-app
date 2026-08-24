@@ -18,16 +18,13 @@ export default function StaffTasksAssignedScreen() {
     try {
       // Load work packages assigned to current user
       const { data: packages, error: pkgErr } = await supabase
-        .from('order_work_packages')
+        .from('order_work_packages_readable')
         .select(`
           id,
           order_id,
           status,
-          assigned_at,
           accepted_at,
           completed_at,
-          assigned_to_staff_id,
-          assigned_to_staff_name,
           organization_units(name,code),
           orders!inner(
             id,
