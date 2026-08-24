@@ -102,7 +102,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
 
   const director = ['owner', 'admin'].includes(profile?.role) || (profile?.extra_roles || []).some(x => ['owner', 'admin'].includes(x));
   const isKitchenLead = ['kitchen_lead', 'bep_truong'].includes(profile?.role) || (profile?.extra_roles || []).some(x => ['kitchen_lead', 'bep_truong'].includes(x));
-  const canEditOrder = o?.created_by_id === profile?.id || isKitchenLead;
+  const canEditOrder = data?.order?.created_by_id === profile?.id || isKitchenLead;
 
   const load = async () => {
     const [o, i, p, u, e, kpi, ops, att] = await Promise.all([
