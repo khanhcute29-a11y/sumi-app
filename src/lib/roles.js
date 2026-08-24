@@ -41,7 +41,7 @@ export const ROLE_META = {
 
 export const ROLE_OPTIONS = Object.entries(ROLE_META).map(([value, m]) => ({
   value,
-  label: `${m.shortLabel ? `[${m.shortLabel}] ` : ''}${m.label}`
+  label: m.label
 }));
 
 export const KITCHEN_LEAD_ROLES = [
