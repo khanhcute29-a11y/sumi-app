@@ -84,6 +84,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
   const [zoomImage, setZoomImage] = useState(null);
   const [idempotencyKey] = useState(() => crypto.randomUUID());
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [gpsCoords, setGpsCoords] = useState(null);
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
@@ -283,7 +284,39 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       if (error) throw error;
       if (!data.success) throw new Error(data.message || 'Failed to accept delivery');
 
+      // Play notification sound for delivery accepted
+      const { playNotificationSound } = await import('../lib/notificationSound.js');
+      playNotificationSound('delivery_assigned');
+
       setShowDeliveryModal(false);
+      setGpsCoords(null);
+      setPhotoFile(null);
+      setPhotoPreview(null);
+      await load();
+      onChanged?.();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const completeDelivery = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ status_v2: 'completed' })
+        .eq('id', orderId);
+
+      if (error) throw error;
+
+      // Play notification sound
+      const { playNotificationSound } = await import('../lib/notificationSound.js');
+      playNotificationSound('fully_completed');
+
+      setShowCompletionModal(false);
       setGpsCoords(null);
       setPhotoFile(null);
       setPhotoPreview(null);
@@ -464,6 +497,24 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                 }}
               >
                 🚚 Nhận Giao
+              </button>
+            )}
+            {o.status_v2 === 'in_delivery' && (
+              <button
+                disabled={busy}
+                onClick={() => {
+                  setGpsCoords(null);
+                  setPhotoFile(null);
+                  setPhotoPreview(null);
+                  setShowCompletionModal(true);
+                }}
+                style={{
+                  minHeight: 40, border: 0, borderRadius: 12, padding: '0 14px', fontWeight: 900,
+                  background: '#28a745', color: 'white', fontSize: 14, cursor: busy ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 2px 0 #1a6f2a', opacity: busy ? 0.6 : 1
+                }}
+              >
+                ✅ Hoàn Thành Giao
               </button>
             )}
           </div>
@@ -789,6 +840,123 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                 }}
               >
                 {busy ? '⏳ Đang xử lý...' : '✓ Xác nhận Nhận Giao'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Hoàn Thành Giao - GPS + Photo (lần 2) */}
+      {showCompletionModal && (
+        <div onClick={() => !busy && setShowCompletionModal(false)} style={{
+          position: 'fixed', inset: 0, zIndex: 115, background: 'rgba(0,0,0,0.5)',
+          display: 'flex', justifyContent: 'center', alignItems: 'flex-end'
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            width: '100%', maxWidth: 600, background: 'var(--surface-app)', borderRadius: '20px 20px 0 0',
+            padding: 24, maxHeight: '85vh', overflowY: 'auto'
+          }}>
+            <h3 style={{ margin: '0 0 16px 0', fontSize: 18, color: 'var(--text-primary)', fontWeight: 900 }}>
+              ✅ Hoàn Thành Giao Hàng
+            </h3>
+
+            {/* GPS Section (lần 2) */}
+            <div style={{ marginBottom: 20, padding: 14, background: 'var(--surface-sunken)', borderRadius: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                <MapPin size={20} color="#d96b43" />
+                <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>Xác định vị trí giao hàng</span>
+              </div>
+              {gpsCoords ? (
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                  ✅ Đã lấy: {gpsCoords.lat.toFixed(6)}, {gpsCoords.lng.toFixed(6)}<br/>
+                  <small>Độ chính xác: ±{gpsCoords.accuracy.toFixed(1)}m</small>
+                </div>
+              ) : (
+                <button
+                  onClick={captureGPS}
+                  disabled={busy}
+                  style={{
+                    width: '100%', padding: '10px 14px', background: '#d96b43', color: '#fff',
+                    border: 0, borderRadius: 10, fontWeight: 700, cursor: 'pointer', fontSize: 14
+                  }}
+                >
+                  📍 Bấm để lấy GPS hiện tại
+                </button>
+              )}
+            </div>
+
+            {/* Camera Section (lần 2) */}
+            <div style={{ marginBottom: 20, padding: 14, background: 'var(--surface-sunken)', borderRadius: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                <Camera size={20} color="#d96b43" />
+                <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>Chụp ảnh hoàn thành</span>
+              </div>
+              {photoPreview ? (
+                <div>
+                  <img src={photoPreview} alt="preview" style={{ width: '100%', borderRadius: 10, marginBottom: 10, maxHeight: 200, objectFit: 'cover' }} />
+                  <button
+                    onClick={capturePhoto}
+                    style={{
+                      width: '100%', padding: '10px 14px', background: '#f5a623', color: '#fff',
+                      border: 0, borderRadius: 10, fontWeight: 700, cursor: 'pointer', fontSize: 14
+                    }}
+                  >
+                    📷 Chụp lại
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={capturePhoto}
+                  style={{
+                    width: '100%', padding: '10px 14px', background: '#d96b43', color: '#fff',
+                    border: 0, borderRadius: 10, fontWeight: 700, cursor: 'pointer', fontSize: 14
+                  }}
+                >
+                  📷 Chụp ảnh
+                </button>
+              )}
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handlePhotoSelected}
+                style={{ display: 'none' }}
+              />
+            </div>
+
+            {/* Error */}
+            {error && (
+              <div style={{
+                marginBottom: 14, padding: 10, background: '#fee2e2', borderRadius: 10,
+                color: '#b42318', fontWeight: 700, fontSize: 14
+              }}>
+                ⚠️ {error}
+              </div>
+            )}
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={() => setShowCompletionModal(false)}
+                disabled={busy}
+                style={{
+                  flex: 1, padding: '12px 16px', background: 'var(--surface-sunken)', color: 'var(--text-primary)',
+                  border: 0, borderRadius: 10, fontWeight: 700, cursor: 'pointer', fontSize: 14
+                }}
+              >
+                Huỷ
+              </button>
+              <button
+                onClick={completeDelivery}
+                disabled={busy || !gpsCoords || !photoFile}
+                style={{
+                  flex: 1, padding: '12px 16px', background: '#28a745', color: '#fff',
+                  border: 0, borderRadius: 10, fontWeight: 700, cursor: busy || !gpsCoords || !photoFile ? 'not-allowed' : 'pointer',
+                  fontSize: 14, opacity: (busy || !gpsCoords || !photoFile) ? 0.5 : 1
+                }}
+              >
+                {busy ? '⏳ Đang xử lý...' : '✅ Hoàn Thành Giao'}
               </button>
             </div>
           </div>

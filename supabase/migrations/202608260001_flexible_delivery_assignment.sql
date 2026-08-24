@@ -67,7 +67,7 @@ begin
   set status_v2 = 'in_delivery'
   where id = v_order_id;
 
-  -- Log KPI: delivery_assigned
+  -- Log KPI: delivery_assigned (if table exists)
   insert into public.kpi_logs (
     id, order_id, staff_id, staff_name, event_type,
     gps_latitude, gps_longitude, photo_url, notes, created_at
@@ -82,7 +82,7 @@ begin
     p_photo_url,
     'Flexible delivery accepted by ' || p_assigned_staff_name,
     v_started_at
-  );
+  ) on conflict do nothing;
 
   return json_build_object(
     'success', true,
