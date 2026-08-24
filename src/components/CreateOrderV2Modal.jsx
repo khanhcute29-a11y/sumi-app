@@ -122,6 +122,16 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
  const loadLibraryPhotos=async()=>{setLibraryLoading(true);try{const {data,error:err}=await supabase.from('macaron_photo_library').select('id,storage_path,caption,created_at').order('created_at',{ascending:false});if(err)throw err;setLibraryPhotos((data||[]).map(p=>({...p,url:supabase.storage.from('uploads').getPublicUrl(p.storage_path).data?.publicUrl})));}catch(e){setError(e.message);}finally{setLibraryLoading(false);}};
  const openLibraryPicker=()=>{setShowLibraryPicker(true);loadLibraryPhotos();};
  const toggleLibraryPhoto=(p)=>{setSelectedLibraryPhotos(x=>x.some(y=>y.id===p.id)?x.filter(y=>y.id!==p.id):[...x,p]);};
+ const deleteLibraryPhoto=async(p)=>{
+  if(!window.confirm('Xoá ảnh này khỏi kho? Không thể hoàn tác.'))return;
+  try{
+   await supabase.storage.from('uploads').remove([p.storage_path]);
+   const {error:err}=await supabase.from('macaron_photo_library').delete().eq('id',p.id);
+   if(err)throw err;
+   setSelectedLibraryPhotos(x=>x.filter(y=>y.id!==p.id));
+   await loadLibraryPhotos();
+  }catch(e){setError(e.message);}
+ };
  const uploadToLibrary=async(file)=>{
   setLibraryUploading(true);setError('');
   try{
@@ -334,10 +344,13 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
          {libraryLoading?<p>Đang tải ảnh...</p>:libraryPhotos.length===0?<p style={{color:'#725f50'}}>Chưa có ảnh nào trong kho. Bấm "Thêm ảnh mới vào kho" để lưu ảnh đầu tiên.</p>:
          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(100px,1fr))',gap:10}}>
            {libraryPhotos.map(p=>{const active=selectedLibraryPhotos.some(x=>x.id===p.id);return(
-             <button type="button" key={p.id} onClick={()=>toggleLibraryPhoto(p)} style={{position:'relative',padding:0,width:'100%',aspectRatio:'1',borderRadius:14,overflow:'hidden',border:active?'3px solid #087f5b':'1.5px solid var(--border-default)',background:'#000',cursor:'pointer'}}>
-               <img src={p.url} alt="Ảnh mẫu macaron" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
-               {active&&<div style={{position:'absolute',top:4,right:4,width:26,height:26,borderRadius:'50%',background:'#087f5b',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900}}>✓</div>}
-             </button>
+             <div key={p.id} style={{position:'relative',width:'100%',aspectRatio:'1',borderRadius:14,overflow:'hidden',border:active?'3px solid #087f5b':'1.5px solid var(--border-default)',background:'#000'}}>
+               <button type="button" onClick={()=>toggleLibraryPhoto(p)} style={{padding:0,border:0,width:'100%',height:'100%',cursor:'pointer',display:'block'}}>
+                 <img src={p.url} alt="Ảnh mẫu macaron" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+               </button>
+               {active&&<div style={{position:'absolute',top:4,right:4,width:26,height:26,borderRadius:'50%',background:'#087f5b',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900,pointerEvents:'none'}}>✓</div>}
+               <button type="button" onClick={()=>deleteLibraryPhoto(p)} title="Xoá khỏi kho" style={{position:'absolute',top:4,left:4,width:26,height:26,borderRadius:'50%',background:'rgba(0,0,0,0.7)',color:'#fff',border:0,fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900}}>✕</button>
+             </div>
            );})}
          </div>}
          <button onClick={()=>setShowLibraryPicker(false)} style={{width:'100%',minHeight:54,marginTop:16,border:0,borderRadius:14,background:'#087f5b',color:'#fff',fontSize:16,fontWeight:900,cursor:'pointer'}}>Xong ({selectedLibraryPhotos.length} ảnh đã chọn)</button>
