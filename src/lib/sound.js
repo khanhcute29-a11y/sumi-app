@@ -67,25 +67,29 @@ export function playTingSound() {
 
 // Play pattern repeated for duration (milliseconds)
 function playPatternLooped(pattern, durationMs) {
-  console.log(`[playPatternLooped] Starting pattern loop for ${durationMs}ms`);
-  const startTime = Date.now();
-  const patternDuration = Math.max(...pattern.map(p => p.delay + p.duration)) * 1000;
+  try {
+    console.log(`[playPatternLooped] Starting pattern loop for ${durationMs}ms`);
 
-  function playOnce(timeOffset) {
-    for (const note of pattern) {
-      const actualDelay = note.delay + timeOffset / 1000;
-      beep({ freq: note.freq, duration: note.duration, delay: actualDelay, volume: note.volume });
+    // Calculate pattern duration in seconds
+    const patternDurationSec = Math.max(...pattern.map(p => p.delay + p.duration));
+    const durationSec = durationMs / 1000;
+    const iterations = Math.ceil(durationSec / patternDurationSec);
+
+    console.log(`[playPatternLooped] Pattern: ${patternDurationSec.toFixed(2)}s, Iterations: ${iterations}, Total: ~${(iterations * patternDurationSec).toFixed(1)}s`);
+
+    // Schedule all beeps for the pattern repetitions
+    for (let i = 0; i < iterations; i++) {
+      const timeOffset = i * patternDurationSec;
+      for (const note of pattern) {
+        const delay = note.delay + timeOffset;
+        beep({ freq: note.freq, duration: note.duration, delay, volume: note.volume });
+      }
     }
-  }
 
-  // Play pattern multiple times
-  let iteration = 0;
-  while (Date.now() - startTime < durationMs) {
-    playOnce(iteration * patternDuration);
-    iteration++;
+    console.log(`[playPatternLooped] ✓ Scheduled ${iterations} iterations`);
+  } catch (e) {
+    console.error(`[playPatternLooped] Error:`, e);
   }
-
-  console.log(`[playPatternLooped] ✓ Loop done - ${iteration} iterations in ${durationMs}ms`);
 }
 
 // TING TING TING - Bếp nhận đơn (lặp 10s)
