@@ -23,6 +23,8 @@ create index if not exists idx_order_edit_requests_status on public.order_edit_r
 alter table public.order_edit_requests enable row level security;
 
 -- RLS Policy: Authenticated users can read and create
+drop policy if exists "Read and create edit requests" on public.order_edit_requests;
+
 create policy "Read and create edit requests" on public.order_edit_requests
   for all using (auth.role() = 'authenticated');
 
