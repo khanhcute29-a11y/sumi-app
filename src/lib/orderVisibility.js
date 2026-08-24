@@ -9,13 +9,34 @@
  * - Owner/Admin: Can see ALL orders
  */
 
+function isOwnerOrAdmin(userProfile) {
+  return ['owner', 'admin'].includes(userProfile?.role) ||
+    (userProfile?.extra_roles || []).some(r => ['owner', 'admin'].includes(r));
+}
+
+function hasRoleOrExtra(userProfile, role) {
+  return userProfile?.role === role || (userProfile?.extra_roles || []).includes(role);
+}
+
+// Đơn Trường học (X42): CHỈ owner/admin và Trợ Lý Giám Đốc Xưởng 42 được xem —
+// không phải "nhân viên X42" nói chung nữa (khác Macaron), theo yêu cầu bảo
+// mật riêng cho đơn trường học ("không ai được xem cả" ngoài 2 vai trò này).
+export function canViewSchoolOrder(userProfile) {
+  return isOwnerOrAdmin(userProfile) || hasRoleOrExtra(userProfile, 'deputy_director_x42');
+}
+
+// Giá sản phẩm Macaron: chỉ owner/admin và Trợ Lý Giám Đốc Xưởng 41 được xem
+// giá — nhân viên khác (kể cả nhân viên X41 sản xuất đơn đó) vẫn thấy đơn
+// hàng bình thường nhưng không thấy giá.
+export function canViewMacaronPrice(userProfile) {
+  return isOwnerOrAdmin(userProfile) || hasRoleOrExtra(userProfile, 'deputy_director_x41');
+}
+
 export function canUserViewOrder(order, userProfile) {
   if (!order || !userProfile) return false;
 
   // Owner/Admin can see all
-  const isAdmin = ['owner', 'admin'].includes(userProfile.role) ||
-    (userProfile.extra_roles || []).some(r => ['owner', 'admin'].includes(r));
-  if (isAdmin) return true;
+  if (isOwnerOrAdmin(userProfile)) return true;
 
   // Driver/Logistics can see all
   const isDriver = userProfile.role === 'driver_logistics';
@@ -33,7 +54,7 @@ export function canUserViewOrder(order, userProfile) {
   const userRole = (userProfile.role || '').toLowerCase();
   const extraRoles = (userProfile.extra_roles || []).map(r => r.toLowerCase());
 
-  // Macaron (X41) orders - only X41 staff
+  // Macaron (X41) orders - only X41 staff (đơn vẫn xem được, chỉ ẩn giá — xem canViewMacaronPrice)
   if (order.order_type === 'macaron') {
     const isX41Staff = userStation.includes('41') ||
                       userStation.includes('macaron') ||
@@ -43,14 +64,9 @@ export function canUserViewOrder(order, userProfile) {
     return isX41Staff;
   }
 
-  // School (X42) orders - only X42 staff
+  // School (X42) orders - chỉ Trợ Lý Giám Đốc Xưởng 42 (+ owner/admin đã trả về true ở trên)
   if (order.order_type === 'school') {
-    const isX42Staff = userStation.includes('42') ||
-                      userStation.includes('school') ||
-                      userRole.includes('school') ||
-                      userRole.includes('x42') ||
-                      extraRoles.some(r => r.includes('school') || r.includes('x42'));
-    return isX42Staff;
+    return hasRoleOrExtra(userProfile, 'deputy_director_x42');
   }
 
   // Mixed orders - need to check which workflows are involved
@@ -94,10 +110,8 @@ export function getUserWorkflows(userProfile) {
     workflows.push('macaron');
   }
 
-  // X42 staff can see school
-  if (userStation.includes('42') || userStation.includes('school') ||
-      userRole.includes('school') || userRole.includes('x42') ||
-      extraRoles.some(r => r.includes('school') || r.includes('x42'))) {
+  // Chỉ Trợ Lý Giám Đốc Xưởng 42 thấy luồng trường học (owner/admin đã return ở trên)
+  if (userProfile.role === 'deputy_director_x42' || extraRoles.includes('deputy_director_x42')) {
     workflows.push('school');
   }
 

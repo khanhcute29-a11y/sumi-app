@@ -65,8 +65,9 @@ function OrderPreviewV2({type,customerName,customerPhone,selectedSchool,items,gu
 
 export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
  const {profile}=useAuth();
- const isDirector=['owner','admin'].includes(profile?.role)||(profile?.extra_roles||[]).some(r=>['owner','admin'].includes(r));
- const isMacaronCreator=['owner','admin','deputy_director'].includes(profile?.role)||(profile?.extra_roles||[]).some(r=>['owner','admin','deputy_director'].includes(r));
+ const isOwnerAdmin=['owner','admin'].includes(profile?.role)||(profile?.extra_roles||[]).some(r=>['owner','admin'].includes(r));
+ const isDirector=isOwnerAdmin||['deputy_director_x42'].includes(profile?.role)||(profile?.extra_roles||[]).some(r=>['deputy_director_x42'].includes(r));
+ const isMacaronCreator=isOwnerAdmin||['deputy_director_x41'].includes(profile?.role)||(profile?.extra_roles||[]).some(r=>['deputy_director_x41'].includes(r));
  const visibleFlows=ORDER_FLOWS.filter(f=>(f.key!=='school'||isDirector)&&(f.key!=='macaron'||isMacaronCreator));
  const [type,setType]=useState(null); const [requiredAt,setRequiredAt]=useState('');
  const [customerName,setCustomerName]=useState(''); const [customerPhone,setCustomerPhone]=useState('');

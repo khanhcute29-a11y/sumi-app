@@ -7,6 +7,7 @@ import { CommentSection } from './CommentSection';
 import OrderStatusTimeline from './OrderStatusTimeline';
 import { MapPin, Camera } from 'lucide-react';
 import { CAKE_FILLINGS } from '../lib/cakePricing';
+import { canViewSchoolOrder, canViewMacaronPrice } from '../lib/orderVisibility';
 
 const ORDER_TYPE_LABELS = {
   cake: '🎂 Bánh kem & Bánh lạnh',
@@ -611,6 +612,20 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
 
   const o = data.order;
   const isSchool = o.confidentiality === 'school_restricted';
+
+  if (isSchool && !canViewSchoolOrder(profile)) {
+    return (
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 110, background: 'rgba(0,0,0,.55)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <div onClick={e => e.stopPropagation()} style={{...box, maxWidth: 400, position: 'relative'}}>
+          <button onClick={onClose} style={{position:'absolute',top:10,right:10,minHeight:44,minWidth:44,border:0,borderRadius:'50%',background:'var(--surface-sunken)',fontSize:16,cursor:'pointer'}}>✕</button>
+          <div style={{fontWeight: 700, color: '#b42318'}}>🔒 Đơn trường học chỉ Giám đốc và Trợ Lý Giám Đốc Xưởng 42 được xem.</div>
+        </div>
+      </div>
+    );
+  }
+
+  const isMacaron = o.order_type === 'macaron';
+  const hidePrice = isSchool || (isMacaron && !canViewMacaronPrice(profile));
   const isReady = ['ready_for_fulfillment', 'in_delivery', 'completed'].includes(o.status_v2);
 
   const customerSamplePhotos = attachments.filter(a => a.attachment_type === 'customer_sample' || !a.attachment_type);
@@ -708,7 +723,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                   </span>
                   <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)' }}>
                     {x.quantity} {x.unit || 'cái'}
-                    {!isSchool && x.unit_price ? ` · ${Number(x.unit_price).toLocaleString('vi-VN')}đ` : ''}
+                    {!hidePrice && x.unit_price ? ` · ${Number(x.unit_price).toLocaleString('vi-VN')}đ` : ''}
                   </span>
                 </div>
 
@@ -818,7 +833,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
             <div>
               <b>Hẹn giờ:</b> {o.required_at ? new Date(o.required_at).toLocaleString('vi-VN') : 'Chưa có giờ hẹn'}
             </div>
-            {o.ship_fee > 0 && (
+            {!hidePrice && o.ship_fee > 0 && (
               <div>
                 <b>Phí ship:</b> {Number(o.ship_fee).toLocaleString('vi-VN')}đ
               </div>
@@ -826,12 +841,12 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
             <div>
               <b>Thanh toán:</b> {PAYMENT_METHOD_LABELS[o.payment_method] || o.payment_method || 'COD (thu khi giao)'}
             </div>
-            {o.deposit > 0 && (
+            {!hidePrice && o.deposit > 0 && (
               <div>
                 <b>Đặt cọc:</b> {Number(o.deposit).toLocaleString('vi-VN')}đ
               </div>
             )}
-            {o.total > 0 && (
+            {!hidePrice && o.total > 0 && (
               <div>
                 <b>Tổng tiền đơn:</b> {Number(o.total).toLocaleString('vi-VN')}đ
               </div>
@@ -870,7 +885,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
             {(data.operations?.driver_name || data.operations?.provider_label) && (
               <div>
                 <b>Người giao:</b> {data.operations.driver_name || data.operations.provider_label}
-                {!isSchool && data.operations?.shipping_fee != null ? ` · Phí ship: ${Number(data.operations.shipping_fee).toLocaleString('vi-VN')}đ` : ''}
+                {!hidePrice && data.operations?.shipping_fee != null ? ` · Phí ship: ${Number(data.operations.shipping_fee).toLocaleString('vi-VN')}đ` : ''}
               </div>
             )}
           </div>
