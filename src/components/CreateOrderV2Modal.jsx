@@ -3,7 +3,6 @@ import { supabase } from '../lib/supabaseClient';
 import { createOrderV2 } from '../lib/featureFlags';
 import { useAuth } from '../lib/AuthContext';
 import { newId } from '../lib/ids';
-import { getProductPricing, getProductSpecs } from '../lib/pricingLookup';
 import { ORDER_FLOWS, CAKE_LINES, TEABREAK_CATALOG, MOONCAKE_CATALOG, normalizeSearch } from '../data/orderCatalogs';
 import { SCHOOL_DELIVERY_POINTS } from '../data/schoolCatalog';
 
@@ -12,15 +11,15 @@ const fieldStyle={width:'100%',minHeight:58,border:'2px solid #d7c3aa',borderRad
 const categoryLabel=(value='')=>value.replaceAll('_',' ').replace(/\b\w/g,x=>x.toUpperCase());
 const FLOW_WORDS={macaron:['macaron'],cake:['kem','mousse','mouse','tiramisu','su kem','banh lanh'],bakery:['banh mi','banh pia','banh quy','trung thu','btt','croissant','donut'],school:['banh mi','banh ngot','banh man'],teabreak:['teabreak']};
 function ProductNameField({item,products,flowType,onChange}){
- const [open,setOpen]=useState(false); const [specs,setSpecs]=useState([]); const wrap=useRef(null); const query=normalizeSearch(item.name||'');
+ const [open,setOpen]=useState(false); const wrap=useRef(null); const query=normalizeSearch(item.name||'');
  useEffect(()=>{if(!open)return;const close=e=>{if(wrap.current&&!wrap.current.contains(e.target))setOpen(false)};document.addEventListener('pointerdown',close);return()=>document.removeEventListener('pointerdown',close)},[open]);
  const scoped=products.filter(p=>FLOW_WORDS[flowType]?.some(word=>normalizeSearch(`${p.name} ${p.category||''}`).includes(normalizeSearch(word))));
  const matches=scoped.filter(p=>!query||normalizeSearch(`${p.name} ${p.category||''}`).includes(query)).slice(0,10);
- const choose=async(p)=>{const productSpecs=await getProductSpecs(p.id,flowType);setSpecs(productSpecs);onChange({name:p.name,product_id:p.id,unit:p.unit||item.unit||'cái',specification:{...(item.specification||{}),catalog_category:p.category||null,catalog_price:p.price??null}});setOpen(false);};
+ const choose=(p)=>{const variants=p.product_variants||[];onChange({name:p.name,product_id:p.id,unit:p.unit||item.unit||'cái',variants,unit_price:variants.length?null:(p.price??null),specification:{...(item.specification||{}),size:variants.length?'':(item.specification?.size),catalog_category:p.category||null,catalog_price:p.price??null}});setOpen(false);};
  return <div className="sumi-product-combobox" ref={wrap}>
-  <input style={fieldStyle} autoComplete="off" placeholder="Gõ tên bánh để tìm hoặc nhập mới" value={item.name||''} onFocus={()=>setOpen(true)} onChange={e=>{onChange({name:e.target.value,product_id:null});setOpen(true)}} aria-expanded={open}/>
+  <input style={fieldStyle} autoComplete="off" placeholder="Gõ tên bánh để tìm hoặc nhập mới" value={item.name||''} onFocus={()=>setOpen(true)} onChange={e=>{onChange({name:e.target.value,product_id:null,variants:[]});setOpen(true)}} aria-expanded={open}/>
   {open&&<div className="sumi-product-options">
-   {matches.map(p=><button type="button" key={p.id} onClick={()=>choose(p)}><span>🍰</span><b>{p.name}</b><small>{categoryLabel(p.category||'Sản phẩm')} · {p.unit||'cái'}</small></button>)}
+   {matches.map(p=><button type="button" key={p.id} onClick={()=>choose(p)}><span>🍰</span><b>{p.name}</b><small>{categoryLabel(p.category||'Sản phẩm')} · {p.unit||'cái'}{p.product_variants?.length?` · ${p.product_variants.length} size`:''}</small></button>)}
    {item.name?.trim()&&<button type="button" className="manual" onClick={()=>setOpen(false)}><span>✍️</span><b>Dùng tên “{item.name.trim()}”</b><small>Chưa có trong danh sách · vẫn tạo đơn bình thường</small></button>}
    {!matches.length&&!item.name?.trim()&&<p>Gõ một phần tên bánh để tìm.</p>}
   </div>}
@@ -62,7 +61,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
  const [productCatalog,setProductCatalog]=useState([]);
  const [isMobile,setIsMobile]=useState(typeof window!=='undefined'?window.innerWidth<860:false);
  useEffect(()=>{const onResize=()=>setIsMobile(window.innerWidth<860);window.addEventListener('resize',onResize);return()=>window.removeEventListener('resize',onResize)},[]);
- useEffect(()=>{let active=true;supabase.from('products').select('id,name,category,unit,price').eq('active',true).order('name').limit(500).then(({data,error})=>{if(active&&!error)setProductCatalog([...(data||[]),...MOONCAKE_CATALOG])});return()=>{active=false}},[]);
+ useEffect(()=>{let active=true;supabase.from('products').select('id,name,category,unit,price,product_variants(id,label,price)').eq('active',true).order('name').limit(500).then(({data,error})=>{if(active&&!error)setProductCatalog([...(data||[]),...MOONCAKE_CATALOG])});return()=>{active=false}},[]);
  const change=(i,key,value)=>setItems(x=>x.map((it,n)=>n===i?{...it,[key]:value}:it));
  const changeMany=(i,fields)=>setItems(x=>x.map((it,n)=>n===i?{...it,...fields}:it));
  const spec=(i,key,value)=>setItems(x=>x.map((it,n)=>n===i?{...it,specification:{...it.specification,[key]:value}}:it));
@@ -177,7 +176,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
     <div className="sumi-product-line"><ProductNameField item={it} products={productCatalog} flowType={it.flow_type||type} onChange={fields=>changeMany(itemIndex,{...fields,unit_price:fields.unit_price??fields.specification?.catalog_price})}/><input style={{...fieldStyle,width:90}} aria-label="Số lượng" type="number" min="1" value={it.quantity} onChange={e=>change(itemIndex,'quantity',Number(e.target.value))}/></div>
     {itemPrice>0&&<div style={{fontSize:13,color:'#d96b43',fontWeight:700,marginTop:6}}>{itemPrice.toLocaleString('vi-VN')}đ × {it.quantity} = {itemTotal.toLocaleString('vi-VN')}đ</div>}
     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:8}}>
-     {(it.flow_type||type)==='cake'&&<><input style={fieldStyle} placeholder="Size (18cm...)" value={it.specification?.size||''} onChange={e=>spec(itemIndex,'size',e.target.value)}/><input style={fieldStyle} placeholder="Chữ trên bánh" value={it.specification?.content||''} onChange={e=>spec(itemIndex,'content',e.target.value)}/></>}
+     {(it.flow_type||type)==='cake'&&<>{it.variants?.length?<select style={fieldStyle} value={it.specification?.size||''} onChange={e=>{const v=it.variants.find(x=>x.label===e.target.value);changeMany(itemIndex,{unit_price:v?.price??null,specification:{...it.specification,size:e.target.value}})}}><option value="">Chọn size...</option>{it.variants.map(v=><option key={v.id} value={v.label}>{v.label} — {Number(v.price).toLocaleString('vi-VN')}đ</option>)}</select>:<input style={fieldStyle} placeholder="Size (18cm...)" value={it.specification?.size||''} onChange={e=>spec(itemIndex,'size',e.target.value)}/>}<input style={fieldStyle} placeholder="Chữ trên bánh" value={it.specification?.content||''} onChange={e=>spec(itemIndex,'content',e.target.value)}/></>}
      {(it.flow_type||type)==='bakery'&&<><select style={fieldStyle} value={it.specification?.product_line||''} onChange={e=>spec(itemIndex,'product_line',e.target.value)}><option value="">Chọn dòng bánh</option><option value="moon_cake">BTT · Bánh Trung Thu</option><option value="other">Bánh mặn/ngọt khác</option></select>{it.specification?.product_line==='moon_cake'?<><input style={fieldStyle} inputMode="numeric" placeholder="Quy cách (gram)" value={it.specification?.weight_gram||''} onChange={e=>spec(itemIndex,'weight_gram',e.target.value)}/><select style={fieldStyle} value={it.specification?.egg_count??''} onChange={e=>spec(itemIndex,'egg_count',Number(e.target.value))}><option value="">Số trứng</option><option value="0">0 trứng</option><option value="1">1 trứng</option><option value="2">2 trứng</option></select><input style={fieldStyle} inputMode="numeric" placeholder="Giá tùy nhập (không bắt buộc)" value={it.unit_price||''} onChange={e=>change(itemIndex,'unit_price',e.target.value?Number(e.target.value):null)}/><input style={fieldStyle} placeholder="Ghi chú linh hoạt" value={it.specification?.flex_note||''} onChange={e=>spec(itemIndex,'flex_note',e.target.value)}/></>:<input style={fieldStyle} placeholder="Quy cách/nhân/đóng gói" value={it.specification?.packing||''} onChange={e=>spec(itemIndex,'packing',e.target.value)}/>}</>}
      {(it.flow_type||type)==='teabreak'&&<><input style={fieldStyle} value={it.specification?.catalog_specification||''} placeholder="Quy cách" onChange={e=>spec(itemIndex,'catalog_specification',e.target.value)}/><input style={fieldStyle} placeholder="Khay/ghi chú" value={it.specification?.packing||''} onChange={e=>spec(itemIndex,'packing',e.target.value)}/></>}
      {(it.flow_type||type)==='macaron'&&<><input style={fieldStyle} placeholder="Màu" value={it.specification?.color||''} onChange={e=>spec(itemIndex,'color',e.target.value)}/><input style={fieldStyle} placeholder="Vị / có nhân" value={it.specification?.flavor||''} onChange={e=>spec(itemIndex,'flavor',e.target.value)}/></>}
