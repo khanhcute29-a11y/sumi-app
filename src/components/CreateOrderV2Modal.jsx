@@ -166,8 +166,13 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
       throw readyErr;
     }
   }
-  onCreated?.(orderId);onClose();
- }catch(e){setError(e.message||'Không thể tạo đơn');}finally{setSaving(false);}};
+  console.log('✅ Order created:', orderId);
+  onCreated?.(orderId);
+  setTimeout(() => {
+    console.log('🔔 Closing modal...');
+    onClose();
+  }, 500);
+ }catch(e){console.error('❌ Order error:', e);setError(e.message||'Không thể tạo đơn');}finally{setSaving(false);}};
  if(!type)return <div className={embedded?'sumi-order-create-page':'sumi-order-create-overlay'} onClick={embedded?undefined:onClose}>
   <div className="sumi-order-create-body sumi-flow-picker" onClick={e=>e.stopPropagation()}>
    <div className="sumi-create-head"><button onClick={onClose} aria-label="Quay lại">←</button><h2>Tạo đơn mới</h2></div>
