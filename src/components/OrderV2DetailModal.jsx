@@ -470,6 +470,30 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
     }
   };
 
+  const loadStaffForPackage = async (pkg) => {
+    setStaffLoading(true);
+    try {
+      // Get kitchen unit from package
+      const kitchenUnit = pkg?.organization_units?.id || pkg?.kitchen_unit_id;
+
+      // Query staff by role (kitchen staff) or by kitchen unit
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, role, station')
+        .eq('active', true)
+        .or(`role.eq.kitchen_lead,role.eq.baker`)
+        .limit(20);
+
+      if (error) throw error;
+      setStaffOptions(data || []);
+    } catch (e) {
+      setError(e.message);
+      setStaffOptions([]);
+    } finally {
+      setStaffLoading(false);
+    }
+  };
+
   const acceptPackageDelegate = async (p, staffId, staffName) => {
     setBusy(true);
     setError('');
@@ -871,6 +895,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                         onClick={() => {
                           setSelectedPackage(p);
                           setShowAcceptPackageModal(true);
+                          loadStaffForPackage(p);
                         }}
                         style={{
                           minHeight: 48, border: 0, borderRadius: 14, padding: '0 20px', fontWeight: 950,
