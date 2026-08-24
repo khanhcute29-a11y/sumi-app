@@ -9,7 +9,7 @@ import EditApprovalPanel from '../components/EditApprovalPanel';
 import { ROLE_META, KITCHEN_LEAD_ROLES, getRoleMeta, formatStationLabel } from '../lib/roles';
 import { ORDER_FLOWS } from '../data/orderCatalogs';
 
-const isDirector = p => ['owner', 'admin', 'deputy_director'].includes(p?.role) || (p?.extra_roles || []).some(r => ['owner', 'admin', 'deputy_director'].includes(r));
+const isDirector = p => ['owner', 'admin', 'deputy_director_x41', 'deputy_director_x42'].includes(p?.role) || (p?.extra_roles || []).some(r => ['owner', 'admin', 'deputy_director_x41', 'deputy_director_x42'].includes(r));
 const canViewRevenue = p => ['owner', 'admin'].includes(p?.role) || (p?.extra_roles || []).some(r => ['owner', 'admin'].includes(r));
 const isLead = p => KITCHEN_LEAD_ROLES.includes(p?.role) || (p?.extra_roles || []).some(r => KITCHEN_LEAD_ROLES.includes(r));
 const getRoleLabel = (r, s) => getRoleMeta(r, s)?.label || r;

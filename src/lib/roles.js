@@ -1,7 +1,8 @@
 export const ROLE_META = {
   owner: { label: 'Giám Đốc / Chủ Sở Hữu', shortLabel: 'Giám Đốc', tone: 'primary', level: 7 },
   admin: { label: 'Quản Lý / Điều Hành', shortLabel: 'Quản Lý', tone: 'primary', level: 6 },
-  deputy_director: { label: 'Trợ Lý Giám Đốc', shortLabel: 'TL Giám Đốc', tone: 'primary', level: 6 },
+  deputy_director_x41: { label: 'Trợ Lý Giám Đốc Xưởng 41', shortLabel: 'TL GĐ X41', tone: 'primary', level: 6, station: 'Xưởng 41' },
+  deputy_director_x42: { label: 'Trợ Lý Giám Đốc Xưởng 42', shortLabel: 'TL GĐ X42', tone: 'primary', level: 6, station: 'Xưởng 42' },
   accountant: { label: 'Kế Toán', shortLabel: 'Kế Toán', tone: 'info', level: 5 },
   warehouse: { label: 'Thủ Kho', shortLabel: 'Thủ Kho', tone: 'info', level: 4 },
   sale: { label: 'Nhân Viên Bán Hàng', shortLabel: 'Bán Hàng', tone: 'success', level: 3 },
@@ -68,8 +69,20 @@ export const ROLE_PERMISSIONS = [
     ]
   },
   {
-    role: 'deputy_director',
-    desc: 'Trợ lý Giám đốc — gần như toàn quyền như Quản lý (đơn hàng, kho, nhân viên, tạo đơn Macaron/Bánh Quy riêng), NGOẠI TRỪ duyệt chi tiêu và xem doanh thu.',
+    role: 'deputy_director_x41',
+    desc: 'Trợ lý Giám đốc Xưởng 41 — gần như toàn quyền như Quản lý, NGOẠI TRỪ duyệt chi tiêu và xem doanh thu. Là người DUY NHẤT (cùng Giám đốc/Quản lý) được tạo đơn Macaron/Bánh Quy VÀ xem giá của các đơn đó — nhân viên khác vẫn thấy đơn nhưng không thấy giá.',
+    permissions: [
+      'view_all_orders', 'create_order', 'edit_order', 'delete_order',
+      'view_all_customers', 'create_customer', 'edit_customer',
+      'view_all_inventory', 'edit_inventory',
+      'view_all_reports', 'create_report',
+      'manage_staff', 'manage_roles', 'manage_settings',
+      'view_audit_log'
+    ]
+  },
+  {
+    role: 'deputy_director_x42',
+    desc: 'Trợ lý Giám đốc Xưởng 42 — gần như toàn quyền như Quản lý, NGOẠI TRỪ duyệt chi tiêu và xem doanh thu. Là người DUY NHẤT (cùng Giám đốc/Quản lý) được xem VÀ tạo đơn Trường học — không ai khác trong công ty thấy được đơn trường học.',
     permissions: [
       'view_all_orders', 'create_order', 'edit_order', 'delete_order',
       'view_all_customers', 'create_customer', 'edit_customer',
@@ -224,9 +237,16 @@ export function resolveRoleAndStation(roleKey, currentStation) {
       mappedRole = 'warehouse';
       mappedStation = 'xuong42';
       break;
+    case 'deputy_director_x41':
+      mappedRole = roleKey;
+      mappedStation = 'xuong41';
+      break;
+    case 'deputy_director_x42':
+      mappedRole = roleKey;
+      mappedStation = 'xuong42';
+      break;
     case 'owner':
     case 'admin':
-    case 'deputy_director':
     case 'accountant':
     case 'sale':
     case 'cashier':
