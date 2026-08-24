@@ -10,6 +10,8 @@ import { Button } from '../components/forms/Button';
 import { DailyChecklistTab } from '../components/tasks/DailyChecklistTab';
 import { AssignedTasksTab } from '../components/tasks/AssignedTasksTab';
 import { AdhocTasksTab } from '../components/tasks/AdhocTasksTab';
+import { ProductionLogModal } from '../components/ProductionLogModal';
+import { ProductionLogList } from '../components/ProductionLogList';
 
 const STATION_OPTIONS = [
   { value: '', label: 'Tất cả khâu (Tổng quan)' },
@@ -28,6 +30,9 @@ export default function TasksScreen() {
   const [selectedStaffId, setSelectedStaffId] = useState('');
   const [stationFilter, setStationFilter] = useState('');
   const [orderCodeFilter, setOrderCodeFilter] = useState('');
+  const [showProductionLog, setShowProductionLog] = useState(false);
+  const [showProductionLogList, setShowProductionLogList] = useState(false);
+  const [productionLogRefreshKey, setProductionLogRefreshKey] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -133,8 +138,27 @@ export default function TasksScreen() {
               👥 Danh sách nhân viên
             </button>
           )}
+          {isOwner && (
+            <Button variant="secondary" size="sm" onClick={() => setShowProductionLog(true)}>
+              Ghi Sản Xuất
+            </Button>
+          )}
+          {isOwner && (
+            <Button variant={showProductionLogList ? 'primary' : 'ghost'} size="sm" onClick={() => setShowProductionLogList((v) => !v)}>
+              Đã ghi sản xuất {showProductionLogList ? '▲' : '▼'}
+            </Button>
+          )}
         </div>
       </div>
+
+      {isOwner && showProductionLogList && <ProductionLogList refreshKey={productionLogRefreshKey} />}
+
+      {showProductionLog && (
+        <ProductionLogModal
+          onClose={() => setShowProductionLog(false)}
+          onSaved={() => { setShowProductionLog(false); setProductionLogRefreshKey((k) => k + 1); }}
+        />
+      )}
 
       {/* Bộ lọc Khâu & Chọn nhân viên */}
       {isOwner && (
