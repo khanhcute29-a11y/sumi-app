@@ -1,21 +1,21 @@
 import React, { useMemo } from 'react';
 
-export default function OrderStatusTimeline({ order, packages = [], tasks = [] }) {
+export default function OrderStatusTimeline({ order, packages = [], tasks = [], changeHistory = [] }) {
   const events = useMemo(() => {
     const list = [];
 
-    // Event 1: Order created
+    // Event 1: Order created - with creator info
     if (order?.created_at) {
       list.push({
         time: new Date(order.created_at),
         icon: '✅',
         title: 'Đơn được tạo',
-        detail: `${order.customer_name || 'Khách lẻ'} | ${order.order_type}`,
+        detail: `${order.customer_name || 'Khách lẻ'} | ${order.order_type} | Tạo bởi: ${order.created_by_name || 'N/A'}`,
         status: 'done'
       });
     }
 
-    // Event 2-N: Package status changes
+    // Event 2-N: Package status changes + Work package assignment flow
     packages.forEach((pkg, idx) => {
       if (pkg?.created_at) {
         list.push({
@@ -27,12 +27,23 @@ export default function OrderStatusTimeline({ order, packages = [], tasks = [] }
         });
       }
 
+      // Event: Work package assigned to staff (Giao nhân viên)
+      if (pkg?.assigned_at && pkg?.assigned_to_staff_name) {
+        list.push({
+          time: new Date(pkg.assigned_at),
+          icon: '🔄',
+          title: 'Chờ nhân viên xác nhận',
+          detail: `Giao cho: ${pkg.assigned_to_staff_name}`,
+          status: 'pending'
+        });
+      }
+
       if (pkg?.accepted_at) {
         list.push({
           time: new Date(pkg.accepted_at),
-          icon: pkg.status === 'accepted' ? '⏳' : '✅',
-          title: `${pkg.organization_units?.name || 'Bếp'} trưởng nhận đơn`,
-          detail: `Trạng thái: ${pkg.status}`,
+          icon: pkg.status === 'accepted' ? '✅' : (pkg.assigned_to_staff_name ? '👥' : '⏳'),
+          title: pkg.assigned_to_staff_name ? `${pkg.assigned_to_staff_name} xác nhận nhận việc` : `${pkg.organization_units?.name || 'Bếp'} trưởng nhận đơn`,
+          detail: pkg.assigned_to_staff_name ? `Bắt đầu làm | ${pkg.organization_units?.name || 'Bếp'}` : `Trạng thái: ${pkg.status}`,
           status: 'done'
         });
       }
@@ -42,11 +53,26 @@ export default function OrderStatusTimeline({ order, packages = [], tasks = [] }
           time: new Date(pkg.completed_at),
           icon: '✅',
           title: `${pkg.organization_units?.name || 'Bếp'} hoàn thành mẻ`,
-          detail: 'Đã bàn giao kho thành phẩm',
+          detail: pkg.assigned_to_staff_name ? `Hoàn thành bởi: ${pkg.assigned_to_staff_name}` : 'Đã bàn giao kho thành phẩm',
           status: 'done'
         });
       }
     });
+
+    // Event: Order edits (Chỉnh sửa)
+    if (changeHistory && changeHistory.length > 0) {
+      changeHistory.forEach(change => {
+        if (change?.created_at) {
+          list.push({
+            time: new Date(change.created_at),
+            icon: '✏️',
+            title: 'Chỉnh sửa đơn hàng',
+            detail: `${change.editor_name || 'N/A'}: Cập nhật ${change.field_name || 'thông tin'}`,
+            status: 'done'
+          });
+        }
+      });
+    }
 
     // Event: Tasks assigned & completed
     tasks.forEach(task => {
@@ -93,7 +119,7 @@ export default function OrderStatusTimeline({ order, packages = [], tasks = [] }
     }
 
     return list.sort((a, b) => a.time - b.time);
-  }, [order, packages, tasks]);
+  }, [order, packages, tasks, changeHistory]);
 
   const getStatusColor = (status) => {
     switch (status) {

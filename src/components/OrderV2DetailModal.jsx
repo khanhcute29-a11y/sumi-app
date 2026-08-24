@@ -111,7 +111,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
   const canEditOrder = data?.order?.created_by_id === profile?.id || isKitchenLead;
 
   const load = async () => {
-    const [o, i, p, u, e, kpi, ops, att] = await Promise.all([
+    const [o, i, p, u, e, kpi, ops, att, changes] = await Promise.all([
       supabase.from('orders').select('id,order_code,order_type,status_v2,required_at,fulfillment_method_v2,address,note,created_by_name,created_at,confidentiality,version,ship_fee,deposit,payment_method,total,customers(name,phone)').eq('id', orderId).single(),
       supabase.from('order_items').select('id,name_snapshot,quantity,unit,specification,unit_price,display_order').eq('order_id', orderId).order('display_order'),
       supabase.from('order_work_packages').select('id,unit_id,status,due_at,accepted_at,completed_at,version,assigned_by_staff_id,assigned_to_staff_id,assigned_to_staff_name,assigned_at,completed_by_staff_id,completed_by_staff_name,organization_units(name,code),work_package_items(order_item_id,quantity)').eq('order_id', orderId),
@@ -119,7 +119,8 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       supabase.from('domain_events').select('id,event_type,occurred_at,payload').eq('entity_type', 'order').eq('entity_id', orderId).order('occurred_at', { ascending: false }),
       supabase.from('kpi_logs').select('id,event_type,created_at,staff_name').eq('order_id', orderId).order('created_at', { ascending: false }),
       supabase.from('order_operations_list').select('production_started_at,production_completed_at,production_minutes,delivery_started_at,delivery_completed_at,delivery_minutes,delivery_provider,provider_label,shipping_fee,driver_name,is_overdue,overdue_stage,overdue_minutes').eq('id', orderId).single(),
-      supabase.from('order_attachments').select('id,attachment_type,storage_path,mime_type,created_at').eq('order_id', orderId).order('created_at', { ascending: false })
+      supabase.from('order_attachments').select('id,attachment_type,storage_path,mime_type,created_at').eq('order_id', orderId).order('created_at', { ascending: false }),
+      supabase.from('order_change_logs').select('id,field_name,old_value,new_value,edited_by_name,created_at').eq('order_id', orderId).order('created_at', { ascending: false })
     ]);
 
     if (o.error) throw o.error;
@@ -146,7 +147,12 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       packages: currentPackages,
       events: e.data || [],
       kpiLogs: kpi.data || [],
-      operations: ops.data || {}
+      operations: ops.data || {},
+      changeHistory: (changes.data || []).map(c => ({
+        ...c,
+        editor_name: c.edited_by_name,
+        field_name: c.field_name
+      }))
     });
     setAttachments(resolvedAttachments);
     setUnits(u.data || []);
@@ -678,7 +684,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
         )}
 
         {/* Status Timeline - hiển thị tiến trình đơn hàng */}
-        <OrderStatusTimeline order={data.order} packages={data.packages} tasks={data.allTasks || []} />
+        <OrderStatusTimeline order={data.order} packages={data.packages} tasks={data.allTasks || []} changeHistory={data.changeHistory || []} />
 
         {/* Danh sách sản phẩm & quy cách tiếng Việt */}
         <div style={{ ...box, marginTop: 12 }}>
