@@ -11,6 +11,7 @@ import {
 import { navBadgeVisibility } from './lib/roles';
 import { initAudioUnlock } from './lib/sound';
 import { useOrderNotifications } from './lib/useOrderNotifications';
+import { requestNotificationPermission } from './lib/alarmSound';
 import { ConnectivityBanner } from './components/ConnectivityBanner';
 import { AuthProvider, useAuth } from './lib/AuthContext';
 import LoginScreen from './screens/LoginScreen';
@@ -114,6 +115,7 @@ function OpsApp({ onSignOut }) {
     initAudioUnlock();
     initOfflineSync(OFFLINE_HANDLERS, () => window.dispatchEvent(new Event('sumi-queue-changed')));
     applyUiScale(getUiScale());
+    requestNotificationPermission();
   }, []);
 
   useEffect(() => { loadFeatureFlags().then(setFeatureFlags).catch(() => {}); }, [profile?.id]);

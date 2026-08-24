@@ -12,7 +12,6 @@ import { translateAuthError } from '../lib/authErrors';
 import { hasAnyRole } from '../lib/roles';
 import { getCurrentPosition } from '../lib/geo';
 import { IconMapPin, IconSettings, IconBell, IconDownload } from '../components/icons/FrogIcons';
-import { isPushSupported, getPushSubscriptionStatus, enablePush, disablePush } from '../lib/push';
 import { localDateStr } from '../lib/date';
 import { ROLE_META, ROLE_OPTIONS, ROLE_PERMISSIONS } from '../lib/roles';
 import { getUiScale, setUiScale } from '../lib/uiScale';
@@ -307,29 +306,6 @@ export default function SettingsScreen({ onSignOut }) {
   const [showPwForm, setShowPwForm] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
   const [savingName, setSavingName] = useState(false);
-  const [pushStatus, setPushStatus] = useState('unsupported');
-  const [pushBusy, setPushBusy] = useState(false);
-  const [pushError, setPushError] = useState('');
-
-  useEffect(() => { getPushSubscriptionStatus().then(setPushStatus).catch(() => {}); }, []);
-
-  const handleTogglePush = async (checked) => {
-    setPushBusy(true);
-    setPushError('');
-    try {
-      if (checked) {
-        await enablePush(me?.id);
-        setPushStatus('subscribed');
-      } else {
-        await disablePush();
-        setPushStatus('unsubscribed');
-      }
-    } catch (err) {
-      setPushError(err.message);
-    } finally {
-      setPushBusy(false);
-    }
-  };
 
   const load = () => {
     setLoading(true);
@@ -388,25 +364,7 @@ export default function SettingsScreen({ onSignOut }) {
         )}
       </Section>
 
-      <Section title="📢 Nhận thông báo công ty">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>
-            Bật thông báo để nhận chuông và popup khi có thông báo quan trọng từ công ty (Bảng tin), đơn hàng mới, hoặc giao hàng xong.
-          </div>
-          <Switch
-            label={<><IconBell size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Bật nhận thông báo</>}
-            checked={pushStatus === 'subscribed'}
-            onChange={handleTogglePush}
-            disabled={pushBusy || pushStatus === 'unsupported' || pushStatus === 'ios_add_to_home'}
-          />
-          {pushStatus === 'unsupported' && <div style={{ font: 'var(--text-caption)', color: 'var(--status-warning)' }}>⚠️ Trình duyệt này không hỗ trợ thông báo. Dùng Chrome, Edge, Firefox, hoặc Safari trên iOS 16.4+.</div>}
-          {pushStatus === 'ios_add_to_home' && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>📱 iPhone/iPad: Bấm ⬆️ (Chia sẻ) trong Safari → "Thêm vào Màn hình chính" → mở app từ icon → quay lại đây bật công tắc.</div>}
-          {pushStatus === 'denied' && <div style={{ font: 'var(--text-caption)', color: 'var(--status-danger)' }}>🚫 Bạn đã chặn thông báo. Vào cài đặt trình duyệt để cho phép lại.</div>}
-          {pushError && <div style={{ font: 'var(--text-caption)', color: 'var(--status-danger)' }}>❌ Lỗi: {pushError}</div>}
-        </div>
-      </Section>
-
-      <Section title="Quyền của vai trò">
+<Section title="Quyền của vai trò">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {ROLE_PERMISSIONS.map((r) => (
             <div key={r.role} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
