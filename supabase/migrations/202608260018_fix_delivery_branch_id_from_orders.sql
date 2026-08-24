@@ -24,6 +24,7 @@ DECLARE
   v_delivery_run_id uuid;
   v_started_at timestamp;
   v_branch_id uuid;
+  v_run_code text;
 BEGIN
   v_started_at := now();
 
@@ -39,10 +40,13 @@ BEGIN
 
   -- Create or update delivery run
   IF v_delivery_run_id IS NULL THEN
+    v_run_code := 'RUN-' || to_char(now(), 'YYMMDD-HH24MI') || '-' || upper(substr(md5(p_order_id::text), 1, 4));
+
     INSERT INTO public.delivery_runs (
-      id, branch_id, assigned_driver_id, status, started_at
+      id, run_code, branch_id, assigned_driver_id, status, started_at
     ) VALUES (
       gen_random_uuid(),
+      v_run_code,
       v_branch_id,
       p_assigned_staff_id,
       'in_progress',
