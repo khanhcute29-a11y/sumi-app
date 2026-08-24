@@ -34,6 +34,7 @@ export const ROLE_META = {
   // Vận chuyển & Kho phụ
   transport_lead: { label: 'Trưởng Đội Vận Tải', shortLabel: 'Trưởng Vận Tải', tone: 'success', level: 3 },
   shipper: { label: 'Nhân Viên Vận Chuyển', shortLabel: 'Shipper', tone: 'success', level: 1 },
+  shipper_school: { label: 'Nhân Viên Vận Chuyển Trường Học', shortLabel: 'Shipper Trường Học', tone: 'success', level: 1 },
   kho_bakery: { label: 'Nhân Viên Kho Bakery', shortLabel: 'Kho Bakery', tone: 'info', level: 2 },
   kho_xuong41: { label: 'Nhân Viên Kho Xưởng 41', shortLabel: 'Kho X41', tone: 'info', level: 2 },
   kho_xuong42: { label: 'Nhân Viên Kho Xưởng 42', shortLabel: 'Kho X42', tone: 'info', level: 2 },
@@ -146,6 +147,14 @@ export const ROLE_PERMISSIONS = [
       'view_customer_contact', 'confirm_cod_receipt'
     ]
   },
+  {
+    role: 'shipper_school',
+    desc: 'Vận chuyển chuyên trách đơn Trường học — giống Nhân Viên Vận Chuyển, cộng thêm quyền riêng: xem được đơn Trường học để đi giao (đơn Trường học vốn ẩn với mọi nhân viên khác ngoài Giám đốc/Trợ Lý Giám Đốc Xưởng 42).',
+    permissions: [
+      'view_ready_orders', 'update_delivery_status',
+      'view_customer_contact', 'confirm_cod_receipt'
+    ]
+  },
 ];
 
 // Chuẩn hóa station cho cơ sở dữ liệu (tương thích 100% check constraint cũ lẫn mới)
@@ -223,6 +232,10 @@ export function resolveRoleAndStation(roleKey, currentStation) {
       break;
     case 'shipper':
       mappedRole = 'shipper';
+      mappedStation = null;
+      break;
+    case 'shipper_school':
+      mappedRole = 'shipper_school';
       mappedStation = null;
       break;
     case 'kho_bakery':
