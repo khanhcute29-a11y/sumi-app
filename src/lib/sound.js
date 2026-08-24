@@ -65,41 +65,76 @@ export function playTingSound() {
   beep({ freq: 1046, duration: 0.16, type: 'sine', volume: 0.25 });
 }
 
-// TING TING TING - Bếp nhận đơn
+// Play pattern repeated for duration (milliseconds)
+function playPatternLooped(pattern, durationMs) {
+  console.log(`[playPatternLooped] Starting pattern loop for ${durationMs}ms`);
+  const startTime = Date.now();
+  const patternDuration = Math.max(...pattern.map(p => p.delay + p.duration)) * 1000;
+
+  function playOnce(timeOffset) {
+    for (const note of pattern) {
+      const actualDelay = note.delay + timeOffset / 1000;
+      beep({ freq: note.freq, duration: note.duration, delay: actualDelay, volume: note.volume });
+    }
+  }
+
+  // Play pattern multiple times
+  let iteration = 0;
+  while (Date.now() - startTime < durationMs) {
+    playOnce(iteration * patternDuration);
+    iteration++;
+  }
+
+  console.log(`[playPatternLooped] ✓ Loop done - ${iteration} iterations in ${durationMs}ms`);
+}
+
+// TING TING TING - Bếp nhận đơn (lặp 10s)
 export function playKitchenReceiveSound() {
-  console.log('[playKitchenReceiveSound] Starting TING TING TING');
-  beep({ freq: 1046, duration: 0.15, volume: 0.4 });
-  beep({ freq: 1046, duration: 0.15, delay: 0.2, volume: 0.4 });
-  beep({ freq: 1046, duration: 0.15, delay: 0.4, volume: 0.4 });
+  console.log('[playKitchenReceiveSound] Starting TING TING TING (10s loop)');
+  const pattern = [
+    { freq: 1046, duration: 0.15, delay: 0, volume: 0.5 },
+    { freq: 1046, duration: 0.15, delay: 0.2, volume: 0.5 },
+    { freq: 1046, duration: 0.15, delay: 0.4, volume: 0.5 }
+  ];
+  playPatternLooped(pattern, 10000);
   console.log('[playKitchenReceiveSound] ✓ Done');
 }
 
-// TING TING TING TING - Bếp hoàn thành đơn
+// TING TING TING TING - Bếp hoàn thành đơn (lặp 10s)
 export function playKitchenCompleteSound() {
-  console.log('[playKitchenCompleteSound] Starting TING TING TING TING');
-  beep({ freq: 1046, duration: 0.12, volume: 0.4 });
-  beep({ freq: 1046, duration: 0.12, delay: 0.15, volume: 0.4 });
-  beep({ freq: 1046, duration: 0.12, delay: 0.3, volume: 0.4 });
-  beep({ freq: 1046, duration: 0.12, delay: 0.45, volume: 0.4 });
+  console.log('[playKitchenCompleteSound] Starting TING TING TING TING (10s loop)');
+  const pattern = [
+    { freq: 1046, duration: 0.12, delay: 0, volume: 0.5 },
+    { freq: 1046, duration: 0.12, delay: 0.15, volume: 0.5 },
+    { freq: 1046, duration: 0.12, delay: 0.3, volume: 0.5 },
+    { freq: 1046, duration: 0.12, delay: 0.45, volume: 0.5 }
+  ];
+  playPatternLooped(pattern, 10000);
   console.log('[playKitchenCompleteSound] ✓ Done');
 }
 
-// TING TING - Shipper nhận giao
+// TING TING - Shipper nhận giao (lặp 10s)
 export function playShipperReceiveSound() {
-  console.log('[playShipperReceiveSound] Starting TING TING');
-  beep({ freq: 1046, duration: 0.15, volume: 0.4 });
-  beep({ freq: 1046, duration: 0.15, delay: 0.2, volume: 0.4 });
+  console.log('[playShipperReceiveSound] Starting TING TING (10s loop)');
+  const pattern = [
+    { freq: 1046, duration: 0.15, delay: 0, volume: 0.5 },
+    { freq: 1046, duration: 0.15, delay: 0.2, volume: 0.5 }
+  ];
+  playPatternLooped(pattern, 10000);
   console.log('[playShipperReceiveSound] ✓ Done');
 }
 
-// TING TING TING TING TING - Shipper hoàn thành giao
+// TING TING TING TING TING - Shipper hoàn thành giao (lặp 10s)
 export function playShipperCompleteSound() {
-  console.log('[playShipperCompleteSound] Starting TING TING TING TING TING');
-  beep({ freq: 1046, duration: 0.12, volume: 0.4 });
-  beep({ freq: 1046, duration: 0.12, delay: 0.15, volume: 0.4 });
-  beep({ freq: 1046, duration: 0.12, delay: 0.3, volume: 0.4 });
-  beep({ freq: 1046, duration: 0.12, delay: 0.45, volume: 0.4 });
-  beep({ freq: 1046, duration: 0.12, delay: 0.6, volume: 0.4 });
+  console.log('[playShipperCompleteSound] Starting TING TING TING TING TING (10s loop)');
+  const pattern = [
+    { freq: 1046, duration: 0.12, delay: 0, volume: 0.5 },
+    { freq: 1046, duration: 0.12, delay: 0.15, volume: 0.5 },
+    { freq: 1046, duration: 0.12, delay: 0.3, volume: 0.5 },
+    { freq: 1046, duration: 0.12, delay: 0.45, volume: 0.5 },
+    { freq: 1046, duration: 0.12, delay: 0.6, volume: 0.5 }
+  ];
+  playPatternLooped(pattern, 10000);
   console.log('[playShipperCompleteSound] ✓ Done');
 }
 
