@@ -51,7 +51,9 @@ function formatSpecificationLines(spec = {}) {
     lines.push(`Dòng bánh: ${label}`);
   }
   if (spec.flavor) lines.push(`Vị / Nhân: ${spec.flavor}`);
-  if (spec.color) lines.push(`Màu sắc: ${spec.color}`);
+  if (spec.colors?.length) lines.push(`Màu: ${spec.colors.join(', ')}`);
+  if (spec.fillings?.length) lines.push(`Nhân: ${spec.fillings.join(', ')}`);
+  if (spec.color) lines.push(`Ghi chú màu/nhân: ${spec.color}`);
   if (spec.cot) lines.push(`Cốt bánh: ${spec.cot}`);
   if (spec.candle) lines.push(`Loại nến: ${spec.candle}`);
   if (spec.filling) {
@@ -77,7 +79,7 @@ function formatSpecificationLines(spec = {}) {
   if (spec.note) lines.push(`Ghi chú: ${spec.note}`);
 
   // Các thuộc tính tuỳ chỉnh khác (bỏ qua các trường hệ thống nội bộ tiếng Anh)
-  const systemKeys = new Set(['product_flow', 'catalog_price', 'catalog_category', 'custom', 'size', 'content', 'cake_line', 'flavor', 'color', 'product_line', 'weight_gram', 'egg_count', 'flex_note', 'catalog_specification', 'group', 'spec', 'grade_note', 'packing', 'note', 'cot', 'candle', 'filling', 'is_ready_stock']);
+  const systemKeys = new Set(['product_flow', 'catalog_price', 'catalog_category', 'custom', 'size', 'content', 'cake_line', 'flavor', 'color', 'product_line', 'weight_gram', 'egg_count', 'flex_note', 'catalog_specification', 'group', 'spec', 'grade_note', 'packing', 'note', 'cot', 'candle', 'filling', 'is_ready_stock', 'colors', 'fillings', 'priceTier']);
   for (const [k, v] of Object.entries(spec)) {
     if (!systemKeys.has(k) && v !== null && v !== undefined && v !== '') {
       lines.push(`${k}: ${v}`);
