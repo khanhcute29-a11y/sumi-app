@@ -20,7 +20,9 @@ function ProductNameField({item,products,flowType,onChange}){
  useEffect(()=>{if(!open)return;const close=e=>{if(wrap.current&&!wrap.current.contains(e.target))setOpen(false)};document.addEventListener('pointerdown',close);return()=>document.removeEventListener('pointerdown',close)},[open]);
  const scoped=flowType==='school'
   ?products.filter(p=>p.category==='school')
-  :products.filter(p=>p.category!=='school'&&FLOW_WORDS[flowType]?.some(word=>normalizeSearch(`${p.name} ${p.category||''}`).includes(normalizeSearch(word))));
+  :flowType==='macaron'
+  ?products.filter(p=>p.category==='macaron')
+  :products.filter(p=>!['school','macaron'].includes(p.category)&&FLOW_WORDS[flowType]?.some(word=>normalizeSearch(`${p.name} ${p.category||''}`).includes(normalizeSearch(word))));
  const matches=scoped.filter(p=>!query||normalizeSearch(`${p.name} ${p.category||''}`).includes(query)).slice(0,10);
  const choose=(p)=>{const variants=p.product_variants||[];onChange({name:p.name,product_id:p.id,unit:p.unit||item.unit||'cái',variants,unit_price:variants.length?null:(p.price??null),specification:{...(item.specification||{}),size:variants.length?'':(item.specification?.size),catalog_category:p.category||null,catalog_price:variants.length?null:(p.price??null)}});setOpen(false);};
  return <div className="sumi-product-combobox" ref={wrap}>
@@ -64,7 +66,8 @@ function OrderPreviewV2({type,customerName,customerPhone,selectedSchool,items,gu
 export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
  const {profile}=useAuth();
  const isDirector=['owner','admin'].includes(profile?.role)||(profile?.extra_roles||[]).some(r=>['owner','admin'].includes(r));
- const visibleFlows=isDirector?ORDER_FLOWS:ORDER_FLOWS.filter(f=>f.key!=='school');
+ const isMacaronCreator=['owner','admin','deputy_director'].includes(profile?.role)||(profile?.extra_roles||[]).some(r=>['owner','admin','deputy_director'].includes(r));
+ const visibleFlows=ORDER_FLOWS.filter(f=>(f.key!=='school'||isDirector)&&(f.key!=='macaron'||isMacaronCreator));
  const [type,setType]=useState(null); const [requiredAt,setRequiredAt]=useState('');
  const [customerName,setCustomerName]=useState(''); const [customerPhone,setCustomerPhone]=useState('');
  const [fulfillment,setFulfillment]=useState('delivery'); const [address,setAddress]=useState(''); const [note,setNote]=useState('');
@@ -89,8 +92,8 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
  const grandTotal=getTotalPrice()+effectiveShipFee;
  const remaining=grandTotal-(Number(deposit)||0);
  const blankItem=(key)=>({id:crypto.randomUUID(),flow_type:key,name:'',quantity:1,unit:'cái',specification:{product_flow:key,...(key==='cake'?{cake_line:cakeLine}:{})}});
- const selectFlow=(key)=>{if(key==='school'&&!isDirector)return;setType(key);setItems(key==='teabreak'?[]:[blankItem(key)]);};
- const addFlow=(key)=>{if(type==='school'||key==='school'){setError('Đơn trường học cần tạo riêng để bảo vệ thông tin.');return}setError('');setItems(x=>[...x,blankItem(key)]);setTimeout(()=>document.querySelector('.sumi-mixed-summary')?.scrollIntoView({behavior:'smooth',block:'start'}),0)};
+ const selectFlow=(key)=>{if(key==='school'&&!isDirector)return;if(key==='macaron'&&!isMacaronCreator)return;setType(key);setItems(key==='teabreak'?[]:[blankItem(key)]);};
+ const addFlow=(key)=>{if(type==='school'||key==='school'){setError('Đơn trường học cần tạo riêng để bảo vệ thông tin.');return}if(key==='macaron'&&!isMacaronCreator){setError('Chỉ Trợ lý Giám đốc mới được thêm sản phẩm Macaron.');return}setError('');setItems(x=>[...x,blankItem(key)]);setTimeout(()=>document.querySelector('.sumi-mixed-summary')?.scrollIntoView({behavior:'smooth',block:'start'}),0)};
  const changeCakeLine=(key)=>{setCakeLine(key);setItems(current=>current.map(item=>(item.flow_type||type)==='cake'?{...item,specification:{...item.specification,cake_line:key}}:item));};
  const addCatalogItem=(product)=>{setItems(current=>{
   const found=current.findIndex(x=>x.catalog_code===product.code);
@@ -216,7 +219,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
    </div>;})}
    {items.length===0&&<div className="sumi-no-selection">Chưa chọn món. Tìm món phía trên hoặc thêm món tùy chỉnh.</div>}
    <button onClick={()=>{const key=itemFlows.at(-1)||type;setItems(x=>[...x,{...blankItem(key),specification:{...blankItem(key).specification,custom:true}}])}} style={{...fieldStyle,fontWeight:900,borderStyle:'dashed'}}>＋ Thêm món cùng nhóm</button>
-   {type!=='school'&&<section className="sumi-add-flow"><strong>＋ Thêm nhóm sản phẩm khác</strong><p>Một mã đơn, mỗi nhóm tự chuyển tới đúng bếp.</p><div>{ORDER_FLOWS.filter(x=>x.key!=='school'&&!itemFlows.includes(x.key)).map(x=><button key={x.key} onClick={()=>addFlow(x.key)}><span>{x.icon}</span><b>{x.title}</b><small>{routeFor[x.key]}</small></button>)}</div></section>}
+   {type!=='school'&&<section className="sumi-add-flow"><strong>＋ Thêm nhóm sản phẩm khác</strong><p>Một mã đơn, mỗi nhóm tự chuyển tới đúng bếp.</p><div>{ORDER_FLOWS.filter(x=>x.key!=='school'&&(x.key!=='macaron'||isMacaronCreator)&&!itemFlows.includes(x.key)).map(x=><button key={x.key} onClick={()=>addFlow(x.key)}><span>{x.icon}</span><b>{x.title}</b><small>{routeFor[x.key]}</small></button>)}</div></section>}
    <label style={{display:'block',marginTop:14,fontWeight:800}}>Ngày giờ cần giao</label><input style={fieldStyle} type="datetime-local" value={requiredAt} onChange={e=>setRequiredAt(e.target.value)}/>
    {type==='school'?
     <div style={{marginTop:12,padding:'12px 14px',borderRadius:14,background:'#f5f1eb',border:'1px solid #e0d5c7',fontSize:14,color:'#725f50'}}>🚚 Giao tận nơi đến địa chỉ trường đã chọn — không thu ship, không thu tiền tại chỗ (trường thanh toán riêng).</div>
