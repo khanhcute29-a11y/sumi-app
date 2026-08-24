@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from './forms/Button';
 import { Input } from './forms/Input';
 import { Select } from './forms/Select';
-import { addProductionLog, fetchProducts } from '../lib/queries';
+import { addProductionLog, fetchProducts, uploadFile } from '../lib/queries';
 import { useAuth } from '../lib/AuthContext';
 import { localDateStr } from '../lib/date';
 import { formatVnd, parseDigits } from '../lib/currency';
@@ -69,6 +69,8 @@ export function ProductionLogModal({ onClose, onSaved }) {
   const [priceFocused, setPriceFocused] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [photo, setPhoto] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState('');
 
   useEffect(() => {
     fetchProducts({ activeOnly: true }).then(setProducts).catch((err) => setError(err.message));
@@ -105,13 +107,16 @@ export function ProductionLogModal({ onClose, onSaved }) {
     if (mode === 'catalog' && variants.length > 0 && !size) { setError('Chọn kích thước.'); return; }
     const qtyNum = Number(qty);
     if (!qtyNum || qtyNum <= 0) { setError('Nhập số lượng hợp lệ.'); return; }
+    if (!photo) { setError('Bắt buộc chụp ảnh thành phẩm.'); return; }
     setSaving(true);
     setError('');
     try {
+      const uploaded = await uploadFile(photo, `production-logs/${profile?.id || 'unknown'}`);
       await addProductionLog({
         productId: mode === 'catalog' ? productId : null, productName, qty: qtyNum,
         size: size || null, price: price ? Number(price) : null,
         staffId: profile?.id, staffName: profile?.full_name, workDate: localDateStr(),
+        photoUrl: uploaded.url,
       });
       onSaved?.();
       onClose();
@@ -163,10 +168,44 @@ export function ProductionLogModal({ onClose, onSaved }) {
             />
           </div>
           <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Giá tự điền theo sản phẩm/kích thước đã chọn, sửa lại được nếu cần.</div>
+
+          <div>
+            <label style={{ font: 'var(--text-caption)', fontWeight: 700, color: 'var(--text-primary)', display: 'block', marginBottom: 6 }}>
+              Ảnh thành phẩm (bắt buộc)
+            </label>
+            {photoPreview ? (
+              <div style={{ position: 'relative', width: 100, height: 100, borderRadius: 'var(--radius-sm)', overflow: 'hidden', border: '1.5px solid var(--border-default)' }}>
+                <img src={photoPreview} alt="Ảnh thành phẩm" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <button
+                  type="button"
+                  onClick={() => { setPhoto(null); URL.revokeObjectURL(photoPreview); setPhotoPreview(''); }}
+                  style={{ position: 'absolute', top: 3, right: 3, minWidth: 26, minHeight: 26, borderRadius: '50%', background: 'rgba(0,0,0,0.7)', color: '#fff', border: 0, fontSize: 12, cursor: 'pointer' }}
+                >✕</button>
+              </div>
+            ) : (
+              <label style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 48,
+                border: '2px dashed var(--border-subtle)', borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+                font: 'var(--text-body-sm)', color: 'var(--text-secondary)',
+              }}>
+                📷 Chụp ảnh
+                <input
+                  hidden type="file" accept="image/*" capture="environment"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    setPhoto(f);
+                    setPhotoPreview(URL.createObjectURL(f));
+                  }}
+                />
+              </label>
+            )}
+          </div>
+
           {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
             <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>Huỷ</Button>
-            <Button variant="primary" size="sm" onClick={handleSave} disabled={saving}>{saving ? 'Đang lưu...' : 'Lưu'}</Button>
+            <Button variant="primary" size="sm" onClick={handleSave} disabled={saving || !photo}>{saving ? 'Đang lưu...' : 'Lưu'}</Button>
           </div>
         </div>
       </div>

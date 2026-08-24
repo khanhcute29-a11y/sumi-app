@@ -81,11 +81,12 @@ export function ProductionLogList({ refreshKey }) {
           <div style={{ overflowX: 'auto', minWidth: 0 }}>
             <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', font: 'var(--text-body-sm)' }}>
               <colgroup>
-                <col style={{ width: '40%' }} />
-                <col style={{ width: '12%' }} />
+                <col style={{ width: '34%' }} />
                 <col style={{ width: '10%' }} />
+                <col style={{ width: '10%' }} />
+                <col style={{ width: '16%' }} />
                 <col style={{ width: '18%' }} />
-                <col style={{ width: '20%' }} />
+                <col style={{ width: '12%' }} />
               </colgroup>
               <thead>
                 <tr style={{ color: 'var(--text-muted)', textAlign: 'left' }}>
@@ -94,6 +95,7 @@ export function ProductionLogList({ refreshKey }) {
                   <th style={{ padding: '6px 4px', borderBottom: '1px solid var(--border-subtle)', fontWeight: 400, textAlign: 'right' }}>SL</th>
                   <th style={{ padding: '6px 4px', borderBottom: '1px solid var(--border-subtle)', fontWeight: 400, textAlign: 'right' }}>Giá trị</th>
                   <th style={{ padding: '6px 4px', borderBottom: '1px solid var(--border-subtle)', fontWeight: 400 }}>Người ghi</th>
+                  <th style={{ padding: '6px 4px', borderBottom: '1px solid var(--border-subtle)', fontWeight: 400 }}>Ảnh</th>
                 </tr>
               </thead>
               <tbody>
@@ -106,6 +108,13 @@ export function ProductionLogList({ refreshKey }) {
                       {l.price ? `${(Number(l.qty) * Number(l.price)).toLocaleString('vi-VN')}đ` : '—'}
                     </td>
                     <td style={{ padding: '8px 4px', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>{l.staff_name}</td>
+                    <td style={{ padding: '8px 4px', borderBottom: '1px solid var(--border-subtle)' }}>
+                      {l.photo_url ? (
+                        <a href={l.photo_url} target="_blank" rel="noreferrer">
+                          <img src={l.photo_url} alt="Ảnh thành phẩm" style={{ width: 32, height: 32, borderRadius: 'var(--radius-sm)', objectFit: 'cover' }} />
+                        </a>
+                      ) : '—'}
+                    </td>
                   </tr>
                 ))}
               </tbody>
