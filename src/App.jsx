@@ -11,7 +11,7 @@ import {
 import { navBadgeVisibility } from './lib/roles';
 import { initAudioUnlock } from './lib/sound';
 import { useOrderNotifications } from './lib/useOrderNotifications';
-import { requestNotificationPermission, subscribeToBroadcast, BroadcastEvents, playAlertSound } from './lib/alarmSound';
+import { requestNotificationPermission, subscribeToBroadcast, BroadcastEvents, playAlertSound, preloadAlertAudio } from './lib/alarmSound';
 import { setupAutoRefresh, cleanupAllSubscriptions, subscribeToMultipleTables } from './lib/realtimeSync';
 import { ConnectivityBanner } from './components/ConnectivityBanner';
 import { AuthProvider, useAuth } from './lib/AuthContext';
@@ -114,6 +114,7 @@ function OpsApp({ onSignOut }) {
 
   useEffect(() => {
     initAudioUnlock();
+    preloadAlertAudio().catch(err => console.warn('[App] Alert audio preload warning:', err));
     initOfflineSync(OFFLINE_HANDLERS, () => window.dispatchEvent(new Event('sumi-queue-changed')));
     applyUiScale(getUiScale());
     requestNotificationPermission();

@@ -22,13 +22,27 @@ function beep({ freq = 880, duration = 0.15, delay = 0, type = 'sine', volume = 
 }
 
 export function initAudioUnlock() {
+  // Try to create context immediately
+  try {
+    const ctx = getCtx();
+    console.log('[initAudioUnlock] Audio context initialized, state:', ctx?.state);
+  } catch (e) {
+    console.log('[initAudioUnlock] Could not pre-initialize context:', e.message);
+  }
+
+  // Also unlock on first user interaction (for browsers that require it)
   const unlock = () => {
-    getCtx();
+    try {
+      getCtx();
+      console.log('[initAudioUnlock] Audio context unlocked via user interaction');
+    } catch (e) {
+      console.log('[initAudioUnlock] Unlock attempt failed:', e.message);
+    }
     window.removeEventListener('click', unlock);
     window.removeEventListener('touchstart', unlock);
   };
-  window.addEventListener('click', unlock);
-  window.addEventListener('touchstart', unlock);
+  window.addEventListener('click', unlock, { passive: true });
+  window.addEventListener('touchstart', unlock, { passive: true });
 }
 
 export function playNewOrderSound() {
