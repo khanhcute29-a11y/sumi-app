@@ -94,6 +94,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
  const [paymentMethod,setPaymentMethod]=useState('cod'); const [deposit,setDeposit]=useState('');
  const [productCatalog,setProductCatalog]=useState([]);
  const [isMobile,setIsMobile]=useState(typeof window!=='undefined'?window.innerWidth<860:false);
+ const [isRecording,setIsRecording]=useState(false); const [voiceLoading,setVoiceLoading]=useState(false);
  useEffect(()=>{const onResize=()=>setIsMobile(window.innerWidth<860);window.addEventListener('resize',onResize);return()=>window.removeEventListener('resize',onResize)},[]);
  useEffect(()=>{let active=true;supabase.from('products').select('id,name,category,unit,price,product_variants(id,label,price)').eq('active',true).order('name').limit(500).then(({data,error})=>{if(active&&!error)setProductCatalog([...(data||[]),...MOONCAKE_CATALOG])});return()=>{active=false}},[]);
  const change=(i,key,value)=>setItems(x=>x.map((it,n)=>n===i?{...it,[key]:value}:it));
@@ -133,6 +134,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
    await loadLibraryPhotos();
   }catch(e){setError(e.message);}finally{setLibraryUploading(false);}
  };
+ const startVoiceInput=async()=>{if(isRecording)return;setIsRecording(true);setVoiceLoading(true);try{const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SpeechRecognition){setError('Trình duyệt không hỗ trợ nhập giọng nói');setIsRecording(false);setVoiceLoading(false);return}const recognition=new SpeechRecognition();recognition.lang='vi-VN';recognition.interimResults=true;let transcript='';recognition.onresult=(event)=>{transcript=Array.from(event.results).map(r=>r[0].transcript).join('')};recognition.onerror=(event)=>{setError(`Lỗi: ${event.error}`)};recognition.onend=async()=>{setIsRecording(false);if(transcript.trim()){await parseVoiceInput(transcript)}else{setError('Không ghi âm được. Thử lại?')}setVoiceLoading(false)};recognition.start();setTimeout(()=>recognition.stop(),8000)}catch(e){setError(`Lỗi: ${e.message}`);setIsRecording(false);setVoiceLoading(false)}};const parseVoiceInput=async(text)=>{try{setVoiceLoading(true);const{data,error}=await supabase.functions.invoke('parse-voice-order',{body:{transcript:text,orderType:type,locale:'vi-VN'}});if(error)throw error;if(data?.customerName)setCustomerName(data.customerName);if(data?.customerPhone)setCustomerPhone(data.customerPhone);if(data?.address)setAddress(data.address);if(data?.items?.length)setItems(data.items.map(it=>({...it,id:crypto.randomUUID()})));if(data?.note)setNote(data.note)}catch(e){console.error('Parse error:',e);setError(`Phân tích không thành công: ${e.message}`)}finally{setVoiceLoading(false)}};
  const itemFlows=[...new Set(items.map(x=>x.flow_type||type))];
  const isMixed=itemFlows.length>1;
  const routeFor={cake:'Bếp lạnh',bakery:'Bếp nóng / Bakery',teabreak:'Bếp theo món',macaron:'Xưởng 41',school:'Xưởng 42'};
@@ -204,8 +206,13 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
       throw readyErr;
     }
   }
-  onCreated?.(orderId);onClose();
- }catch(e){setError(e.message||'Không thể tạo đơn');}finally{setSaving(false);}};
+  console.log('✅ Order created:', orderId);
+  onCreated?.(orderId);
+  setTimeout(() => {
+    console.log('🔔 Closing modal...');
+    onClose();
+  }, 500);
+ }catch(e){console.error('❌ Order error:', e);setError(e.message||'Không thể tạo đơn');}finally{setSaving(false);}};
  if(!type)return <div className={embedded?'sumi-order-create-page':'sumi-order-create-overlay'} onClick={embedded?undefined:onClose}>
   <div className="sumi-order-create-body sumi-flow-picker" onClick={e=>e.stopPropagation()}>
    <div className="sumi-create-head"><button onClick={onClose} aria-label="Quay lại">←</button><h2>Tạo đơn mới</h2></div>
@@ -229,7 +236,9 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
     {selectedSchool&&<div className="sumi-school-selected"><b>✓</b><span><strong>{selectedSchool.name}</strong><small>{selectedSchool.code} · {selectedSchool.type}</small><em>{selectedSchool.address||'Chưa có địa chỉ'}</em></span><button onClick={()=>setSelectedSchool(null)}>Đổi</button></div>}
    </section>}
    {type!=='school'&&<><label style={{display:'block',fontWeight:900}}>Khách hàng</label><input style={{...fieldStyle,margin:'7px 0 12px'}} placeholder="Tên khách hàng" value={customerName} onChange={e=>setCustomerName(e.target.value)}/>
-   <label style={{display:'block',fontWeight:900}}>Số điện thoại</label><input style={{...fieldStyle,margin:'7px 0 14px'}} inputMode="tel" placeholder="Số điện thoại khách" value={customerPhone} onChange={e=>setCustomerPhone(e.target.value)}/></>}
+   <label style={{display:'block',fontWeight:900}}>Số điện thoại</label><input style={{...fieldStyle,margin:'7px 0 12px'}} inputMode="tel" placeholder="Số điện thoại khách" value={customerPhone} onChange={e=>setCustomerPhone(e.target.value)}/>
+   <label style={{display:'block',fontWeight:900}}>Địa chỉ</label><input style={{...fieldStyle,margin:'7px 0 14px'}} placeholder="Địa chỉ giao hàng" value={address} onChange={e=>setAddress(e.target.value)}/>
+   <button onClick={startVoiceInput} disabled={isRecording||voiceLoading} style={{width:'100%',minHeight:54,border:'2px dashed #d7c3aa',borderRadius:17,background:'#fff',fontSize:16,fontWeight:900,color:isRecording?'#b93e13':'#2d1c10',cursor:isRecording||voiceLoading?'not-allowed':'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>🎤 {isRecording?'Đang ghi âm...':voiceLoading?'Đang xử lý...':'Nói để nhập đơn'}</button></>}
    {type==='teabreak'&&<section className="sumi-catalog-picker">
     <label>Số khách dự kiến</label><input style={fieldStyle} type="number" min="1" inputMode="numeric" placeholder="Ví dụ: 80 hoặc 1500" value={guestCount} onChange={e=>setGuestCount(e.target.value)}/>
     <label>Chọn món bằng tên hoặc mã</label><input style={fieldStyle} placeholder="Gõ su kem, bánh mặn, SM30…" value={catalogSearch} onChange={e=>setCatalogSearch(e.target.value)}/>
