@@ -6,6 +6,7 @@ import { newId } from '../lib/ids';
 import { ORDER_FLOWS, CAKE_LINES, TEABREAK_CATALOG, MOONCAKE_CATALOG, normalizeSearch } from '../data/orderCatalogs';
 import { SCHOOL_DELIVERY_POINTS } from '../data/schoolCatalog';
 import { CAKE_BASES, CAKE_FILLINGS, baseSurcharge } from '../lib/cakePricing';
+import { broadcastEvent, BroadcastEvents, notifyOtherTabs } from '../lib/realtimeSync';
 
 const PAYMENT_METHODS = [{ value: 'cod', label: 'COD (thu khi giao)' }, { value: 'bank_transfer', label: 'Chuyển khoản' }, { value: 'cash', label: 'Tiền mặt' }];
 
@@ -144,7 +145,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
    await loadLibraryPhotos();
   }catch(e){setError(e.message);}finally{setLibraryUploading(false);}
  };
- const startVoiceInput=async()=>{if(isRecording)return;setIsRecording(true);setVoiceLoading(true);try{const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SpeechRecognition){setError('Trình duyệt không hỗ trợ nhập giọng nói');setIsRecording(false);setVoiceLoading(false);return}const recognition=new SpeechRecognition();recognition.lang='vi-VN';recognition.interimResults=true;let transcript='';recognition.onresult=(event)=>{transcript=Array.from(event.results).map(r=>r[0].transcript).join('')};recognition.onerror=(event)=>{setError(`Lỗi: ${event.error}`)};recognition.onend=async()=>{setIsRecording(false);if(transcript.trim()){await parseVoiceInput(transcript)}else{setError('Không ghi âm được. Thử lại?')}setVoiceLoading(false)};recognition.start();setTimeout(()=>recognition.stop(),8000)}catch(e){setError(`Lỗi: ${e.message}`);setIsRecording(false);setVoiceLoading(false)}};const parseVoiceInput=async(text)=>{try{setVoiceLoading(true);const{data,error}=await supabase.functions.invoke('parse-voice-order',{body:{transcript:text,orderType:type,locale:'vi-VN'}});if(error)throw error;if(data?.customerName)setCustomerName(data.customerName);if(data?.customerPhone)setCustomerPhone(data.customerPhone);if(data?.address)setAddress(data.address);if(data?.items?.length)setItems(data.items.map(it=>({...it,id:crypto.randomUUID()})));if(data?.note)setNote(data.note)}catch(e){console.error('Parse error:',e);setError(`Phân tích không thành công: ${e.message}`)}finally{setVoiceLoading(false)}};
+ const startVoiceInput=async()=>{if(isRecording)return;setIsRecording(true);setVoiceLoading(false);setError('');try{const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SpeechRecognition){setError('Trình duyệt không hỗ trợ nhập giọng nói');setIsRecording(false);return}const recognition=new SpeechRecognition();recognition.lang='vi-VN';recognition.interimResults=false;recognition.continuous=false;let transcript='';recognition.onstart=()=>{console.log('🎤 Recording started...')};recognition.onresult=(event)=>{for(let i=event.resultIndex;i<event.results.length;i++){if(event.results[i].isFinal){transcript+=event.results[i][0].transcript+' '}}console.log('📝 Transcript:',transcript)};recognition.onerror=(event)=>{console.error('Speech error:',event.error);setError(`Lỗi âm thanh: ${event.error}. Thử lại?`)};recognition.onend=async()=>{setIsRecording(false);if(transcript.trim()){console.log('✅ Parsing...');setVoiceLoading(true);await parseVoiceInput(transcript.trim())}else{setError('Không ghi được tiếng nói. Thử lại - nói rõ và lâu hơn.')}};recognition.start()}catch(e){console.error('Voice error:',e);setError(`Lỗi: ${e.message}`);setIsRecording(false)}};const parseVoiceInput=async(text)=>{try{console.log('Calling parse-voice-order with:',text);const{data,error}=await supabase.functions.invoke('parse-voice-order',{body:{transcript:text,orderType:type||'cake',locale:'vi-VN'}});if(error){console.error('Function error:',error);throw error}console.log('Parsed data:',data);if(data?.customerName)setCustomerName(data.customerName);if(data?.customerPhone)setCustomerPhone(data.customerPhone);if(data?.address)setAddress(data.address);if(data?.items?.length)setItems(data.items.map(it=>({...it,id:crypto.randomUUID()})));if(data?.note)setNote(data.note);if(!data?.items?.length&&!data?.customerName){setError('Không trích xuất được thông tin nào. Nói rõ hơn?')}}catch(e){console.error('Parse error:',e);setError(`Không phân tích được: ${e.message}`)}finally{setVoiceLoading(false)}};
  const itemFlows=[...new Set(items.map(x=>x.flow_type||type))];
  const isMixed=itemFlows.length>1;
  const routeFor={cake:'Bếp lạnh',bakery:'Bếp nóng / Bakery',teabreak:'Bếp theo món',macaron:'Xưởng 41',school:'Xưởng 42'};
@@ -217,6 +218,15 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
     }
   }
   console.log('✅ Order created:', orderId);
+  // Broadcast order creation to all listeners
+  await broadcastEvent(BroadcastEvents.ORDER_CREATED, {
+    orderId,
+    orderCode,
+    orderType: isMixed ? 'mixed' : type,
+    customerName,
+    createdAt: new Date().toISOString(),
+  });
+  notifyOtherTabs(BroadcastEvents.ORDER_CREATED, { orderId });
   onCreated?.(orderId);
   setTimeout(() => {
     console.log('🔔 Closing modal...');

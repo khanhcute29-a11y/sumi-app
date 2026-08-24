@@ -1,21 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Button } from './forms/Button';
 
-export function CameraCapture({ onCapture, onClose }) {
+export function CameraCapture({ onCapture, onClose, facingMode = 'environment' }) {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const [error, setError] = useState('');
   const [captured, setCaptured] = useState(null);
 
   useEffect(() => {
-    navigator.mediaDevices?.getUserMedia?.({ video: { facingMode: 'environment' } })
+    navigator.mediaDevices?.getUserMedia?.({ video: { facingMode } })
       .then((stream) => {
         streamRef.current = stream;
         if (videoRef.current) videoRef.current.srcObject = stream;
       })
       .catch((err) => setError('Không truy cập được camera: ' + err.message));
     return () => streamRef.current?.getTracks().forEach((t) => t.stop());
-  }, []);
+  }, [facingMode]);
 
   useEffect(() => {
     if (!captured && videoRef.current && streamRef.current) {

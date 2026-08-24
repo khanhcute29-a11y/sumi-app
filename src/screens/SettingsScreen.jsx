@@ -12,7 +12,6 @@ import { translateAuthError } from '../lib/authErrors';
 import { hasAnyRole } from '../lib/roles';
 import { getCurrentPosition } from '../lib/geo';
 import { IconMapPin, IconSettings, IconBell, IconDownload } from '../components/icons/FrogIcons';
-import { isPushSupported, getPushSubscriptionStatus, enablePush, disablePush } from '../lib/push';
 import { localDateStr } from '../lib/date';
 import { ROLE_META, ROLE_OPTIONS, ROLE_PERMISSIONS } from '../lib/roles';
 import { getUiScale, setUiScale } from '../lib/uiScale';
@@ -307,29 +306,6 @@ export default function SettingsScreen({ onSignOut }) {
   const [showPwForm, setShowPwForm] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
   const [savingName, setSavingName] = useState(false);
-  const [pushStatus, setPushStatus] = useState('unsupported');
-  const [pushBusy, setPushBusy] = useState(false);
-  const [pushError, setPushError] = useState('');
-
-  useEffect(() => { getPushSubscriptionStatus().then(setPushStatus).catch(() => {}); }, []);
-
-  const handleTogglePush = async (checked) => {
-    setPushBusy(true);
-    setPushError('');
-    try {
-      if (checked) {
-        await enablePush(me?.id);
-        setPushStatus('subscribed');
-      } else {
-        await disablePush();
-        setPushStatus('unsubscribed');
-      }
-    } catch (err) {
-      setPushError(err.message);
-    } finally {
-      setPushBusy(false);
-    }
-  };
 
   const load = () => {
     setLoading(true);
@@ -388,7 +364,7 @@ export default function SettingsScreen({ onSignOut }) {
         )}
       </Section>
 
-      <Section title="Quyền của vai trò">
+<Section title="Quyền của vai trò">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {ROLE_PERMISSIONS.map((r) => (
             <div key={r.role} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
@@ -404,13 +380,6 @@ export default function SettingsScreen({ onSignOut }) {
           options={[{ value: 'small', label: 'Nhỏ' }, { value: 'normal', label: 'Vừa (mặc định)' }, { value: 'large', label: 'Lớn' }]} />
         <Switch label="Bật Offline-First (lưu đơn khi mất mạng)" checked={offlineFirst} onChange={setOfflineFirst} />
         <Switch label="Bắt buộc chốt ca cuối ngày (Z-Report)" checked={forceCloseShift} onChange={setForceCloseShift} />
-        <Switch label={<><IconBell size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Nhận thông báo đẩy trên thiết bị này (đơn mới, giao hàng xong)</>}
-          checked={pushStatus === 'subscribed'} onChange={handleTogglePush}
-          disabled={pushBusy || pushStatus === 'unsupported' || pushStatus === 'ios_add_to_home'} />
-        {pushStatus === 'unsupported' && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Trình duyệt này không hỗ trợ thông báo đẩy.</div>}
-        {pushStatus === 'ios_add_to_home' && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>iPhone/iPad chỉ nhận được thông báo đẩy khi mở app từ Màn hình chính (không phải tab Safari thường). Bấm nút Chia sẻ (⬆️) trong Safari → "Thêm vào Màn hình chính" → mở lại app từ icon vừa thêm, rồi quay lại đây bật công tắc này. Cần iOS 16.4 trở lên.</div>}
-        {pushStatus === 'denied' && <div style={{ font: 'var(--text-caption)', color: 'var(--status-danger)' }}>Bạn đã chặn thông báo cho trang này — vào cài đặt trình duyệt để bật lại.</div>}
-        {pushError && <div style={{ font: 'var(--text-caption)', color: 'var(--status-danger)' }}>{pushError}</div>}
       </Section>
 
       {isOwner && <AdminSection />}

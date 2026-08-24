@@ -4,7 +4,7 @@ import { uploadPhoto } from '../lib/queries';
 import { toWebSafeImage } from '../lib/imageConvert';
 import { IconCamera } from './icons/FrogIcons';
 
-export function CameraPhotoField({ url, onChange, label = 'Ảnh (chụp trực tiếp)', prefix = 'misc' }) {
+export function CameraPhotoField({ url, onChange, label = 'Ảnh (chụp trực tiếp)', prefix = 'misc', facingMode = 'environment' }) {
   const [showCamera, setShowCamera] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
@@ -41,7 +41,7 @@ export function CameraPhotoField({ url, onChange, label = 'Ảnh (chụp trực 
         </button>
       </div>
       {error && <div style={{ font: 'var(--text-caption)', color: 'var(--status-danger)' }}>{error}</div>}
-      {showCamera && <CameraCapture onClose={() => setShowCamera(false)} onCapture={handleCapture} />}
+      {showCamera && <CameraCapture onClose={() => setShowCamera(false)} onCapture={handleCapture} facingMode={facingMode} />}
     </div>
   );
 }

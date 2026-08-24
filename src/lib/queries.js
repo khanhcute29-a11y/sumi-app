@@ -2,6 +2,7 @@ import { supabase } from './supabaseClient';
 import { isSyntheticPhoneEmail } from './authPhone';
 import { branchForCategory, KEM_GROUP_CATEGORIES } from './cakePricing';
 import { newId } from './ids';
+import { broadcastEvent, BroadcastEvents, notifyOtherTabs } from './realtimeSync';
 
 // Báo cho App.jsx biết cần đếm lại chấm đỏ thông báo ngay — không chờ Supabase Realtime
 // (bảng mới có thể chưa bật Realtime replication, khiến chấm đỏ bị kẹt tới khi tải lại trang).
@@ -269,6 +270,9 @@ export async function updateOrderStatus(id, status) {
   const { error } = await supabase.from('orders').update({ status }).eq('id', id);
   if (error) throw error;
   notifyBadgesChanged();
+  // Broadcast status change to all listeners
+  await broadcastEvent(BroadcastEvents.ORDER_STATUS_CHANGED, { orderId: id, status });
+  notifyOtherTabs(BroadcastEvents.ORDER_STATUS_CHANGED, { orderId: id, status });
 }
 
 export async function updateOrder(id, fields) {
@@ -283,6 +287,9 @@ export async function updateOrder(id, fields) {
     throw err;
   }
   notifyBadgesChanged();
+  // Broadcast order update to all listeners
+  await broadcastEvent(BroadcastEvents.ORDER_STATUS_CHANGED, { orderId: id, fields });
+  notifyOtherTabs(BroadcastEvents.ORDER_STATUS_CHANGED, { orderId: id });
 }
 
 export async function updateOrderFull(id, { customerName, customerPhone, address, deliveryDate, deliveryTime, deliveryMethod, shipFee, total, deposit, paymentMethod, note, items }) {

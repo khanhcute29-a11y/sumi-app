@@ -6,6 +6,7 @@ import OrderV2DetailModal from '../components/OrderV2DetailModal';
 import { useAuth } from '../lib/AuthContext';
 import { supabase } from '../lib/supabaseClient';
 import { canUserViewOrder, getUserWorkflows } from '../lib/orderVisibility';
+import { subscribeToBroadcast, BroadcastEvents } from '../lib/realtimeSync';
 
 const LABELS = {
   awaiting_assignment: 'Đơn chờ làm', awaiting_acceptance: 'Đơn chờ làm', in_production: 'Bếp đang làm',
@@ -73,6 +74,33 @@ export default function OrdersV2Screen() {
     };
     window.addEventListener('sumi-order-filter', select);
     return () => window.removeEventListener('sumi-order-filter', select);
+  }, []);
+
+  // Auto-refresh on broadcasts
+  useEffect(() => {
+    const unsubscribers = [
+      subscribeToBroadcast(BroadcastEvents.ORDER_CREATED, () => {
+        console.log('[Orders] New order created, refreshing...');
+        load();
+      }),
+      subscribeToBroadcast(BroadcastEvents.ORDER_STATUS_CHANGED, () => {
+        console.log('[Orders] Order status changed, refreshing...');
+        load();
+      }),
+      subscribeToBroadcast(BroadcastEvents.KITCHEN_WORK_PACKAGE_COMPLETED, () => {
+        console.log('[Orders] Kitchen completed, refreshing...');
+        load();
+      }),
+    ];
+
+    // Also listen to general data changes
+    const dataChangeListener = () => load();
+    window.addEventListener('sumi-data-changed', dataChangeListener);
+
+    return () => {
+      unsubscribers.forEach(unsub => unsub());
+      window.removeEventListener('sumi-data-changed', dataChangeListener);
+    };
   }, []);
 
   const roleCanCreate = ['owner', 'admin', 'cashier', 'sale', 'kitchen_lead'].includes(profile?.role) || (profile?.extra_roles || []).some(r => ['owner', 'admin', 'cashier', 'sale', 'kitchen_lead'].includes(r));
