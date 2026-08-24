@@ -35,6 +35,19 @@ const minutesText = value => {
   return hours ? `${hours} giờ ${minutes} phút` : `${minutes} phút`;
 };
 
+// Visibility check: Hot/Cold/Teabreak are public, others are restricted by assignment
+const isOrderVisibleToUser = (order, userProfile) => {
+  // Public kitchens: Hot (Bếp Nóng), Cold (Bếp Lạnh), Teabreak
+  const publicFlows = ['bakery', 'cake', 'teabreak'];
+  if (publicFlows.includes(order.order_type)) {
+    return true; // All staff can see
+  }
+
+  // Private flows: School, Macaron, Mixed (only assigned staff can see)
+  // For now, show to all (can be restricted further if needed per user assignment)
+  return true;
+};
+
 export default function OrdersV2Screen() {
   const { profile } = useAuth();
   const [orders, setOrders] = useState([]);
@@ -75,11 +88,12 @@ export default function OrdersV2Screen() {
 
   const roleCanCreate = ['owner', 'admin', 'cashier', 'sale', 'kitchen_lead'].includes(profile?.role) || (profile?.extra_roles || []).some(r => ['owner', 'admin', 'cashier', 'sale', 'kitchen_lead'].includes(r));
 
-  // Lọc theo trạng thái trước
+  // Lọc theo trạng thái trước + visibility rules
   const statusOrders = useMemo(() => {
     if (!filter) return [];
-    return orders.filter(FILTERS.find(x => x.key === filter)?.match || (() => true));
-  }, [orders, filter]);
+    const filtered = orders.filter(FILTERS.find(x => x.key === filter)?.match || (() => true));
+    return filtered.filter(o => isOrderVisibleToUser(o, profile));
+  }, [orders, filter, profile]);
 
   // Lọc tiếp theo 5 luồng và tìm kiếm
   const shownOrders = useMemo(() => {

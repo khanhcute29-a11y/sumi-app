@@ -5,6 +5,7 @@ import { useAuth } from '../lib/AuthContext';
 import PackageTaskPanel from './PackageTaskPanel';
 import { CommentSection } from './CommentSection';
 import OrderStatusTimeline from './OrderStatusTimeline';
+import { MapPin, Camera } from 'lucide-react';
 
 const ORDER_TYPE_LABELS = {
   cake: '🎂 Bánh kem & Bánh lạnh',
@@ -82,6 +83,11 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
   const [error, setError] = useState('');
   const [zoomImage, setZoomImage] = useState(null);
   const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const [showDeliveryModal, setShowDeliveryModal] = useState(false);
+  const [gpsCoords, setGpsCoords] = useState(null);
+  const [photoFile, setPhotoFile] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(null);
+  const cameraInputRef = React.useRef(null);
 
   const director = ['owner', 'admin'].includes(profile?.role) || (profile?.extra_roles || []).some(x => ['owner', 'admin'].includes(x));
 
@@ -199,6 +205,87 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       await load();
       onChanged?.();
     } catch (e) { setError(e.message); } finally { setBusy(false); }
+  };
+
+  const captureGPS = async () => {
+    if (!navigator.geolocation) {
+      setError('Thiết bị không hỗ trợ định vị GPS');
+      return;
+    }
+    try {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setGpsCoords({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+            accuracy: position.coords.accuracy
+          });
+        },
+        (err) => setError('Không lấy được GPS: ' + err.message)
+      );
+    } catch (e) {
+      setError('Lỗi GPS: ' + e.message);
+    }
+  };
+
+  const capturePhoto = async () => {
+    if (cameraInputRef.current) {
+      cameraInputRef.current.click();
+    }
+  };
+
+  const handlePhotoSelected = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setPhotoFile(file);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setPhotoPreview(event.target?.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const acceptDeliveryAssignment = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      if (!gpsCoords) throw new Error('Chưa lấy được GPS');
+      if (!photoFile) throw new Error('Chưa chụp ảnh nhận giao');
+
+      // Upload photo
+      const cleanExt = (photoFile.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+      const photoPath = `orders/${orderId}/delivery/${crypto.randomUUID()}.${cleanExt}`;
+      const { error: upErr } = await supabase.storage.from('uploads').upload(photoPath, photoFile, { contentType: photoFile.type || 'image/jpeg' });
+      if (upErr) throw upErr;
+
+      // Get signed URL for photo
+      const { data: { publicUrl } } = supabase.storage.from('uploads').getPublicUrl(photoPath);
+
+      // Call RPC to accept delivery
+      const { data, error } = await supabase.rpc('accept_delivery_assignment_flexible', {
+        p_order_id: orderId,
+        p_assigned_staff_id: profile.id,
+        p_assigned_staff_name: profile.full_name || profile.email,
+        p_gps_latitude: gpsCoords.lat,
+        p_gps_longitude: gpsCoords.lng,
+        p_photo_url: publicUrl
+      });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.message || 'Failed to accept delivery');
+
+      setShowDeliveryModal(false);
+      setGpsCoords(null);
+      setPhotoFile(null);
+      setPhotoPreview(null);
+      await load();
+      onChanged?.();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (!data) return (
@@ -354,9 +441,24 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
 
         {/* Thông tin Giao nhận & Khách hàng */}
         <div style={box}>
-          <strong style={{ fontSize: 16, display: 'block', marginBottom: 8, color: 'var(--text-primary)' }}>
-            🚚 Thông tin giao nhận
-          </strong>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+            <strong style={{ fontSize: 16, color: 'var(--text-primary)' }}>
+              🚚 Thông tin giao nhận
+            </strong>
+            {o.status_v2 === 'ready_for_fulfillment' && (
+              <button
+                disabled={busy}
+                onClick={() => setShowDeliveryModal(true)}
+                style={{
+                  minHeight: 40, border: 0, borderRadius: 12, padding: '0 14px', fontWeight: 900,
+                  background: '#d96b43', color: 'white', fontSize: 14, cursor: busy ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 2px 0 #a84b2e', opacity: busy ? 0.6 : 1
+                }}
+              >
+                🚚 Nhận Giao
+              </button>
+            )}
+          </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 15 }}>
             <div>
               <b>Phương thức:</b> {o.fulfillment_method_v2 === 'pickup' ? '🏬 Nhận tại quầy' : '🛵 Giao tận nơi'}
@@ -567,6 +669,123 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
         {error && <div style={{ color: '#b42318', marginTop: 8, fontWeight: 700 }}>{error}</div>}
 
       </div>
+
+      {/* Modal: Nhận Giao - GPS + Photo */}
+      {showDeliveryModal && (
+        <div onClick={() => !busy && setShowDeliveryModal(false)} style={{
+          position: 'fixed', inset: 0, zIndex: 115, background: 'rgba(0,0,0,0.5)',
+          display: 'flex', justifyContent: 'center', alignItems: 'flex-end'
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            width: '100%', maxWidth: 600, background: 'var(--surface-app)', borderRadius: '20px 20px 0 0',
+            padding: 24, maxHeight: '85vh', overflowY: 'auto'
+          }}>
+            <h3 style={{ margin: '0 0 16px 0', fontSize: 18, color: 'var(--text-primary)', fontWeight: 900 }}>
+              🚚 Nhận Giao Hàng
+            </h3>
+
+            {/* GPS Section */}
+            <div style={{ marginBottom: 20, padding: 14, background: 'var(--surface-sunken)', borderRadius: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                <MapPin size={20} color="#d96b43" />
+                <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>Định vị GPS</span>
+              </div>
+              {gpsCoords ? (
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                  ✅ Đã lấy: {gpsCoords.lat.toFixed(6)}, {gpsCoords.lng.toFixed(6)}<br/>
+                  <small>Độ chính xác: ±{gpsCoords.accuracy.toFixed(1)}m</small>
+                </div>
+              ) : (
+                <button
+                  onClick={captureGPS}
+                  disabled={busy}
+                  style={{
+                    width: '100%', padding: '10px 14px', background: '#d96b43', color: '#fff',
+                    border: 0, borderRadius: 10, fontWeight: 700, cursor: 'pointer', fontSize: 14
+                  }}
+                >
+                  📍 Bấm để lấy GPS hiện tại
+                </button>
+              )}
+            </div>
+
+            {/* Camera Section */}
+            <div style={{ marginBottom: 20, padding: 14, background: 'var(--surface-sunken)', borderRadius: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                <Camera size={20} color="#d96b43" />
+                <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>Chụp ảnh nhận giao</span>
+              </div>
+              {photoPreview ? (
+                <div>
+                  <img src={photoPreview} alt="preview" style={{ width: '100%', borderRadius: 10, marginBottom: 10, maxHeight: 200, objectFit: 'cover' }} />
+                  <button
+                    onClick={capturePhoto}
+                    style={{
+                      width: '100%', padding: '10px 14px', background: '#f5a623', color: '#fff',
+                      border: 0, borderRadius: 10, fontWeight: 700, cursor: 'pointer', fontSize: 14
+                    }}
+                  >
+                    📷 Chụp lại
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={capturePhoto}
+                  style={{
+                    width: '100%', padding: '10px 14px', background: '#d96b43', color: '#fff',
+                    border: 0, borderRadius: 10, fontWeight: 700, cursor: 'pointer', fontSize: 14
+                  }}
+                >
+                  📷 Chụp ảnh
+                </button>
+              )}
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handlePhotoSelected}
+                style={{ display: 'none' }}
+              />
+            </div>
+
+            {/* Error */}
+            {error && (
+              <div style={{
+                marginBottom: 14, padding: 10, background: '#fee2e2', borderRadius: 10,
+                color: '#b42318', fontWeight: 700, fontSize: 14
+              }}>
+                ⚠️ {error}
+              </div>
+            )}
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={() => setShowDeliveryModal(false)}
+                disabled={busy}
+                style={{
+                  flex: 1, padding: '12px 16px', background: 'var(--surface-sunken)', color: 'var(--text-primary)',
+                  border: 0, borderRadius: 10, fontWeight: 700, cursor: 'pointer', fontSize: 14
+                }}
+              >
+                Huỷ
+              </button>
+              <button
+                onClick={acceptDeliveryAssignment}
+                disabled={busy || !gpsCoords || !photoFile}
+                style={{
+                  flex: 1, padding: '12px 16px', background: '#d96b43', color: '#fff',
+                  border: 0, borderRadius: 10, fontWeight: 700, cursor: busy || !gpsCoords || !photoFile ? 'not-allowed' : 'pointer',
+                  fontSize: 14, opacity: (busy || !gpsCoords || !photoFile) ? 0.5 : 1
+                }}
+              >
+                {busy ? '⏳ Đang xử lý...' : '✓ Xác nhận Nhận Giao'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Lightbox / Modal xem ảnh phóng to */}
       {zoomImage && (
