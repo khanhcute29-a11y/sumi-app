@@ -15,13 +15,14 @@ export default function OrderStatusTimeline({ order, packages = [], tasks = [], 
     });
 
     // Stage 2: Nhận đơn (Kitchen Lead Received)
-    const kitchenAcceptedPkg = packages.find(p => p?.accepted_at && !p?.assigned_to_staff_id);
+    const kitchenAcceptedPkg = packages.find(p => p?.accepted_at);
+    const kitchenAcceptedLog = kpiLogs.find(log => log?.event_type === 'work_package_accepted' && !log?.staff_name?.includes('undefined'));
     stageList.push({
       id: 'kitchen_accepted',
       icon: '👨‍🍳',
       title: 'Nhận đơn',
       status: kitchenAcceptedPkg?.accepted_at ? 'done' : 'pending',
-      who: kitchenAcceptedPkg ? `BT ${kitchenAcceptedPkg.organization_units?.name || 'Bếp'}` : 'Chờ',
+      who: kitchenAcceptedLog?.staff_name || `BT ${kitchenAcceptedPkg?.organization_units?.name || 'Bếp'}` || 'Chờ',
       when: kitchenAcceptedPkg?.accepted_at ? new Date(kitchenAcceptedPkg.accepted_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '-'
     });
 
@@ -40,12 +41,13 @@ export default function OrderStatusTimeline({ order, packages = [], tasks = [], 
 
     // Stage 4: Hoàn thành nhập kho (Kitchen Completed)
     const completedPkg = packages.find(p => p?.completed_at);
+    const workPackageCompletedLog = kpiLogs.find(log => log?.event_type === 'work_package_completed');
     stageList.push({
       id: 'kitchen_completed',
       icon: '✅',
       title: 'Hoàn thành nhập kho',
       status: completedPkg?.completed_at ? 'done' : 'pending',
-      who: completedPkg ? completedPkg.assigned_to_staff_name || completedPkg.organization_units?.name || 'N/A' : 'Chờ',
+      who: workPackageCompletedLog?.staff_name || completedPkg?.organization_units?.name || 'Chờ',
       when: completedPkg?.completed_at ? new Date(completedPkg.completed_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '-'
     });
 
