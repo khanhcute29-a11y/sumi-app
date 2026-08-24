@@ -24,6 +24,8 @@ const SHIFT_PRESETS = [
   '🍞 Bếp Bánh Nóng',
   '🧁 Xưởng Macaron (X41)',
   '🏫 Xưởng 42 (Trường học)',
+];
+const SHIFT_PRESETS_EXTENDED = [
   '☕ Teabreak',
   '🏬 Bán Hàng',
   '🛵 Giao Hàng',
@@ -148,14 +150,46 @@ function CheckinModal({ staffName, staffId, defaultBranch, onClose, onDone }) {
           </div>
         </div>
 
-        {/* Shift Selection */}
+        {/* Shift Selection - Main Shifts Only */}
         <div>
           <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8 }}>Chọn ca làm việc</label>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-            {SHIFT_PRESETS.slice(0, 4).map((p) => (
-              <button key={p} type="button" onClick={() => setShiftLabel(p)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border-default)', background: shiftLabel === p ? 'var(--brand-primary)' : 'var(--surface-sunken)', color: shiftLabel === p ? '#fff' : 'var(--text-primary)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{p}</button>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
+            {SHIFT_PRESETS.map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setShiftLabel(p)}
+                style={{
+                  padding: '8px 10px',
+                  borderRadius: 8,
+                  border: '1px solid var(--border-default)',
+                  background: shiftLabel === p ? 'var(--brand-primary)' : 'var(--surface-sunken)',
+                  color: shiftLabel === p ? '#fff' : 'var(--text-primary)',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  minHeight: 36
+                }}
+              >
+                {p}
+              </button>
             ))}
           </div>
+
+          {/* Extended Shifts - Optional */}
+          {!SHIFT_PRESETS.some(p => p === shiftLabel) && (
+            <Select
+              value={shiftLabel}
+              onChange={(e) => setShiftLabel(e.target.value)}
+              options={[
+                { value: '', label: 'Chọn ca khác...' },
+                ...SHIFT_PRESETS_EXTENDED.map(s => ({ value: s, label: s }))
+              ]}
+              style={{ fontSize: 13, marginBottom: 8 }}
+            />
+          )}
+
           <Select value={branch} onChange={(e) => setBranch(e.target.value)} options={BRANCHES.map(b => ({ value: b, label: b }))} style={{ fontSize: 13 }} />
         </div>
 
