@@ -28,12 +28,9 @@ export default function KpiDashboardScreen() {
 
       // Load all completed work packages with orders
       const { data: packages, error: err } = await supabase
-        .from('order_work_packages')
+        .from('order_work_packages_readable')
         .select(`
           id,
-          assigned_to_staff_id,
-          assigned_to_staff_name,
-          assigned_at,
           accepted_at,
           completed_at,
           organization_units(name,code),

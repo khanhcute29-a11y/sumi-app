@@ -114,7 +114,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
     const [o, i, p, u, e, kpi, ops, att, changes] = await Promise.all([
       supabase.from('orders').select('id,order_code,order_type,status_v2,required_at,fulfillment_method_v2,address,note,created_by_name,created_at,confidentiality,version,ship_fee,deposit,payment_method,total,customers(name,phone)').eq('id', orderId).single(),
       supabase.from('order_items').select('id,name_snapshot,quantity,unit,specification,unit_price,display_order').eq('order_id', orderId).order('display_order'),
-      supabase.from('order_work_packages').select('id,unit_id,status,due_at,accepted_at,completed_at,version,assigned_by_staff_id,assigned_to_staff_id,assigned_to_staff_name,assigned_at,completed_by_staff_id,completed_by_staff_name,organization_units(name,code),work_package_items(order_item_id,quantity)').eq('order_id', orderId),
+      supabase.from('order_work_packages_readable').select('id,unit_id,status,due_at,accepted_at,completed_at,version,organization_units(name,code),work_package_items(order_item_id,quantity)').eq('order_id', orderId),
       supabase.from('organization_units').select('id,name,code').eq('unit_type', 'kitchen').eq('active', true),
       supabase.from('domain_events').select('id,event_type,occurred_at,payload').eq('entity_type', 'order').eq('entity_id', orderId).order('occurred_at', { ascending: false }),
       supabase.from('kpi_logs').select('id,event_type,created_at,staff_name').eq('order_id', orderId).order('created_at', { ascending: false }),
