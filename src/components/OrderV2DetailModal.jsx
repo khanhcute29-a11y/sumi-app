@@ -443,7 +443,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
         <div style={box}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
             <strong style={{ fontSize: 16, color: 'var(--text-primary)' }}>
-              🚚 Thông tin giao nhận {/* DEBUG */} [{o.status_v2}]
+              🚚 Thông tin giao nhận
             </strong>
             {o.status_v2 === 'ready_for_fulfillment' && (
               <button
