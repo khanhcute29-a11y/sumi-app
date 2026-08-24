@@ -108,7 +108,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
     const [o, i, p, u, e, kpi, ops, att] = await Promise.all([
       supabase.from('orders').select('id,order_code,order_type,status_v2,required_at,fulfillment_method_v2,address,note,created_by_name,created_at,confidentiality,version').eq('id', orderId).single(),
       supabase.from('order_items').select('id,name_snapshot,quantity,unit,specification,unit_price,display_order').eq('order_id', orderId).order('display_order'),
-      supabase.from('order_work_packages').select('id,unit_id,status,due_at,accepted_at,completed_at,version,organization_units(name,code),work_package_items(order_item_id,quantity)').eq('order_id', orderId),
+      supabase.from('order_work_packages').select('id,unit_id,status,due_at,accepted_at,completed_at,assigned_by_staff_id,assigned_to_staff_id,assigned_to_staff_name,assigned_at,version,organization_units(name,code),work_package_items(order_item_id,quantity)').eq('order_id', orderId),
       supabase.from('organization_units').select('id,name,code').eq('unit_type', 'kitchen').eq('active', true),
       supabase.from('domain_events').select('id,event_type,occurred_at,payload').eq('entity_type', 'order').eq('entity_id', orderId).order('occurred_at', { ascending: false }),
       supabase.from('kpi_logs').select('id,event_type,created_at,staff_name').eq('order_id', orderId).order('created_at', { ascending: false }),
@@ -938,11 +938,36 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                 </div>
 
                 {(p.assigned_to_staff_name || p.accepted_at) && (
-                  <small style={{ display: 'block', marginTop: 6, color: 'var(--text-secondary)', fontSize: 13 }}>
-                    {p.assigned_to_staff_name && `👤 ${p.assigned_to_staff_name}`}
-                    {p.assigned_at && ` · Nhận ${new Date(p.assigned_at).toLocaleString('vi-VN')}`}
-                    {p.completed_by_staff_name && ` · Hoàn thành ${new Date(p.completed_at).toLocaleString('vi-VN')}`}
-                  </small>
+                  <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <small style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+                      {p.assigned_to_staff_name && `✋ Giao cho: ${p.assigned_to_staff_name}`}
+                      {p.assigned_at && ` · ${new Date(p.assigned_at).toLocaleString('vi-VN')}`}
+                      {p.completed_by_staff_name && ` · ✅ ${new Date(p.completed_at).toLocaleString('vi-VN')}`}
+                    </small>
+                    {isInProgress && director && !p.completed_at && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedPackage(p);
+                          setShowAcceptPackageModal(true);
+                        }}
+                        style={{
+                          padding: '4px 10px',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          border: 'none',
+                          borderRadius: 8,
+                          background: '#fde8de',
+                          color: '#d96b43',
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap'
+                        }}
+                        title="Giao lại cho nhân viên khác"
+                      >
+                        🔄 Giao lại
+                      </button>
+                    )}
+                  </div>
                 )}
 
                 {/* Bếp trưởng giao việc cho thợ bếp tuyến dưới */}
