@@ -26,7 +26,7 @@ export default function PackageTaskPanel({ packageId, packageUnit, defaultDueAt,
   const [error, setError] = useState('');
   const [showAssignForm, setShowAssignForm] = useState(false);
 
-  const isLead = ['owner', 'admin', ...KITCHEN_LEAD_ROLES, 'bakery'].some(
+  const isLead = ['owner', 'admin', ...KITCHEN_LEAD_ROLES].some(
     r => r === profile?.role || (profile?.extra_roles || []).includes(r)
   );
 
@@ -75,37 +75,27 @@ export default function PackageTaskPanel({ packageId, packageUnit, defaultDueAt,
   const subordinates = useMemo(() => {
     const unitCode = (packageUnit?.code || '').toUpperCase();
     const unitName = (packageUnit?.name || '').toLowerCase();
-    const myRole = profile?.role || '';
-    const myStation = profile?.station || '';
+    const myStation = (profile?.station || '').toLowerCase();
 
-    // Xác định luồng: Lạnh, Nóng, Macaron (X41), hay Xưởng 42
-    const isCold = unitCode.includes('COLD') || unitName.includes('lạnh') || myRole.includes('cold') || myStation.includes('Lạnh');
-    const isHot = unitCode.includes('HOT') || unitName.includes('nóng') || myRole.includes('hot') || myStation.includes('Nóng');
-    const isX41 = unitCode.includes('X41') || unitName.includes('41') || unitName.includes('macaron') || myRole.includes('macaron') || myStation.includes('41');
-    const isX42 = unitCode.includes('X42') || unitName.includes('42') || unitName.includes('trường') || myRole.includes('x42') || myStation.includes('42');
+    // Xác định luồng: Lạnh, Nóng, Macaron (X41), hay Xưởng 42 — station chuẩn DB là mã thường: lanh/nong/xuong41/xuong42
+    const isCold = unitCode.includes('COLD') || unitName.includes('lạnh') || myStation === 'lanh';
+    const isHot = unitCode.includes('HOT') || unitName.includes('nóng') || myStation === 'nong';
+    const isX41 = unitCode.includes('X41') || unitName.includes('41') || unitName.includes('macaron') || myStation === 'xuong41';
+    const isX42 = unitCode.includes('X42') || unitName.includes('42') || unitName.includes('trường') || myStation === 'xuong42';
 
     let filtered = staff.filter(s => {
-      const sRole = s.role || '';
-      const sStation = s.station || '';
+      const sStation = (s.station || '').toLowerCase();
 
-      if (isCold) {
-        return sStation.includes('Lạnh') || ['baker_cold', 'kitchen_deputy_cold', 'kitchen_lead_cold', 'tho_lanh', 'bp_lanh', 'bakery', 'kitchen'].includes(sRole);
-      }
-      if (isHot) {
-        return sStation.includes('Nóng') || ['baker_hot', 'kitchen_deputy_hot', 'kitchen_lead_hot', 'tho_nong', 'bp_nong', 'bakery', 'kitchen'].includes(sRole);
-      }
-      if (isX41) {
-        return sStation.includes('41') || sStation.includes('Macaron') || ['baker_macaron', 'kitchen_lead_macaron', 'tho_macaron', 'bakery', 'kitchen'].includes(sRole);
-      }
-      if (isX42) {
-        return sStation.includes('42') || sStation.includes('Trường') || ['baker_x42', 'kitchen_lead_x42', 'tho_x42', 'bakery', 'kitchen'].includes(sRole);
-      }
+      if (isCold) return sStation === 'lanh';
+      if (isHot) return sStation === 'nong';
+      if (isX41) return sStation === 'xuong41';
+      if (isX42) return sStation === 'xuong42';
       return true;
     });
 
     // Nếu không khớp ai (do chưa gán khâu), trả về toàn bộ thợ làm bánh để tránh kẹt
     if (filtered.length === 0) {
-      filtered = staff.filter(s => ['bakery', 'kitchen', 'baker_cold', 'baker_hot', 'baker_macaron', 'baker_x42'].includes(s.role) || s.station);
+      filtered = staff.filter(s => s.role === 'bakery' || s.station);
     }
     return filtered.length > 0 ? filtered : staff;
   }, [staff, packageUnit, profile]);
@@ -299,15 +289,31 @@ export default function PackageTaskPanel({ packageId, packageUnit, defaultDueAt,
                         p_note: null
                       });
                       if(taskErr) throw taskErr;
-                      const {error: pkgErr} = await supabase.rpc('complete_kitchen_work_package_with_proof', {
-                        p_package_id: packageId,
-                        p_proof_storage_path: null
-                      });
-                      if(pkgErr) {
-                        setError(`Bàn giao kho thất bại: ${pkgErr.message}`);
-                      } else {
+
+                      // Chỉ bàn giao kho khi TẤT CẢ việc trong gói này đã xong —
+                      // nếu còn nhân sự khác chưa hoàn thành phần của họ, không được
+                      // force-complete cả gói (mất việc của người khác + nhập kho thiếu).
+                      const {data: remaining, error: remErr} = await supabase
+                        .from('tasks')
+                        .select('id')
+                        .eq('work_package_id', packageId)
+                        .not('status', 'in', '(done,exempted)');
+                      if(remErr) throw remErr;
+
+                      if (remaining && remaining.length > 0) {
                         await load();
                         onChanged?.();
+                      } else {
+                        const {error: pkgErr} = await supabase.rpc('complete_kitchen_work_package_with_proof', {
+                          p_package_id: packageId,
+                          p_proof_storage_path: null
+                        });
+                        if(pkgErr) {
+                          setError(`Bàn giao kho thất bại: ${pkgErr.message}`);
+                        } else {
+                          await load();
+                          onChanged?.();
+                        }
                       }
                     } catch (e) {
                       setError(e.message);
