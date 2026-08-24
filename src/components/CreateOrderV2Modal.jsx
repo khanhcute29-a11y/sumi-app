@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabaseClient';
 import { createOrderV2 } from '../lib/featureFlags';
 import { useAuth } from '../lib/AuthContext';
 import { newId } from '../lib/ids';
+import { getProductPricing, getProductSpecs } from '../lib/pricingLookup';
 import { ORDER_FLOWS, CAKE_LINES, TEABREAK_CATALOG, MOONCAKE_CATALOG, normalizeSearch } from '../data/orderCatalogs';
 import { SCHOOL_DELIVERY_POINTS } from '../data/schoolCatalog';
 
@@ -11,11 +12,11 @@ const fieldStyle={width:'100%',minHeight:58,border:'2px solid #d7c3aa',borderRad
 const categoryLabel=(value='')=>value.replaceAll('_',' ').replace(/\b\w/g,x=>x.toUpperCase());
 const FLOW_WORDS={macaron:['macaron'],cake:['kem','mousse','mouse','tiramisu','su kem','banh lanh'],bakery:['banh mi','banh pia','banh quy','trung thu','btt','croissant','donut'],school:['banh mi','banh ngot','banh man'],teabreak:['teabreak']};
 function ProductNameField({item,products,flowType,onChange}){
- const [open,setOpen]=useState(false); const wrap=useRef(null); const query=normalizeSearch(item.name||'');
+ const [open,setOpen]=useState(false); const [specs,setSpecs]=useState([]); const wrap=useRef(null); const query=normalizeSearch(item.name||'');
  useEffect(()=>{if(!open)return;const close=e=>{if(wrap.current&&!wrap.current.contains(e.target))setOpen(false)};document.addEventListener('pointerdown',close);return()=>document.removeEventListener('pointerdown',close)},[open]);
  const scoped=products.filter(p=>FLOW_WORDS[flowType]?.some(word=>normalizeSearch(`${p.name} ${p.category||''}`).includes(normalizeSearch(word))));
  const matches=scoped.filter(p=>!query||normalizeSearch(`${p.name} ${p.category||''}`).includes(query)).slice(0,10);
- const choose=p=>{onChange({name:p.name,product_id:p.id,unit:p.unit||item.unit||'cái',specification:{...(item.specification||{}),catalog_category:p.category||null,catalog_price:p.price??null}});setOpen(false)};
+ const choose=async(p)=>{const productSpecs=await getProductSpecs(p.id,flowType);setSpecs(productSpecs);onChange({name:p.name,product_id:p.id,unit:p.unit||item.unit||'cái',specification:{...(item.specification||{}),catalog_category:p.category||null,catalog_price:p.price??null}});setOpen(false);};
  return <div className="sumi-product-combobox" ref={wrap}>
   <input style={fieldStyle} autoComplete="off" placeholder="Gõ tên bánh để tìm hoặc nhập mới" value={item.name||''} onFocus={()=>setOpen(true)} onChange={e=>{onChange({name:e.target.value,product_id:null});setOpen(true)}} aria-expanded={open}/>
   {open&&<div className="sumi-product-options">
