@@ -2,37 +2,22 @@ import { useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { playNewOrderSound, playDeliveredSound } from './sound';
 
-function sendPush(title, body) {
-  fetch('/api/send-push', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title, body, url: '/' }),
-  }).catch(() => {});
-}
-
+// Push đẩy (kèm chuông cho người KHÔNG mở app) giờ do server tự bắn qua
+// Postgres trigger (xem migration 202608260015), không phụ thuộc client
+// nào đang mở app. Hook này chỉ còn lo phát âm thanh tức thời cho người
+// đang mở app sẵn — không gọi /api/send-push nữa để tránh gửi trùng.
 export function useOrderNotifications() {
   useEffect(() => {
     const channel = supabase
       .channel('orders-notify')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, (payload) => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, () => {
         playNewOrderSound();
-        sendPush('🔔 Đơn hàng mới', `Mã đơn ${payload.new?.order_code || ''} vừa được tạo.`);
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, (payload) => {
-        if (payload.new?.status === 'hoan_thanh' && payload.old?.status !== 'hoan_thanh') {
-          playDeliveredSound();
-          sendPush('✅ Giao hàng hoàn thành', `Đơn ${payload.new?.order_code || ''} đã giao xong.`);
-        }
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'order_notes' }, (payload) => {
-        const author = payload.new?.author_name || 'Nhân viên';
-        const code = payload.new?.order_code ? `đơn ${payload.new.order_code}` : 'một đơn';
-        sendPush('💬 Ghi chú đơn hàng mới', `${author} vừa ghi chú ${code}: ${payload.new?.message || ''}`);
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'incident_reports' }, (payload) => {
-        const reporter = payload.new?.reporter_name || 'Nhân viên';
-        const code = payload.new?.order_code ? ` (${payload.new.order_code})` : '';
-        sendPush('⚠ Báo sự cố mới', `${reporter} báo ${payload.new?.code || ''} - ${payload.new?.label || ''}${code}`);
+        const justCompleted =
+          (payload.new?.status === 'hoan_thanh' && payload.old?.status !== 'hoan_thanh') ||
+          (payload.new?.status_v2 === 'completed' && payload.old?.status_v2 !== 'completed');
+        if (justCompleted) playDeliveredSound();
       })
       .subscribe();
 

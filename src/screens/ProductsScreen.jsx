@@ -30,13 +30,14 @@ const CATEGORIES = [
   { value: 'banh_trung_thu', label: 'Bánh Trung Thu' },
   { value: 'trung_thu_combo', label: 'Trung Thu — Hộp Combo' },
   { value: 'phu_kien_trung_thu', label: 'Trung Thu — Phụ Kiện (hộp đựng)' },
+  { value: 'school', label: 'Trường Học (chỉ Giám đốc)' },
   { value: 'khac', label: 'Khác' },
 ];
 const categoryLabel = (v) => CATEGORIES.find((c) => c.value === v)?.label || v;
 // 'banh_kem' vẫn dùng công thức Size+Cốt+Nhân lúc lên đơn (không đọc product_variants),
 // nhưng vẫn cho phép thêm mức giá theo size ở đây — cộng thêm vào SIZE_VARIANT_CATEGORIES
 // (nguồn dùng chung với OrdersScreen) thay vì tự duy trì một danh sách riêng dễ lệch nhau.
-const VARIANT_CATEGORIES = ['banh_kem', ...SIZE_VARIANT_CATEGORIES];
+const VARIANT_CATEGORIES = ['banh_kem', 'school', ...SIZE_VARIANT_CATEGORIES];
 
 function AddProductForm({ onAdded, onClose }) {
   const [name, setName] = useState('');

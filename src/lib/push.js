@@ -13,8 +13,18 @@ export function isPushSupported() {
   return 'serviceWorker' in navigator && 'PushManager' in window && Boolean(VAPID_PUBLIC_KEY);
 }
 
+// iOS Safari chỉ hỗ trợ Web Push khi trang đã được "Thêm vào Màn hình chính"
+// (chạy standalone như 1 app) và iOS >= 16.4 — mở bằng tab Safari thường thì
+// PushManager không tồn tại, isPushSupported() trả về false dù máy hỗ trợ được.
+export function isIosSafariNotInstalled() {
+  const ua = window.navigator.userAgent;
+  const isIos = /iPad|iPhone|iPod/.test(ua) || (ua.includes('Macintosh') && 'ontouchend' in document);
+  const isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+  return isIos && !isStandalone;
+}
+
 export async function getPushSubscriptionStatus() {
-  if (!isPushSupported()) return 'unsupported';
+  if (!isPushSupported()) return isIosSafariNotInstalled() ? 'ios_add_to_home' : 'unsupported';
   if (Notification.permission === 'denied') return 'denied';
   const reg = await navigator.serviceWorker.ready;
   const sub = await reg.pushManager.getSubscription();

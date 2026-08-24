@@ -406,8 +406,9 @@ export default function SettingsScreen({ onSignOut }) {
         <Switch label="Bắt buộc chốt ca cuối ngày (Z-Report)" checked={forceCloseShift} onChange={setForceCloseShift} />
         <Switch label={<><IconBell size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Nhận thông báo đẩy trên thiết bị này (đơn mới, giao hàng xong)</>}
           checked={pushStatus === 'subscribed'} onChange={handleTogglePush}
-          disabled={pushBusy || pushStatus === 'unsupported'} />
+          disabled={pushBusy || pushStatus === 'unsupported' || pushStatus === 'ios_add_to_home'} />
         {pushStatus === 'unsupported' && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Trình duyệt này không hỗ trợ thông báo đẩy.</div>}
+        {pushStatus === 'ios_add_to_home' && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>iPhone/iPad chỉ nhận được thông báo đẩy khi mở app từ Màn hình chính (không phải tab Safari thường). Bấm nút Chia sẻ (⬆️) trong Safari → "Thêm vào Màn hình chính" → mở lại app từ icon vừa thêm, rồi quay lại đây bật công tắc này. Cần iOS 16.4 trở lên.</div>}
         {pushStatus === 'denied' && <div style={{ font: 'var(--text-caption)', color: 'var(--status-danger)' }}>Bạn đã chặn thông báo cho trang này — vào cài đặt trình duyệt để bật lại.</div>}
         {pushError && <div style={{ font: 'var(--text-caption)', color: 'var(--status-danger)' }}>{pushError}</div>}
       </Section>
