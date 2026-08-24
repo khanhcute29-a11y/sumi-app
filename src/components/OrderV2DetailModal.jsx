@@ -306,6 +306,49 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
     }
   };
 
+  const completeWorkPackage = async (p) => {
+    setBusy(true);
+    setError('');
+    try {
+      // Update work package: mark as completed by staff
+      const { error: pkgError } = await supabase
+        .from('order_work_packages')
+        .update({
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          completed_by_staff_id: p.assigned_to_staff_id || profile.id,
+          completed_by_staff_name: p.assigned_to_staff_name || profile.full_name || profile.email
+        })
+        .eq('id', p.id);
+
+      if (pkgError) throw pkgError;
+
+      // Update order status to ready_for_fulfillment (chờ vận chuyển)
+      const { error: orderError } = await supabase
+        .from('orders')
+        .update({ status_v2: 'ready_for_fulfillment' })
+        .eq('id', orderId);
+
+      if (orderError) throw orderError;
+
+      // Log KPI: work_package_completed
+      await supabase.from('kpi_logs').insert({
+        order_id: orderId,
+        staff_id: p.assigned_to_staff_id || profile.id,
+        staff_name: p.assigned_to_staff_name || profile.full_name || profile.email,
+        event_type: 'work_package_completed',
+        notes: 'Nhân viên hoàn thành đơn hàng'
+      }).catch(() => {}); // Fail silently if kpi_logs insert fails
+
+      await load();
+      onChanged?.();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const acceptPackageSelf = async (p) => {
     setBusy(true);
     setError('');
@@ -344,10 +387,16 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
     try {
       if (!staffId) throw new Error('Chưa chọn nhân viên');
 
-      // Update work package status to in_progress (bếp trưởng giao cho nhân viên)
+      // Update work package: assign to staff + status in_progress
       const { error } = await supabase
         .from('order_work_packages')
-        .update({ status: 'in_progress', accepted_at: new Date().toISOString() })
+        .update({
+          status: 'in_progress',
+          accepted_at: new Date().toISOString(),
+          assigned_to_staff_id: staffId,
+          assigned_to_staff_name: staffName,
+          assigned_at: new Date().toISOString()
+        })
         .eq('id', p.id);
 
       if (error) throw error;
@@ -733,7 +782,20 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                         👩‍🍳 Nhận đơn
                       </button>
                     )}
-                    {['in_progress', 'awaiting_approval'].includes(p.status) && (
+                    {p.status === 'in_progress' && (
+                      <button
+                        disabled={busy}
+                        onClick={() => completeWorkPackage(p)}
+                        style={{
+                          minHeight: 44, border: 0, borderRadius: 12, padding: '0 16px', fontWeight: 900,
+                          background: '#28a745', color: 'white', fontSize: 15, cursor: 'pointer',
+                          boxShadow: '0 3px 0 #1a6f2a'
+                        }}
+                      >
+                        ✅ Hoàn thành
+                      </button>
+                    )}
+                    {p.status === 'awaiting_approval' && (
                       <button
                         disabled={busy}
                         onClick={() => approvePackage(p)}
@@ -749,10 +811,11 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                   </div>
                 </div>
 
-                {p.accepted_at && (
+                {(p.assigned_to_staff_name || p.accepted_at) && (
                   <small style={{ display: 'block', marginTop: 6, color: 'var(--text-secondary)', fontSize: 13 }}>
-                    Nhận lúc {new Date(p.accepted_at).toLocaleString('vi-VN')}
-                    {p.completed_at ? ` · Xong lúc ${new Date(p.completed_at).toLocaleString('vi-VN')}` : ''}
+                    {p.assigned_to_staff_name && `👤 ${p.assigned_to_staff_name}`}
+                    {p.assigned_at && ` · Nhận ${new Date(p.assigned_at).toLocaleString('vi-VN')}`}
+                    {p.completed_by_staff_name && ` · Hoàn thành ${new Date(p.completed_at).toLocaleString('vi-VN')}`}
                   </small>
                 )}
 
