@@ -9,7 +9,7 @@ ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS branch_id uuid;
 -- Create index for faster queries
 CREATE INDEX IF NOT EXISTS idx_orders_branch_id ON public.orders(branch_id);
 
--- Update RPC to handle missing branch_id gracefully
+-- Update RPC to handle missing branch_id gracefully and use correct status values
 CREATE OR REPLACE FUNCTION public.accept_delivery_assignment_flexible(
   p_order_id uuid,
   p_assigned_staff_id uuid,
@@ -49,7 +49,7 @@ BEGIN
       v_run_code,
       v_branch_id,
       p_assigned_staff_id,
-      'in_progress',
+      'in_transit',
       v_started_at
     )
     RETURNING id INTO v_delivery_run_id;
@@ -57,7 +57,7 @@ BEGIN
     UPDATE public.delivery_runs
     SET
       assigned_driver_id = p_assigned_staff_id,
-      status = 'in_progress',
+      status = 'in_transit',
       started_at = v_started_at,
       branch_id = COALESCE(branch_id, v_branch_id)
     WHERE id = v_delivery_run_id;
@@ -69,14 +69,14 @@ BEGIN
   FROM public.orders o WHERE o.id = v_order_id
   ON CONFLICT (delivery_run_id, order_id) DO NOTHING;
 
-  -- Update delivery stop with GPS and photo
+  -- Update delivery stop with GPS and photo (status: arrived = staff has arrived at location with photo proof)
   UPDATE public.delivery_stops
   SET
     gps_latitude = p_gps_latitude,
     gps_longitude = p_gps_longitude,
     photo_proof_url = p_photo_url,
     started_at = v_started_at,
-    status = 'in_transit'
+    status = 'arrived'
   WHERE order_id = v_order_id;
 
   -- Mark order as in delivery
@@ -124,7 +124,7 @@ GRANT EXECUTE ON FUNCTION public.accept_delivery_assignment_flexible TO authenti
 -- Log migration
 INSERT INTO public.migration_runs(migration_key, status, finished_at, notes)
 VALUES('202608260018_fix_delivery_branch_id_from_orders', 'completed', now(),
-  'Added branch_id column to orders table and fixed accept_delivery_assignment_flexible RPC to handle branch_id gracefully')
+  'Added branch_id column to orders table, fixed accept_delivery_assignment_flexible RPC with run_code generation, branch_id handling, and correct status values (in_transit/arrived)')
 ON CONFLICT(migration_key) DO UPDATE SET status='completed', finished_at=now(), notes=excluded.notes;
 
 COMMIT;
