@@ -11,8 +11,8 @@ import {
 import { navBadgeVisibility } from './lib/roles';
 import { initAudioUnlock } from './lib/sound';
 import { useOrderNotifications } from './lib/useOrderNotifications';
-import { requestNotificationPermission, subscribeToBroadcast, BroadcastEvents, playAlertSound } from './lib/alarmSound';
-import { setupAutoRefresh, cleanupAllSubscriptions, subscribeToMultipleTables } from './lib/realtimeSync';
+import { requestNotificationPermission, playAlertSound } from './lib/alarmSound';
+import { setupAutoRefresh, cleanupAllSubscriptions, subscribeToMultipleTables, subscribeToBroadcast, BroadcastEvents } from './lib/realtimeSync';
 import { ConnectivityBanner } from './components/ConnectivityBanner';
 import { AuthProvider, useAuth } from './lib/AuthContext';
 import LoginScreen from './screens/LoginScreen';
