@@ -88,6 +88,8 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
   const [showAcceptPackageModal, setShowAcceptPackageModal] = useState(false);
   const [selectedPackage, setSelectedPackage] = useState(null);
   const [selectedStaff, setSelectedStaff] = useState('');
+  const [staffOptions, setStaffOptions] = useState([]);
+  const [staffLoading, setStaffLoading] = useState(false);
   const [gpsCoords, setGpsCoords] = useState(null);
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
@@ -140,6 +142,26 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
   useEffect(() => {
     load().catch(x => setError(x.message));
   }, [orderId]);
+
+  useEffect(() => {
+    if (!selectedPackage?.unit_id) { setStaffOptions([]); return; }
+    setStaffLoading(true);
+    setSelectedStaff('');
+    supabase.from('profile_assignments')
+      .select('profile_id, profiles!inner(id, full_name, active)')
+      .eq('unit_id', selectedPackage.unit_id)
+      .is('valid_to', null)
+      .eq('profiles.active', true)
+      .then(({ data: rows, error: err }) => {
+        if (err) { setStaffOptions([]); setStaffLoading(false); return; }
+        const list = (rows || [])
+          .map(r => r.profiles)
+          .filter(Boolean)
+          .filter((p, i, arr) => arr.findIndex(x => x.id === p.id) === i);
+        setStaffOptions(list);
+        setStaffLoading(false);
+      });
+  }, [selectedPackage?.unit_id]);
 
   const assign = async () => {
     setBusy(true); setError('');
@@ -1183,15 +1205,17 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                   fontSize: 14, color: 'var(--text-primary)'
                 }}
               >
-                <option value="">👥 Chọn nhân viên để giao</option>
-                {/* TODO: Load staff list from database based on kitchen unit */}
-                <option value="STAFF-01">Nhân viên 1</option>
-                <option value="STAFF-02">Nhân viên 2</option>
+                <option value="">
+                  {staffLoading ? '⏳ Đang tải danh sách...' : staffOptions.length ? '👥 Chọn nhân viên để giao' : '⚠️ Bếp này chưa có nhân viên'}
+                </option>
+                {staffOptions.map(s => (
+                  <option key={s.id} value={s.id}>{s.full_name}</option>
+                ))}
               </select>
               <button
                 disabled={busy || !selectedStaff}
                 onClick={() => {
-                  const staffName = document.querySelector('select').options[document.querySelector('select').selectedIndex].text;
+                  const staffName = staffOptions.find(s => s.id === selectedStaff)?.full_name || '';
                   acceptPackageDelegate(selectedPackage, selectedStaff, staffName);
                 }}
                 style={{
