@@ -132,6 +132,8 @@ function CheckoutModal({ staffName, staffId, activeCheckins, defaultBranch, onCl
   const [workDate, setWorkDate] = useState(localDateStr(now));
   const [checkoutTime, setCheckoutTime] = useState(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
   const [photoUrl, setPhotoUrl] = useState('');
+  const [useGps, setUseGps] = useState(false);
+  const [gpsCoords, setGpsCoords] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -141,10 +143,39 @@ function CheckoutModal({ staffName, staffId, activeCheckins, defaultBranch, onCl
   const outTimeStr = `${workDate}T${checkoutTime}:00`;
   const timeCalc = inTimeStr ? calculateNetWorkHours(inTimeStr, outTimeStr) : null;
 
+  // Get GPS location
+  const captureGps = async () => {
+    if (!navigator.geolocation) {
+      setError('Trình duyệt không hỗ trợ GPS');
+      return;
+    }
+    try {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          setGpsCoords(`${latitude},${longitude}`);
+        },
+        (err) => setError(`GPS lỗi: ${err.message}`)
+      );
+    } catch (e) {
+      setError('Không thể lấy GPS');
+    }
+  };
+
   const submit = async () => {
+    if (!photoUrl) {
+      setError('Vui lòng chụp ảnh để xác nhận');
+      return;
+    }
     setSaving(true);
     setError('');
-    const payload = { staffId, staffName, workDate: selectedCheckin?.work_date || workDate, shiftLabel: currentShiftLabel, branch: selectedCheckin?.branch || defaultBranch || null, photoUrl: photoUrl || null };
+    const payload = {
+      staffId, staffName, workDate: selectedCheckin?.work_date || workDate,
+      shiftLabel: currentShiftLabel,
+      branch: selectedCheckin?.branch || defaultBranch || null,
+      photoUrl: photoUrl || null,
+      gpsCoords: gpsCoords || null
+    };
     try {
       if (!navigator.onLine) throw new Error('offline');
       await addShiftCheckout(payload);
@@ -161,33 +192,93 @@ function CheckoutModal({ staffName, staffId, activeCheckins, defaultBranch, onCl
     }
   };
 
+  const inTime = inTimeStr ? new Date(inTimeStr).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }) : '--:--';
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 16 }} onClick={onClose}>
-      <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: 440, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto', padding: 20, boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 14 }} onClick={(e) => e.stopPropagation()}>
-        <div>
-          <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>⏹ Kết thúc ca làm việc</div>
-          <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)', marginTop: 2 }}>Tự động tính giờ làm việc thực tế (trừ 1h nghỉ trưa 11:30 - 12:30).</div>
+      <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: '100%', maxWidth: 380, maxHeight: '90vh', overflowY: 'auto', padding: 20, boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 14 }} onClick={(e) => e.stopPropagation()}>
+        {/* Header - Staff Info */}
+        <div style={{ textAlign: 'center', borderBottom: '1px solid var(--border-default)', paddingBottom: 14 }}>
+          <div style={{ font: 'var(--text-display-sm)', color: 'var(--text-primary)', marginBottom: 4 }}>{staffName}</div>
+          <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>{currentShiftLabel}</div>
         </div>
-        {activeCheckins.length > 1 && (
-          <Select label="Chọn ca cần kết thúc" value={selectedCheckinId} onChange={(e) => setSelectedCheckinId(e.target.value)} options={activeCheckins.map(c => ({ value: c.id, label: `${c.shift_label} (Vào ${new Date(c.checkin_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' })})` }))} />
-        )}
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <Input label="Ngày kết thúc" type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} style={{ flex: '1 1 160px' }} />
-          <Input label="Giờ kết thúc" type="time" value={checkoutTime} onChange={(e) => setCheckoutTime(e.target.value)} style={{ flex: '1 1 120px' }} />
+
+        {/* Time Card */}
+        <div style={{ padding: 16, borderRadius: 14, background: 'var(--surface-sunken)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div style={{ textAlign: 'center', paddingRight: 14, borderRight: '1px dashed var(--border-default)' }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Giờ vào</div>
+            <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>{inTime}</div>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Giờ ra</div>
+            <input
+              type="time"
+              value={checkoutTime}
+              onChange={(e) => setCheckoutTime(e.target.value)}
+              style={{ width: '100%', padding: '8px 10px', fontSize: 16, fontWeight: 900, textAlign: 'center', border: '1px solid var(--border-default)', borderRadius: 8, background: 'var(--surface-card)', color: 'var(--text-primary)' }}
+            />
+          </div>
         </div>
+
+        {/* Net Work Hours */}
         {timeCalc && (
-          <div style={{ padding: '12px 14px', borderRadius: 12, background: 'var(--surface-sunken)', display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Bắt đầu vào ca:</span><b>{new Date(inTimeStr).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</b></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Kết thúc ca lúc:</span><b>{checkoutTime}</b></div>
-            {timeCalc.lunchDeduction > 0 && (<div style={{ display: 'flex', justifyContent: 'space-between', color: '#b93e13' }}><span>Nghỉ trưa (11:30–12:30):</span><b>- {timeCalc.lunchDeduction} giờ</b></div>)}
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15, fontWeight: 800, color: 'var(--brand-primary)', borderTop: '1px dashed var(--border-subtle)', paddingTop: 6, marginTop: 2 }}><span>Giờ làm thực tế ghi nhận:</span><span>{timeCalc.netHours} giờ</span></div>
+          <div style={{ padding: 12, borderRadius: 12, background: '#e6f6ed', border: '1px solid #138a53', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 13, color: '#09663d', fontWeight: 700 }}>Giờ làm thực tế:</span>
+            <span style={{ fontSize: 18, fontWeight: 900, color: '#138a53' }}>{timeCalc.netHours} giờ</span>
           </div>
         )}
-        <CameraPhotoField url={photoUrl} onChange={setPhotoUrl} label="Ảnh minh chứng (không bắt buộc)" prefix="shift" />
-        {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
-          <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>Huỷ</Button>
-          <Button variant="primary" size="sm" onClick={submit} disabled={saving}>{saving ? 'Đang lưu...' : '✓ Xác nhận kết thúc ca'}</Button>
+
+        {/* Photo Capture - Required */}
+        <div>
+          <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8 }}>📷 Chụp ảnh xác nhận *</label>
+          <CameraPhotoField url={photoUrl} onChange={setPhotoUrl} label="" prefix="shift" />
+        </div>
+
+        {/* GPS Toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 12, borderRadius: 12, background: 'var(--surface-sunken)', cursor: 'pointer' }} onClick={() => setUseGps(!useGps)}>
+          <input type="checkbox" checked={useGps} readOnly style={{ cursor: 'pointer', width: 18, height: 18 }} />
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>📍 Bật vị trí GPS</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Ghi lại tọa độ khi kết thúc ca</div>
+          </div>
+        </div>
+
+        {useGps && (
+          <button
+            onClick={captureGps}
+            disabled={saving}
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              borderRadius: 12,
+              border: '1px solid var(--border-default)',
+              background: gpsCoords ? '#e6f6ed' : 'var(--surface-sunken)',
+              color: gpsCoords ? '#09663d' : 'var(--text-primary)',
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: saving ? 'not-allowed' : 'pointer',
+              opacity: saving ? 0.6 : 1
+            }}
+          >
+            {gpsCoords ? `✓ GPS Đã lấy: ${gpsCoords}` : '▶ Lấy vị trí hiện tại'}
+          </button>
+        )}
+
+        {/* Error */}
+        {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)', padding: 10, borderRadius: 8, background: '#ffebee' }}>{error}</div>}
+
+        {/* Action Buttons */}
+        <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+          <Button variant="secondary" size="sm" onClick={onClose} disabled={saving} style={{ flex: 1 }}>Huỷ</Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={submit}
+            disabled={saving || !photoUrl}
+            style={{ flex: 1, opacity: !photoUrl ? 0.5 : 1 }}
+          >
+            {saving ? 'Đang lưu...' : '✓ Kết thúc ca'}
+          </Button>
         </div>
       </div>
     </div>
