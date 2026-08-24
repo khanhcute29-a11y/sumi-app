@@ -93,12 +93,13 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
   const director = ['owner', 'admin'].includes(profile?.role) || (profile?.extra_roles || []).some(x => ['owner', 'admin'].includes(x));
 
   const load = async () => {
-    const [o, i, p, u, e, ops, att] = await Promise.all([
+    const [o, i, p, u, e, kpi, ops, att] = await Promise.all([
       supabase.from('orders').select('id,order_code,order_type,status_v2,required_at,fulfillment_method_v2,address,note,created_by_name,created_at,confidentiality,version').eq('id', orderId).single(),
       supabase.from('order_items').select('id,name_snapshot,quantity,unit,specification,unit_price,display_order').eq('order_id', orderId).order('display_order'),
       supabase.from('order_work_packages').select('id,unit_id,status,due_at,accepted_at,completed_at,version,organization_units(name,code),work_package_items(order_item_id,quantity)').eq('order_id', orderId),
       supabase.from('organization_units').select('id,name,code').eq('unit_type', 'kitchen').eq('active', true),
       supabase.from('domain_events').select('id,event_type,occurred_at,payload').eq('entity_type', 'order').eq('entity_id', orderId).order('occurred_at', { ascending: false }),
+      supabase.from('kpi_logs').select('id,event_type,created_at,staff_name').eq('order_id', orderId).order('created_at', { ascending: false }),
       supabase.from('order_operations_list').select('production_started_at,production_completed_at,production_minutes,delivery_started_at,delivery_completed_at,delivery_minutes,delivery_provider,provider_label,shipping_fee,driver_name,is_overdue,overdue_stage,overdue_minutes').eq('id', orderId).single(),
       supabase.from('order_attachments').select('id,attachment_type,storage_path,mime_type,created_at').eq('order_id', orderId).order('created_at', { ascending: false })
     ]);
@@ -126,6 +127,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       items: i.data || [],
       packages: currentPackages,
       events: e.data || [],
+      kpiLogs: kpi.data || [],
       operations: ops.data || {}
     });
     setAttachments(resolvedAttachments);
@@ -731,16 +733,50 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
           <CommentSection order={o} profile={profile} />
         </div>
 
-        {/* Lịch sử trạng thái */}
+        {/* Lịch sử cập nhật - KPI Logs với nhân sự */}
         <div style={box}>
-          <strong style={{ fontSize: 16, display: 'block', marginBottom: 8, color: 'var(--text-primary)' }}>
+          <strong style={{ fontSize: 16, display: 'block', marginBottom: 12, color: 'var(--text-primary)' }}>
             🕘 Lịch sử cập nhật
           </strong>
-          {data.events.map((e) => (
-            <div key={e.id} style={{ padding: '6px 0', fontSize: 13, color: 'var(--text-secondary)', borderBottom: '1px dashed var(--border-subtle)' }}>
-              {new Date(e.occurred_at).toLocaleString('vi-VN')} · {e.event_type}
+
+          {/* Order Creator */}
+          {data.order?.created_by_name && (
+            <div style={{ padding: '10px 0', fontSize: 13, borderBottom: '1px dashed var(--border-subtle)' }}>
+              <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+                📝 Tạo đơn
+              </div>
+              <div style={{ color: 'var(--text-secondary)', marginTop: 2 }}>
+                👤 {data.order.created_by_name} · {new Date(data.order.created_at).toLocaleString('vi-VN')}
+              </div>
             </div>
-          ))}
+          )}
+
+          {/* KPI Logs - Delivery & Kitchen Events */}
+          {data.kpiLogs && data.kpiLogs.length > 0 ? (
+            data.kpiLogs.map((log) => {
+              const eventLabels = {
+                'delivery_assigned': '🚚 Nhân viên nhận đi giao',
+                'delivery_completed': '✅ Hoàn thành giao hàng',
+                'work_package_accepted': '👨‍🍳 Bếp nhận việc',
+                'work_package_completed': '✓ Bếp hoàn thành'
+              };
+              const label = eventLabels[log.event_type] || log.event_type;
+              return (
+                <div key={log.id} style={{ padding: '10px 0', fontSize: 13, borderBottom: '1px dashed var(--border-subtle)' }}>
+                  <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {label}
+                  </div>
+                  <div style={{ color: 'var(--text-secondary)', marginTop: 2 }}>
+                    👤 {log.staff_name || 'Hệ thống'} · {new Date(log.created_at).toLocaleString('vi-VN')}
+                  </div>
+                </div>
+              );
+            })
+          ) : null}
+
+          {!data.kpiLogs?.length && !data.order?.created_by_name && (
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Chưa có hoạt động</div>
+          )}
         </div>
 
         {error && <div style={{ color: '#b42318', marginTop: 8, fontWeight: 700 }}>{error}</div>}
