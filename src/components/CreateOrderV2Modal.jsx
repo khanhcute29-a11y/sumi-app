@@ -18,7 +18,9 @@ const FLOW_WORDS={macaron:['macaron'],cake:['kem','mousse','mouse','tiramisu','s
 function ProductNameField({item,products,flowType,onChange}){
  const [open,setOpen]=useState(false); const wrap=useRef(null); const query=normalizeSearch(item.name||'');
  useEffect(()=>{if(!open)return;const close=e=>{if(wrap.current&&!wrap.current.contains(e.target))setOpen(false)};document.addEventListener('pointerdown',close);return()=>document.removeEventListener('pointerdown',close)},[open]);
- const scoped=products.filter(p=>FLOW_WORDS[flowType]?.some(word=>normalizeSearch(`${p.name} ${p.category||''}`).includes(normalizeSearch(word))));
+ const scoped=flowType==='school'
+  ?products.filter(p=>p.category==='school')
+  :products.filter(p=>p.category!=='school'&&FLOW_WORDS[flowType]?.some(word=>normalizeSearch(`${p.name} ${p.category||''}`).includes(normalizeSearch(word))));
  const matches=scoped.filter(p=>!query||normalizeSearch(`${p.name} ${p.category||''}`).includes(query)).slice(0,10);
  const choose=(p)=>{const variants=p.product_variants||[];onChange({name:p.name,product_id:p.id,unit:p.unit||item.unit||'cái',variants,unit_price:variants.length?null:(p.price??null),specification:{...(item.specification||{}),size:variants.length?'':(item.specification?.size),catalog_category:p.category||null,catalog_price:variants.length?null:(p.price??null)}});setOpen(false);};
  return <div className="sumi-product-combobox" ref={wrap}>
@@ -60,7 +62,10 @@ function OrderPreviewV2({type,customerName,customerPhone,selectedSchool,items,gu
 }
 
 export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
- const {profile}=useAuth(); const [type,setType]=useState(null); const [requiredAt,setRequiredAt]=useState('');
+ const {profile}=useAuth();
+ const isDirector=['owner','admin'].includes(profile?.role)||(profile?.extra_roles||[]).some(r=>['owner','admin'].includes(r));
+ const visibleFlows=isDirector?ORDER_FLOWS:ORDER_FLOWS.filter(f=>f.key!=='school');
+ const [type,setType]=useState(null); const [requiredAt,setRequiredAt]=useState('');
  const [customerName,setCustomerName]=useState(''); const [customerPhone,setCustomerPhone]=useState('');
  const [fulfillment,setFulfillment]=useState('delivery'); const [address,setAddress]=useState(''); const [note,setNote]=useState('');
  const [items,setItems]=useState([]); const [photos,setPhotos]=useState([]); const [saving,setSaving]=useState(false); const [error,setError]=useState('');
@@ -84,7 +89,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
  const grandTotal=getTotalPrice()+effectiveShipFee;
  const remaining=grandTotal-(Number(deposit)||0);
  const blankItem=(key)=>({id:crypto.randomUUID(),flow_type:key,name:'',quantity:1,unit:'cái',specification:{product_flow:key,...(key==='cake'?{cake_line:cakeLine}:{})}});
- const selectFlow=(key)=>{setType(key);setItems(key==='teabreak'?[]:[blankItem(key)]);};
+ const selectFlow=(key)=>{if(key==='school'&&!isDirector)return;setType(key);setItems(key==='teabreak'?[]:[blankItem(key)]);};
  const addFlow=(key)=>{if(type==='school'||key==='school'){setError('Đơn trường học cần tạo riêng để bảo vệ thông tin.');return}setError('');setItems(x=>[...x,blankItem(key)]);setTimeout(()=>document.querySelector('.sumi-mixed-summary')?.scrollIntoView({behavior:'smooth',block:'start'}),0)};
  const changeCakeLine=(key)=>{setCakeLine(key);setItems(current=>current.map(item=>(item.flow_type||type)==='cake'?{...item,specification:{...item.specification,cake_line:key}}:item));};
  const addCatalogItem=(product)=>{setItems(current=>{
@@ -158,7 +163,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
   <div className="sumi-order-create-body sumi-flow-picker" onClick={e=>e.stopPropagation()}>
    <div className="sumi-create-head"><button onClick={onClose} aria-label="Quay lại">←</button><h2>Tạo đơn mới</h2></div>
    <div className="sumi-create-intro"><strong>Đơn này thuộc loại nào?</strong><span>Chọn đúng loại để chỉ hiện những thông tin cần nhập.</span></div>
-   <div className="sumi-flow-grid">{ORDER_FLOWS.map(item=><button key={item.key} onClick={()=>selectFlow(item.key)}><b>{item.icon}</b><strong>{item.title}</strong><span>{item.subtitle}</span></button>)}</div>
+   <div className="sumi-flow-grid">{visibleFlows.map(item=><button key={item.key} onClick={()=>selectFlow(item.key)}><b>{item.icon}</b><strong>{item.title}</strong><span>{item.subtitle}</span></button>)}</div>
    <div className="sumi-entry-title"><strong>Cách nhập đơn</strong><span>Chọn trước hoặc bổ sung ảnh sau</span></div>
    <div className="sumi-entry-grid"><button className={entryMode==='photo'?'active':''} onClick={()=>setEntryMode('photo')}>📷<span>Chụp đơn</span></button><button className={entryMode==='voice'?'active':''} onClick={()=>setEntryMode('voice')}>🎤<span>Nói để nhập</span></button></div>
    {entryMode!=='manual'&&<div className="sumi-entry-note">Đã chọn {entryMode==='photo'?'chụp ảnh':'nhập bằng giọng nói'}. Bây giờ chọn loại đơn ở phía trên.</div>}
