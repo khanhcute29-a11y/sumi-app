@@ -7,18 +7,23 @@ function getCtx() {
 }
 
 function beep({ freq = 880, duration = 0.15, delay = 0, type = 'sine', volume = 0.3 } = {}) {
-  const audioCtx = getCtx();
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-  osc.type = type;
-  osc.frequency.value = freq;
-  osc.connect(gain);
-  gain.connect(audioCtx.destination);
-  const startTime = audioCtx.currentTime + delay;
-  gain.gain.setValueAtTime(volume, startTime);
-  gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
-  osc.start(startTime);
-  osc.stop(startTime + duration + 0.02);
+  try {
+    const audioCtx = getCtx();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    const startTime = audioCtx.currentTime + delay;
+    gain.gain.setValueAtTime(volume, startTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+    osc.start(startTime);
+    osc.stop(startTime + duration + 0.02);
+    console.log('[beep] ✓ Generated beep at', freq, 'Hz, delay:', delay);
+  } catch (e) {
+    console.error('[beep] Error:', e);
+  }
 }
 
 export function initAudioUnlock() {
@@ -62,32 +67,40 @@ export function playTingSound() {
 
 // TING TING TING - Bếp nhận đơn
 export function playKitchenReceiveSound() {
+  console.log('[playKitchenReceiveSound] Starting TING TING TING');
   beep({ freq: 1046, duration: 0.15, volume: 0.4 });
   beep({ freq: 1046, duration: 0.15, delay: 0.2, volume: 0.4 });
   beep({ freq: 1046, duration: 0.15, delay: 0.4, volume: 0.4 });
+  console.log('[playKitchenReceiveSound] ✓ Done');
 }
 
 // TING TING TING TING - Bếp hoàn thành đơn
 export function playKitchenCompleteSound() {
+  console.log('[playKitchenCompleteSound] Starting TING TING TING TING');
   beep({ freq: 1046, duration: 0.12, volume: 0.4 });
   beep({ freq: 1046, duration: 0.12, delay: 0.15, volume: 0.4 });
   beep({ freq: 1046, duration: 0.12, delay: 0.3, volume: 0.4 });
   beep({ freq: 1046, duration: 0.12, delay: 0.45, volume: 0.4 });
+  console.log('[playKitchenCompleteSound] ✓ Done');
 }
 
 // TING TING - Shipper nhận giao
 export function playShipperReceiveSound() {
+  console.log('[playShipperReceiveSound] Starting TING TING');
   beep({ freq: 1046, duration: 0.15, volume: 0.4 });
   beep({ freq: 1046, duration: 0.15, delay: 0.2, volume: 0.4 });
+  console.log('[playShipperReceiveSound] ✓ Done');
 }
 
 // TING TING TING TING TING - Shipper hoàn thành giao
 export function playShipperCompleteSound() {
+  console.log('[playShipperCompleteSound] Starting TING TING TING TING TING');
   beep({ freq: 1046, duration: 0.12, volume: 0.4 });
   beep({ freq: 1046, duration: 0.12, delay: 0.15, volume: 0.4 });
   beep({ freq: 1046, duration: 0.12, delay: 0.3, volume: 0.4 });
   beep({ freq: 1046, duration: 0.12, delay: 0.45, volume: 0.4 });
   beep({ freq: 1046, duration: 0.12, delay: 0.6, volume: 0.4 });
+  console.log('[playShipperCompleteSound] ✓ Done');
 }
 
 export function playNotificationSound(soundKey) {
