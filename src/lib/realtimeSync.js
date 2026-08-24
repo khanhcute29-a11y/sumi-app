@@ -12,6 +12,7 @@ export const BroadcastEvents = {
   DELIVERY_STATUS_CHANGED: 'delivery:status_changed',
   FEED_POST_CREATED: 'feed:post_created',
   KPI_LOG_CREATED: 'kpi:log_created',
+  SOUND_NOTIFICATION: 'sound:notification',  // Sound alerts for tasks, orders, deliveries
 };
 
 // Subscribe to broadcast events

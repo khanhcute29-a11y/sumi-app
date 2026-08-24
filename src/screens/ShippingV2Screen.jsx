@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../lib/AuthContext';
 import { VoiceMicButton } from '../components/VoiceMicButton';
 import OrderV2DetailModal from '../components/OrderV2DetailModal';
+import { playSound, SoundEvents } from '../lib/alarmSound';
+import { broadcastEvent, BroadcastEvents } from '../lib/realtimeSync';
 
 const button = {
   minHeight: 48,
@@ -436,6 +438,13 @@ function StopCard({ stop, runActive, onViewOrder, onDone, setError }) {
         p_recipient: recipient.trim()
       });
       if (x.error) throw x.error;
+
+      // 🎵 Phát âm thanh hoàn thành giao hàng cho tất cả người dùng
+      playSound(SoundEvents.DELIVERY_COMPLETED).catch(e => console.error('Delivery complete sound error:', e));
+      broadcastEvent(BroadcastEvents.SOUND_NOTIFICATION, {
+        soundType: SoundEvents.DELIVERY_COMPLETED
+      }).catch(e => console.error('Delivery complete broadcast error:', e));
+
       await onDone();
     } catch (e) {
       setError(e.message);
