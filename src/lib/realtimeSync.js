@@ -43,14 +43,26 @@ export const subscribeToBroadcast = (event, callback) => {
 // Broadcast event to all listeners
 export const broadcastEvent = async (event, data) => {
   try {
-    await supabase.channel(`broadcast:${event}`).send({
+    console.log(`[Broadcast] Sending ${event}...`, data);
+    const channel = supabase.channel(`broadcast:${event}`, {
+      config: { broadcast: { self: true } }
+    });
+
+    // Subscribe first to ensure channel is ready
+    await channel.subscribe();
+
+    // Then send
+    const result = await channel.send({
       type: 'broadcast',
       event,
       payload: data,
     });
-    console.log(`[Broadcast Sent] ${event}:`, data);
+    console.log(`[Broadcast] Sent ${event}:`, result, data);
+
+    // Clean up
+    await supabase.removeChannel(channel);
   } catch (e) {
-    console.error(`[Broadcast Error] ${event}:`, e);
+    console.error(`[Broadcast Error] ${event}:`, e.message, e);
   }
 };
 
