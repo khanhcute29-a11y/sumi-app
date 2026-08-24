@@ -14,10 +14,12 @@ const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SU
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { title, body, url } = req.body || {};
+  const { title, body, url, staffId } = req.body || {};
   if (!title) return res.status(400).json({ error: 'Thiếu title' });
 
-  const { data: subs, error } = await supabase.from('push_subscriptions').select('*');
+  let query = supabase.from('push_subscriptions').select('*');
+  if (staffId) query = query.eq('staff_id', staffId);
+  const { data: subs, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
 
   const payload = JSON.stringify({ title, body: body || '', url: url || '/' });
