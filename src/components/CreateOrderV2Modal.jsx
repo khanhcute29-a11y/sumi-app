@@ -243,14 +243,13 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
        );})}</div>
    )}
    <div style={{color:'#725f50',fontWeight:700,marginTop:6,marginBottom:8}}>{photos.length?`${photos.length} ảnh đã chọn`:'Chưa có ảnh'}</div>
-   {type==='school'&&<div style={{padding:12,marginTop:12,borderRadius:14,background:'#fff3cd',fontWeight:700}}>Đơn trường học không nhập và không hiển thị giá.</div>}
-   <label style={{display:'flex',alignItems:'center',gap:10,marginTop:14,padding:'12px 14px',borderRadius:14,background:isReadyStock?'#e6f6ed':'#fcf9f5',border:isReadyStock?'2px solid #087f5b':'1px solid var(--border-default)',cursor:'pointer'}}>
+   {type!=='school'&&<label style={{display:'flex',alignItems:'center',gap:10,marginTop:14,padding:'12px 14px',borderRadius:14,background:isReadyStock?'#e6f6ed':'#fcf9f5',border:isReadyStock?'2px solid #087f5b':'1px solid var(--border-default)',cursor:'pointer'}}>
      <input type="checkbox" checked={isReadyStock} onChange={e=>setIsReadyStock(e.target.checked)} style={{width:22,height:22,margin:0}}/>
      <div>
        <b style={{fontSize:15,color:isReadyStock?'#087f5b':'var(--text-primary)',display:'block'}}>⚡ Bánh có sẵn trong Kho Thành Phẩm (Xuất giao ngay)</b>
        <span style={{fontSize:13,color:'var(--text-secondary)'}}>Bỏ qua khâu làm bánh của Bếp, đưa thẳng vào Kho Thành Phẩm và kích hoạt Shipper nhận đơn.</span>
      </div>
-   </label>
+   </label>}
    <div style={{padding:14,marginTop:14,borderRadius:14,background:'#f5f1eb',border:'2px solid #e0d5c7'}}>
      <div style={{fontSize:12,color:'#725f50',fontWeight:700,marginBottom:8}}>💰 TỔNG ĐƠN HÀNG</div>
      <div style={{fontSize:28,fontWeight:900,color:'#d96b43',marginBottom:10}}>{grandTotal.toLocaleString('vi-VN')}đ</div>
