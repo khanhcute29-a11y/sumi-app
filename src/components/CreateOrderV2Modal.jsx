@@ -15,7 +15,7 @@ function ProductNameField({item,products,flowType,onChange}){
  useEffect(()=>{if(!open)return;const close=e=>{if(wrap.current&&!wrap.current.contains(e.target))setOpen(false)};document.addEventListener('pointerdown',close);return()=>document.removeEventListener('pointerdown',close)},[open]);
  const scoped=products.filter(p=>FLOW_WORDS[flowType]?.some(word=>normalizeSearch(`${p.name} ${p.category||''}`).includes(normalizeSearch(word))));
  const matches=scoped.filter(p=>!query||normalizeSearch(`${p.name} ${p.category||''}`).includes(query)).slice(0,10);
- const choose=(p)=>{const variants=p.product_variants||[];onChange({name:p.name,product_id:p.id,unit:p.unit||item.unit||'cái',variants,unit_price:variants.length?null:(p.price??null),specification:{...(item.specification||{}),size:variants.length?'':(item.specification?.size),catalog_category:p.category||null,catalog_price:p.price??null}});setOpen(false);};
+ const choose=(p)=>{const variants=p.product_variants||[];onChange({name:p.name,product_id:p.id,unit:p.unit||item.unit||'cái',variants,unit_price:variants.length?null:(p.price??null),specification:{...(item.specification||{}),size:variants.length?'':(item.specification?.size),catalog_category:p.category||null,catalog_price:variants.length?null:(p.price??null)}});setOpen(false);};
  return <div className="sumi-product-combobox" ref={wrap}>
   <input style={fieldStyle} autoComplete="off" placeholder="Gõ tên bánh để tìm hoặc nhập mới" value={item.name||''} onFocus={()=>setOpen(true)} onChange={e=>{onChange({name:e.target.value,product_id:null,variants:[]});setOpen(true)}} aria-expanded={open}/>
   {open&&<div className="sumi-product-options">
