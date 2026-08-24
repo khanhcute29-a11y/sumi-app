@@ -85,6 +85,9 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
   const [idempotencyKey] = useState(() => crypto.randomUUID());
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [showAcceptPackageModal, setShowAcceptPackageModal] = useState(false);
+  const [selectedPackage, setSelectedPackage] = useState(null);
+  const [selectedStaff, setSelectedStaff] = useState('');
   const [gpsCoords, setGpsCoords] = useState(null);
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
@@ -294,6 +297,73 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       setGpsCoords(null);
       setPhotoFile(null);
       setPhotoPreview(null);
+      await load();
+      onChanged?.();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const acceptPackageSelf = async (p) => {
+    setBusy(true);
+    setError('');
+    try {
+      // Update work package status to in_progress (bếp trưởng tự làm)
+      const { error } = await supabase
+        .from('order_work_packages')
+        .update({ status: 'in_progress', accepted_at: new Date().toISOString() })
+        .eq('id', p.id);
+
+      if (error) throw error;
+
+      // Log KPI: work_package_accepted by bếp trưởng
+      await supabase.from('kpi_logs').insert({
+        order_id: orderId,
+        staff_id: profile.id,
+        staff_name: profile.full_name || profile.email,
+        event_type: 'work_package_accepted',
+        notes: 'Bếp trưởng tự nhận đơn để làm'
+      }).catch(() => {}); // Fail silently if kpi_logs insert fails
+
+      setShowAcceptPackageModal(false);
+      setSelectedPackage(null);
+      await load();
+      onChanged?.();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const acceptPackageDelegate = async (p, staffId, staffName) => {
+    setBusy(true);
+    setError('');
+    try {
+      if (!staffId) throw new Error('Chưa chọn nhân viên');
+
+      // Update work package status to in_progress (bếp trưởng giao cho nhân viên)
+      const { error } = await supabase
+        .from('order_work_packages')
+        .update({ status: 'in_progress', accepted_at: new Date().toISOString() })
+        .eq('id', p.id);
+
+      if (error) throw error;
+
+      // Log KPI: work_package_accepted by delegated staff
+      await supabase.from('kpi_logs').insert({
+        order_id: orderId,
+        staff_id: staffId,
+        staff_name: staffName,
+        event_type: 'work_package_accepted',
+        notes: 'Nhân viên nhận đơn từ bếp trưởng'
+      }).catch(() => {}); // Fail silently if kpi_logs insert fails
+
+      setShowAcceptPackageModal(false);
+      setSelectedPackage(null);
+      setSelectedStaff('');
       await load();
       onChanged?.();
     } catch (e) {
@@ -650,14 +720,17 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                     {isAssigned && (
                       <button
                         disabled={busy}
-                        onClick={() => accept(p)}
+                        onClick={() => {
+                          setSelectedPackage(p);
+                          setShowAcceptPackageModal(true);
+                        }}
                         style={{
                           minHeight: 48, border: 0, borderRadius: 14, padding: '0 20px', fontWeight: 950,
                           background: '#ef642b', color: '#fff', fontSize: 16, cursor: 'pointer',
                           boxShadow: '0 4px 0 #b93e13'
                         }}
                       >
-                        👩‍🍳 Nhận đơn & Bắt đầu làm
+                        👩‍🍳 Nhận đơn
                       </button>
                     )}
                     {['in_progress', 'awaiting_approval'].includes(p.status) && (
@@ -1013,6 +1086,92 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                 {busy ? '⏳ Đang xử lý...' : '✅ Hoàn Thành Giao'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Nhận đơn - Tự làm hoặc Giao nhân viên */}
+      {showAcceptPackageModal && selectedPackage && (
+        <div onClick={() => !busy && setShowAcceptPackageModal(false)} style={{
+          position: 'fixed', inset: 0, zIndex: 115, background: 'rgba(0,0,0,0.5)',
+          display: 'flex', justifyContent: 'center', alignItems: 'center'
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            width: '100%', maxWidth: 400, background: 'var(--surface-app)', borderRadius: 16,
+            padding: 24, boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
+          }}>
+            <h3 style={{ margin: '0 0 20px 0', fontSize: 18, color: 'var(--text-primary)', fontWeight: 900 }}>
+              👨‍🍳 Nhận đơn - {selectedPackage.organization_units?.name}
+            </h3>
+
+            {/* Option 1: Tự làm */}
+            <button
+              disabled={busy}
+              onClick={() => acceptPackageSelf(selectedPackage)}
+              style={{
+                width: '100%', padding: '16px', marginBottom: 10, background: '#d96b43', color: '#fff',
+                border: 0, borderRadius: 12, fontWeight: 900, fontSize: 16, cursor: busy ? 'not-allowed' : 'pointer',
+                opacity: busy ? 0.6 : 1
+              }}
+            >
+              ✅ Tự làm
+            </button>
+
+            {/* Option 2: Giao nhân viên - with staff selection */}
+            <div style={{ marginBottom: 10 }}>
+              <select
+                value={selectedStaff}
+                onChange={(e) => setSelectedStaff(e.target.value)}
+                disabled={busy}
+                style={{
+                  width: '100%', padding: '12px 10px', marginBottom: 10, borderRadius: 10,
+                  border: '1px solid var(--border-default)', background: 'var(--surface-sunken)',
+                  fontSize: 14, color: 'var(--text-primary)'
+                }}
+              >
+                <option value="">👥 Chọn nhân viên để giao</option>
+                {/* TODO: Load staff list from database based on kitchen unit */}
+                <option value="STAFF-01">Nhân viên 1</option>
+                <option value="STAFF-02">Nhân viên 2</option>
+              </select>
+              <button
+                disabled={busy || !selectedStaff}
+                onClick={() => {
+                  const staffName = document.querySelector('select').options[document.querySelector('select').selectedIndex].text;
+                  acceptPackageDelegate(selectedPackage, selectedStaff, staffName);
+                }}
+                style={{
+                  width: '100%', padding: '16px', background: '#1e88e5', color: '#fff',
+                  border: 0, borderRadius: 12, fontWeight: 900, fontSize: 16,
+                  cursor: (busy || !selectedStaff) ? 'not-allowed' : 'pointer',
+                  opacity: (busy || !selectedStaff) ? 0.5 : 1
+                }}
+              >
+                👥 Giao nhân viên
+              </button>
+            </div>
+
+            {error && (
+              <div style={{
+                marginTop: 10, padding: 10, background: '#fee2e2', borderRadius: 10,
+                color: '#b42318', fontWeight: 700, fontSize: 13
+              }}>
+                ⚠️ {error}
+              </div>
+            )}
+
+            {/* Close button */}
+            <button
+              onClick={() => setShowAcceptPackageModal(false)}
+              disabled={busy}
+              style={{
+                width: '100%', marginTop: 10, padding: '12px', background: 'var(--surface-sunken)',
+                color: 'var(--text-primary)', border: 0, borderRadius: 10, fontWeight: 700,
+                cursor: 'pointer', fontSize: 14
+              }}
+            >
+              Huỷ
+            </button>
           </div>
         </div>
       )}
