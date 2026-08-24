@@ -310,26 +310,19 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
     setBusy(true);
     setError('');
     try {
-      // Update work package: mark as completed by staff
-      const { error: pkgError } = await supabase
-        .from('order_work_packages')
-        .update({
-          status: 'completed',
-          completed_at: new Date().toISOString(),
-          completed_by_staff_id: p.assigned_to_staff_id || profile.id,
-          completed_by_staff_name: p.assigned_to_staff_name || profile.full_name || profile.email
-        })
-        .eq('id', p.id);
+      const staffId = p.assigned_to_staff_id || profile.id;
+      const staffName = p.assigned_to_staff_name || profile.full_name || profile.email;
 
-      if (pkgError) throw pkgError;
+      // Call RPC to complete work package and update order status (bypasses RLS)
+      const { data, error } = await supabase.rpc('complete_work_package_and_order', {
+        p_package_id: p.id,
+        p_order_id: orderId,
+        p_staff_id: staffId,
+        p_staff_name: staffName
+      });
 
-      // Update order status to ready_for_fulfillment (chờ vận chuyển)
-      const { error: orderError } = await supabase
-        .from('orders')
-        .update({ status_v2: 'ready_for_fulfillment' })
-        .eq('id', orderId);
-
-      if (orderError) throw orderError;
+      if (error) throw error;
+      if (!data.success) throw new Error(data.message || 'Failed to complete work package');
 
       // Log KPI: work_package_completed
       await supabase.from('kpi_logs').insert({
@@ -353,13 +346,15 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
     setBusy(true);
     setError('');
     try {
-      // Update work package status to in_progress (bếp trưởng tự làm)
-      const { error } = await supabase
-        .from('order_work_packages')
-        .update({ status: 'in_progress', accepted_at: new Date().toISOString() })
-        .eq('id', p.id);
+      // Call RPC to accept work package by kitchen lead (bypasses RLS)
+      const { data, error } = await supabase.rpc('accept_work_package_self', {
+        p_package_id: p.id,
+        p_staff_id: profile.id,
+        p_staff_name: profile.full_name || profile.email
+      });
 
       if (error) throw error;
+      if (!data.success) throw new Error(data.message || 'Failed to accept work package');
 
       // Log KPI: work_package_accepted by bếp trưởng
       await supabase.from('kpi_logs').insert({
@@ -387,19 +382,15 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
     try {
       if (!staffId) throw new Error('Chưa chọn nhân viên');
 
-      // Update work package: assign to staff + status in_progress
-      const { error } = await supabase
-        .from('order_work_packages')
-        .update({
-          status: 'in_progress',
-          accepted_at: new Date().toISOString(),
-          assigned_to_staff_id: staffId,
-          assigned_to_staff_name: staffName,
-          assigned_at: new Date().toISOString()
-        })
-        .eq('id', p.id);
+      // Call RPC to delegate work package to staff (bypasses RLS)
+      const { data, error } = await supabase.rpc('accept_delegate_work_package', {
+        p_package_id: p.id,
+        p_staff_id: staffId,
+        p_staff_name: staffName
+      });
 
       if (error) throw error;
+      if (!data.success) throw new Error(data.message || 'Failed to delegate work package');
 
       // Log KPI: work_package_accepted by delegated staff
       await supabase.from('kpi_logs').insert({
