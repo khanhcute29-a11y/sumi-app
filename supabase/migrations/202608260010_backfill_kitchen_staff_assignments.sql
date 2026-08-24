@@ -22,7 +22,7 @@ with mapped_profiles as (
     and p.active is distinct from false
 )
 insert into public.profile_assignments (profile_id, unit_id, position_code, is_primary)
-select mp.profile_id, ou.id, mp.position_code, true
+select mp.profile_id, ou.id, mp.position_code, false
 from mapped_profiles mp
 join public.organization_units ou on ou.code = mp.unit_code and ou.active = true
 where mp.unit_code is not null
