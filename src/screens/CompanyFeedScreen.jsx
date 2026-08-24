@@ -1,5 +1,6 @@
 import React,{useEffect,useRef,useState} from 'react';
-import {supabase} from '../lib/supabaseClient';import {useAuth} from '../lib/AuthContext';import {hasAnyRole} from '../lib/roles';import {VoiceMicButton} from '../components/VoiceMicButton';import UserAvatar from '../components/UserAvatar';import {uploadFile} from '../lib/queries';import {toWebSafeImage} from '../lib/imageConvert';import {notifyCompany, requestNotificationPermission, subscribeToBroadcast, BroadcastEvents, playAlertSound, broadcastEvent} from '../lib/alarmSound';
+import {supabase} from '../lib/supabaseClient';import {useAuth} from '../lib/AuthContext';import {hasAnyRole} from '../lib/roles';import {VoiceMicButton} from '../components/VoiceMicButton';import UserAvatar from '../components/UserAvatar';import {uploadFile} from '../lib/queries';import {toWebSafeImage} from '../lib/imageConvert';import {notifyCompany, requestNotificationPermission, playAlertSound} from '../lib/alarmSound';
+import {subscribeToBroadcast, BroadcastEvents, broadcastEvent} from '../lib/realtimeSync';
 import '../feed-media-fixes.css';
 const format=d=>new Date(d).toLocaleString('vi-VN',{dateStyle:'short',timeStyle:'short'});
 export default function CompanyFeedScreen(){const{profile}=useAuth(),legacyDirector=hasAnyRole(profile,['owner','admin']);const[director,setDirector]=useState(legacyDirector),[tab,setTab]=useState('announcement'),[posts,setPosts]=useState([]),[authors,setAuthors]=useState({}),[show,setShow]=useState(false),[error,setError]=useState('');
