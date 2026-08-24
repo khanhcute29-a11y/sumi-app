@@ -27,6 +27,29 @@ function ProductNameField({item,products,flowType,onChange}){
  </div>;
 }
 
+function OrderPreviewV2({type,customerName,customerPhone,selectedSchool,items,guestCount,fulfillment,address,requiredAt,note,total}){
+ const itemLine=(it)=>{
+  const s=it.specification||{};
+  const parts=[s.size,s.content&&`chữ: ${s.content}`,s.candle&&`nến: ${s.candle}`,s.packing,s.color,s.flavor,s.spec,s.catalog_specification].filter(Boolean);
+  return `${it.name?.trim()||'(chưa đặt tên)'} × ${it.quantity}${parts.length?` (${parts.join(', ')})`:''}`;
+ };
+ const displayName=type==='school'?(selectedSchool?.name||customerName):customerName;
+ return <div style={{display:'flex',flexDirection:'column',gap:10,background:'#f5f1eb',borderRadius:17,padding:16,border:'2px solid #e0d5c7'}}>
+  <div style={{fontSize:12,color:'#8c5a3c',fontWeight:800,display:'flex',alignItems:'center',gap:4}}>👁 XEM TRƯỚC ĐƠN HÀNG</div>
+  <div style={{fontWeight:900,color:'#2d1c10',fontSize:16}}>{displayName||'Khách chưa đặt tên'}</div>
+  {customerPhone&&type!=='school'&&<div style={{fontSize:13,color:'#725f50'}}>📞 {customerPhone}</div>}
+  {type==='teabreak'&&guestCount&&<div style={{fontSize:13,color:'#725f50'}}>👥 {guestCount} khách</div>}
+  <div style={{fontSize:13,color:'#725f50'}}>{items.length?items.map(itemLine).join(', '):'Chưa có sản phẩm nào'}</div>
+  <div style={{fontSize:13,color:'#725f50'}}>{fulfillment==='delivery'?'🛵 Giao hàng tận nơi':'🏬 Nhận tại quầy'}</div>
+  {fulfillment==='delivery'&&address&&<div style={{fontSize:13,color:'#725f50'}}>📍 {address}</div>}
+  {requiredAt&&<div style={{fontSize:13,color:'#725f50'}}>🕒 {new Date(requiredAt).toLocaleString('vi-VN')}</div>}
+  {type!=='school'&&<div style={{display:'flex',flexDirection:'column',gap:4,paddingTop:8,borderTop:'1px solid #e0d5c7'}}>
+   <div style={{display:'flex',justifyContent:'space-between',fontWeight:900,color:'#2d1c10'}}><span>Tổng tiền</span><span>{total?`${total.toLocaleString('vi-VN')}đ`:'0 đồng'}</span></div>
+  </div>}
+  {note&&<div style={{fontSize:13,color:'#725f50'}}>📝 {note}</div>}
+ </div>;
+}
+
 export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
  const {profile}=useAuth(); const [type,setType]=useState(null); const [requiredAt,setRequiredAt]=useState('');
  const [customerName,setCustomerName]=useState(''); const [customerPhone,setCustomerPhone]=useState('');
@@ -37,6 +60,8 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
  const [schoolSearch,setSchoolSearch]=useState(''); const [selectedSchool,setSelectedSchool]=useState(null);
  const [entryMode,setEntryMode]=useState('manual'); const [cakeLine,setCakeLine]=useState('decorated_cake');
  const [productCatalog,setProductCatalog]=useState([]);
+ const [isMobile,setIsMobile]=useState(typeof window!=='undefined'?window.innerWidth<860:false);
+ useEffect(()=>{const onResize=()=>setIsMobile(window.innerWidth<860);window.addEventListener('resize',onResize);return()=>window.removeEventListener('resize',onResize)},[]);
  useEffect(()=>{let active=true;supabase.from('products').select('id,name,category,unit,price').eq('active',true).order('name').limit(500).then(({data,error})=>{if(active&&!error)setProductCatalog([...(data||[]),...MOONCAKE_CATALOG])});return()=>{active=false}},[]);
  const change=(i,key,value)=>setItems(x=>x.map((it,n)=>n===i?{...it,[key]:value}:it));
  const changeMany=(i,fields)=>setItems(x=>x.map((it,n)=>n===i?{...it,...fields}:it));
@@ -125,10 +150,12 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
    {entryMode!=='manual'&&<div className="sumi-entry-note">Đã chọn {entryMode==='photo'?'chụp ảnh':'nhập bằng giọng nói'}. Bây giờ chọn loại đơn ở phía trên.</div>}
   </div></div>;
  return <div className={embedded?'sumi-order-create-page':'sumi-order-create-overlay'} onClick={embedded?undefined:onClose}>
-  <div className="sumi-order-create-body" onClick={e=>e.stopPropagation()}>
+  <div className="sumi-order-create-body" style={isMobile?undefined:{maxWidth:1040}} onClick={e=>e.stopPropagation()}>
    <div className="sumi-create-head"><button onClick={()=>setType(null)} aria-label="Chọn lại loại đơn">←</button><h2>{isMixed?'🧺 Đơn nhiều sản phẩm':`${flow?.icon} ${flow?.title}`}</h2></div>
    <button className="sumi-change-flow" onClick={()=>setType(null)}>Đổi loại đơn</button>
    {entryMode!=='manual'&&<div className="sumi-entry-note">{entryMode==='photo'?'📷 Đơn được nhập từ ảnh — cần kiểm tra trước khi tạo':'🎤 Đơn được nhập bằng giọng nói — cần xác nhận lại nội dung'}</div>}
+   <div style={{display:'flex',flexDirection:isMobile?'column':'row',gap:20,alignItems:'flex-start'}}>
+   <div style={{flex:isMobile?'1 1 auto':'1 1 480px',minWidth:0}}>
    <p style={{color:'#725f50',fontWeight:700}}>Người tạo: {profile?.full_name||'Nhân viên'} · tự lưu ngày giờ</p>
    {type==='school'&&<section className="sumi-catalog-picker sumi-school-picker">
     <label>Tìm trường hoặc điểm giao</label><input style={fieldStyle} placeholder="Gõ HC 5, Hoa Cúc, Dĩ An…" value={schoolSearch} onChange={e=>setSchoolSearch(e.target.value)}/>
@@ -194,5 +221,12 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
    </div>
    {error&&<div style={{color:'#b42318',marginTop:10}}>{error}</div>}
    <button disabled={saving} onClick={submit} style={{width:'100%',minHeight:66,marginTop:18,border:0,borderRadius:18,background:saving?'#c7b6a3':'#ef642b',color:'#fff',fontSize:20,fontWeight:950,boxShadow:saving?'none':'0 7px 0 #b93e13',opacity:1}}>{saving?'ĐANG TẠO...':(isReadyStock?'TẠO ĐƠN & BÁO VẬN TẢI NGAY':'TẠO ĐƠN HÀNG')}</button>
+   </div>
+   <div style={{flex:isMobile?'1 1 auto':'1 1 320px',minWidth:0,width:isMobile?'100%':undefined}}>
+    <div style={{position:isMobile?'static':'sticky',top:12}}>
+     <OrderPreviewV2 type={type} customerName={type==='school'?selectedSchool?.name:customerName} customerPhone={customerPhone} selectedSchool={selectedSchool} items={items} guestCount={guestCount} fulfillment={fulfillment} address={address} requiredAt={requiredAt} note={note} total={getTotalPrice()}/>
+    </div>
+   </div>
+   </div>
   </div></div>;
 }
