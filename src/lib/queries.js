@@ -3,7 +3,7 @@ import { isSyntheticPhoneEmail } from './authPhone';
 import { branchForCategory, KEM_GROUP_CATEGORIES } from './cakePricing';
 import { newId } from './ids';
 import { broadcastEvent, BroadcastEvents, notifyOtherTabs } from './realtimeSync';
-import { playSound, SoundEvents } from './alarmSound';
+import { playShipperReceiveSound } from './sound';
 
 // Báo cho App.jsx biết cần đếm lại chấm đỏ thông báo ngay — không chờ Supabase Realtime
 // (bảng mới có thể chưa bật Realtime replication, khiến chấm đỏ bị kẹt tới khi tải lại trang).
@@ -1058,11 +1058,11 @@ export async function createAdhocTask({ assigneeId, title, description, orderCod
   const { error } = await supabase.rpc('create_general_task',{p_category:'adhoc',p_title:title,p_description:description||null,p_order_code:orderCode||null,p_assignee_id:assigneeId,p_deadline:null,p_reminder_at:null});
   if (error) throw error;
 
-  // 🎵 Phát âm thanh giao việc cho tất cả người dùng
-  playSound(SoundEvents.TASK_ASSIGNED).catch(e => console.error('Task assigned sound error:', e));
+  // 🎵 TING TING - Phát âm thanh giao việc cho tất cả người dùng
+  playShipperReceiveSound();
   broadcastEvent(BroadcastEvents.SOUND_NOTIFICATION, {
-    soundType: SoundEvents.TASK_ASSIGNED
-  }).catch(e => console.error('Task assigned broadcast error:', e));
+    soundType: 'task_assigned'
+  }).catch(e => console.error('Broadcast error:', e));
 
   notifyBadgesChanged();
 }

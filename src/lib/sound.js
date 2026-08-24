@@ -60,6 +60,36 @@ export function playTingSound() {
   beep({ freq: 1046, duration: 0.16, type: 'sine', volume: 0.25 });
 }
 
+// TING TING TING - Bếp nhận đơn
+export function playKitchenReceiveSound() {
+  beep({ freq: 1046, duration: 0.15, volume: 0.4 });
+  beep({ freq: 1046, duration: 0.15, delay: 0.2, volume: 0.4 });
+  beep({ freq: 1046, duration: 0.15, delay: 0.4, volume: 0.4 });
+}
+
+// TING TING TING TING - Bếp hoàn thành đơn
+export function playKitchenCompleteSound() {
+  beep({ freq: 1046, duration: 0.12, volume: 0.4 });
+  beep({ freq: 1046, duration: 0.12, delay: 0.15, volume: 0.4 });
+  beep({ freq: 1046, duration: 0.12, delay: 0.3, volume: 0.4 });
+  beep({ freq: 1046, duration: 0.12, delay: 0.45, volume: 0.4 });
+}
+
+// TING TING - Shipper nhận giao
+export function playShipperReceiveSound() {
+  beep({ freq: 1046, duration: 0.15, volume: 0.4 });
+  beep({ freq: 1046, duration: 0.15, delay: 0.2, volume: 0.4 });
+}
+
+// TING TING TING TING TING - Shipper hoàn thành giao
+export function playShipperCompleteSound() {
+  beep({ freq: 1046, duration: 0.12, volume: 0.4 });
+  beep({ freq: 1046, duration: 0.12, delay: 0.15, volume: 0.4 });
+  beep({ freq: 1046, duration: 0.12, delay: 0.3, volume: 0.4 });
+  beep({ freq: 1046, duration: 0.12, delay: 0.45, volume: 0.4 });
+  beep({ freq: 1046, duration: 0.12, delay: 0.6, volume: 0.4 });
+}
+
 export function playNotificationSound(soundKey) {
   if (soundKey === 'new_order_voice') {
     playNewOrderSound();

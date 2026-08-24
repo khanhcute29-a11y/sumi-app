@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../lib/AuthContext';
 import { VoiceMicButton } from '../components/VoiceMicButton';
 import OrderV2DetailModal from '../components/OrderV2DetailModal';
-import { playSound, SoundEvents } from '../lib/alarmSound';
+import { playShipperCompleteSound } from '../lib/sound';
 import { broadcastEvent, BroadcastEvents } from '../lib/realtimeSync';
 
 const button = {
@@ -439,11 +439,11 @@ function StopCard({ stop, runActive, onViewOrder, onDone, setError }) {
       });
       if (x.error) throw x.error;
 
-      // 🎵 Phát âm thanh hoàn thành giao hàng cho tất cả người dùng
-      playSound(SoundEvents.DELIVERY_COMPLETED).catch(e => console.error('Delivery complete sound error:', e));
+      // 🎵 TING TING TING TING TING - Phát âm thanh hoàn thành giao hàng cho tất cả người dùng
+      playShipperCompleteSound();
       broadcastEvent(BroadcastEvents.SOUND_NOTIFICATION, {
-        soundType: SoundEvents.DELIVERY_COMPLETED
-      }).catch(e => console.error('Delivery complete broadcast error:', e));
+        soundType: 'shipper_complete'
+      }).catch(e => console.error('Broadcast error:', e));
 
       await onDone();
     } catch (e) {

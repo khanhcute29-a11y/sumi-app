@@ -16,7 +16,7 @@ import { useAuth } from '../lib/AuthContext';
 import { hasAnyRole } from '../lib/roles';
 import { enqueue } from '../lib/offlineQueue';
 import { supabase } from '../lib/supabaseClient';
-import { playSound, SoundEvents } from '../lib/alarmSound';
+import { playKitchenCompleteSound } from '../lib/sound';
 import { broadcastEvent, BroadcastEvents } from '../lib/realtimeSync';
 import {
   IconStationHot, IconStationCold, IconStationWorkshop, IconStationSparkle,
@@ -519,11 +519,11 @@ export default function KdsScreen({ initialStation }) {
       if (photoUrl) fields.kitchen_photo_url = photoUrl;
       await applyFields(order, fields);
 
-      // 🎵 Phát âm thanh hoàn thành đơn cho tất cả người dùng
-      playSound(SoundEvents.ORDER_COMPLETED).catch(e => console.error('Order complete sound error:', e));
+      // 🎵 TING TING TING TING - Phát âm thanh hoàn thành đơn cho tất cả người dùng
+      playKitchenCompleteSound();
       broadcastEvent(BroadcastEvents.SOUND_NOTIFICATION, {
-        soundType: SoundEvents.ORDER_COMPLETED
-      }).catch(e => console.error('Order complete broadcast error:', e));
+        soundType: 'kitchen_complete'
+      }).catch(e => console.error('Broadcast error:', e));
     } else {
       load();
     }
