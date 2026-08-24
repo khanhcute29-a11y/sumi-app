@@ -1,7 +1,7 @@
 export const playAlertSound = () => {
-  // Play alert sound using audio file
+  // Play rotary phone ring alert sound
   try {
-    const audio = new Audio('data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEAQB8AAAB9AAACABAAZGF0YQIAAAAAAA==');
+    const audio = new Audio('/alert.mp3');
     audio.volume = 1.0;
     audio.play().catch(e => console.log('Audio play failed:', e));
   } catch (e) {
@@ -10,8 +10,12 @@ export const playAlertSound = () => {
 };
 
 export const notifyCompany = (title, body, severity = 'normal') => {
-  // Send browser notification to entire company
+  // Send browser notification + play sound when posting announcement
   try {
+    // Play alert sound immediately
+    playAlertSound();
+
+    // Also send notification if permission granted
     if ('Notification' in window && Notification.permission === 'granted') {
       const notification = new Notification(title, {
         body: body,
@@ -26,9 +30,6 @@ export const notifyCompany = (title, body, severity = 'normal') => {
         notification.close();
       };
     }
-
-    // Also try to play sound
-    playAlertSound();
   } catch (e) {
     console.error('Notification error:', e);
   }
