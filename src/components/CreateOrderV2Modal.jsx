@@ -110,8 +110,8 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
   const orderCode = `SUMI-${dateStr}-${timeStr}`;
   let customerId=null;
   if(customerName||customerPhone){
-    const {data: cust, error: custErr} = await supabase.from('customers').select('id').match({name: customerName || null, phone: customerPhone || null}).single();
-    if(!cust && !custErr) {
+    const {data: cust} = await supabase.from('customers').select('id').match({name: customerName || null, phone: customerPhone || null}).maybeSingle();
+    if(!cust) {
       const {data: newCust} = await supabase.from('customers').insert({name: customerName || null, phone: customerPhone || null, created_by: user?.id}).select('id').single();
       customerId = newCust?.id || null;
     } else {
