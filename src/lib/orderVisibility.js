@@ -22,7 +22,7 @@ function hasRoleOrExtra(userProfile, role) {
 // không phải "nhân viên X42" nói chung nữa (khác Macaron), theo yêu cầu bảo
 // mật riêng cho đơn trường học ("không ai được xem cả" ngoài 2 vai trò này).
 export function canViewSchoolOrder(userProfile) {
-  return isOwnerOrAdmin(userProfile) || hasRoleOrExtra(userProfile, 'deputy_director_x42');
+  return isOwnerOrAdmin(userProfile) || hasRoleOrExtra(userProfile, 'deputy_director_x42') || hasRoleOrExtra(userProfile, 'shipper_school');
 }
 
 // Giá sản phẩm Macaron: chỉ owner/admin và Trợ Lý Giám Đốc Xưởng 41 được xem
@@ -66,7 +66,7 @@ export function canUserViewOrder(order, userProfile) {
 
   // School (X42) orders - chỉ Trợ Lý Giám Đốc Xưởng 42 (+ owner/admin đã trả về true ở trên)
   if (order.order_type === 'school') {
-    return hasRoleOrExtra(userProfile, 'deputy_director_x42');
+    return hasRoleOrExtra(userProfile, 'deputy_director_x42') || hasRoleOrExtra(userProfile, 'shipper_school');
   }
 
   // Mixed orders - need to check which workflows are involved
@@ -111,7 +111,8 @@ export function getUserWorkflows(userProfile) {
   }
 
   // Chỉ Trợ Lý Giám Đốc Xưởng 42 thấy luồng trường học (owner/admin đã return ở trên)
-  if (userProfile.role === 'deputy_director_x42' || extraRoles.includes('deputy_director_x42')) {
+  if (userProfile.role === 'deputy_director_x42' || extraRoles.includes('deputy_director_x42') ||
+      userProfile.role === 'shipper_school' || extraRoles.includes('shipper_school')) {
     workflows.push('school');
   }
 

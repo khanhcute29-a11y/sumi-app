@@ -15,7 +15,7 @@ const TYPE_LABELS = {
   order_cancel: 'Yêu cầu khách hủy đơn',
   order_delete: 'Yêu cầu xoá đơn',
   shift_recheck: 'Yêu cầu chấm công lại',
-  leave_request: 'Yêu cầu xin nghỉ (lịch tuần)',
+  leave_request: 'Yêu cầu xin nghỉ',
   task_exemption: 'Yêu cầu miễn trừ công việc',
 };
 

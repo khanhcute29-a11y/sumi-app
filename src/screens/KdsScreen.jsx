@@ -423,7 +423,7 @@ export default function KdsScreen({ initialStation }) {
 
   const load = () => {
     setLoading(true);
-    fetchOrders({ statuses: ['moi', 'dang_lam', 'cho_giao'] })
+    fetchOrders({ statuses: ['moi', 'dang_lam', 'cho_giao'], excludeOrderTypes: ['macaron', 'school'] })
       .then((data) => { setOrders(data); setError(''); })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -602,6 +602,17 @@ export default function KdsScreen({ initialStation }) {
           <StationOverviewCard key={key} stationKey={key} orders={byStation[key]} active={activeStation === key} onClick={() => setActiveStation(key)} />
         ))}
       </div>
+
+      {(activeStation === 'xuong41' || activeStation === 'all') && (
+        <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '8px 10px' }}>
+          🧁 Đơn Macaron giờ xử lý (nhận / hoàn thành) ở màn <b>Đơn Hàng</b> — mở đơn, bấm Nhận đơn/Hoàn thành ở đó. Màn này không còn thao tác được đơn Macaron.
+        </div>
+      )}
+      {(activeStation === 'xuong42' || activeStation === 'all') && (
+        <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '8px 10px' }}>
+          🏫 Đơn Trường học chỉ Giám đốc và Trợ Lý Giám Đốc Xưởng 42 xử lý được, trong màn <b>Đơn Hàng</b>.
+        </div>
+      )}
 
       {/* Danh sách đơn hàng dạng thu gọn — click để xem chi tiết */}
       {loading ? (

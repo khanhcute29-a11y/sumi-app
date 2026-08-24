@@ -466,7 +466,7 @@ function AddManualShiftModal({ staffName, staffId, defaultBranch, onClose, onDon
   );
 }
 
-function LeaveModal({ staffName, staffId, defaultBranch, onClose, onDone }) {
+function LeaveModal({ staffName, staffId, staffRole, defaultBranch, onClose, onDone }) {
   const now = new Date();
   const initialFrom = `${localDateStr(now)}T${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
@@ -488,6 +488,10 @@ function LeaveModal({ staffName, staffId, defaultBranch, onClose, onDone }) {
     try {
       if (!navigator.onLine) throw new Error('offline');
       await addLeaveRequest(payload);
+      await createApprovalRequest({
+        type: 'leave_request', leaveDate: payload.workDate, reason: `Nghỉ đột xuất: ${reason} (${leaveFrom.replace('T', ' ')} → ${leaveTo.replace('T', ' ')})`,
+        photoUrl: photoUrl || null, requesterId: staffId, requesterName: staffName, requesterRole: staffRole,
+      }).catch(() => {}); // Không để lỗi ghi yêu cầu duyệt chặn việc đã lưu đơn xin nghỉ
     } catch (err) { enqueue('addLeaveRequest', payload); } finally { setSaving(false); onDone(); }
   };
 
@@ -759,6 +763,7 @@ export default function ShiftsScreen() {
         <LeaveModal
           staffId={profile?.id}
           staffName={profile?.full_name}
+          staffRole={profile?.role}
           defaultBranch={profile?.station}
           onClose={() => setShowLeave(false)}
           onDone={() => { setShowLeave(false); refreshAfterAction(); }}
