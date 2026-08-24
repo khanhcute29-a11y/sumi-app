@@ -70,23 +70,24 @@ async function playAudioViaWebAudio(soundType, filePath) {
   const ctx = getAudioContext();
   if (!ctx) throw new Error('No audio context');
 
-  // Load and cache audio file if not already cached
-  if (!audioBuffers[soundType]) {
-    console.log(`[playSound] Loading ${soundType} from ${filePath}...`);
-    const response = await fetch(filePath);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const arrayBuffer = await response.arrayBuffer();
-    audioBuffers[soundType] = await ctx.decodeAudioData(arrayBuffer);
-    console.log(`[playSound] ${soundType} loaded, duration:`, audioBuffers[soundType].duration);
-  }
+  // Always fetch fresh audio (no cache) to ensure latest file
+  console.log(`[playSound] Fetching ${soundType} from ${filePath}... (cache-busted)`);
+  const response = await fetch(filePath + '?t=' + Date.now());
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const arrayBuffer = await response.arrayBuffer();
+
+  console.log(`[playSound] Decoding audio buffer (${arrayBuffer.byteLength} bytes)...`);
+  const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+  console.log(`[playSound] ✓ ${soundType} decoded - duration: ${audioBuffer.duration}s, channels: ${audioBuffer.numberOfChannels}`);
 
   // Play the audio
   const source = ctx.createBufferSource();
-  source.buffer = audioBuffers[soundType];
+  source.buffer = audioBuffer;
   const gainNode = ctx.createGain();
   gainNode.gain.value = 1.0;
   source.connect(gainNode);
   gainNode.connect(ctx.destination);
+  console.log(`[playSound] Starting playback of ${soundType}...`);
   source.start(0);
 
   console.log(`[playSound] ✓ Playing ${soundType} via Web Audio API`);
