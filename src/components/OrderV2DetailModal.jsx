@@ -706,7 +706,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
         )}
 
         {/* Status Timeline - hiển thị tiến trình đơn hàng */}
-        <OrderStatusTimeline order={data.order} packages={data.packages} tasks={data.allTasks || []} changeHistory={data.changeHistory || []} />
+        <OrderStatusTimeline order={data.order} packages={data.packages} tasks={data.allTasks || []} changeHistory={data.changeHistory || []} kpiLogs={data.kpiLogs || []} />
 
         {/* Danh sách sản phẩm & quy cách tiếng Việt */}
         <div style={{ ...box, marginTop: 12 }}>
