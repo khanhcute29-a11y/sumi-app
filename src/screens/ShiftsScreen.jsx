@@ -228,10 +228,10 @@ function CheckoutModal({ staffName, staffId, activeCheckins, defaultBranch, onCl
           </div>
         )}
 
-        {/* Photo Capture - Required */}
+        {/* Photo Capture - Required (Front camera/Selfie) */}
         <div>
-          <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8 }}>📷 Chụp ảnh xác nhận *</label>
-          <CameraPhotoField url={photoUrl} onChange={setPhotoUrl} label="" prefix="shift" />
+          <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8 }}>📷 Chụp ảnh xác nhận (Camera xoay mặt) *</label>
+          <CameraPhotoField url={photoUrl} onChange={setPhotoUrl} label="" prefix="shift" facingMode="user" />
         </div>
 
         {/* GPS Toggle */}
@@ -521,33 +521,61 @@ export default function ShiftsScreen() {
           {loading ? (
             <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)', padding: 20, textAlign: 'center' }}>Đang tải danh sách chấm công...</div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14 }}>
-              {/* Cột các ca làm việc */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* CA LÀM VIỆC CỦA TÔI - PROMINENT */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)', display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Ca làm việc đã ghi nhận ({shiftPairs.length})</span>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Theo dõi theo Giờ Bắt Đầu</span>
+                <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span>👤 CA LÀM VIỆC CỦA TÔI ({myCheckins.length})</span>
+                  {activeCheckins.length > 0 && <span style={{ background: '#E53935', color: '#fff', padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700 }}>ĐANG LÀM</span>}
                 </div>
-                {shiftPairs.length === 0 ? (
+                {myCheckins.length === 0 ? (
                   <div style={{ padding: 20, borderRadius: 14, background: 'var(--surface-sunken)', color: 'var(--text-muted)', textAlign: 'center' }}>
-                    Chưa có ca làm việc nào được chấm trong ngày {date}.
+                    Chưa chấm công trong ngày {date}.
                   </div>
                 ) : (
-                  shiftPairs.map((p) => <ShiftCardRow key={p.id} checkin={p.checkin} checkout={p.checkout} />)
+                  myCheckins.map((checkin, idx) => {
+                    const checkout = myCheckouts.find(co => new Date(co.checkin_time) >= new Date(checkin.checkin_time));
+                    const isActive = !checkout;
+                    return (
+                      <div
+                        key={checkin.id}
+                        style={{
+                          padding: 14,
+                          borderRadius: 14,
+                          background: isActive ? '#e6f6ed' : 'var(--surface-card)',
+                          border: isActive ? '2px solid #138a53' : '1px solid var(--border-default)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 8,
+                          position: 'relative'
+                        }}
+                      >
+                        {isActive && <div style={{ position: 'absolute', top: 10, right: 10, fontSize: 12, fontWeight: 700, color: '#09663d', background: '#fff', padding: '4px 8px', borderRadius: 6 }}>🔴 ĐANG LÀM</div>}
+                        <div style={{ fontSize: 15, fontWeight: 900, color: 'var(--text-primary)' }}>
+                          {checkin.shift_label}
+                        </div>
+                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between' }}>
+                          <span>🕐 Vào: {new Date(checkin.checkin_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' })}</span>
+                          {checkout && <span>Ra: {new Date(checkout.checkin_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' })}</span>}
+                        </div>
+                        {isActive && (
+                          <button onClick={() => setShowCheckout(true)} style={{ padding: '8px 12px', borderRadius: 8, background: '#D96B43', color: '#fff', border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                            ⏹ KẾT THÚC CA NGAY
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })
                 )}
               </div>
 
-              {/* Cột xin nghỉ đột xuất */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>
-                  Xin nghỉ đột xuất ({leaves.length})
-                </div>
-                {leaves.length === 0 ? (
-                  <div style={{ padding: 20, borderRadius: 14, background: 'var(--surface-sunken)', color: 'var(--text-muted)', textAlign: 'center' }}>
-                    Không có ai xin nghỉ trong ngày {date}.
+              {/* XIN NGHỈ ĐỘT XUẤT */}
+              {leaves.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>
+                    📋 Xin nghỉ đột xuất ({leaves.length})
                   </div>
-                ) : (
-                  leaves.map((l) => (
+                  {leaves.map((l) => (
                     <div key={l.id} style={{ padding: 14, borderRadius: 14, background: '#fff', border: '1px solid var(--border-default)', display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <b style={{ fontSize: 15 }}>{l.staff_name}</b>
@@ -561,9 +589,9 @@ export default function ShiftsScreen() {
                       )}
                       {l.reason && <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Lý do: {l.reason}</div>}
                     </div>
-                  ))
-                )}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </React.Fragment>
