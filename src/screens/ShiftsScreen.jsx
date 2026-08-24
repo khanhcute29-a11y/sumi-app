@@ -63,19 +63,42 @@ function CheckinModal({ staffName, staffId, defaultBranch, onClose, onDone }) {
   const [checkinTime, setCheckinTime] = useState(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
   const [shiftLabel, setShiftLabel] = useState(SHIFT_PRESETS[0]);
   const [branch, setBranch] = useState(defaultBranch || BRANCHES[0]);
-  const [reason, setReason] = useState('');
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [useGps, setUseGps] = useState(false);
+  const [gpsCoords, setGpsCoords] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  // Get GPS location
+  const captureGps = async () => {
+    if (!navigator.geolocation) {
+      setError('Trình duyệt không hỗ trợ GPS');
+      return;
+    }
+    try {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          setGpsCoords(`${latitude},${longitude}`);
+        },
+        (err) => setError(`GPS lỗi: ${err.message}`)
+      );
+    } catch (e) {
+      setError('Không thể lấy GPS');
+    }
+  };
+
   const submit = async () => {
     if (!shiftLabel.trim()) { setError('Vui lòng chọn hoặc nhập tên ca làm việc.'); return; }
+    if (!photoUrl) { setError('Vui lòng chụp ảnh để xác nhận.'); return; }
     setSaving(true);
     setError('');
 
     const payload = {
       staffId, staffName, workDate, shiftLabel: shiftLabel.trim(), branch: branch || null,
       expectedStart: `${checkinTime}:00`, lateMinutes: 0, wageEarned: 0,
-      reason: reason.trim() || null, photoUrl: null,
+      reason: null, photoUrl: photoUrl || null,
+      gpsCoords: gpsCoords || null,
     };
 
     try {
@@ -96,30 +119,97 @@ function CheckinModal({ staffName, staffId, defaultBranch, onClose, onDone }) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 16 }} onClick={onClose}>
-      <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: 440, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto', padding: 20, boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 14 }} onClick={(e) => e.stopPropagation()}>
-        <div>
-          <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>▶ Bắt đầu ca làm việc</div>
-          <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)', marginTop: 2 }}>Hệ thống tự động ghi nhận giờ vào realtime theo ca thực tế.</div>
+      <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: '100%', maxWidth: 380, maxHeight: '90vh', overflowY: 'auto', padding: 20, boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 14 }} onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div style={{ textAlign: 'center', borderBottom: '1px solid var(--border-default)', paddingBottom: 14 }}>
+          <div style={{ font: 'var(--text-display-sm)', color: 'var(--text-primary)', marginBottom: 4 }}>{staffName}</div>
+          <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>Bắt đầu ca làm việc</div>
         </div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <Input label="Ngày làm việc" type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} style={{ flex: '1 1 160px' }} />
-          <Input label="Giờ bắt đầu" type="time" value={checkinTime} onChange={(e) => setCheckinTime(e.target.value)} style={{ flex: '1 1 120px' }} />
+
+        {/* Time & Shift */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Ngày</label>
+            <input
+              type="date"
+              value={workDate}
+              onChange={(e) => setWorkDate(e.target.value)}
+              style={{ width: '100%', padding: '8px 10px', fontSize: 14, border: '1px solid var(--border-default)', borderRadius: 8, background: 'var(--surface-card)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Giờ bắt đầu</label>
+            <input
+              type="time"
+              value={checkinTime}
+              onChange={(e) => setCheckinTime(e.target.value)}
+              style={{ width: '100%', padding: '8px 10px', fontSize: 14, border: '1px solid var(--border-default)', borderRadius: 8, background: 'var(--surface-card)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
+            />
+          </div>
         </div>
+
+        {/* Shift Selection */}
         <div>
-          <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Chọn ca / Bộ phận làm việc</label>
+          <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8 }}>Chọn ca làm việc</label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-            {SHIFT_PRESETS.map((p) => (
-              <button key={p} type="button" onClick={() => setShiftLabel(p)} style={{ padding: '5px 10px', borderRadius: 999, border: '1px solid var(--border-default)', background: shiftLabel === p ? 'var(--brand-primary)' : 'var(--surface-sunken)', color: shiftLabel === p ? '#fff' : 'var(--text-primary)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{p}</button>
+            {SHIFT_PRESETS.slice(0, 4).map((p) => (
+              <button key={p} type="button" onClick={() => setShiftLabel(p)} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border-default)', background: shiftLabel === p ? 'var(--brand-primary)' : 'var(--surface-sunken)', color: shiftLabel === p ? '#fff' : 'var(--text-primary)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{p}</button>
             ))}
           </div>
-          <Input placeholder="Hoặc tự gõ tên ca..." value={shiftLabel} onChange={(e) => setShiftLabel(e.target.value)} />
+          <Select value={branch} onChange={(e) => setBranch(e.target.value)} options={BRANCHES.map(b => ({ value: b, label: b }))} style={{ fontSize: 13 }} />
         </div>
-        <Select label="Chi nhánh" value={branch} onChange={(e) => setBranch(e.target.value)} options={BRANCHES.map(b => ({ value: b, label: b }))} />
-        <Input label="Ghi chú (không bắt buộc)" placeholder="VD: Ca sáng phụ bếp bánh nóng..." value={reason} onChange={(e) => setReason(e.target.value)} />
-        {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
-          <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>Huỷ</Button>
-          <Button variant="primary" size="sm" onClick={submit} disabled={saving || !shiftLabel.trim()}>{saving ? 'Đang lưu...' : '✓ Xác nhận bắt đầu ca'}</Button>
+
+        {/* Photo Capture - Required */}
+        <div>
+          <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8 }}>📷 Chụp ảnh xác nhận (Camera xoay mặt) *</label>
+          <CameraPhotoField url={photoUrl} onChange={setPhotoUrl} label="" prefix="shift" facingMode="user" />
+        </div>
+
+        {/* GPS Toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 12, borderRadius: 12, background: 'var(--surface-sunken)', cursor: 'pointer' }} onClick={() => setUseGps(!useGps)}>
+          <input type="checkbox" checked={useGps} readOnly style={{ cursor: 'pointer', width: 18, height: 18 }} />
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>📍 Bật vị trí GPS</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Ghi lại tọa độ khi vào ca</div>
+          </div>
+        </div>
+
+        {useGps && (
+          <button
+            onClick={captureGps}
+            disabled={saving}
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              borderRadius: 12,
+              border: '1px solid var(--border-default)',
+              background: gpsCoords ? '#e6f6ed' : 'var(--surface-sunken)',
+              color: gpsCoords ? '#09663d' : 'var(--text-primary)',
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: saving ? 'not-allowed' : 'pointer',
+              opacity: saving ? 0.6 : 1
+            }}
+          >
+            {gpsCoords ? `✓ GPS Đã lấy: ${gpsCoords}` : '▶ Lấy vị trí hiện tại'}
+          </button>
+        )}
+
+        {/* Error */}
+        {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)', padding: 10, borderRadius: 8, background: '#ffebee' }}>{error}</div>}
+
+        {/* Action Buttons */}
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Button variant="secondary" size="sm" onClick={onClose} disabled={saving} style={{ flex: 1 }}>Huỷ</Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={submit}
+            disabled={saving || !shiftLabel.trim() || !photoUrl}
+            style={{ flex: 1, opacity: !photoUrl || !shiftLabel.trim() ? 0.5 : 1 }}
+          >
+            {saving ? 'Đang lưu...' : '✓ Bắt đầu ca'}
+          </Button>
         </div>
       </div>
     </div>
