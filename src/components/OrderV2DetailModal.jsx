@@ -213,6 +213,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       return;
     }
     try {
+      setError(''); // Clear previous errors
       navigator.geolocation.getCurrentPosition(
         (position) => {
           setGpsCoords({
@@ -220,8 +221,15 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
             lng: position.coords.longitude,
             accuracy: position.coords.accuracy
           });
+          setError('');
         },
-        (err) => setError('Không lấy được GPS: ' + err.message)
+        (err) => {
+          const errMsg = err.code === 1 ? 'Vui lòng cấp quyền định vị' :
+                         err.code === 2 ? 'Không lấy được vị trí (thử lại)' :
+                         'Lỗi GPS: ' + err.message;
+          setError(errMsg);
+        },
+        { timeout: 10000, enableHighAccuracy: true }
       );
     } catch (e) {
       setError('Lỗi GPS: ' + e.message);
