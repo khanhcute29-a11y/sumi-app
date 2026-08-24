@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 
-export default function OrderStatusTimeline({ order, packages = [], tasks = [], changeHistory = [] }) {
+export default function OrderStatusTimeline({ order, packages = [], tasks = [], changeHistory = [], kpiLogs = [] }) {
   const events = useMemo(() => {
     const list = [];
 
@@ -107,6 +107,43 @@ export default function OrderStatusTimeline({ order, packages = [], tasks = [], 
       }
     });
 
+    // Event: Delivery events from KPI logs
+    if (kpiLogs && kpiLogs.length > 0) {
+      kpiLogs.forEach(log => {
+        if (log?.created_at) {
+          let icon = '📊';
+          let title = log.event_type;
+          let detail = log.staff_name || 'Hệ thống';
+
+          if (log.event_type === 'delivery_assigned') {
+            icon = '🚚';
+            title = 'Nhân viên nhận đi giao';
+            detail = `${log.staff_name} · GPS: ${log.gps_latitude?.toFixed(6)}, ${log.gps_longitude?.toFixed(6)}`;
+          } else if (log.event_type === 'delivery_completed') {
+            icon = '✅';
+            title = 'Hoàn thành giao hàng';
+            detail = `${log.staff_name} · GPS: ${log.gps_latitude?.toFixed(6)}, ${log.gps_longitude?.toFixed(6)}`;
+          } else if (log.event_type === 'work_package_accepted') {
+            icon = '👨‍🍳';
+            title = 'Bếp nhận việc';
+            detail = log.staff_name;
+          } else if (log.event_type === 'work_package_completed') {
+            icon = '✅';
+            title = 'Bếp hoàn thành';
+            detail = log.staff_name;
+          }
+
+          list.push({
+            time: new Date(log.created_at),
+            icon,
+            title,
+            detail,
+            status: (log.event_type.includes('completed') || log.event_type.includes('done')) ? 'done' : 'doing'
+          });
+        }
+      });
+    }
+
     // Event: Order completion
     if (order?.completed_at) {
       list.push({
@@ -119,7 +156,7 @@ export default function OrderStatusTimeline({ order, packages = [], tasks = [], 
     }
 
     return list.sort((a, b) => a.time - b.time);
-  }, [order, packages, tasks, changeHistory]);
+  }, [order, packages, tasks, changeHistory, kpiLogs]);
 
   const getStatusColor = (status) => {
     switch (status) {
