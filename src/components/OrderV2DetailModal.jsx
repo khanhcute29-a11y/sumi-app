@@ -94,6 +94,11 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
   const cameraInputRef = React.useRef(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editLock, setEditLock] = useState(null);
+  const [editFormData, setEditFormData] = useState({});
+  const [changeHistory, setChangeHistory] = useState([]);
+  const [editReason, setEditReason] = useState('');
 
   const director = ['owner', 'admin'].includes(profile?.role) || (profile?.extra_roles || []).some(x => ['owner', 'admin'].includes(x));
 
@@ -398,6 +403,73 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
     }
   };
 
+  const checkEditLock = async () => {
+    try {
+      const { data, error } = await supabase.rpc('check_order_edit_lock', {
+        p_order_id: orderId
+      });
+      if (error) throw error;
+      setEditLock(data);
+      await fetchChangeHistory();
+      return data;
+    } catch (e) {
+      setError(e.message);
+      return null;
+    }
+  };
+
+  const fetchChangeHistory = async () => {
+    try {
+      const { data, error } = await supabase.rpc('get_order_change_history', {
+        p_order_id: orderId
+      });
+      if (error) throw error;
+      setChangeHistory(data || []);
+    } catch (e) {
+      // Silent fail
+    }
+  };
+
+  const handleEditOpen = async () => {
+    const lock = await checkEditLock();
+    if (lock) {
+      setEditFormData({
+        address: o.address || '',
+        delivery_address: o.delivery_address || '',
+        delivery_date: o.delivery_date || '',
+        required_at: o.required_at || '',
+        note: o.note || ''
+      });
+      setShowEditModal(true);
+    }
+  };
+
+  const saveEdit = async (fieldName, oldValue, newValue) => {
+    setBusy(true);
+    setError('');
+    try {
+      const { data, error } = await supabase.rpc('edit_order_field', {
+        p_order_id: orderId,
+        p_editor_id: profile.id,
+        p_editor_name: profile.full_name || profile.email,
+        p_field_name: fieldName,
+        p_old_value: String(oldValue || ''),
+        p_new_value: String(newValue || '')
+      });
+
+      if (error) throw error;
+      if (!data.success) throw new Error(data.message || 'Failed to save edit');
+
+      await load();
+      await fetchChangeHistory();
+      onChanged?.();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const acceptPackageDelegate = async (p, staffId, staffName) => {
     setBusy(true);
     setError('');
@@ -539,6 +611,20 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                 title="Bánh có sẵn tại kho thành phẩm/tủ - Bỏ qua khâu bếp và báo Vận tải nhận đơn"
               >
                 ⚡ Bánh có sẵn (Vào kho ngay)
+              </button>
+            )}
+            {o.created_by_id === profile.id && o.status_v2 === 'pending' && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={handleEditOpen}
+                style={{
+                  minHeight: 38, padding: '0 12px', borderRadius: 10, border: '1.5px solid #d96b43',
+                  background: '#fde8de', color: '#d96b43', fontWeight: 800, fontSize: 13, cursor: 'pointer'
+                }}
+                title="Chỉnh sửa thông tin đơn hàng"
+              >
+                ✏️ Chỉnh sửa
               </button>
             )}
             <button
@@ -900,6 +986,28 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
             </div>
           )}
 
+          {/* Change History - Order Edits */}
+          {changeHistory && changeHistory.length > 0 && (
+            <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
+              <strong style={{ fontSize: 14, display: 'block', marginBottom: 12, color: 'var(--text-primary)' }}>
+                ✏️ Lịch sử chỉnh sửa
+              </strong>
+              {changeHistory.map((change) => (
+                <div key={change.id} style={{ padding: '10px 0', fontSize: 13, borderBottom: '1px dashed var(--border-subtle)' }}>
+                  <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {change.field_name}
+                  </div>
+                  <div style={{ color: 'var(--text-secondary)', marginTop: 2 }}>
+                    <strong>{change.old_value || '(trống)'}</strong> → <strong>{change.new_value || '(trống)'}</strong>
+                  </div>
+                  <div style={{ color: 'var(--text-secondary)', marginTop: 2, fontSize: 12 }}>
+                    👤 {change.edited_by_name} · {new Date(change.created_at).toLocaleString('vi-VN')}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* KPI Logs - Delivery & Kitchen Events */}
           {data.kpiLogs && data.kpiLogs.length > 0 ? (
             data.kpiLogs.map((log) => {
@@ -907,7 +1015,10 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                 'delivery_assigned': '🚚 Nhân viên nhận đi giao',
                 'delivery_completed': '✅ Hoàn thành giao hàng',
                 'work_package_accepted': '👨‍🍳 Bếp nhận việc',
-                'work_package_completed': '✓ Bếp hoàn thành'
+                'work_package_completed': '✓ Bếp hoàn thành',
+                'order_edited': '✏️ Chỉnh sửa đơn',
+                'edit_approval_requested': '📨 Yêu cầu duyệt chỉnh sửa',
+                'edit_approval_processed': '✅ Duyệt chỉnh sửa'
               };
               const label = eventLabels[log.event_type] || log.event_type;
               return (
@@ -918,6 +1029,11 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                   <div style={{ color: 'var(--text-secondary)', marginTop: 2 }}>
                     👤 {log.staff_name || 'Hệ thống'} · {new Date(log.created_at).toLocaleString('vi-VN')}
                   </div>
+                  {log.notes && (
+                    <div style={{ color: 'var(--text-secondary)', marginTop: 2, fontSize: 12 }}>
+                      📝 {log.notes}
+                    </div>
+                  )}
                 </div>
               );
             })
@@ -1280,6 +1396,125 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
           />
           <div style={{ color: '#fff', marginTop: 12, fontSize: 14 }}>
             Bấm bất kỳ đâu ngoài ảnh để đóng
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Chỉnh sửa đơn hàng */}
+      {showEditModal && (
+        <div onClick={() => !busy && setShowEditModal(false)} style={{
+          position: 'fixed', inset: 0, zIndex: 115, background: 'rgba(0,0,0,0.5)',
+          display: 'flex', justifyContent: 'center', alignItems: 'flex-end'
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            width: '100%', maxWidth: 600, background: 'var(--surface-app)', borderRadius: '20px 20px 0 0',
+            padding: 24, maxHeight: '85vh', overflowY: 'auto'
+          }}>
+            <h3 style={{ margin: '0 0 16px 0', fontSize: 18, color: 'var(--text-primary)', fontWeight: 900 }}>
+              ✏️ Chỉnh sửa đơn hàng
+            </h3>
+
+            {editLock && !editLock.can_edit && (
+              <div style={{
+                marginBottom: 16, padding: 12, background: '#fde8de', borderRadius: 12,
+                color: '#d96b43', fontWeight: 700, fontSize: 13
+              }}>
+                ⏰ Đã quá 30 phút. Cần yêu cầu duyệt từ Giám đốc để chỉnh sửa.
+              </div>
+            )}
+
+            {editLock?.can_edit && (
+              <>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', fontWeight: 700, fontSize: 13, marginBottom: 6, color: 'var(--text-primary)' }}>
+                    📍 Địa chỉ giao
+                  </label>
+                  <textarea
+                    value={editFormData.delivery_address || ''}
+                    onChange={(e) => setEditFormData({...editFormData, delivery_address: e.target.value})}
+                    style={{
+                      width: '100%', padding: 10, borderRadius: 10, border: '1px solid var(--border-default)',
+                      fontSize: 14, fontFamily: 'inherit', minHeight: 60
+                    }}
+                    placeholder="Nhập địa chỉ giao hàng"
+                  />
+                </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', fontWeight: 700, fontSize: 13, marginBottom: 6, color: 'var(--text-primary)' }}>
+                    📅 Ngày giao dự kiến
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={editFormData.required_at || ''}
+                    onChange={(e) => setEditFormData({...editFormData, required_at: e.target.value})}
+                    style={{
+                      width: '100%', padding: 10, borderRadius: 10, border: '1px solid var(--border-default)',
+                      fontSize: 14
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', fontWeight: 700, fontSize: 13, marginBottom: 6, color: 'var(--text-primary)' }}>
+                    📝 Ghi chú
+                  </label>
+                  <textarea
+                    value={editFormData.note || ''}
+                    onChange={(e) => setEditFormData({...editFormData, note: e.target.value})}
+                    style={{
+                      width: '100%', padding: 10, borderRadius: 10, border: '1px solid var(--border-default)',
+                      fontSize: 14, fontFamily: 'inherit', minHeight: 60
+                    }}
+                    placeholder="Ghi chú đơn hàng"
+                  />
+                </div>
+
+                {error && (
+                  <div style={{
+                    marginBottom: 14, padding: 10, background: '#fee2e2', borderRadius: 10,
+                    color: '#b42318', fontWeight: 700, fontSize: 14
+                  }}>
+                    ⚠️ {error}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button
+                    onClick={() => setShowEditModal(false)}
+                    disabled={busy}
+                    style={{
+                      flex: 1, padding: '12px 16px', background: 'var(--surface-sunken)', color: 'var(--text-primary)',
+                      border: 0, borderRadius: 10, fontWeight: 700, cursor: 'pointer', fontSize: 14
+                    }}
+                  >
+                    Huỷ
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (editFormData.delivery_address !== o.delivery_address) {
+                        await saveEdit('delivery_address', o.delivery_address, editFormData.delivery_address);
+                      }
+                      if (editFormData.required_at !== o.required_at) {
+                        await saveEdit('required_at', o.required_at, editFormData.required_at);
+                      }
+                      if (editFormData.note !== o.note) {
+                        await saveEdit('note', o.note, editFormData.note);
+                      }
+                      setShowEditModal(false);
+                    }}
+                    disabled={busy}
+                    style={{
+                      flex: 1, padding: '12px 16px', background: '#d96b43', color: '#fff',
+                      border: 0, borderRadius: 10, fontWeight: 700, cursor: busy ? 'not-allowed' : 'pointer',
+                      fontSize: 14, opacity: busy ? 0.5 : 1
+                    }}
+                  >
+                    {busy ? '⏳ Đang lưu...' : '✓ Lưu thay đổi'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
