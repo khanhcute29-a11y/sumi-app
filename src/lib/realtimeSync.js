@@ -48,21 +48,14 @@ export const broadcastEvent = async (event, data) => {
       config: { broadcast: { self: true } }
     });
 
-    // Subscribe first to ensure channel is ready
-    await channel.subscribe();
-
-    // Then send
-    const result = await channel.send({
+    channel.send({
       type: 'broadcast',
       event,
       payload: data,
     });
-    console.log(`[Broadcast] Sent ${event}:`, result, data);
-
-    // Clean up
-    await supabase.removeChannel(channel);
+    console.log(`[Broadcast] Sent ${event}:`, data);
   } catch (e) {
-    console.error(`[Broadcast Error] ${event}:`, e.message, e);
+    console.error(`[Broadcast Error] ${event}:`, e);
   }
 };
 
