@@ -30,6 +30,12 @@ export function AssignedTasksTab({ profile, isOwner, viewingStaffId, viewingStaf
 
   const visible = orderCodeFilter ? tasks.filter((t) => (t.order_code || '').includes(orderCodeFilter)) : tasks;
 
+  const nameFor = (id) => {
+    if (!id) return '';
+    if (id === profile?.id) return profile?.full_name || 'Tôi';
+    return staffList?.find((p) => p.id === id)?.full_name || '';
+  };
+
   const handleComplete = async (id) => {
     setBusyId(id); setError('');
     try { await completeTask(id); load(); } catch (err) { setError(err.message); } finally { setBusyId(''); }
@@ -53,6 +59,13 @@ export function AssignedTasksTab({ profile, isOwner, viewingStaffId, viewingStaf
             </span>
           </div>
           {t.description && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>{t.description}</div>}
+          {(nameFor(t.created_by) || nameFor(t.assignee_id)) && (
+            <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>
+              {nameFor(t.created_by) && `Giao bởi: ${nameFor(t.created_by)}`}
+              {nameFor(t.created_by) && nameFor(t.assignee_id) && '  ·  '}
+              {nameFor(t.assignee_id) && `Người nhận: ${nameFor(t.assignee_id)}`}
+            </div>
+          )}
           {t.order_code && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Mã đơn: {t.order_code}</div>}
           {t.deadline && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Hạn: {new Date(t.deadline).toLocaleString('vi-VN')}</div>}
           {t.started_at&&<div style={{font:'var(--text-caption)',color:'var(--status-success)'}}>▶ Bắt đầu: {new Date(t.started_at).toLocaleString('vi-VN')}</div>}

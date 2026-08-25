@@ -106,10 +106,12 @@ export default function TasksScreen() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    if (!isOwner) return;
+    // Luôn tải danh sách nhân viên (không chỉ khi là chủ) để nhân viên
+    // thường cũng suy ra được tên "Giao bởi / Người nhận" trong việc được giao.
     fetchAllProfiles().then((data) => {
       const approved = data.filter((p) => p.approved && p.active !== false && p.full_name);
       setStaffList(approved);
+      if (!isOwner) return;
       const requested = sessionStorage.getItem('sumi_managed_staff_id');
       if (requested && approved.some((p) => p.id === requested)) {
         setSelectedStaffId(requested);
