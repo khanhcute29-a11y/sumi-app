@@ -84,13 +84,15 @@ export function playTingSound() {
   beep({ freq: 1046, duration: 0.16, type: 'sine', volume: 0.25 });
 }
 
-// Play pattern repeated for duration (milliseconds)
-function playPatternLooped(pattern, durationMs) {
+// Play pattern repeated for duration (milliseconds).
+// cycleSec: độ dài một chu kỳ, tính cả khoảng lặng cuối để hai lần lặp không dính vào nhau.
+function playPatternLooped(pattern, durationMs, cycleSec) {
   try {
     console.log(`[playPatternLooped] Starting pattern loop for ${durationMs}ms`);
 
     // Calculate pattern duration in seconds
-    const patternDurationSec = Math.max(...pattern.map(p => p.delay + p.duration));
+    const notesEndSec = Math.max(...pattern.map(p => p.delay + p.duration));
+    const patternDurationSec = cycleSec || notesEndSec;
     const durationSec = durationMs / 1000;
     const iterations = Math.ceil(durationSec / patternDurationSec);
 
@@ -111,39 +113,38 @@ function playPatternLooped(pattern, durationMs) {
   }
 }
 
-// TING TING TING - Bếp nhận đơn (lặp 10s)
+// NHẬN ĐƠN — "đing-đoong" đi lên, 2 nốt Sol→Đô (lặp 6s)
+// Giai điệu riêng để phân biệt với các sự kiện khác.
 export function playKitchenReceiveSound() {
-  console.log('[playKitchenReceiveSound] Starting TING TING TING (10s loop)');
+  console.log('[playKitchenReceiveSound] Nhận đơn — Sol→Đô đi lên (6s loop)');
   const pattern = [
-    { freq: 1046, duration: 0.15, delay: 0, volume: 0.5 },
-    { freq: 1046, duration: 0.15, delay: 0.2, volume: 0.5 },
-    { freq: 1046, duration: 0.15, delay: 0.4, volume: 0.5 }
+    { freq: 784, duration: 0.18, delay: 0, volume: 0.45 },    // Sol5
+    { freq: 1046, duration: 0.32, delay: 0.22, volume: 0.45 } // Đô6
   ];
-  playPatternLooped(pattern, 10000);
+  playPatternLooped(pattern, 6000, 1.1); // 0.54s tiếng + 0.56s lặng
   console.log('[playKitchenReceiveSound] ✓ Done');
 }
 
-// TING TING TING TING - Bếp hoàn thành đơn (lặp 10s)
+// HOÀN THÀNH MẺ BÁNH — hợp âm trưởng Đô-Mi-Sol đi lên, vui tai (lặp 6s)
 export function playKitchenCompleteSound() {
-  console.log('[playKitchenCompleteSound] Starting TING TING TING TING (10s loop)');
+  console.log('[playKitchenCompleteSound] Xong mẻ bánh — Đô-Mi-Sol (6s loop)');
   const pattern = [
-    { freq: 1046, duration: 0.12, delay: 0, volume: 0.5 },
-    { freq: 1046, duration: 0.12, delay: 0.15, volume: 0.5 },
-    { freq: 1046, duration: 0.12, delay: 0.3, volume: 0.5 },
-    { freq: 1046, duration: 0.12, delay: 0.45, volume: 0.5 }
+    { freq: 523, duration: 0.16, delay: 0, volume: 0.45 },    // Đô5
+    { freq: 659, duration: 0.16, delay: 0.19, volume: 0.45 }, // Mi5
+    { freq: 784, duration: 0.38, delay: 0.38, volume: 0.5 }   // Sol5 ngân dài
   ];
-  playPatternLooped(pattern, 10000);
+  playPatternLooped(pattern, 6000, 1.3); // 0.76s tiếng + 0.54s lặng
   console.log('[playKitchenCompleteSound] ✓ Done');
 }
 
-// TING TING - Shipper nhận giao (lặp 10s)
+// NHẬN GIAO — 2 nốt trầm ấm La→Rê, khác hẳn tiếng bếp (lặp 6s)
 export function playShipperReceiveSound() {
-  console.log('[playShipperReceiveSound] Starting TING TING (10s loop)');
+  console.log('[playShipperReceiveSound] Nhận giao — La→Rê trầm (6s loop)');
   const pattern = [
-    { freq: 1046, duration: 0.15, delay: 0, volume: 0.5 },
-    { freq: 1046, duration: 0.15, delay: 0.2, volume: 0.5 }
+    { freq: 440, duration: 0.22, delay: 0, volume: 0.5 },     // La4
+    { freq: 587, duration: 0.34, delay: 0.26, volume: 0.5 }   // Rê5
   ];
-  playPatternLooped(pattern, 10000);
+  playPatternLooped(pattern, 6000, 1.2); // 0.6s tiếng + 0.6s lặng
   console.log('[playShipperReceiveSound] ✓ Done');
 }
 

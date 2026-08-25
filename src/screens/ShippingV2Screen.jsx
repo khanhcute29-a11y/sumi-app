@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../lib/AuthContext';
 import { VoiceMicButton } from '../components/VoiceMicButton';
 import OrderV2DetailModal from '../components/OrderV2DetailModal';
-import { playShipperCompleteSound, playShipperReceiveSound } from '../lib/sound';
+import { playShipperCompleteSound } from '../lib/sound';
 import { broadcastEvent, BroadcastEvents } from '../lib/realtimeSync';
 
 const button = {
@@ -68,35 +68,14 @@ export default function ShippingV2Screen() {
     }
   };
 
-  const accept = async r => {
-    try {
-      const result = await rpc('accept_delivery_run_v2', {
-        p_idempotency_key: crypto.randomUUID(),
-        p_run_id: r.id,
-        p_expected_version: r.version
-      });
-
-      // 🔴 CRITICAL FIX: Phát âm thanh khi nhận giao
-      console.log('[ShippingV2] Playing shipper receive sound...');
-      try {
-        playShipperReceiveSound();
-        console.log('[ShippingV2] ✓ Shipper receive sound played');
-      } catch (soundErr) {
-        console.error('[ShippingV2] Sound play error:', soundErr);
-      }
-
-      // Broadcast cho tất cả users
-      console.log('[ShippingV2] Broadcasting shipper receive notification...');
-      broadcastEvent(BroadcastEvents.SOUND_NOTIFICATION, {
-        soundType: 'shipper_receive'
-      }).catch(e => console.error('[ShippingV2] Broadcast error:', e));
-
-      return result;
-    } catch (err) {
-      console.error('[ShippingV2] Accept delivery error:', err);
-      throw err;
-    }
-  };
+  // Chuông "nhận giao" do useOrderNotifications phát khi orders.status_v2
+  // chuyển sang 'in_delivery' — mọi máy nghe cùng lúc, nên ở đây không tự phát.
+  const accept = r =>
+    rpc('accept_delivery_run_v2', {
+      p_idempotency_key: crypto.randomUUID(),
+      p_run_id: r.id,
+      p_expected_version: r.version
+    });
 
   const start = async r => {
     try {
