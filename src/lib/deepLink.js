@@ -10,6 +10,11 @@ const LUAT = [
   { re: /^\/company-feed\/([0-9a-f-]{36})/i,  tab: 'feed' },
   { re: /^\/tasks\/([0-9a-f-]{36})/i,         tab: 'tasks' },
   { re: /^\/finance-requests\/([0-9a-f-]{36})/i, tab: 'financeRequests' },
+  // Đường dẫn KHÔNG kèm mã: chỉ mở đúng trang, không cuộn tới mục nào.
+  // Cần có vì một số thông báo cũ vẫn gửi dạng này.
+  { re: /^\/feed\/?$/i,   tab: 'feed' },
+  { re: /^\/tasks\/?$/i,  tab: 'tasks' },
+  { re: /^\/orders\/?$/i, tab: 'orders' },
 ];
 
 // Chỉ nhận đường dẫn nội bộ. Đường dẫn từ bên ngoài (http://...) bị bỏ qua để
@@ -28,7 +33,7 @@ export function parseDeepLink(raw) {
 
   for (const l of LUAT) {
     const m = duongDan.match(l.re);
-    if (m) return { tab: l.tab, entityId: m[1] };
+    if (m) return { tab: l.tab, entityId: m[1] || undefined };
   }
   return null;
 }
