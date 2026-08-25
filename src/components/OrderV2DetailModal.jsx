@@ -678,7 +678,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 110, background: 'rgba(0,0,0,.55)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
         <div onClick={e => e.stopPropagation()} style={{...box, maxWidth: 400, position: 'relative'}}>
           <button onClick={onClose} style={{position:'absolute',top:10,right:10,minHeight:44,minWidth:44,border:0,borderRadius:'50%',background:'var(--surface-sunken)',fontSize:16,cursor:'pointer'}}>✕</button>
-          <div style={{fontWeight: 700, color: '#b42318'}}>🔒 Đơn trường học chỉ Giám đốc và Trợ Lý Giám Đốc Xưởng 42 được xem.</div>
+          <div style={{fontWeight: 700, color: '#b42318'}}>🔒 Đơn trường học chỉ Giám đốc, Trợ Lý Giám Đốc Xưởng 42 và nhân viên Bếp Trường học được xem.</div>
         </div>
       </div>
     );
