@@ -49,11 +49,11 @@ function ProductNameField({item,products,flowType,onChange}){
 }
 
 function OrderPreviewV2({type,customerName,customerPhone,selectedSchool,items,guestCount,fulfillment,address,requiredAt,note,itemsTotal,shipFee,paymentMethod,deposit,grandTotal,remaining}){
- const itemLine=(it)=>{
+ const itemSpecLine=(it)=>{
   const s=it.specification||{};
   const fillingLabel=CAKE_FILLINGS.find(f=>f.value===s.filling)?.label;
   const parts=[s.size,s.cot,fillingLabel,s.content&&`chữ: ${s.content}`,s.candle&&`nến: ${s.candle}`,s.packing,s.colors?.length&&`màu: ${s.colors.join(', ')}`,s.fillings?.length&&`nhân: ${s.fillings.join(', ')}`,s.color,s.flavor,s.spec,s.catalog_specification].filter(Boolean);
-  return `${it.name?.trim()||'(chưa đặt tên)'} × ${it.quantity}${parts.length?` (${parts.join(', ')})`:''}`;
+  return parts.join(', ');
  };
  const displayName=type==='school'?(selectedSchool?.name||customerName):customerName;
  return <div style={{display:'flex',flexDirection:'column',gap:10,background:'#f5f1eb',borderRadius:17,padding:16,border:'2px solid #e0d5c7'}}>
@@ -61,7 +61,26 @@ function OrderPreviewV2({type,customerName,customerPhone,selectedSchool,items,gu
   <div style={{fontWeight:900,color:'#2d1c10',fontSize:16}}>{displayName||'Khách chưa đặt tên'}</div>
   {customerPhone&&type!=='school'&&<div style={{fontSize:13,color:'#725f50'}}>📞 {customerPhone}</div>}
   {type==='teabreak'&&guestCount&&<div style={{fontSize:13,color:'#725f50'}}>👥 {guestCount} khách</div>}
-  <div style={{fontSize:13,color:'#725f50'}}>{items.length?items.map(itemLine).join(', '):'Chưa có sản phẩm nào'}</div>
+  {items.length===0?<div style={{fontSize:13,color:'#725f50'}}>Chưa có sản phẩm nào</div>:
+  <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+   <thead><tr style={{borderBottom:'1.5px dashed #c7b6a3'}}>
+    <th style={{textAlign:'left',padding:'4px 4px 6px',color:'#8c5a3c',fontWeight:800}}>Sản phẩm</th>
+    <th style={{textAlign:'center',padding:'4px 4px 6px',color:'#8c5a3c',fontWeight:800}}>SL</th>
+    {type!=='school'&&<th style={{textAlign:'right',padding:'4px 4px 6px',color:'#8c5a3c',fontWeight:800}}>Đơn giá</th>}
+    {type!=='school'&&<th style={{textAlign:'right',padding:'4px 4px 6px',color:'#8c5a3c',fontWeight:800}}>Thành tiền</th>}
+   </tr></thead>
+   <tbody>{items.map((it,i)=>{const spec=itemSpecLine(it);const price=Number(it.unit_price)||0;const qty=Number(it.quantity)||0;return(
+    <tr key={it.id||i} style={{borderBottom:'1px dashed #e0d5c7'}}>
+     <td style={{padding:'6px 4px',color:'#2d1c10',verticalAlign:'top'}}>
+      <div style={{fontWeight:700}}>{it.name?.trim()||'(chưa đặt tên)'}</div>
+      {spec&&<div style={{fontSize:11,color:'#8c5a3c'}}>{spec}</div>}
+     </td>
+     <td style={{padding:'6px 4px',textAlign:'center',color:'#2d1c10',verticalAlign:'top'}}>{qty}{it.unit&&it.unit!=='cái'?` ${it.unit}`:''}</td>
+     {type!=='school'&&<td style={{padding:'6px 4px',textAlign:'right',color:'#2d1c10',verticalAlign:'top'}}>{price?price.toLocaleString('vi-VN'):'—'}</td>}
+     {type!=='school'&&<td style={{padding:'6px 4px',textAlign:'right',color:'#2d1c10',fontWeight:700,verticalAlign:'top'}}>{price?(price*qty).toLocaleString('vi-VN'):'—'}</td>}
+    </tr>
+   );})}</tbody>
+  </table>}
   <div style={{fontSize:13,color:'#725f50'}}>{fulfillment==='delivery'?'🛵 Giao hàng tận nơi':'🏬 Nhận tại quầy'}{fulfillment==='delivery'&&` · Ship: ${shipFee?`${shipFee.toLocaleString('vi-VN')}đ`:'Miễn phí'}`}</div>
   {fulfillment==='delivery'&&address&&<div style={{fontSize:13,color:'#725f50'}}>📍 {address}</div>}
   {requiredAt&&<div style={{fontSize:13,color:'#725f50'}}>🕒 {new Date(requiredAt).toLocaleString('vi-VN')}</div>}

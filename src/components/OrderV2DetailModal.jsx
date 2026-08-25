@@ -715,35 +715,43 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
           <strong style={{ fontSize: 16, display: 'block', marginBottom: 8, color: 'var(--text-primary)' }}>
             📦 Sản phẩm và quy cách
           </strong>
-          {data.items.map((x) => {
-            const specLines = formatSpecificationLines(x.specification);
-            return (
-              <div key={x.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--border-default)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 6 }}>
-                  <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
-                    {x.name_snapshot}
-                  </span>
-                  <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)' }}>
-                    {x.quantity} {x.unit || 'cái'}
-                    {!hidePrice && x.unit_price ? ` · ${Number(x.unit_price).toLocaleString('vi-VN')}đ` : ''}
-                  </span>
-                </div>
-
-                {specLines.length > 0 && (
-                  <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {specLines.map((line, idx) => (
-                      <span key={idx} style={{
-                        fontSize: 13, padding: '3px 8px', borderRadius: 'var(--radius-sm)',
-                        background: 'var(--surface-sunken)', color: 'var(--text-secondary)', fontWeight: 500
-                      }}>
-                        {line}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+            <thead><tr style={{ borderBottom: '1.5px dashed var(--border-default)' }}>
+              <th style={{ textAlign: 'left', padding: '4px 4px 8px', color: 'var(--text-secondary)', fontWeight: 700, fontSize: 12 }}>Sản phẩm</th>
+              <th style={{ textAlign: 'center', padding: '4px 4px 8px', color: 'var(--text-secondary)', fontWeight: 700, fontSize: 12 }}>SL</th>
+              {!hidePrice && <th style={{ textAlign: 'right', padding: '4px 4px 8px', color: 'var(--text-secondary)', fontWeight: 700, fontSize: 12 }}>Đơn giá</th>}
+              {!hidePrice && <th style={{ textAlign: 'right', padding: '4px 4px 8px', color: 'var(--text-secondary)', fontWeight: 700, fontSize: 12 }}>Thành tiền</th>}
+            </tr></thead>
+            <tbody>
+              {data.items.map((x) => {
+                const specLines = formatSpecificationLines(x.specification);
+                const price = Number(x.unit_price) || 0;
+                const qty = Number(x.quantity) || 0;
+                return (
+                  <tr key={x.id} style={{ borderBottom: '1px dashed var(--border-default)' }}>
+                    <td style={{ padding: '8px 4px', verticalAlign: 'top' }}>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{x.name_snapshot}</div>
+                      {specLines.length > 0 && (
+                        <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                          {specLines.map((line, idx) => (
+                            <span key={idx} style={{
+                              fontSize: 12, padding: '2px 7px', borderRadius: 'var(--radius-sm)',
+                              background: 'var(--surface-sunken)', color: 'var(--text-secondary)', fontWeight: 500
+                            }}>
+                              {line}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td style={{ padding: '8px 4px', textAlign: 'center', verticalAlign: 'top', color: 'var(--text-primary)' }}>{qty} {x.unit || 'cái'}</td>
+                    {!hidePrice && <td style={{ padding: '8px 4px', textAlign: 'right', verticalAlign: 'top', color: 'var(--text-primary)' }}>{price ? price.toLocaleString('vi-VN') : '—'}</td>}
+                    {!hidePrice && <td style={{ padding: '8px 4px', textAlign: 'right', verticalAlign: 'top', color: 'var(--text-primary)', fontWeight: 700 }}>{price ? (price * qty).toLocaleString('vi-VN') : '—'}</td>}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
 
         {/* Ảnh mẫu khách gửi (Cake Sample Photo) */}
