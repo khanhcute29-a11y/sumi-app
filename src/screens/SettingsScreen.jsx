@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Card } from '../components/data/Card';
+import PushStatusPanel from '../components/PushStatusPanel';
 import { Switch } from '../components/forms/Switch';
 import { Input } from '../components/forms/Input';
 import { Select } from '../components/forms/Select';
@@ -337,6 +338,10 @@ export default function SettingsScreen({ onSignOut }) {
       </div>
 
       {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>Lỗi tải tài khoản: {error}</div>}
+
+      <Section title="Thông báo trên máy này">
+        <PushStatusPanel staffId={me?.id} />
+      </Section>
 
       <Section title="Tài khoản của bạn">
         {loading ? (
