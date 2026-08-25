@@ -194,6 +194,28 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
   }
   const customerNote=[customerName&&`Khách hàng: ${customerName}`,customerPhone&&`SĐT: ${customerPhone}`,type==='teabreak'&&guestCount&&`Số khách: ${guestCount}`,note,isReadyStock&&'⚡ BÁNH CÓ SẴN (XUẤT KHO THÀNH PHẨM NGAY)'].filter(Boolean).join(' · ');
   const normalizedItems=items.map((item,index)=>({...item,display_order:index,specification:{...(item.specification||{}),product_flow:item.flow_type||type,is_ready_stock:isReadyStock}}));
+  // Bánh có sẵn: KIỂM TRA KHO TRƯỚC KHI TẠO ĐƠN.
+  // Nếu để tạo đơn xong mới kiểm tra rồi báo lỗi thì đơn đã nằm trong hệ
+  // thống ở trạng thái sai (rơi vào hàng chờ của Bếp) — đúng lỗi đang gặp.
+  if(isReadyStock){
+    const dsKiem=items.filter(it=>it.product_id&&(Number(it.quantity)||0)>0).map(it=>({
+      product_id:it.product_id,
+      name:it.name||'Sản phẩm',
+      size:it.specification?.size||null,
+      qty:Number(it.quantity)||0,
+    }));
+    if(dsKiem.length){
+      const {data:thieu,error:kiemErr}=await supabase.rpc('check_finished_goods_stock',{p_items:dsKiem});
+      if(kiemErr){ setError(`Không kiểm tra được tồn kho: ${kiemErr.message}`); setSaving(false); return; }
+      if(thieu&&thieu.length){
+        const mota=thieu.map(t=>`${t.ten}${t.size?` (${t.size})`:''}: cần ${t.can_co}, kho còn ${t.ton_kho}`).join(' · ');
+        setError(`Kho thành phẩm không đủ hàng — ${mota}. Bỏ tick "Bánh có sẵn" để Bếp làm, hoặc giảm số lượng.`);
+        setSaving(false);
+        return;
+      }
+    }
+  }
+
   const {data: orderId, error: orderErr} = await supabase.rpc('create_order_v2',{p_idempotency_key:key,p_order_code:orderCode,p_order_type:isMixed?'mixed':type,p_customer_id:customerId,p_required_at:requiredAt?new Date(requiredAt).toISOString():null,p_fulfillment_method:fulfillment,p_address:fulfillment==='delivery'?address:null,p_note:customerNote||null,p_confidentiality:type==='school'?'school_restricted':'normal',p_items:normalizedItems,p_ship_fee:effectiveShipFee,p_deposit:Number(deposit)||0,p_payment_method:paymentMethod,p_total:grandTotal});
   if(orderErr) throw orderErr;
   for(const file of photos){
@@ -229,11 +251,18 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
     });
     if(insertErr) throw insertErr;
   }
+  let daBaoVanTai=false;
   if(isReadyStock){
     const {error: readyErr} = await supabase.rpc('mark_order_ready_from_stock',{p_order_id:orderId});
-    if(readyErr) {
-      setError(`Báo vận tải thất bại: ${readyErr.message}`);
-      throw readyErr;
+    if(readyErr){
+      // Đơn ĐÃ được tạo rồi. Không ném lỗi ở đây, vì ném là màn hình đứng im
+      // mà đơn vẫn nằm trong hệ thống — người dùng không biết chuyện gì xảy ra.
+      // Thay vào đó báo rõ và vẫn đóng màn hình: đơn rơi về luồng Bếp bình
+      // thường, bếp làm được, không mất đơn.
+      console.error('[TaoDon] Báo vận tải thất bại:', readyErr);
+      setError(`Đơn đã tạo nhưng chưa chuyển được sang chờ giao: ${readyErr.message}. Đơn đang nằm ở hàng chờ của Bếp.`);
+    } else {
+      daBaoVanTai=true;
     }
   }
   console.log('✅ Order created:', orderId);
@@ -247,9 +276,18 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
   });
   notifyOtherTabs(BroadcastEvents.ORDER_CREATED, { orderId });
   onCreated?.(orderId);
+
+  // Đóng màn hình tạo đơn rồi đưa về đúng danh sách cần theo dõi tiếp:
+  //  - bánh có sẵn đã báo vận tải -> tab "Chờ vận chuyển"
+  //  - còn lại                    -> tab "Đơn chờ làm"
+  // Mỗi bước bọc riêng: dọn dẹp vấp thì chỉ ghi nhật ký, không để màn hình đơ.
   setTimeout(() => {
-    console.log('🔔 Closing modal...');
-    onClose();
+    try { onClose(); } catch (err) { console.error('[TaoDon] Đóng màn hình lỗi (bỏ qua):', err); }
+    try {
+      window.dispatchEvent(new CustomEvent('sumi-navigate', {
+        detail: { tab: 'orders', filter: daBaoVanTai ? 'ready' : 'waiting' },
+      }));
+    } catch (err) { console.error('[TaoDon] Chuyển trang lỗi (bỏ qua):', err); }
   }, 500);
  }catch(e){console.error('❌ Order error:', e);setError(e.message||'Không thể tạo đơn');}finally{setSaving(false);}};
  if(!type)return <div className={embedded?'sumi-order-create-page':'sumi-order-create-overlay'} onClick={embedded?undefined:onClose}>
