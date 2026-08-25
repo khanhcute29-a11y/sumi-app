@@ -278,6 +278,8 @@ export default function OrdersV2Screen() {
               </div>
               <h2>{o.customer_name || 'Khách chưa ghi tên'}</h2>
               <p><b>{o.order_type_label || o.order_type || 'Đơn sản xuất'}</b> · {o.address || 'Nhận tại quầy'}</p>
+              {o.product_names && <p className="mock-order-metric">🍰 {o.product_names}</p>}
+              {o.kitchen_names && <p className="mock-order-metric">👨‍🍳 Bếp: {o.kitchen_names}</p>}
               <p>Tạo lúc {new Date(o.created_at).toLocaleString('vi-VN')} · {o.total_quantity || 0} sản phẩm</p>
               <div className="mock-track">
                 {[1, 2, 3, 4, 5].map(n => <i key={n} className={n <= stage(o.status_v2) ? 'done' : ''} />)}
