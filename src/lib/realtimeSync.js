@@ -15,87 +15,84 @@ export const BroadcastEvents = {
   SOUND_NOTIFICATION: 'sound:notification',  // Sound alerts for tasks, orders, deliveries
 };
 
-// 🔴 CRITICAL FIX: Subscribe to broadcast events with proper error handling
-export const subscribeToBroadcast = (event, callback) => {
-  try {
-    console.log(`[subscribeToBroadcast] Setting up listener for ${event}`);
+// MỘT kênh dùng chung cho mỗi loại sự kiện, dùng cho CẢ nghe lẫn gửi.
+// Trước đây hàm gửi tự tạo một kênh mới trùng tên với kênh đang nghe —
+// hai kênh cùng topic dễ xung đột và tín hiệu rơi mất. Giờ chỉ còn một.
+const broadcastChannels = new Map();
+const broadcastListeners = new Map();
 
-    const channel = supabase.channel(`broadcast:${event}`, {
-      config: { broadcast: { self: true } }
+const getBroadcastChannel = (event) => {
+  let entry = broadcastChannels.get(event);
+  if (entry) return entry;
+
+  const channel = supabase.channel(`broadcast:${event}`, {
+    config: { broadcast: { self: true } }
+  });
+
+  entry = { channel, ready: false };
+  broadcastChannels.set(event, entry);
+  broadcastListeners.set(event, new Set());
+
+  channel
+    .on('broadcast', { event }, (payload) => {
+      const listeners = broadcastListeners.get(event);
+      if (!listeners) return;
+      for (const cb of listeners) {
+        try {
+          cb(payload.payload);
+        } catch (callbackErr) {
+          console.error(`[broadcast] Lỗi trong callback của ${event}:`, callbackErr);
+        }
+      }
+    })
+    .subscribe((status) => {
+      entry.ready = status === 'SUBSCRIBED';
+      console.log(`[broadcast] Kênh ${event}: ${status}`);
     });
 
-    channel
-      .on('broadcast', { event }, (payload) => {
-        console.log(`[subscribeToBroadcast] ✓ Received ${event}:`, payload.payload);
-        try {
-          callback(payload.payload);
-        } catch (callbackErr) {
-          console.error(`[subscribeToBroadcast] Callback error for ${event}:`, callbackErr);
-        }
-      })
-      .subscribe((status) => {
-        console.log(`[subscribeToBroadcast] Channel status for ${event}:`, status);
-      });
+  return entry;
+};
 
-    if (!activeChannels.has(event)) {
-      activeChannels.set(event, []);
-    }
-    activeChannels.get(event).push(channel);
-
+export const subscribeToBroadcast = (event, callback) => {
+  try {
+    getBroadcastChannel(event);
+    broadcastListeners.get(event).add(callback);
     return () => {
-      console.log(`[subscribeToBroadcast] Cleaning up listener for ${event}`);
-      supabase.removeChannel(channel);
-      const channels = activeChannels.get(event);
-      if (channels) {
-        const idx = channels.indexOf(channel);
-        if (idx > -1) channels.splice(idx, 1);
-      }
+      broadcastListeners.get(event)?.delete(callback);
     };
   } catch (err) {
-    console.error(`[subscribeToBroadcast] Error setting up listener for ${event}:`, err);
+    console.error(`[subscribeToBroadcast] Không tạo được listener cho ${event}:`, err);
     return () => {};
   }
 };
 
-// 🔴 CRITICAL FIX: Broadcast event to all listeners with proper subscription & timing
+// Gửi tín hiệu tới mọi máy đang mở app, qua đúng kênh đang được lắng nghe.
+// Nếu kênh chưa kịp sẵn sàng thì chờ tối đa 3 giây rồi mới gửi.
 export const broadcastEvent = async (event, data) => {
   try {
-    console.log(`[broadcastEvent] Sending ${event}:`, data);
+    const entry = getBroadcastChannel(event);
 
-    const channel = supabase.channel(`broadcast:${event}`, {
-      config: { broadcast: { self: true } }
-    });
-
-    // CRITICAL: Subscribe to channel with status check
-    return new Promise((resolve, reject) => {
-      channel.subscribe((status) => {
-        console.log(`[broadcastEvent] Channel status for ${event}:`, status);
-
-        if (status === 'SUBSCRIBED') {
-          // Send message only after confirmed subscription
-          const sendResult = channel.send({
-            type: 'broadcast',
-            event,
-            payload: data,
-            timestamp: new Date().toISOString()
-          });
-
-          console.log(`[broadcastEvent] ✓ Message sent for ${event}:`, sendResult);
-
-          // Keep channel alive for 500ms to ensure message delivery across network
-          setTimeout(() => {
-            supabase.removeChannel(channel);
-            console.log(`[broadcastEvent] Channel cleaned up for ${event}`);
-            resolve(sendResult);
-          }, 500);
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error(`[broadcastEvent] Channel error for ${event}:`, status);
-          reject(new Error(`Channel error for ${event}`));
-        }
+    if (!entry.ready) {
+      await new Promise((resolve) => {
+        const deadline = Date.now() + 3000;
+        const tick = () => {
+          if (entry.ready || Date.now() > deadline) resolve();
+          else setTimeout(tick, 50);
+        };
+        tick();
       });
+    }
+
+    const result = await entry.channel.send({
+      type: 'broadcast',
+      event,
+      payload: data,
     });
+
+    console.log(`[broadcast] Đã gửi ${event}:`, data, '→', result);
+    return result;
   } catch (e) {
-    console.error(`[broadcastEvent] Error broadcasting ${event}:`, e);
+    console.error(`[broadcast] Lỗi khi gửi ${event}:`, e);
     throw e;
   }
 };

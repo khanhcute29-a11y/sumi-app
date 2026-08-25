@@ -1,20 +1,66 @@
 let ctx;
+let masterBus;
+
+// Đường ra chung cho MỌI tiếng chuông trong app.
+// Nén động (compressor) + khuếch đại bù (makeup gain): cho phép đẩy âm lượng
+// lên sát mức tối đa mà không bị rè/vỡ tiếng khi nhiều nốt chồng nhau.
+// Đây là cách tăng độ to cho âm thanh tạo bằng Web Audio — không có thẻ
+// <audio> hay new Audio() nào để đặt .volume = 1.0.
+function getMasterBus(audioCtx) {
+  if (masterBus) return masterBus;
+  // Bộ số dưới đây được chọn bằng cách đo thực tế (OfflineAudioContext):
+  // to nhất có thể mà đỉnh tín hiệu vẫn <= 0.91 nên KHÔNG bị rè, kể cả ở
+  // trường hợp nặng nhất là 5 nốt cùng tần số chồng lên nhau.
+  const comp = audioCtx.createDynamicsCompressor();
+  comp.threshold.value = -30;  // nén sớm
+  comp.knee.value = 20;
+  comp.ratio.value = 20;       // nén mạnh -> nâng được makeup gain cao
+  comp.attack.value = 0.003;
+  comp.release.value = 0.25;
+
+  const makeup = audioCtx.createGain();
+  makeup.gain.value = 1.9;     // bù lại phần bị nén -> to gấp ~2.6 lần trước
+
+  comp.connect(makeup);
+  makeup.connect(audioCtx.destination);
+  masterBus = comp;
+  return masterBus;
+}
+
+export function getAudioBus() {
+  const audioCtx = getCtx();
+  return { audioCtx, bus: getMasterBus(audioCtx) };
+}
+
+// Chống kêu chồng: một mốc có thể được báo qua hai đường (tín hiệu trực tiếp
+// và thay đổi trong cơ sở dữ liệu). Nếu cùng một loại chuông được yêu cầu hai
+// lần trong 3 giây thì chỉ phát lần đầu.
+const lastPlayedAt = new Map();
+export function playOnce(key, fn, windowMs = 3000) {
+  const now = Date.now();
+  const prev = lastPlayedAt.get(key) || 0;
+  if (now - prev < windowMs) {
+    console.log(`[Sound] Bỏ qua "${key}" — vừa phát cách đây ${now - prev}ms`);
+    return false;
+  }
+  lastPlayedAt.set(key, now);
+  fn();
+  return true;
+}
 
 function getCtx() {
   if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
 
-  // 🔴 CRITICAL FIX: Resume context nếu suspended (bypass autoplay policy)
+  // Resume context nếu suspended (bypass autoplay policy)
   if (ctx.state === 'suspended') {
-    console.log('[Sound] AudioContext suspended, attempting resume...');
-    ctx.resume()
-      .then(() => console.log('[Sound] ✓ AudioContext resumed'))
-      .catch(e => console.error('[Sound] Resume failed:', e));
+    ctx.resume().catch(e => console.error('[Sound] Resume failed:', e));
   }
 
   return ctx;
 }
 
-function beep({ freq = 880, duration = 0.15, delay = 0, type = 'sine', volume = 0.3 } = {}) {
+// volume mặc định đẩy lên sát tối đa; compressor lo phần chống rè.
+function beep({ freq = 880, duration = 0.15, delay = 0, type = 'sine', volume = 1.0 } = {}) {
   try {
     const audioCtx = getCtx();
     const osc = audioCtx.createOscillator();
@@ -22,13 +68,12 @@ function beep({ freq = 880, duration = 0.15, delay = 0, type = 'sine', volume = 
     osc.type = type;
     osc.frequency.value = freq;
     osc.connect(gain);
-    gain.connect(audioCtx.destination);
+    gain.connect(getMasterBus(audioCtx));
     const startTime = audioCtx.currentTime + delay;
-    gain.gain.setValueAtTime(volume, startTime);
+    gain.gain.setValueAtTime(Math.min(volume, 1), startTime);
     gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
     osc.start(startTime);
     osc.stop(startTime + duration + 0.02);
-    console.log('[beep] ✓ Generated beep at', freq, 'Hz, delay:', delay);
   } catch (e) {
     console.error('[beep] Error:', e);
   }
@@ -118,8 +163,8 @@ function playPatternLooped(pattern, durationMs, cycleSec) {
 export function playKitchenReceiveSound() {
   console.log('[playKitchenReceiveSound] Nhận đơn — Sol→Đô đi lên (6s loop)');
   const pattern = [
-    { freq: 784, duration: 0.18, delay: 0, volume: 0.45 },    // Sol5
-    { freq: 1046, duration: 0.32, delay: 0.22, volume: 0.45 } // Đô6
+    { freq: 784, duration: 0.18, delay: 0, volume: 1.0 },    // Sol5
+    { freq: 1046, duration: 0.32, delay: 0.22, volume: 1.0 } // Đô6
   ];
   playPatternLooped(pattern, 6000, 1.1); // 0.54s tiếng + 0.56s lặng
   console.log('[playKitchenReceiveSound] ✓ Done');
@@ -129,9 +174,9 @@ export function playKitchenReceiveSound() {
 export function playKitchenCompleteSound() {
   console.log('[playKitchenCompleteSound] Xong mẻ bánh — Đô-Mi-Sol (6s loop)');
   const pattern = [
-    { freq: 523, duration: 0.16, delay: 0, volume: 0.45 },    // Đô5
-    { freq: 659, duration: 0.16, delay: 0.19, volume: 0.45 }, // Mi5
-    { freq: 784, duration: 0.38, delay: 0.38, volume: 0.5 }   // Sol5 ngân dài
+    { freq: 523, duration: 0.16, delay: 0, volume: 1.0 },    // Đô5
+    { freq: 659, duration: 0.16, delay: 0.19, volume: 1.0 }, // Mi5
+    { freq: 784, duration: 0.38, delay: 0.38, volume: 1.0 }   // Sol5 ngân dài
   ];
   playPatternLooped(pattern, 6000, 1.3); // 0.76s tiếng + 0.54s lặng
   console.log('[playKitchenCompleteSound] ✓ Done');
@@ -141,8 +186,8 @@ export function playKitchenCompleteSound() {
 export function playShipperReceiveSound() {
   console.log('[playShipperReceiveSound] Nhận giao — La→Rê trầm (6s loop)');
   const pattern = [
-    { freq: 440, duration: 0.22, delay: 0, volume: 0.5 },     // La4
-    { freq: 587, duration: 0.34, delay: 0.26, volume: 0.5 }   // Rê5
+    { freq: 440, duration: 0.22, delay: 0, volume: 1.0 },     // La4
+    { freq: 587, duration: 0.34, delay: 0.26, volume: 1.0 }   // Rê5
   ];
   playPatternLooped(pattern, 6000, 1.2); // 0.6s tiếng + 0.6s lặng
   console.log('[playShipperReceiveSound] ✓ Done');
@@ -152,11 +197,11 @@ export function playShipperReceiveSound() {
 export function playShipperCompleteSound() {
   console.log('[playShipperCompleteSound] Starting TING TING TING TING TING (10s loop)');
   const pattern = [
-    { freq: 1046, duration: 0.12, delay: 0, volume: 0.5 },
-    { freq: 1046, duration: 0.12, delay: 0.15, volume: 0.5 },
-    { freq: 1046, duration: 0.12, delay: 0.3, volume: 0.5 },
-    { freq: 1046, duration: 0.12, delay: 0.45, volume: 0.5 },
-    { freq: 1046, duration: 0.12, delay: 0.6, volume: 0.5 }
+    { freq: 1046, duration: 0.12, delay: 0, volume: 1.0 },
+    { freq: 1046, duration: 0.12, delay: 0.15, volume: 1.0 },
+    { freq: 1046, duration: 0.12, delay: 0.3, volume: 1.0 },
+    { freq: 1046, duration: 0.12, delay: 0.45, volume: 1.0 },
+    { freq: 1046, duration: 0.12, delay: 0.6, volume: 1.0 }
   ];
   playPatternLooped(pattern, 10000);
   console.log('[playShipperCompleteSound] ✓ Done');

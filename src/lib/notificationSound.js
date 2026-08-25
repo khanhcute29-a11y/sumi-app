@@ -1,23 +1,52 @@
 // Bell chime notification system
 // Generate melodic bell sound for all notifications
+import { getAudioBus } from './sound';
 
-export const createBellChime = () => {
-  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+// Âm lượng theo loại thông báo. TRƯỚC ĐÂY bảng này được khai báo nhưng
+// không hề truyền vào hàm phát tiếng — mọi thông báo đều kẹt ở 0.35 nên
+// nghe rất nhỏ. Giờ đã nối đúng, và đẩy lên sát mức tối đa.
+const VOLUME_MAP = {
+  order_arrived: 1.0,      // Đơn tới
+  task_assigned: 1.0,      // Có việc
+  order_accepted: 1.0,     // Nhận đơn
+  order_completed: 1.0,    // Đơn hoàn thành
+  delivery_assigned: 1.0,  // Nhận giao
+  delivery_received: 1.0,  // Giao nhận
+  fully_completed: 1.0,    // Hoàn thành giao
+  default: 1.0,
+};
 
-  // Create long bell chime (Solfège: Do-Mi-Sol sequence repeated)
-  const playBell = (frequency, duration, startTime, volume = 0.3) => {
-    const osc = audioContext.createOscillator();
-    const gain = audioContext.createGain();
+const TITLE_MAP = {
+  order_arrived: '🔔 Đơn hàng mới tới!',
+  task_assigned: '📋 Có việc được giao!',
+  order_accepted: '✓ Đơn đã được nhận',
+  order_completed: '✓ Đơn hoàn thành',
+  delivery_assigned: '🚚 Đã nhận giao',
+  delivery_received: '🚚 Đã nhận giao',
+  fully_completed: '🎉 Đơn đã hoàn tất!',
+  default: '🔔 Thông báo',
+};
+
+// volume: 0..1 — nay được truyền vào thật sự thay vì bỏ quên.
+// Tiếng đi qua bus chung (nén động + khuếch đại bù) trong sound.js nên to
+// hơn hẳn mà không bị rè.
+export const createBellChime = (volume = 1.0) => {
+  const { audioCtx, bus } = getAudioBus();
+
+  const playBell = (frequency, duration, startTime, level) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
 
     osc.connect(gain);
-    gain.connect(audioContext.destination);
+    gain.connect(bus);
 
     osc.frequency.value = frequency;
     osc.type = 'sine';
 
     // Fade in/out envelope for bell sound
-    gain.gain.setValueAtTime(0, startTime);
-    gain.gain.linearRampToValueAtTime(volume, startTime + 0.1);
+    const peak = Math.max(0.001, Math.min(level * volume, 1));
+    gain.gain.setValueAtTime(0.001, startTime);
+    gain.gain.linearRampToValueAtTime(peak, startTime + 0.1);
     gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
 
     osc.start(startTime);
@@ -25,54 +54,35 @@ export const createBellChime = () => {
   };
 
   // Play bell sequence: Do (262Hz) → Mi (330Hz) → Sol (392Hz) - extended duration
-  const now = audioContext.currentTime;
+  const now = audioCtx.currentTime;
   const noteDuration = 0.6; // Long note
   const delay = 0.15; // Gap between notes
 
   // First cycle
-  playBell(262, noteDuration, now, 0.35); // Do
-  playBell(330, noteDuration, now + noteDuration + delay, 0.35); // Mi
-  playBell(392, noteDuration, now + (noteDuration + delay) * 2, 0.35); // Sol
+  playBell(262, noteDuration, now, 1.0); // Do
+  playBell(330, noteDuration, now + noteDuration + delay, 1.0); // Mi
+  playBell(392, noteDuration, now + (noteDuration + delay) * 2, 1.0); // Sol
 
   // Second cycle (louder, full chime)
   const cycleStart = now + (noteDuration + delay) * 3 + 0.3;
-  playBell(262, noteDuration + 0.3, cycleStart, 0.4); // Do
-  playBell(330, noteDuration + 0.3, cycleStart + noteDuration + delay + 0.1, 0.4); // Mi
-  playBell(392, noteDuration + 0.4, cycleStart + (noteDuration + delay + 0.1) * 2, 0.4); // Sol
+  playBell(262, noteDuration + 0.3, cycleStart, 1.0); // Do
+  playBell(330, noteDuration + 0.3, cycleStart + noteDuration + delay + 0.1, 1.0); // Mi
+  playBell(392, noteDuration + 0.4, cycleStart + (noteDuration + delay + 0.1) * 2, 1.0); // Sol
 };
 
 export const playNotificationSound = (type = 'default') => {
   try {
-    // Determine volume based on notification type
-    const volumeMap = {
-      'order_arrived': 0.8,      // Đơn tới - LOUD
-      'task_assigned': 0.8,       // Có việc - LOUD
-      'order_accepted': 0.7,      // Tình trạng nhận - HIGH
-      'order_completed': 0.75,    // Đơn hoàn thành - HIGH
-      'delivery_received': 0.75,  // Giao nhận - HIGH
-      'fully_completed': 0.8,     // Hoàn thành - LOUD
-      'default': 0.6
-    };
+    const volume = VOLUME_MAP[type] ?? VOLUME_MAP.default;
 
-    // Play bell chime
-    createBellChime();
+    // Play bell chime — âm lượng nay thực sự được áp dụng
+    createBellChime(volume);
 
     // Also trigger browser notification if permitted
     if ('Notification' in window && Notification.permission === 'granted') {
-      const titleMap = {
-        'order_arrived': '🔔 Đơn hàng mới tới!',
-        'task_assigned': '📋 Có việc được giao!',
-        'order_accepted': '✓ Đơn đã được nhận',
-        'order_completed': '✓ Đơn hoàn thành',
-        'delivery_received': '🚚 Đã nhận giao',
-        'fully_completed': '🎉 Đơn đã hoàn tất!',
-        'default': '🔔 Thông báo'
-      };
-
-      new Notification(titleMap[type], {
+      new Notification(TITLE_MAP[type] || TITLE_MAP.default, {
         icon: '/icon-192.png',
         tag: type,
-        requireInteraction: true // Keep notification visible
+        requireInteraction: true, // Keep notification visible
       });
     }
   } catch (err) {

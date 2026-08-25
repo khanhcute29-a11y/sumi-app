@@ -8,6 +8,7 @@ import OrderStatusTimeline from './OrderStatusTimeline';
 import { MapPin, Camera } from 'lucide-react';
 import { CAKE_FILLINGS } from '../lib/cakePricing';
 import { canViewSchoolOrder, canViewMacaronPrice } from '../lib/orderVisibility';
+import { broadcastEvent, BroadcastEvents } from '../lib/realtimeSync';
 
 const ORDER_TYPE_LABELS = {
   cake: '🎂 Bánh kem & Bánh lạnh',
@@ -375,6 +376,16 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       if (error) throw error;
       if (!data.success) throw new Error(data.message || 'Failed to complete work package');
 
+      // RPC chỉ đổi orders.status_v2 -> 'ready_for_fulfillment' khi MỌI bếp
+      // của đơn đã xong (order_ready = true); khi đó useOrderNotifications tự
+      // phát chuông cho mọi máy. Còn nếu vẫn còn bếp khác đang làm thì bảng
+      // `orders` không đổi -> phải tự bắn tín hiệu, nếu không sẽ im lặng.
+      // Tách bạch như vậy để không bao giờ kêu chồng hai lần.
+      if (data.order_ready === false) {
+        broadcastEvent(BroadcastEvents.SOUND_NOTIFICATION, { soundType: 'kitchen_complete' })
+          .catch(e => console.error('[OrderV2] Không gửi được chuông xong mẻ bánh:', e));
+      }
+
       // Log KPI: work_package_completed
       await supabase.from('kpi_logs').insert({
         order_id: orderId,
@@ -406,6 +417,12 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
 
       if (error) throw error;
       if (!data.success) throw new Error(data.message || 'Failed to accept work package');
+
+      // RPC accept_work_package_self CHỈ sửa bảng công việc bếp, không đụng
+      // vào bảng `orders` — mà chỉ `orders` mới được phát realtime. Nên phải
+      // tự bắn tín hiệu, nếu không các máy khác sẽ không hay biết gì.
+      broadcastEvent(BroadcastEvents.SOUND_NOTIFICATION, { soundType: 'kitchen_receive' })
+        .catch(e => console.error('[OrderV2] Không gửi được chuông nhận đơn:', e));
 
       // Log KPI: work_package_accepted by bếp trưởng
       await supabase.from('kpi_logs').insert({
@@ -533,6 +550,10 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
 
       if (error) throw error;
       if (!data.success) throw new Error(data.message || 'Failed to delegate work package');
+
+      // Cùng lý do như acceptPackageSelf: RPC này không sửa bảng `orders`.
+      broadcastEvent(BroadcastEvents.SOUND_NOTIFICATION, { soundType: 'kitchen_receive' })
+        .catch(e => console.error('[OrderV2] Không gửi được chuông nhận đơn:', e));
 
       // Log KPI: work_package_accepted by delegated staff
       await supabase.from('kpi_logs').insert({

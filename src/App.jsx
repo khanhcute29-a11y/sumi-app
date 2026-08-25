@@ -12,7 +12,7 @@ import { navBadgeVisibility } from './lib/roles';
 import { initAudioUnlock } from './lib/sound';
 import { useOrderNotifications } from './lib/useOrderNotifications';
 import { requestNotificationPermission, playAlertSound, preloadAlertAudio } from './lib/alarmSound';
-import { playKitchenReceiveSound, playKitchenCompleteSound, playShipperReceiveSound, playShipperCompleteSound } from './lib/sound';
+import { playKitchenReceiveSound, playKitchenCompleteSound, playShipperReceiveSound, playShipperCompleteSound, playOnce } from './lib/sound';
 import { setupAutoRefresh, cleanupAllSubscriptions, subscribeToMultipleTables, subscribeToBroadcast, BroadcastEvents } from './lib/realtimeSync';
 import { ConnectivityBanner } from './components/ConnectivityBanner';
 import { AuthProvider, useAuth } from './lib/AuthContext';
@@ -141,32 +141,20 @@ function OpsApp({ onSignOut }) {
 
       try {
         const soundType = data?.soundType;
-        console.log(`[App] Playing sound type: ${soundType}`);
-
-        switch (soundType) {
-          case 'kitchen_receive':
-            console.log('[App] Triggering TING TING TING');
-            playKitchenReceiveSound();
-            break;
-          case 'kitchen_complete':
-            console.log('[App] Triggering TING TING TING TING');
-            playKitchenCompleteSound();
-            break;
-          case 'shipper_receive':
-            console.log('[App] Triggering TING TING');
-            playShipperReceiveSound();
-            break;
-          case 'shipper_complete':
-            console.log('[App] Triggering TING TING TING TING TING');
-            playShipperCompleteSound();
-            break;
-          case 'task_assigned':
-            console.log('[App] Triggering task sound');
-            playShipperReceiveSound();
-            break;
-          default:
-            console.warn('[App] Unknown sound type:', soundType);
+        // playOnce: nếu mốc này vừa được báo qua đường khác trong 3 giây thì bỏ qua
+        const SOUNDS = {
+          kitchen_receive: playKitchenReceiveSound,
+          kitchen_complete: playKitchenCompleteSound,
+          shipper_receive: playShipperReceiveSound,
+          shipper_complete: playShipperCompleteSound,
+          task_assigned: playShipperReceiveSound,
+        };
+        const fn = SOUNDS[soundType];
+        if (!fn) {
+          console.warn('[App] Không rõ loại chuông:', soundType);
+          return;
         }
+        playOnce(soundType, fn);
       } catch (err) {
         console.error('[App] Error playing sound:', err);
       }

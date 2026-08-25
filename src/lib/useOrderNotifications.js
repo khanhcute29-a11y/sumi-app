@@ -6,6 +6,7 @@ import {
   playKitchenReceiveSound,
   playKitchenCompleteSound,
   playShipperReceiveSound,
+  playOnce,
 } from './sound';
 
 // Push đẩy (kèm chuông cho người KHÔNG mở app) giờ do server tự bắn qua
@@ -36,18 +37,17 @@ export function useOrderNotifications() {
         const after = payload.new?.status_v2;
         if (!after || before === after) return;
 
+        // playOnce dùng chung với đường tín hiệu trực tiếp (broadcast) trong
+        // App.jsx — mốc nào lỡ được báo qua cả hai đường thì vẫn chỉ kêu 1 lần.
         switch (after) {
           case 'in_production': // Bếp nhận đơn
-            console.log('[OrderNotify] Nhận đơn → phát chuông bếp nhận');
-            playKitchenReceiveSound();
+            playOnce('kitchen_receive', playKitchenReceiveSound);
             break;
           case 'ready_for_fulfillment': // Bếp báo xong mẻ bánh
-            console.log('[OrderNotify] Xong mẻ bánh → phát chuông bếp xong');
-            playKitchenCompleteSound();
+            playOnce('kitchen_complete', playKitchenCompleteSound);
             break;
           case 'in_delivery': // Shipper nhận giao
-            console.log('[OrderNotify] Nhận giao → phát chuông shipper nhận');
-            playShipperReceiveSound();
+            playOnce('shipper_receive', playShipperReceiveSound);
             break;
           default:
             break;
