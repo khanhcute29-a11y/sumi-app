@@ -12,7 +12,7 @@ import { navBadgeVisibility } from './lib/roles';
 import { initAudioUnlock } from './lib/sound';
 import { useOrderNotifications } from './lib/useOrderNotifications';
 import { requestNotificationPermission, playAlertSound, preloadAlertAudio } from './lib/alarmSound';
-import { playKitchenReceiveSound, playKitchenCompleteSound, playShipperReceiveSound, playShipperCompleteSound, playOnce } from './lib/sound';
+import { playKitchenReceiveSound, playKitchenCompleteSound, playShipperReceiveSound, playShipperCompleteSound, playTaskAssignedSound, playOnce } from './lib/sound';
 import { setupAutoRefresh, cleanupAllSubscriptions, subscribeToMultipleTables, subscribeToBroadcast, BroadcastEvents } from './lib/realtimeSync';
 import { ConnectivityBanner } from './components/ConnectivityBanner';
 import ToastHost from './components/ToastHost';
@@ -132,11 +132,16 @@ function OpsApp({ onSignOut }) {
     );
 
     // Global listener for feed announcements
+    // Đường phụ: người ĐĂNG tin không được ghi vào bảng notifications (trigger
+    // bỏ qua chính tác giả), nên vẫn cần nhánh này để họ nghe phản hồi.
+    // playOnce theo tiêu đề -> nếu đường chính (bảng notifications) đã báo rồi
+    // thì ở đây bỏ qua, không kêu chồng.
     const unsubFeedBroadcast = subscribeToBroadcast(BroadcastEvents.FEED_POST_CREATED, (data) => {
-      console.log('[App] Announcement broadcast received! Playing sound...');
-      playAlertSound().catch(err => console.error('[App] Alert sound error:', err));
-      // Tin nhắn hiện song song với chuông — bấm vào mở Bảng tin công ty
-      notify('company_feed', data?.title || data?.content || undefined);
+      const tieuDe = data?.title || data?.content || '';
+      playOnce('feed:' + tieuDe, () => {
+        playAlertSound().catch(err => console.error('[App] Alert sound error:', err));
+        notify('company_feed', tieuDe || undefined);
+      });
     });
 
     // 🔴 CRITICAL FIX: Global listener for all sound notifications (tasks, orders, deliveries)
@@ -170,10 +175,55 @@ function OpsApp({ onSignOut }) {
       }
     });
 
+    // ---------------------------------------------------------------------
+    // ĐƯỜNG CHÍNH cho Tin Công Ty và Giao Việc: nghe thẳng bảng notifications.
+    //
+    // Vì sao không dùng broadcast giữa các trình duyệt: broadcast chỉ tới
+    // được máy nào đang mở app ĐÚNG LÚC gửi, và phụ thuộc trình duyệt người
+    // gửi bắn thành công — dễ rơi, đó là lý do Tin Công Ty từng bị mất.
+    // Bảng notifications thì được ghi bởi trigger phía máy chủ cho TỪNG người,
+    // kèm sẵn đường dẫn chính xác, và quy tắc bảo mật lo việc ai thấy tin nào.
+    //
+    // KHÔNG đụng tới 5 mốc đơn hàng — chúng đã có đường riêng chạy tốt
+    // (useOrderNotifications) nên ở đây bỏ qua để không hiện tin hai lần.
+    const BO_QUA = new Set([
+      'new_order', 'order_in_production', 'order_ready',
+      'delivery_assigned', 'delivery_completed', 'work_package_assigned',
+    ]);
+    const chNotify = supabase
+      .channel('notifications-toast-global')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (p) => {
+        try {
+          const n = p.new;
+          if (!n || BO_QUA.has(n.notification_type)) return;
+
+          if (n.notification_type === 'company_announcement') {
+            // playOnce theo tiêu đề: khớp với nhánh broadcast ở trên nên dù
+            // cả hai đường cùng báo thì chuông và tin chỉ hiện một lần.
+            playOnce('feed:' + (n.title || ''), () => {
+              playAlertSound().catch(err => console.error('[App] Alert sound error:', err));
+              notify('company_feed', n.title, n.entity_id);
+            });
+            return;
+          }
+
+          if (n.notification_type === 'task_assigned' || n.notification_type === 'task_reminder') {
+            playOnce('task:' + n.id, () => {
+              playTaskAssignedSound();
+              notify(n.notification_type, n.body || n.title, n.entity_id);
+            });
+          }
+        } catch (err) {
+          console.error('[App] Lỗi xử lý thông báo:', err);
+        }
+      })
+      .subscribe();
+
     return () => {
       unsubscribe();
       unsubFeedBroadcast();
       unsubSoundNotifications();
+      supabase.removeChannel(chNotify);
       cleanupAllSubscriptions();
     };
   }, []);
@@ -190,6 +240,13 @@ function OpsApp({ onSignOut }) {
       // để mở thẳng đúng khu vực. Lời gọi cũ không có filter nên không đổi gì.
       if (nextTab === 'orders' && e.detail?.filter) {
         setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-order-filter', { detail: { filter: e.detail.filter } })), 0);
+      }
+      // Mở thẳng đúng bài đăng / đầu việc, thay vì chỉ nhảy tới trang chung.
+      if (nextTab === 'feed' && e.detail?.entityId) {
+        setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-feed', { detail: { entityId: e.detail.entityId } })), 0);
+      }
+      if ((nextTab === 'tasks' || nextTab === 'staffTasks') && e.detail?.entityId) {
+        setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-task', { detail: { entityId: e.detail.entityId } })), 0);
       }
     };
     window.addEventListener('sumi-navigate', go);

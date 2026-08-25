@@ -31,7 +31,7 @@ export function AdhocTasksTab({ profile, isOwner, viewingStaffId, orderCodeFilte
       {canReport && <Button size="sm" onClick={() => setShowReport(true)} style={{ alignSelf: 'flex-start' }}>Báo việc phát sinh</Button>}
       {visible.length === 0 && <div style={{ font: 'var(--text-body)', color: 'var(--text-muted)' }}>Chưa có việc phát sinh nào.</div>}
       {visible.map((t) => (
-        <div key={t.id} style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: 10, background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)' }}>
+        <div key={t.id} id={`task-item-${t.id}`} style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: 10, background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
             <span style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>{t.title}</span>
             <span style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>{new Date(t.created_at).toLocaleString('vi-VN')}</span>

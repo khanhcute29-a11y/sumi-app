@@ -65,12 +65,26 @@ export const showToast = (t) => {
 // Sửa đích đến thì sửa ở đây, không phải đi tìm khắp nơi.
 // ---------------------------------------------------------------------------
 export const NOTIFY_KINDS = {
-  // 1. Đăng tin của công ty -> Bảng tin nội bộ
+  // 1. Đăng tin của công ty -> Bảng tin nội bộ (mở thẳng bài đăng đó)
   company_feed: {
     icon: '📢',
     title: 'Thông báo từ công ty',
     tone: 'warning',
     tab: 'feed',
+  },
+  // 7. Được giao việc -> Trang công việc (mở thẳng đầu việc đó)
+  task_assigned: {
+    icon: '📋',
+    title: 'Bạn được giao việc mới',
+    tone: 'primary',
+    tab: 'tasks',
+  },
+  // Nhắc việc -> cùng chỗ với giao việc
+  task_reminder: {
+    icon: '⏰',
+    title: 'Nhắc việc cần làm',
+    tone: 'warning',
+    tab: 'tasks',
   },
   // 2. Đơn tạo mới -> Đơn chờ làm
   new_order: {

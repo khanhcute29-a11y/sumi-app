@@ -45,7 +45,7 @@ export function AssignedTasksTab({ profile, isOwner, viewingStaffId, viewingStaf
       )}
       {visible.length === 0 && <div style={{ font: 'var(--text-body)', color: 'var(--text-muted)' }}>Không có việc được giao.</div>}
       {visible.map((t) => (
-        <div key={t.id} style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: 10, background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)' }}>
+        <div key={t.id} id={`task-item-${t.id}`} style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: 10, background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
             <span style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>{t.title}</span>
             <span style={{ font: 'var(--text-caption)', color: t.status === 'done' && t.late ? 'var(--status-danger)' : t.status === 'done' ? 'var(--status-success)' : 'var(--text-muted)' }}>

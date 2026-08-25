@@ -219,3 +219,16 @@ export function playNotificationSound(soundKey) {
   } else if (soundKey === 'cash_complete') playDeliveredSound();
   else if (soundKey === 'ting') playTingSound();
 }
+
+// GIAO VIỆC — 3 nốt nảy Mi-La-Đô, tươi và gấp gáp, khác hẳn tiếng bếp/shipper
+// (Hàm THÊM MỚI. Không đụng tới bất kỳ hàm âm thanh nào đang chạy.)
+export function playTaskAssignedSound() {
+  console.log('[playTaskAssignedSound] Giao việc — Mi-La-Đô (6s loop)');
+  const pattern = [
+    { freq: 659, duration: 0.13, delay: 0, volume: 1.0 },     // Mi5
+    { freq: 880, duration: 0.13, delay: 0.16, volume: 1.0 },  // La5
+    { freq: 1318, duration: 0.3, delay: 0.32, volume: 1.0 },  // Mi6 vút lên
+  ];
+  playPatternLooped(pattern, 6000, 1.15);
+  console.log('[playTaskAssignedSound] ✓ Done');
+}
