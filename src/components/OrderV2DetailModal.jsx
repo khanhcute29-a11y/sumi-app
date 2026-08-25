@@ -129,7 +129,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       supabase.from('organization_units').select('id,name,code').eq('unit_type', 'kitchen').eq('active', true),
       supabase.from('domain_events').select('id,event_type,occurred_at,payload').eq('entity_type', 'order').eq('entity_id', orderId).order('occurred_at', { ascending: false }),
       supabase.from('kpi_logs').select('id,event_type,created_at,staff_name,staff_id,gps_latitude,gps_longitude,photo_url,notes').eq('order_id', orderId).order('created_at', { ascending: false }),
-      supabase.from('order_operations_list').select('production_started_at,production_completed_at,production_minutes,delivery_started_at,delivery_completed_at,delivery_minutes,delivery_provider,provider_label,shipping_fee,driver_name,is_overdue,overdue_stage,overdue_minutes').eq('id', orderId).single(),
+      supabase.from('order_operations_list').select('production_started_at,production_completed_at,production_minutes,delivery_started_at,delivery_completed_at,delivery_minutes,delivery_provider,provider_label,shipping_fee,driver_name,is_overdue,overdue_stage,overdue_minutes,was_late,late_staff_names').eq('id', orderId).single(),
       supabase.from('order_attachments').select('id,attachment_type,storage_path,mime_type,created_at').eq('order_id', orderId).order('created_at', { ascending: false }),
       supabase.from('order_change_logs').select('id,field_name,old_value,new_value,edited_by_name,created_at').eq('order_id', orderId).order('created_at', { ascending: false })
     ]);
@@ -896,6 +896,11 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
             {o.address && (
               <div>
                 <b>Địa chỉ:</b> {o.address}
+              </div>
+            )}
+            {data.operations?.was_late && (
+              <div style={{ marginTop: 4, padding: '8px 10px', background: '#fee2e2', borderRadius: 8, color: '#b42318', fontWeight: 700 }}>
+                ⚠️ Đơn này trễ giờ hẹn{data.operations?.late_staff_names ? ` — nhân viên: ${data.operations.late_staff_names}` : ''}
               </div>
             )}
             <div>
