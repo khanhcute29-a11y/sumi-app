@@ -1,15 +1,13 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "rewrites": [
+  "headers": [
     {
-      "comment": "Cho /api/* di thang toi ham may chu. Luat nay phai dung TRUOC luat bat-tat-ca ben duoi, vi Vercel xet theo thu tu va dung o luat khop dau tien.",
-      "source": "/api/:path*",
-      "destination": "/api/:path*"
-    },
-    {
-      "comment": "App la dang mot-trang: khong co file that cho /orders/<id>, /tasks/<id>, /company-feed/<id>. Khi bam vao thong bao day luc app dang DONG, he dieu hanh mo thang dia chi do -> may chu khong tim thay file -> 404 trang xoa. Luat nay tra ve index.html, roi app tu doc dia chi va mo dung don (src/lib/deepLink.js). Vercel kiem tra file that TRUOC nen assets/*.js, sw.js, version.json van duoc phuc vu binh thuong.",
-      "source": "/:path*",
-      "destination": "/index.html"
+      "source": "/(.*)",
+      "headers": [{ "key": "x-sumi-config", "value": "da-doc-vercel-json" }]
     }
+  ],
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/:path*" },
+    { "source": "/:path*", "destination": "/index.html" }
   ]
 }
