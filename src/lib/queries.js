@@ -1055,6 +1055,20 @@ export async function createAssignedTasks(rows) {
   notifyBadgesChanged();
 }
 
+export async function reportTaskProgress(taskId, percent, note) {
+  const { data: userData } = await supabase.auth.getUser();
+  const { error } = await supabase.from('task_progress_reports').insert({
+    task_id: taskId, staff_id: userData.user.id, percent, note: note || null,
+  });
+  if (error) throw error;
+}
+
+export async function fetchTaskProgressReports(taskId) {
+  const { data, error } = await supabase.from('task_progress_reports').select('*').eq('task_id', taskId).order('created_at', { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
 export async function createAdhocTask({ assigneeId, title, description, orderCode, createdBy }) {
   const { error } = await supabase.rpc('create_general_task',{p_category:'adhoc',p_title:title,p_description:description||null,p_order_code:orderCode||null,p_assignee_id:assigneeId,p_deadline:null,p_reminder_at:null});
   if (error) throw error;
@@ -1068,14 +1082,15 @@ export async function createAdhocTask({ assigneeId, title, description, orderCod
   notifyBadgesChanged();
 }
 
-export async function completeTask(id) {
+export async function completeTask(id, photoUrl) {
   const { data: task, error: findErr } = await supabase.from('tasks').select('deadline,version,work_package_id').eq('id', id).single();
   if (findErr) throw findErr;
   const { error } = await supabase.rpc('complete_task_v2', {
     p_idempotency_key: `task-complete:${id}:${newId()}`,
     p_task_id: id,
     p_expected_version: task.version,
-    p_note: null
+    p_note: null,
+    p_photo_url: photoUrl,
   });
   if (error) throw error;
   if (task.work_package_id) {

@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Button } from '../forms/Button';
-import { fetchTasks, startTask, completeTask, fetchApprovalRequests } from '../../lib/queries';
+import { fetchTasks, startTask, fetchApprovalRequests } from '../../lib/queries';
 import { AssignTaskModal } from './AssignTaskModal';
 import { ExemptionRequestModal } from './ExemptionRequestModal';
+import { CompleteTaskModal } from './CompleteTaskModal';
+import { ProgressReportModal } from './ProgressReportModal';
 
 export function AssignedTasksTab({ profile, isOwner, viewingStaffId, viewingStaffName, staffList, orderCodeFilter, refreshKey }) {
   const [tasks, setTasks] = useState([]);
@@ -11,6 +13,8 @@ export function AssignedTasksTab({ profile, isOwner, viewingStaffId, viewingStaf
   const [busyId, setBusyId] = useState('');
   const [showAssign, setShowAssign] = useState(false);
   const [exemptTarget, setExemptTarget] = useState(null);
+  const [completeTarget, setCompleteTarget] = useState(null);
+  const [progressTarget, setProgressTarget] = useState(null);
 
   const load = () => {
     Promise.all([
@@ -36,10 +40,6 @@ export function AssignedTasksTab({ profile, isOwner, viewingStaffId, viewingStaf
     return staffList?.find((p) => p.id === id)?.full_name || '';
   };
 
-  const handleComplete = async (id) => {
-    setBusyId(id); setError('');
-    try { await completeTask(id); load(); } catch (err) { setError(err.message); } finally { setBusyId(''); }
-  };
   const handleStart=async id=>{setBusyId(id);setError('');try{await startTask(id);load()}catch(err){setError(err.message)}finally{setBusyId('')}};
 
   return (
@@ -74,18 +74,31 @@ export function AssignedTasksTab({ profile, isOwner, viewingStaffId, viewingStaf
             <div style={{ font: 'var(--text-caption)', color: 'var(--status-warning)' }}>Đang chờ duyệt miễn trừ</div>
           )}
           {t.assignee_id === profile?.id && t.status === 'open' && (
-            <div style={{ display: 'flex', gap: 8 }}>
-              {!t.started_at?<Button size="sm" disabled={busyId===t.id} onClick={()=>handleStart(t.id)}>Bắt đầu</Button>:<Button size="sm" disabled={busyId === t.id} onClick={() => handleComplete(t.id)}>Hoàn thành</Button>}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {!t.started_at
+                ? <Button size="sm" disabled={busyId===t.id} onClick={()=>handleStart(t.id)}>Bắt đầu</Button>
+                : <>
+                    <Button size="sm" onClick={() => setCompleteTarget(t)}>Hoàn thành</Button>
+                    <Button size="sm" variant="secondary" onClick={() => setProgressTarget(t)}>Báo cáo tiến độ</Button>
+                  </>
+              }
               {!pendingExemptionTaskIds.includes(t.id) && (
                 <Button size="sm" variant="secondary" onClick={() => setExemptTarget(t)}>Xin miễn trừ</Button>
               )}
             </div>
+          )}
+          {t.photo_url && (
+            <a href={t.photo_url} target="_blank" rel="noreferrer" style={{ display: 'inline-block', width: 60, height: 60, borderRadius: 'var(--radius-sm)', overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
+              <img src={t.photo_url} alt="Ảnh hoàn thành" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            </a>
           )}
         </div>
       ))}
       {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
       {showAssign && <AssignTaskModal staffList={staffList} profile={profile} initialStaffId={viewingStaffId} onClose={() => setShowAssign(false)} onSaved={load} />}
       {exemptTarget && <ExemptionRequestModal task={exemptTarget} profile={profile} onClose={() => setExemptTarget(null)} onSent={load} />}
+      {completeTarget && <CompleteTaskModal task={completeTarget} onClose={() => setCompleteTarget(null)} onDone={() => { setCompleteTarget(null); load(); }} />}
+      {progressTarget && <ProgressReportModal task={progressTarget} onClose={() => setProgressTarget(null)} onSent={load} />}
     </div>
   );
 }
