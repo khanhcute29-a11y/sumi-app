@@ -607,6 +607,13 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
     try {
       if (!gpsCoords) throw new Error('Chưa lấy được GPS');
       if (!photoFile) throw new Error('Chưa chụp ảnh hoàn thành');
+      const ord = data.order;
+      const missing = [];
+      if (!ord?.required_at) missing.push('giờ giao');
+      if (!ord?.customers?.name) missing.push('tên khách');
+      if (!ord?.address) missing.push('địa chỉ');
+      if (!ord?.customers?.phone) missing.push('số điện thoại');
+      if (missing.length) throw new Error(`Thiếu thông tin đơn: ${missing.join(', ')} — bổ sung trước khi hoàn thành.`);
 
       // Upload completion photo
       const cleanExt = (photoFile.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
@@ -1348,6 +1355,17 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
               </div>
             )}
 
+            {(!data.order?.required_at || !data.order?.address || !data.order?.customers?.name || !data.order?.customers?.phone) && (
+              <div style={{ marginBottom: 14, padding: 10, background: '#fff3cd', borderRadius: 10, color: '#7a5a00', fontWeight: 700, fontSize: 13 }}>
+                ⚠️ Đơn còn thiếu: {[
+                  !data.order?.required_at && 'giờ giao',
+                  !data.order?.customers?.name && 'tên khách',
+                  !data.order?.address && 'địa chỉ',
+                  !data.order?.customers?.phone && 'số điện thoại',
+                ].filter(Boolean).join(', ')} — vào "Sửa đơn" bổ sung trước khi hoàn thành.
+              </div>
+            )}
+
             {/* Actions */}
             <div style={{ display: 'flex', gap: 10 }}>
               <button
@@ -1362,11 +1380,11 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
               </button>
               <button
                 onClick={completeDelivery}
-                disabled={busy || !gpsCoords || !photoFile}
+                disabled={busy || !gpsCoords || !photoFile || !data.order?.required_at || !data.order?.address || !data.order?.customers?.name || !data.order?.customers?.phone}
                 style={{
                   flex: 1, padding: '12px 16px', background: '#28a745', color: '#fff',
-                  border: 0, borderRadius: 10, fontWeight: 700, cursor: busy || !gpsCoords || !photoFile ? 'not-allowed' : 'pointer',
-                  fontSize: 14, opacity: (busy || !gpsCoords || !photoFile) ? 0.5 : 1
+                  border: 0, borderRadius: 10, fontWeight: 700, cursor: (busy || !gpsCoords || !photoFile || !data.order?.required_at || !data.order?.address || !data.order?.customers?.name || !data.order?.customers?.phone) ? 'not-allowed' : 'pointer',
+                  fontSize: 14, opacity: (busy || !gpsCoords || !photoFile || !data.order?.required_at || !data.order?.address || !data.order?.customers?.name || !data.order?.customers?.phone) ? 0.5 : 1
                 }}
               >
                 {busy ? '⏳ Đang xử lý...' : '✅ Hoàn Thành Giao'}
