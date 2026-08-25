@@ -410,7 +410,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
    {showLibraryPicker&&(
      <div className="sumi-order-create-overlay" onClick={()=>setShowLibraryPicker(false)}>
        <div className="sumi-order-create-body" onClick={e=>e.stopPropagation()}>
-         <div className="sumi-create-head"><button onClick={()=>setShowLibraryPicker(false)} aria-label="Đóng">←</button><h2>🎨 Ảnh mẫu Macaron đã lưu</h2></div>
+         <div className="sumi-create-head"><button onClick={()=>setShowLibraryPicker(false)} aria-label="Đóng">←</button><h2>🎨 Ảnh mẫu {type==='school'?'Trường học':'Macaron'} đã lưu</h2></div>
          <label style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,minHeight:50,border:'2px dashed #d96b43',borderRadius:14,background:'#fdf6ef',cursor:'pointer',fontWeight:800,color:'#b93e13',marginBottom:14}}>
            {libraryUploading?'Đang tải lên...':'+ Thêm ảnh mới vào kho'}
            <input hidden type="file" accept="image/*" disabled={libraryUploading} onChange={e=>{const f=e.target.files?.[0];if(f)uploadToLibrary(f);e.target.value='';}}/>
