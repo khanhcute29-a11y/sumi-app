@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   IconDashboard, IconOrders, IconKitchen, IconWarehouse, IconCashbook,
   IconShipping, IconProducts, IconShifts, IconReports, IconClipboard, IconCustomers, IconStaff,
-  IconSettings, IconStationHot, IconStationCold, IconStationWorkshop, IconStationSparkle, IconCheck, IconWarning,
+  IconSettings, IconStationHot, IconStationCold, IconStationWorkshop, IconStationSparkle, IconCheck, IconWarning, IconMoney,
 } from '../icons/FrogIcons';
 import { NavBadge } from './NavBadge';
 
@@ -20,6 +20,7 @@ const items = [
   { key: 'incidents', label: 'Báo Cáo Sự Cố', Icon: IconWarning },
   { key: 'reports', label: 'Báo Cáo', Icon: IconReports },
   { key: 'kpi', label: 'KPI', Icon: IconClipboard },
+  { key: 'schoolRevenue', label: 'Doanh Thu Trường Học', Icon: IconMoney },
   { key: 'crm', label: 'Khách Hàng', Icon: IconCustomers },
   { key: 'staff', label: 'Nhân Viên', Icon: IconStaff },
   { key: 'settings', label: 'Thiết Lập', Icon: IconSettings },
