@@ -16,7 +16,7 @@ import { useAuth } from '../lib/AuthContext';
 import { hasAnyRole } from '../lib/roles';
 import { enqueue } from '../lib/offlineQueue';
 import { supabase } from '../lib/supabaseClient';
-import { playKitchenCompleteSound } from '../lib/sound';
+import { playKitchenCompleteSound, playKitchenReceiveSound } from '../lib/sound';
 import { broadcastEvent, BroadcastEvents } from '../lib/realtimeSync';
 import {
   IconStationHot, IconStationCold, IconStationWorkshop, IconStationSparkle,
