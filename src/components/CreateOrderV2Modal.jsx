@@ -307,6 +307,10 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
       <input style={{...fieldStyle,gridColumn:'1 / -1'}} placeholder="Quy cách (VD: Khay 36 cặp - 4cm, Hộp 100 cặp - 2cm)" value={it.specification?.packing||''} onChange={e=>spec(itemIndex,'packing',e.target.value)}/>
       <div style={{gridColumn:'1 / -1',display:'flex',flexDirection:'column',gap:6}}>
        <label style={{fontSize:13,fontWeight:800,color:'#2d1c10'}}>Màu (chọn nhiều màu)</label>
+       <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+        {[6,9,10,12].map(n=><button type="button" key={n} onClick={()=>spec(itemIndex,'colors',MACARON_COLORS.slice(0,n))} style={{minHeight:34,padding:'5px 12px',borderRadius:999,fontSize:12,fontWeight:800,cursor:'pointer',border:'1px solid #d96b43',background:'#fff5f0',color:'#b93e13'}}>Mix {n} màu</button>)}
+        <button type="button" onClick={()=>spec(itemIndex,'colors',[])} style={{minHeight:34,padding:'5px 12px',borderRadius:999,fontSize:12,fontWeight:700,cursor:'pointer',border:'1px solid var(--border-default)',background:'#fff',color:'#6b5a4a'}}>Xóa hết</button>
+       </div>
        <MultiChipPicker options={MACARON_COLORS} selected={it.specification?.colors||[]} onToggle={c=>{const cur=it.specification?.colors||[];spec(itemIndex,'colors',cur.includes(c)?cur.filter(x=>x!==c):[...cur,c])}}/>
       </div>
       <div style={{gridColumn:'1 / -1',display:'flex',flexDirection:'column',gap:6}}>
