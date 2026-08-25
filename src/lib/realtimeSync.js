@@ -15,57 +15,88 @@ export const BroadcastEvents = {
   SOUND_NOTIFICATION: 'sound:notification',  // Sound alerts for tasks, orders, deliveries
 };
 
-// Subscribe to broadcast events
+// 🔴 CRITICAL FIX: Subscribe to broadcast events with proper error handling
 export const subscribeToBroadcast = (event, callback) => {
-  const channel = supabase.channel(`broadcast:${event}`, {
-    config: { broadcast: { self: true } }
-  });
-
-  channel.on('broadcast', { event }, (payload) => {
-    console.log(`[Broadcast] ${event}:`, payload.payload);
-    callback(payload.payload);
-  }).subscribe();
-
-  if (!activeChannels.has(event)) {
-    activeChannels.set(event, []);
-  }
-  activeChannels.get(event).push(channel);
-
-  return () => {
-    supabase.removeChannel(channel);
-    const channels = activeChannels.get(event);
-    if (channels) {
-      const idx = channels.indexOf(channel);
-      if (idx > -1) channels.splice(idx, 1);
-    }
-  };
-};
-
-// Broadcast event to all listeners
-export const broadcastEvent = async (event, data) => {
   try {
-    console.log(`[Broadcast] Sending ${event}...`, data);
+    console.log(`[subscribeToBroadcast] Setting up listener for ${event}`);
+
     const channel = supabase.channel(`broadcast:${event}`, {
       config: { broadcast: { self: true } }
     });
 
-    // MUST subscribe to the channel for broadcast to work
-    await channel.subscribe();
-    console.log(`[Broadcast] Channel subscribed, sending message...`);
+    channel
+      .on('broadcast', { event }, (payload) => {
+        console.log(`[subscribeToBroadcast] ✓ Received ${event}:`, payload.payload);
+        try {
+          callback(payload.payload);
+        } catch (callbackErr) {
+          console.error(`[subscribeToBroadcast] Callback error for ${event}:`, callbackErr);
+        }
+      })
+      .subscribe((status) => {
+        console.log(`[subscribeToBroadcast] Channel status for ${event}:`, status);
+      });
 
-    channel.send({
-      type: 'broadcast',
-      event,
-      payload: data,
-    });
-    console.log(`[Broadcast] Sent ${event}:`, data);
+    if (!activeChannels.has(event)) {
+      activeChannels.set(event, []);
+    }
+    activeChannels.get(event).push(channel);
 
-    // Unsubscribe after sending to avoid memory leak
-    setTimeout(() => {
+    return () => {
+      console.log(`[subscribeToBroadcast] Cleaning up listener for ${event}`);
       supabase.removeChannel(channel);
-    }, 100);
+      const channels = activeChannels.get(event);
+      if (channels) {
+        const idx = channels.indexOf(channel);
+        if (idx > -1) channels.splice(idx, 1);
+      }
+    };
+  } catch (err) {
+    console.error(`[subscribeToBroadcast] Error setting up listener for ${event}:`, err);
+    return () => {};
+  }
+};
+
+// 🔴 CRITICAL FIX: Broadcast event to all listeners with proper subscription & timing
+export const broadcastEvent = async (event, data) => {
+  try {
+    console.log(`[broadcastEvent] Sending ${event}:`, data);
+
+    const channel = supabase.channel(`broadcast:${event}`, {
+      config: { broadcast: { self: true } }
+    });
+
+    // CRITICAL: Subscribe to channel with status check
+    return new Promise((resolve, reject) => {
+      channel.subscribe((status) => {
+        console.log(`[broadcastEvent] Channel status for ${event}:`, status);
+
+        if (status === 'SUBSCRIBED') {
+          // Send message only after confirmed subscription
+          const sendResult = channel.send({
+            type: 'broadcast',
+            event,
+            payload: data,
+            timestamp: new Date().toISOString()
+          });
+
+          console.log(`[broadcastEvent] ✓ Message sent for ${event}:`, sendResult);
+
+          // Keep channel alive for 500ms to ensure message delivery across network
+          setTimeout(() => {
+            supabase.removeChannel(channel);
+            console.log(`[broadcastEvent] Channel cleaned up for ${event}`);
+            resolve(sendResult);
+          }, 500);
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error(`[broadcastEvent] Channel error for ${event}:`, status);
+          reject(new Error(`Channel error for ${event}`));
+        }
+      });
+    });
   } catch (e) {
-    console.error(`[Broadcast Error] ${event}:`, e);
+    console.error(`[broadcastEvent] Error broadcasting ${event}:`, e);
+    throw e;
   }
 };
 

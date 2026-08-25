@@ -2,7 +2,15 @@ let ctx;
 
 function getCtx() {
   if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
-  if (ctx.state === 'suspended') ctx.resume();
+
+  // 🔴 CRITICAL FIX: Resume context nếu suspended (bypass autoplay policy)
+  if (ctx.state === 'suspended') {
+    console.log('[Sound] AudioContext suspended, attempting resume...');
+    ctx.resume()
+      .then(() => console.log('[Sound] ✓ AudioContext resumed'))
+      .catch(e => console.error('[Sound] Resume failed:', e));
+  }
+
   return ctx;
 }
 
@@ -29,23 +37,34 @@ function beep({ freq = 880, duration = 0.15, delay = 0, type = 'sine', volume = 
 export function initAudioUnlock() {
   // Try to create context immediately
   try {
-    const ctx = getCtx();
-    console.log('[initAudioUnlock] Audio context initialized, state:', ctx?.state);
+    const audioCtx = getCtx();
+    console.log('[initAudioUnlock] Audio context initialized, state:', audioCtx?.state);
   } catch (e) {
     console.log('[initAudioUnlock] Could not pre-initialize context:', e.message);
   }
 
-  // Also unlock on first user interaction (for browsers that require it)
+  // 🔴 CRITICAL FIX: Unlock on user interaction - force resume if suspended
   const unlock = () => {
     try {
-      getCtx();
-      console.log('[initAudioUnlock] Audio context unlocked via user interaction');
+      const audioCtx = getCtx();
+      // Force resume on any user interaction
+      if (audioCtx.state === 'suspended') {
+        audioCtx
+          .resume()
+          .then(() => {
+            console.log('[initAudioUnlock] ✓ Audio context unlocked & resumed via user interaction');
+          })
+          .catch(e => console.error('[initAudioUnlock] Resume failed:', e));
+      } else {
+        console.log('[initAudioUnlock] Audio context already running, state:', audioCtx.state);
+      }
     } catch (e) {
       console.log('[initAudioUnlock] Unlock attempt failed:', e.message);
     }
     window.removeEventListener('click', unlock);
     window.removeEventListener('touchstart', unlock);
   };
+
   window.addEventListener('click', unlock, { passive: true });
   window.addEventListener('touchstart', unlock, { passive: true });
 }

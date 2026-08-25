@@ -135,17 +135,40 @@ function OpsApp({ onSignOut }) {
       playAlertSound().catch(err => console.error('[App] Alert sound error:', err));
     });
 
-    // Global listener for all sound notifications (tasks, orders, deliveries)
+    // 🔴 CRITICAL FIX: Global listener for all sound notifications (tasks, orders, deliveries)
     const unsubSoundNotifications = subscribeToBroadcast(BroadcastEvents.SOUND_NOTIFICATION, (data) => {
       console.log('[App] Sound notification received:', data?.soundType);
-      const soundType = data?.soundType;
-      switch (soundType) {
-        case 'kitchen_receive': playKitchenReceiveSound(); break;      // TING TING TING
-        case 'kitchen_complete': playKitchenCompleteSound(); break;   // TING TING TING TING
-        case 'shipper_receive': playShipperReceiveSound(); break;     // TING TING
-        case 'shipper_complete': playShipperCompleteSound(); break;   // TING TING TING TING TING
-        case 'task_assigned': playShipperReceiveSound(); break;       // TING TING
-        default: console.log('[App] Unknown sound type:', soundType);
+
+      try {
+        const soundType = data?.soundType;
+        console.log(`[App] Playing sound type: ${soundType}`);
+
+        switch (soundType) {
+          case 'kitchen_receive':
+            console.log('[App] Triggering TING TING TING');
+            playKitchenReceiveSound();
+            break;
+          case 'kitchen_complete':
+            console.log('[App] Triggering TING TING TING TING');
+            playKitchenCompleteSound();
+            break;
+          case 'shipper_receive':
+            console.log('[App] Triggering TING TING');
+            playShipperReceiveSound();
+            break;
+          case 'shipper_complete':
+            console.log('[App] Triggering TING TING TING TING TING');
+            playShipperCompleteSound();
+            break;
+          case 'task_assigned':
+            console.log('[App] Triggering task sound');
+            playShipperReceiveSound();
+            break;
+          default:
+            console.warn('[App] Unknown sound type:', soundType);
+        }
+      } catch (err) {
+        console.error('[App] Error playing sound:', err);
       }
     });
 
