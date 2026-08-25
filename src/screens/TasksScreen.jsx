@@ -138,20 +138,16 @@ export default function TasksScreen() {
               👥 Danh sách nhân viên
             </button>
           )}
-          {isOwner && (
-            <Button variant="secondary" size="sm" onClick={() => setShowProductionLog(true)}>
-              Ghi Sản Xuất
-            </Button>
-          )}
-          {isOwner && (
-            <Button variant={showProductionLogList ? 'primary' : 'ghost'} size="sm" onClick={() => setShowProductionLogList((v) => !v)}>
-              Đã ghi sản xuất {showProductionLogList ? '▲' : '▼'}
-            </Button>
-          )}
+          <Button variant="secondary" size="sm" onClick={() => setShowProductionLog(true)}>
+            Ghi Sản Xuất
+          </Button>
+          <Button variant={showProductionLogList ? 'primary' : 'ghost'} size="sm" onClick={() => setShowProductionLogList((v) => !v)}>
+            Đã ghi sản xuất {showProductionLogList ? '▲' : '▼'}
+          </Button>
         </div>
       </div>
 
-      {isOwner && showProductionLogList && <ProductionLogList refreshKey={productionLogRefreshKey} />}
+      {showProductionLogList && <ProductionLogList refreshKey={productionLogRefreshKey} />}
 
       {showProductionLog && (
         <ProductionLogModal
