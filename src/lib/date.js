@@ -60,6 +60,9 @@ export function periodRangeFor(unit, anchor) {
     const days = weekDates(mondayOf(anchor));
     return { from: localDateStr(days[0]), to: localDateStr(days[6]) };
   }
+  if (unit === 'year') {
+    return { from: `${anchor.getFullYear()}-01-01`, to: `${anchor.getFullYear()}-12-31` };
+  }
   return { from: localDateStr(startOfMonth(anchor)), to: localDateStr(endOfMonth(anchor)) };
 }
 
@@ -69,6 +72,7 @@ export function periodLabelFor(unit, anchor) {
     const days = weekDates(mondayOf(anchor));
     return `${days[0].toLocaleDateString('vi-VN')} - ${days[6].toLocaleDateString('vi-VN')}`;
   }
+  if (unit === 'year') return `Năm ${anchor.getFullYear()}`;
   return `Tháng ${anchor.getMonth() + 1}/${anchor.getFullYear()}`;
 }
 
@@ -76,6 +80,7 @@ export function shiftAnchor(unit, anchor, dir) {
   const d = new Date(anchor);
   if (unit === 'day') { d.setDate(d.getDate() + dir); return d; }
   if (unit === 'week') { d.setDate(d.getDate() + dir * 7); return d; }
+  if (unit === 'year') { d.setFullYear(d.getFullYear() + dir); return d; }
   d.setDate(1);
   d.setMonth(d.getMonth() + dir);
   return d;

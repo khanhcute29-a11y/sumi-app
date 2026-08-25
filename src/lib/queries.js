@@ -421,6 +421,16 @@ export async function uploadPhoto(blob, pathPrefix) {
   return data.publicUrl;
 }
 
+export async function fetchSchoolRevenue({ from, to } = {}) {
+  let q = supabase.from('orders').select('id,order_code,total,created_at,completed_at,status_v2,address')
+    .eq('order_type', 'school').neq('status_v2', 'cancelled').order('created_at', { ascending: true });
+  if (from) q = q.gte('created_at', `${from}T00:00:00+07:00`);
+  if (to) q = q.lte('created_at', `${to}T23:59:59.999+07:00`);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data;
+}
+
 export async function uploadFile(file, pathPrefix) {
   if (file.size > MAX_ATTACHMENT_BYTES) throw new Error('File vượt quá 25MB');
   const contentType = file.type || 'application/octet-stream';
