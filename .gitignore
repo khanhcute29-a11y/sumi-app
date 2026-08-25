@@ -11,3 +11,4 @@ yarn-error.log*
 pnpm-debug.log*
 .vercel
 .superpowers/
+.env*

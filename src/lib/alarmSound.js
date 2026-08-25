@@ -2,7 +2,8 @@ import {
   playKitchenReceiveSound,
   playKitchenCompleteSound,
   playShipperReceiveSound,
-  playShipperCompleteSound
+  playShipperCompleteSound,
+  registerAudioContext
 } from './sound';
 
 // Sound event types
@@ -32,6 +33,10 @@ function getAudioContext() {
   if (!audioContext) {
     try {
       audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      // File này có bộ âm thanh RIÊNG, tách khỏi sound.js. Trước đây bộ mở
+      // khoá chỉ mở cho sound.js nên chuông tin công ty vẫn câm trên máy
+      // người nhận. Đăng ký vào đây để được mở khoá cùng lúc.
+      registerAudioContext(audioContext);
       console.log('[getAudioContext] Created context, state:', audioContext.state);
     } catch (e) {
       console.error('[getAudioContext] Failed:', e);

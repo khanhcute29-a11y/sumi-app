@@ -60,6 +60,30 @@ export default function TasksScreen() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'task_templates' }, () => setRefreshKey((k) => k + 1))
       .subscribe();
     return () => { supabase.removeChannel(channel); };
+
+  // Bấm vào tin nhắn "được giao việc" -> cuộn tới đúng đầu việc và làm nổi bật.
+  // Thử lại vài lần vì danh sách việc có thể chưa tải xong lúc vừa chuyển trang.
+  useEffect(() => {
+    const go = (e) => {
+      const id = e.detail?.entityId;
+      if (!id) return;
+      let n = 0;
+      const tim = () => {
+        const el = document.getElementById(`task-item-${id}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.style.transition = 'box-shadow .3s';
+          el.style.boxShadow = '0 0 0 4px rgba(217,107,67,.55)';
+          setTimeout(() => { el.style.boxShadow = ''; }, 2600);
+          return;
+        }
+        if (++n < 20) setTimeout(tim, 250);
+      };
+      tim();
+    };
+    window.addEventListener('sumi-open-task', go);
+    return () => window.removeEventListener('sumi-open-task', go);
+  }, []);
   }, []);
 
   const filteredStaff = stationFilter ? staffList.filter((p) => p.station === stationFilter) : staffList;

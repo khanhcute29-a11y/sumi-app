@@ -16,8 +16,6 @@ import { useAuth } from '../lib/AuthContext';
 import { hasAnyRole } from '../lib/roles';
 import { enqueue } from '../lib/offlineQueue';
 import { supabase } from '../lib/supabaseClient';
-import { playKitchenCompleteSound } from '../lib/sound';
-import { broadcastEvent, BroadcastEvents } from '../lib/realtimeSync';
 import {
   IconStationHot, IconStationCold, IconStationWorkshop, IconStationSparkle,
   IconChat, IconWarning, IconPaperclip, IconClipboard, IconKitchen, IconCamera, IconSearch, IconClock,
@@ -489,9 +487,12 @@ export default function KdsScreen({ initialStation }) {
     }
   };
 
+  // Chuông do useOrderNotifications phát theo orders.status_v2 (mọi máy nghe
+  // cùng lúc), nên các handler dưới đây không tự phát để khỏi kêu chồng.
   const handleAccept = async (order) => {
     const staffName = profile?.full_name || null;
     await applyFields(order, { status: 'dang_lam', kitchen_staff_name: staffName });
+
     if (isUrgent(order) && staffName) {
       addOrderNote({
         orderId: order.id, orderCode: order.order_code, authorId: profile?.id,
@@ -520,20 +521,6 @@ export default function KdsScreen({ initialStation }) {
         const fields = { status: 'cho_giao', kitchen_staff_name: stage.assignee_name };
         if (photoUrl) fields.kitchen_photo_url = photoUrl;
         await applyFields(order, fields);
-
-        // 🎵 TING TING TING TING - Phát âm thanh hoàn thành đơn cho tất cả người dùng
-        console.log('[KDS] Playing kitchen complete sound...');
-        try {
-          playKitchenCompleteSound();
-          console.log('[KDS] ✓ Sound played successfully');
-        } catch (soundErr) {
-          console.error('[KDS] Sound play error:', soundErr);
-        }
-
-        console.log('[KDS] Broadcasting sound notification...');
-        broadcastEvent(BroadcastEvents.SOUND_NOTIFICATION, {
-          soundType: 'kitchen_complete'
-        }).catch(e => console.error('[KDS] Broadcast error:', e));
       } else {
         load();
       }

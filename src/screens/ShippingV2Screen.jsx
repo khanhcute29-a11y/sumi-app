@@ -68,6 +68,8 @@ export default function ShippingV2Screen() {
     }
   };
 
+  // Chuông "nhận giao" do useOrderNotifications phát khi orders.status_v2
+  // chuyển sang 'in_delivery' — mọi máy nghe cùng lúc, nên ở đây không tự phát.
   const accept = r =>
     rpc('accept_delivery_run_v2', {
       p_idempotency_key: crypto.randomUUID(),
@@ -445,7 +447,13 @@ function StopCard({ stop, runActive, onViewOrder, onDone, setError }) {
         soundType: 'shipper_complete'
       }).catch(e => console.error('Broadcast error:', e));
 
-      await onDone();
+      // Giao hàng ĐÃ xong. Bước làm mới danh sách mà vấp thì chỉ ghi nhật ký,
+      // không được hiện dòng đỏ như thể giao hàng thất bại.
+      try {
+        await onDone();
+      } catch (err) {
+        console.error('[ShippingV2] Làm mới sau khi giao xong lỗi (bỏ qua):', err);
+      }
     } catch (e) {
       setError(e.message);
     } finally {
