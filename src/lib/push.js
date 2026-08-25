@@ -34,7 +34,23 @@ export async function getPushSubscriptionStatus() {
 export async function enablePush(staffId) {
   if (!isPushSupported()) throw new Error('Trình duyệt này không hỗ trợ thông báo đẩy.');
   const permission = await Notification.requestPermission();
-  if (permission !== 'granted') throw new Error('Bạn chưa cho phép nhận thông báo.');
+  if (permission === 'denied') {
+    throw new Error(
+      'Máy đang CHẶN thông báo của trang này. Vào Cài đặt trình duyệt → Cài đặt trang web → ' +
+      'Thông báo → tìm sumibakery.shop → đổi thành Cho phép.'
+    );
+  }
+  if (permission !== 'granted') {
+    // 'default' sau khi đã hỏi = trình duyệt NUỐT lời xin phép, không hiện hộp
+    // thoại nào. Chrome/Samsung tự làm vậy với trang bị đánh giá "ít người
+    // đồng ý" (chế độ thông báo nhẹ nhàng). Khác hẳn với việc người dùng bấm
+    // Chặn — nên phải báo khác, nếu không sẽ hướng dẫn sai chỗ.
+    throw new Error(
+      'Trình duyệt đã tự chặn lời xin phép, không hiện hộp thoại nào. ' +
+      'Cách chắc chắn nhất: tắt "Sử dụng thông báo nhẹ nhàng hơn" trong Cài đặt trang web → Thông báo, ' +
+      'hoặc xoá dữ liệu trang sumibakery.shop rồi vào lại.'
+    );
+  }
   const reg = await navigator.serviceWorker.ready;
   let sub = await reg.pushManager.getSubscription();
   if (!sub) {
