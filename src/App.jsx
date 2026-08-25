@@ -15,6 +15,8 @@ import { requestNotificationPermission, playAlertSound, preloadAlertAudio } from
 import { playKitchenReceiveSound, playKitchenCompleteSound, playShipperReceiveSound, playShipperCompleteSound, playOnce } from './lib/sound';
 import { setupAutoRefresh, cleanupAllSubscriptions, subscribeToMultipleTables, subscribeToBroadcast, BroadcastEvents } from './lib/realtimeSync';
 import { ConnectivityBanner } from './components/ConnectivityBanner';
+import ToastHost from './components/ToastHost';
+import { notify } from './lib/toast';
 import { AuthProvider, useAuth } from './lib/AuthContext';
 import LoginScreen from './screens/LoginScreen';
 import ResetPasswordScreen from './screens/ResetPasswordScreen';
@@ -133,6 +135,8 @@ function OpsApp({ onSignOut }) {
     const unsubFeedBroadcast = subscribeToBroadcast(BroadcastEvents.FEED_POST_CREATED, (data) => {
       console.log('[App] Announcement broadcast received! Playing sound...');
       playAlertSound().catch(err => console.error('[App] Alert sound error:', err));
+      // Tin nhắn hiện song song với chuông — bấm vào mở Bảng tin công ty
+      notify('company_feed', data?.title || data?.content || undefined);
     });
 
     // 🔴 CRITICAL FIX: Global listener for all sound notifications (tasks, orders, deliveries)
@@ -154,7 +158,13 @@ function OpsApp({ onSignOut }) {
           console.warn('[App] Không rõ loại chuông:', soundType);
           return;
         }
-        playOnce(soundType, fn);
+        // Chuông giữ NGUYÊN như cũ. Tin nhắn được gọi ngay cạnh, trong cùng
+        // playOnce để tin và chuông luôn xuất hiện cùng nhau (và cùng bị chặn
+        // khi trùng lặp) — không bao giờ lệch nhau.
+        playOnce(soundType, () => {
+          fn();
+          if (soundType !== 'task_assigned') notify(soundType, data?.orderCode);
+        });
       } catch (err) {
         console.error('[App] Error playing sound:', err);
       }
@@ -169,7 +179,22 @@ function OpsApp({ onSignOut }) {
   }, []);
 
   useEffect(() => { loadFeatureFlags().then(setFeatureFlags).catch(() => {}); }, [profile?.id]);
-  useEffect(() => { const go=e=>{setTab(e.detail?.tab||'orders'); if((e.detail?.tab||'orders')==='orders'&&e.detail?.entityId)setTimeout(()=>window.dispatchEvent(new CustomEvent('sumi-open-order',{detail:{entityId:e.detail.entityId}})),0);}; window.addEventListener('sumi-navigate',go); return()=>window.removeEventListener('sumi-navigate',go); }, []);
+  useEffect(() => {
+    const go = (e) => {
+      const nextTab = e.detail?.tab || 'orders';
+      setTab(nextTab);
+      if (nextTab === 'orders' && e.detail?.entityId) {
+        setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-order', { detail: { entityId: e.detail.entityId } })), 0);
+      }
+      // Bấm vào tin nhắn thông báo còn kèm tab lọc (vd: 'production' = Bếp đang làm)
+      // để mở thẳng đúng khu vực. Lời gọi cũ không có filter nên không đổi gì.
+      if (nextTab === 'orders' && e.detail?.filter) {
+        setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-order-filter', { detail: { filter: e.detail.filter } })), 0);
+      }
+    };
+    window.addEventListener('sumi-navigate', go);
+    return () => window.removeEventListener('sumi-navigate', go);
+  }, []);
   useEffect(() => { document.querySelector('.sb-content')?.scrollTo({ top: 0, behavior: 'instant' }); }, [tab]);
 
   useEffect(() => {
@@ -202,6 +227,7 @@ function OpsApp({ onSignOut }) {
   const isBottomKey = (k) => ['home', 'feed', 'orders', 'tasks', 'profile'].includes(k);
   return (
     <div className="sb-shell">
+      <ToastHost />
       <ConnectivityBanner />
       <div className="sb-body">
         <div className="sb-sidebar"><Sidebar active={tab} activeStation={kdsStation} onSelectStation={setKdsStation} activeBranch={warehouseBranch} onSelectBranch={setWarehouseBranch} onSelect={setTab} badges={badgeCounts} /></div>
