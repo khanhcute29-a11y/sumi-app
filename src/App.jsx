@@ -16,6 +16,7 @@ import { playKitchenReceiveSound, playKitchenCompleteSound, playShipperReceiveSo
 import { setupAutoRefresh, cleanupAllSubscriptions, subscribeToMultipleTables, subscribeToBroadcast, BroadcastEvents } from './lib/realtimeSync';
 import { ConnectivityBanner } from './components/ConnectivityBanner';
 import ToastHost from './components/ToastHost';
+import AudioUnlockBanner from './components/AudioUnlockBanner';
 import { notify, showToast, NOTIFY_KINDS } from './lib/toast';
 import { AuthProvider, useAuth } from './lib/AuthContext';
 import LoginScreen from './screens/LoginScreen';
@@ -296,6 +297,7 @@ function OpsApp({ onSignOut }) {
   return (
     <div className="sb-shell">
       <ToastHost />
+      <AudioUnlockBanner />
       <ConnectivityBanner />
       <div className="sb-body">
         <div className="sb-sidebar"><Sidebar active={tab} activeStation={kdsStation} onSelectStation={setKdsStation} activeBranch={warehouseBranch} onSelectBranch={setWarehouseBranch} onSelect={setTab} badges={badgeCounts} /></div>

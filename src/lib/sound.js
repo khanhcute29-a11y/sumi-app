@@ -1,6 +1,110 @@
 let ctx;
 let masterBus;
 
+// ---------------------------------------------------------------------------
+// TRẠNG THÁI KHOÁ ÂM THANH
+// Trình duyệt khoá không cho phát tiếng cho tới khi người dùng có thao tác
+// (bấm/chạm). Máy của người BẤM NÚT được mở khoá ngay nhờ chính cú bấm đó;
+// máy của người khác chỉ ngồi nhìn nên vẫn bị khoá -> chuông chạy mà câm.
+// Đây chính là lý do chỉ người thao tác nghe được tiếng.
+// ---------------------------------------------------------------------------
+const extraContexts = new Set();   // bộ âm thanh riêng của alarmSound.js
+const blockedListeners = new Set();
+let audioBlocked = false;
+
+// alarmSound.js gọi hàm này để bộ âm thanh của nó cũng được mở khoá cùng lúc.
+export function registerAudioContext(c) {
+  if (c) extraContexts.add(c);
+}
+
+function allContexts() {
+  return [ctx, ...extraContexts].filter(Boolean);
+}
+
+function setBlocked(v) {
+  if (audioBlocked === v) return;
+  audioBlocked = v;
+  for (const cb of blockedListeners) {
+    try { cb(v); } catch (e) { console.error('[Sound] listener error:', e); }
+  }
+}
+
+export function isAudioBlocked() {
+  return audioBlocked;
+}
+
+export function subscribeAudioBlocked(cb) {
+  blockedListeners.add(cb);
+  cb(audioBlocked);
+  return () => blockedListeners.delete(cb);
+}
+
+// Mở khoá TẤT CẢ bộ âm thanh. Trả về true nếu đã sẵn sàng phát tiếng.
+export async function unlockAudioNow() {
+  try {
+    getCtx();
+    const list = allContexts();
+    await Promise.all(
+      list.map((c) => (c.state === 'suspended' ? c.resume().catch(() => {}) : Promise.resolve()))
+    );
+    const ok = allContexts().every((c) => c.state === 'running');
+    setBlocked(!ok);
+    return ok;
+  } catch (e) {
+    console.error('[Sound] unlockAudioNow error:', e);
+    setBlocked(true);
+    return false;
+  }
+}
+
+// Chỉ lên lịch phát tiếng KHI bộ âm thanh đang chạy thật.
+// Nếu còn khoá thì thử mở rồi mới phát — tránh hai chuyện:
+//  * lên lịch vào bộ đang khoá -> mất tiếng hoàn toàn
+//  * các tiếng bị dồn ứ, tới lúc mở khoá thì nổ ra cùng lúc (nghẹn tiếng)
+// Sổ theo dõi các tiếng ĐANG phát dở, để tắt chúng trước khi phát tiếng mới.
+// Đây là cách tương đương "audio.currentTime = 0" cho âm thanh tạo bằng Web
+// Audio: thay vì chồng tiếng lên nhau thành tạp âm khi thông báo dồn dập,
+// tiếng cũ được tắt mượt (30ms) rồi tiếng mới bắt đầu lại từ đầu.
+const activeNodes = new Set();
+
+function stopActiveSounds() {
+  if (!ctx || activeNodes.size === 0) return;
+  const now = ctx.currentTime;
+  for (const node of activeNodes) {
+    try {
+      // Cắt NHANH (8ms) chứ không phải 30ms: khi 5 thông báo ập tới gần như
+      // cùng lúc, mỗi mili-giây chồng tiếng đều cộng dồn biên độ. Đo thực tế
+      // cho thấy cắt chậm thì 5 tiếng cùng lúc đẩy đỉnh lên 2.83 (vỡ tiếng).
+      // 8ms đủ ngắn để không cộng dồn, đủ dài để không nghe thành tiếng "tách".
+      node.gain.gain.cancelScheduledValues(now);
+      node.gain.gain.setValueAtTime(Math.max(node.gain.gain.value, 0.0001), now);
+      node.gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.008);
+      node.osc.stop(now + 0.02);
+    } catch (e) { /* nốt đã dừng rồi thì bỏ qua */ }
+  }
+  activeNodes.clear();
+}
+
+function withRunningCtx(run) {
+  let audioCtx;
+  try { audioCtx = getCtx(); } catch (e) { console.error('[Sound] getCtx error:', e); return; }
+
+  if (audioCtx.state === 'running') {
+    setBlocked(false);
+    stopActiveSounds();   // tiếng mới bắt đầu lại từ đầu, không chồng lên tiếng cũ
+    run();
+    return;
+  }
+
+  setBlocked(true);
+  audioCtx.resume()
+    .then(() => {
+      if (audioCtx.state === 'running') { setBlocked(false); stopActiveSounds(); run(); }
+      else console.warn('[Sound] Trình duyệt vẫn chặn — cần người dùng bấm "Bật âm thanh".');
+    })
+    .catch((e) => console.warn('[Sound] Không mở được âm thanh:', e?.message || e));
+}
+
 // Đường ra chung cho MỌI tiếng chuông trong app.
 // Nén động (compressor) + khuếch đại bù (makeup gain): cho phép đẩy âm lượng
 // lên sát mức tối đa mà không bị rè/vỡ tiếng khi nhiều nốt chồng nhau.
@@ -21,8 +125,20 @@ function getMasterBus(audioCtx) {
   const makeup = audioCtx.createGain();
   makeup.gain.value = 1.9;     // bù lại phần bị nén -> to gấp ~2.6 lần trước
 
+  // TẦNG CHẶN ĐỈNH cuối cùng. Một thông báo đơn lẻ thì makeup 1.9 vừa đẹp,
+  // nhưng khi nhiều thông báo ập tới gần như cùng lúc thì biên độ cộng dồn
+  // vượt ngưỡng 1.0 và tiếng bị vỡ/rè. Đo thực tế: 5 thông báo cùng lúc đẩy
+  // đỉnh lên 2.83. Tầng này ghìm mọi thứ xuống dưới ngưỡng, dù dồn bao nhiêu.
+  const limiter = audioCtx.createDynamicsCompressor();
+  limiter.threshold.value = -1.5;
+  limiter.knee.value = 0;      // chặn dứt khoát, không bo tròn
+  limiter.ratio.value = 20;
+  limiter.attack.value = 0.001; // bắt kịp cả tiếng đột ngột
+  limiter.release.value = 0.05;
+
   comp.connect(makeup);
-  makeup.connect(audioCtx.destination);
+  makeup.connect(limiter);
+  limiter.connect(audioCtx.destination);
   masterBus = comp;
   return masterBus;
 }
@@ -74,64 +190,74 @@ function beep({ freq = 880, duration = 0.15, delay = 0, type = 'sine', volume = 
     gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
     osc.start(startTime);
     osc.stop(startTime + duration + 0.02);
+
+    const node = { osc, gain };
+    activeNodes.add(node);
+    osc.onended = () => activeNodes.delete(node);
   } catch (e) {
     console.error('[beep] Error:', e);
   }
 }
 
 export function initAudioUnlock() {
-  // Try to create context immediately
-  try {
-    const audioCtx = getCtx();
-    console.log('[initAudioUnlock] Audio context initialized, state:', audioCtx?.state);
-  } catch (e) {
-    console.log('[initAudioUnlock] Could not pre-initialize context:', e.message);
-  }
-
-  // 🔴 CRITICAL FIX: Unlock on user interaction - force resume if suspended
-  const unlock = () => {
-    try {
-      const audioCtx = getCtx();
-      // Force resume on any user interaction
-      if (audioCtx.state === 'suspended') {
-        audioCtx
-          .resume()
-          .then(() => {
-            console.log('[initAudioUnlock] ✓ Audio context unlocked & resumed via user interaction');
-          })
-          .catch(e => console.error('[initAudioUnlock] Resume failed:', e));
-      } else {
-        console.log('[initAudioUnlock] Audio context already running, state:', audioCtx.state);
-      }
-    } catch (e) {
-      console.log('[initAudioUnlock] Unlock attempt failed:', e.message);
-    }
-    window.removeEventListener('click', unlock);
-    window.removeEventListener('touchstart', unlock);
+  // LỖI CŨ: bộ nghe tự gỡ ngay sau cú bấm ĐẦU TIÊN, bất kể mở khoá có thành
+  // công hay không. resume() chạy bất đồng bộ nên nếu chưa kịp xong thì bộ
+  // nghe đã biến mất — không còn lần thử thứ hai, máy đó câm vĩnh viễn.
+  // SỬA: chỉ gỡ khi ĐÃ mở khoá thật sự, và thử lại ở mọi thao tác.
+  const tryUnlock = () => {
+    unlockAudioNow().then((ok) => {
+      if (!ok) return;
+      window.removeEventListener('click', tryUnlock);
+      window.removeEventListener('touchstart', tryUnlock);
+      window.removeEventListener('keydown', tryUnlock);
+      console.log('[Sound] ✓ Âm thanh đã sẵn sàng');
+    });
   };
 
-  window.addEventListener('click', unlock, { passive: true });
-  window.addEventListener('touchstart', unlock, { passive: true });
+  window.addEventListener('click', tryUnlock, { passive: true });
+  window.addEventListener('touchstart', tryUnlock, { passive: true });
+  window.addEventListener('keydown', tryUnlock);
+
+  // Điện thoại/máy tính bảng hay tạm dừng âm thanh khi chuyển sang app khác.
+  // Quay lại app thì mở khoá lại, nếu không thì im tiếng mà không ai biết.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') unlockAudioNow();
+  });
+  window.addEventListener('focus', () => { unlockAudioNow(); });
+
+  // Kiểm tra ngay lúc mở app để biết có đang bị chặn không.
+  unlockAudioNow();
 }
 
 export function playNewOrderSound() {
-  beep({ freq: 880, duration: 0.12 });
-  beep({ freq: 1174, duration: 0.18, delay: 0.14 });
+  withRunningCtx(() => {
+    beep({ freq: 880, duration: 0.12 });
+    beep({ freq: 1174, duration: 0.18, delay: 0.14 });
+  });
 }
 
 export function playDeliveredSound() {
-  beep({ freq: 660, duration: 0.1 });
-  beep({ freq: 880, duration: 0.1, delay: 0.11 });
-  beep({ freq: 1108, duration: 0.22, delay: 0.22 });
+  withRunningCtx(() => {
+    beep({ freq: 660, duration: 0.1 });
+    beep({ freq: 880, duration: 0.1, delay: 0.11 });
+    beep({ freq: 1108, duration: 0.22, delay: 0.22 });
+  });
 }
 
 export function playTingSound() {
-  beep({ freq: 1046, duration: 0.16, type: 'sine', volume: 0.25 });
+  withRunningCtx(() => {
+    beep({ freq: 1046, duration: 0.16, type: 'sine', volume: 0.25 });
+  });
 }
 
 // Play pattern repeated for duration (milliseconds).
 // cycleSec: độ dài một chu kỳ, tính cả khoảng lặng cuối để hai lần lặp không dính vào nhau.
 function playPatternLooped(pattern, durationMs, cycleSec) {
+  // Cổng kiểm tra: chỉ lên lịch khi bộ âm thanh đang chạy thật.
+  withRunningCtx(() => schedulePattern(pattern, durationMs, cycleSec));
+}
+
+function schedulePattern(pattern, durationMs, cycleSec) {
   try {
     console.log(`[playPatternLooped] Starting pattern loop for ${durationMs}ms`);
 
