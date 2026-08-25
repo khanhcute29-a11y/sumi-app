@@ -2,8 +2,13 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
-      "comment": "App là dạng một-trang: không có file thật cho /orders/<id>, /tasks/<id>... Khi bấm vào thông báo đẩy lúc app đang ĐÓNG, hệ điều hành mở thẳng địa chỉ đó -> máy chủ không tìm thấy file -> 404 trắng xoá. Quy tắc này trả về index.html cho mọi đường dẫn, rồi app tự đọc địa chỉ và mở đúng đơn (xem src/lib/deepLink.js). Loại trừ /api/ để các hàm máy chủ vẫn chạy.",
-      "source": "/((?!api/).*)",
+      "comment": "Cho /api/* di thang toi ham may chu. Luat nay phai dung TRUOC luat bat-tat-ca ben duoi, vi Vercel xet theo thu tu va dung o luat khop dau tien.",
+      "source": "/api/:path*",
+      "destination": "/api/:path*"
+    },
+    {
+      "comment": "App la dang mot-trang: khong co file that cho /orders/<id>, /tasks/<id>, /company-feed/<id>. Khi bam vao thong bao day luc app dang DONG, he dieu hanh mo thang dia chi do -> may chu khong tim thay file -> 404 trang xoa. Luat nay tra ve index.html, roi app tu doc dia chi va mo dung don (src/lib/deepLink.js). Vercel kiem tra file that TRUOC nen assets/*.js, sw.js, version.json van duoc phuc vu binh thuong.",
+      "source": "/:path*",
       "destination": "/index.html"
     }
   ]
