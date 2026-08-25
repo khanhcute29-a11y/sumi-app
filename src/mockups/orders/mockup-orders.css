@@ -1,0 +1,376 @@
+/* ============================================================
+   MOCKUP CSS — Orders Redesign
+   Scope: .mkp-orders-* (không xung đột với production)
+   Dùng lại CSS variables của dự án (--surface-card, v.v.)
+   ============================================================ */
+
+/* ── Shell ── */
+.mkp-orders-shell {
+  min-height: 100dvh;
+  background: #FAF6F0;
+  color: #2d1c10;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  display: flex;
+  flex-direction: column;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+/* ── Header ── */
+.mkp-orders-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #C88A4B;
+  padding: 14px 16px 0;
+  box-shadow: 0 2px 12px rgba(80,40,10,.18);
+}
+.mkp-orders-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.mkp-orders-back {
+  display: flex; align-items: center; gap: 6px;
+  background: rgba(255,255,255,0.18);
+  border: none; border-radius: 12px;
+  color: #fff; font-size: 14px; font-weight: 700;
+  padding: 8px 12px; cursor: pointer;
+}
+.mkp-orders-title { color: #fff; font-size: 20px; font-weight: 900; }
+.mkp-orders-view-toggle {
+  display: flex; gap: 4px;
+  background: rgba(0,0,0,0.15);
+  border-radius: 12px; padding: 4px;
+}
+.mkp-orders-view-toggle button {
+  border: none; border-radius: 9px;
+  padding: 7px 10px; font-size: 16px;
+  background: transparent; cursor: pointer; transition: background .15s;
+}
+.mkp-orders-view-toggle button.active {
+  background: #fff;
+}
+
+/* ── Status Tab Strip ── */
+.mkp-status-tabs {
+  display: flex; gap: 6px;
+  overflow-x: auto; padding: 0 0 12px;
+  scrollbar-width: none;
+}
+.mkp-status-tabs::-webkit-scrollbar { display: none; }
+.mkp-status-tab {
+  flex-shrink: 0;
+  display: flex; align-items: center; gap: 5px;
+  padding: 6px 12px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-radius: 20px;
+  background: transparent; color: rgba(255,255,255,0.8);
+  font-size: 13px; font-weight: 700;
+  cursor: pointer; transition: all .15s;
+  white-space: nowrap;
+}
+.mkp-status-tab.active {
+  background: #fff; color: #2d1c10; border-color: #fff;
+}
+.mkp-status-tab .mkp-badge {
+  display: grid; place-items: center;
+  min-width: 20px; height: 20px;
+  border-radius: 10px; padding: 0 5px;
+  background: rgba(255,255,255,0.25);
+  color: #fff; font-size: 11px; font-weight: 900;
+}
+.mkp-status-tab.active .mkp-badge {
+  background: #C88A4B; color: #fff;
+}
+.mkp-status-tab.is-alert { border-color: #fca5a5 !important; }
+.mkp-status-tab.is-alert.active { background: #fef2f2 !important; color: #dc2626 !important; }
+.mkp-status-tab.is-alert.active .mkp-badge { background: #dc2626 !important; }
+
+/* ── Filter & Sort Bar ── */
+.mkp-filter-bar {
+  display: flex; gap: 8px; align-items: center;
+  padding: 12px 16px 8px;
+  background: #FAF6F0;
+}
+.mkp-search {
+  flex: 1; min-height: 44px;
+  border: 2px solid #e5d9c9;
+  border-radius: 14px;
+  padding: 0 14px;
+  font-size: 15px; background: #fff;
+  outline: none;
+}
+.mkp-search:focus { border-color: #C88A4B; }
+.mkp-sort-btn {
+  min-height: 44px; padding: 0 14px;
+  border: 2px solid #e5d9c9; border-radius: 14px;
+  background: #fff; color: #725f50;
+  font-size: 13px; font-weight: 700;
+  cursor: pointer; white-space: nowrap;
+}
+
+/* ── Type Chip Row ── */
+.mkp-type-chips {
+  display: flex; gap: 6px;
+  padding: 0 16px 12px;
+  overflow-x: auto; scrollbar-width: none;
+}
+.mkp-type-chips::-webkit-scrollbar { display: none; }
+.mkp-type-chip {
+  flex-shrink: 0;
+  padding: 6px 12px; border-radius: 20px;
+  border: 2px solid #e5d9c9; background: #fff;
+  font-size: 13px; font-weight: 700; color: #725f50;
+  cursor: pointer; transition: all .15s;
+}
+.mkp-type-chip.active {
+  border-color: #2d1c10; background: #2d1c10; color: #fff;
+}
+
+/* ── List View ── */
+.mkp-list-body { flex: 1; padding: 0 16px 100px; }
+.mkp-group-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 0 8px;
+  position: sticky; top: 0; background: #FAF6F0; z-index: 5;
+}
+.mkp-group-label {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase;
+}
+.mkp-group-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+}
+.mkp-group-count {
+  padding: 3px 10px; border-radius: 20px;
+  font-size: 12px; font-weight: 900;
+}
+.mkp-group-toggle {
+  background: none; border: none; font-size: 18px;
+  color: #725f50; cursor: pointer; padding: 4px;
+}
+
+/* ── Order Card Compact ── */
+.mkp-order-card {
+  width: 100%; text-align: left;
+  background: #fff; border: 2px solid #eadcca;
+  border-radius: 18px; padding: 14px 16px;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 8px rgba(80,40,10,.06);
+  cursor: pointer; transition: transform .1s, box-shadow .1s;
+  display: block;
+}
+.mkp-order-card:active { transform: scale(0.98); }
+.mkp-order-card.is-urgent { border-color: #fcd34d; }
+.mkp-order-card.is-overdue { border-color: #fca5a5; background: #fff5f5; }
+
+.mkp-card-row1 {
+  display: flex; align-items: center;
+  gap: 10px; margin-bottom: 8px;
+}
+.mkp-card-type-icon {
+  font-size: 26px; flex-shrink: 0;
+  width: 44px; height: 44px;
+  display: grid; place-items: center;
+  border-radius: 12px; background: #f4efe8;
+}
+.mkp-card-main { flex: 1; min-width: 0; }
+.mkp-card-customer {
+  font-size: 16px; font-weight: 900;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mkp-card-code { font-size: 12px; color: #a08060; font-weight: 700; }
+.mkp-card-status-badge {
+  padding: 5px 10px; border-radius: 20px;
+  font-size: 12px; font-weight: 900;
+  flex-shrink: 0;
+}
+
+.mkp-card-row2 {
+  display: flex; align-items: center;
+  gap: 8px; margin-bottom: 8px;
+  font-size: 13px; color: #725f50;
+}
+.mkp-card-time {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 15px; font-weight: 900; color: #2d1c10;
+}
+.mkp-card-time.is-soon { color: #f97316; }
+.mkp-card-time.is-overdue { color: #dc2626; }
+.mkp-card-sep { color: #d7c3aa; }
+.mkp-card-address {
+  flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.mkp-card-row3 {
+  display: flex; align-items: center;
+  gap: 8px; flex-wrap: wrap;
+}
+.mkp-card-tag {
+  padding: 4px 9px; border-radius: 20px;
+  font-size: 12px; font-weight: 800;
+  background: #f4efe8; color: #725f50;
+}
+.mkp-card-tag.kitchen { background: #eff6ff; color: #1d4ed8; }
+.mkp-card-tag.urgent  { background: #fef3c7; color: #92400e; }
+.mkp-card-tag.overdue { background: #fee2e2; color: #991b1b; }
+.mkp-card-total {
+  margin-left: auto;
+  font-size: 15px; font-weight: 900; color: #2d1c10;
+}
+
+.mkp-card-note {
+  margin-top: 8px; padding: 8px 10px;
+  background: #fffbeb; border-radius: 10px;
+  font-size: 13px; color: #92400e;
+  border-left: 3px solid #fcd34d;
+}
+
+/* ── Progress Track (5 steps) ── */
+.mkp-progress-track {
+  display: grid; grid-template-columns: repeat(5,1fr);
+  gap: 4px; margin-top: 10px;
+}
+.mkp-progress-track span {
+  height: 5px; border-radius: 5px; background: #eadcca;
+}
+.mkp-progress-track span.done { background: #138a53; }
+.mkp-progress-track span.active { background: #C88A4B; }
+.mkp-progress-track span.overdue { background: #dc2626; }
+
+/* ── Board View (Kanban) ── */
+.mkp-board-scroll {
+  flex: 1; display: flex;
+  overflow-x: auto; gap: 12px;
+  padding: 16px; padding-bottom: 100px;
+  scrollbar-width: thin;
+}
+.mkp-board-col {
+  flex-shrink: 0; width: 280px;
+  display: flex; flex-direction: column;
+}
+.mkp-board-col-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px;
+  border-radius: 14px 14px 0 0;
+  font-size: 13px; font-weight: 900;
+  text-transform: uppercase; letter-spacing: .06em;
+  position: sticky; top: 0;
+}
+.mkp-board-col-body {
+  flex: 1; padding: 8px;
+  border-radius: 0 0 14px 14px;
+  min-height: 80px;
+}
+.mkp-board-col .mkp-order-card {
+  width: 100%; font-size: 13px; padding: 12px;
+}
+.mkp-board-col .mkp-card-customer { font-size: 14px; }
+.mkp-board-col .mkp-card-time { font-size: 13px; }
+.mkp-board-col .mkp-card-total { font-size: 13px; }
+.mkp-board-empty {
+  padding: 24px 12px; text-align: center;
+  color: #b8a898; font-size: 13px; font-weight: 700;
+}
+
+/* ── Order Detail Drawer ── */
+.mkp-detail-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.45); z-index: 100;
+  display: flex; align-items: flex-end;
+  animation: mkp-fade-in .2s ease;
+}
+@keyframes mkp-fade-in { from { opacity: 0; } to { opacity: 1; } }
+.mkp-detail-sheet {
+  width: 100%; max-width: 480px; margin: 0 auto;
+  background: #fff; border-radius: 24px 24px 0 0;
+  padding: 20px 20px 40px;
+  max-height: 85dvh; overflow-y: auto;
+  animation: mkp-slide-up .25s ease;
+}
+@keyframes mkp-slide-up {
+  from { transform: translateY(60px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.mkp-detail-handle {
+  width: 40px; height: 4px;
+  background: #ddd; border-radius: 4px;
+  margin: 0 auto 16px;
+}
+.mkp-detail-header {
+  display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px;
+}
+.mkp-detail-icon { font-size: 36px; }
+.mkp-detail-title { flex: 1; }
+.mkp-detail-title h3 { font-size: 20px; font-weight: 900; margin: 0 0 4px; }
+.mkp-detail-title small { font-size: 12px; color: #a08060; font-weight: 700; }
+.mkp-detail-close {
+  background: #f4efe8; border: none; border-radius: 12px;
+  width: 36px; height: 36px; font-size: 18px; cursor: pointer;
+}
+.mkp-detail-section {
+  border-top: 1px solid #eadcca; padding: 14px 0;
+}
+.mkp-detail-section h4 {
+  font-size: 11px; font-weight: 900; letter-spacing: .1em;
+  text-transform: uppercase; color: #a08060; margin: 0 0 10px;
+}
+.mkp-detail-row {
+  display: flex; gap: 8px; align-items: flex-start;
+  margin-bottom: 8px; font-size: 15px;
+}
+.mkp-detail-row strong { font-weight: 800; }
+.mkp-detail-row span { color: #725f50; }
+.mkp-detail-actions {
+  display: flex; flex-direction: column; gap: 10px;
+  margin-top: 16px;
+}
+.mkp-action-btn {
+  min-height: 52px; border: none; border-radius: 16px;
+  font-size: 16px; font-weight: 900; cursor: pointer;
+  transition: opacity .15s;
+}
+.mkp-action-btn:active { opacity: .8; }
+.mkp-action-btn.primary { background: #C88A4B; color: #fff; }
+.mkp-action-btn.success { background: #16a34a; color: #fff; }
+.mkp-action-btn.danger  { background: #dc2626; color: #fff; }
+.mkp-action-btn.outline {
+  background: transparent; color: #2d1c10;
+  border: 2px solid #eadcca;
+}
+.mkp-toast {
+  position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
+  background: #2d1c10; color: #fff;
+  padding: 12px 24px; border-radius: 20px;
+  font-size: 15px; font-weight: 800;
+  z-index: 200; animation: mkp-fade-in .2s ease;
+  white-space: nowrap;
+}
+
+/* ── Create FAB ── */
+.mkp-fab {
+  position: fixed; bottom: 24px; right: 24px;
+  width: 60px; height: 60px; border-radius: 50%;
+  background: #C88A4B; color: #fff;
+  border: none; font-size: 28px;
+  box-shadow: 0 6px 20px rgba(200,138,75,.4);
+  cursor: pointer; z-index: 10;
+  transition: transform .15s;
+}
+.mkp-fab:active { transform: scale(0.93); }
+
+/* ── Empty State ── */
+.mkp-empty {
+  text-align: center; padding: 48px 24px;
+  color: #a08060;
+}
+.mkp-empty-icon { font-size: 48px; margin-bottom: 12px; }
+.mkp-empty h3 { color: #2d1c10; font-size: 18px; margin: 0 0 6px; }
+.mkp-empty p { font-size: 14px; margin: 0; }
+
+/* ── Scrollbar ── */
+.mkp-board-scroll::-webkit-scrollbar { height: 4px; }
+.mkp-board-scroll::-webkit-scrollbar-thumb { background: #d7c3aa; border-radius: 4px; }

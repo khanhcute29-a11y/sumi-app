@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../lib/AuthContext';
 import { hasAnyRole } from '../lib/roles';
 import { supabase } from '../lib/supabaseClient';
@@ -12,6 +12,76 @@ import { AssignedTasksTab } from '../components/tasks/AssignedTasksTab';
 import { AdhocTasksTab } from '../components/tasks/AdhocTasksTab';
 import { ProductionLogModal } from '../components/ProductionLogModal';
 import { ProductionLogList } from '../components/ProductionLogList';
+
+function StaffPicker({ label, value, onChange, options }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    const onClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setOpen(false);
+        setQuery('');
+      }
+    };
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, []);
+
+  const selected = options.find((o) => o.value === value);
+  const filtered = query.trim()
+    ? options.filter((o) => o.label.toLowerCase().includes(query.trim().toLowerCase()))
+    : options;
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative' }}>
+      <label style={{ display: 'block', font: 'var(--text-body-sm)', color: 'var(--text-secondary)', marginBottom: 4 }}>
+        {label}
+      </label>
+      <input
+        type="text"
+        value={open ? query : (selected?.label || '')}
+        placeholder="Gõ tên để tìm..."
+        onFocus={() => { setOpen(true); setQuery(''); }}
+        onChange={(e) => setQuery(e.target.value)}
+        style={{
+          width: '100%', padding: '8px 10px', borderRadius: 'var(--radius-md)',
+          border: '1px solid var(--border-subtle)', background: 'var(--surface-card)',
+          color: 'var(--text-primary)', font: 'var(--text-body-sm)', boxSizing: 'border-box'
+        }}
+      />
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20, marginTop: 4,
+          background: 'var(--surface-card)', border: '1px solid var(--border-subtle)',
+          borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-md, 0 4px 12px rgba(0,0,0,.15))',
+          maxHeight: 260, overflowY: 'auto'
+        }}>
+          {filtered.length === 0 && (
+            <div style={{ padding: '10px 12px', color: 'var(--text-muted)', font: 'var(--text-body-sm)' }}>
+              Không tìm thấy nhân viên
+            </div>
+          )}
+          {filtered.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => { onChange(o.value); setOpen(false); setQuery(''); }}
+              style={{
+                display: 'block', width: '100%', textAlign: 'left', padding: '9px 12px',
+                border: 'none', background: o.value === value ? 'var(--surface-sunken)' : 'transparent',
+                color: 'var(--text-primary)', font: 'var(--text-body-sm)', cursor: 'pointer'
+              }}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const STATION_OPTIONS = [
   { value: '', label: 'Tất cả khâu (Tổng quan)' },
@@ -60,6 +130,7 @@ export default function TasksScreen() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'task_templates' }, () => setRefreshKey((k) => k + 1))
       .subscribe();
     return () => { supabase.removeChannel(channel); };
+  }, []);
 
   // Bấm vào tin nhắn "được giao việc" -> cuộn tới đúng đầu việc và làm nổi bật.
   // Thử lại vài lần vì danh sách việc có thể chưa tải xong lúc vừa chuyển trang.
@@ -83,7 +154,6 @@ export default function TasksScreen() {
     };
     window.addEventListener('sumi-open-task', go);
     return () => window.removeEventListener('sumi-open-task', go);
-  }, []);
   }, []);
 
   const filteredStaff = stationFilter ? staffList.filter((p) => p.station === stationFilter) : staffList;
@@ -195,10 +265,10 @@ export default function TasksScreen() {
             />
           </div>
           <div style={{ flex: '1 1 240px', minWidth: 180 }}>
-            <Select
+            <StaffPicker
               label="Người thực hiện"
               value={selectedStaffId || profile?.id || ''}
-              onChange={(e) => setSelectedStaffId(e.target.value)}
+              onChange={setSelectedStaffId}
               options={staffOptions}
             />
           </div>

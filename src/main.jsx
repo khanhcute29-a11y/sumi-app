@@ -30,10 +30,43 @@ const updateSW = registerSW({
   },
 });
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
-  </React.StrictMode>,
-)
+// ── MOCKUP SANDBOX ────────────────────────────────────────────────
+// Chỉ active khi có ?mockup=orders trong URL.
+// Production không có param này → App chạy y hệt như cũ.
+const _mkParam = new URLSearchParams(window.location.search).get('mockup');
+
+async function mountApp() {
+  let RootComponent = App;
+  let wrapWithErrorBoundary = true;
+
+  if (_mkParam === 'orders') {
+    const mod = await import('./mockups/orders/index.jsx');
+    RootComponent = mod.default;
+    wrapWithErrorBoundary = false;
+  } else if (_mkParam === 'shifts' || _mkParam === '1') {
+    const mod = await import('./mockups/shifts/index.jsx');
+    RootComponent = mod.default;
+    wrapWithErrorBoundary = false;
+  } else if (_mkParam === 'notifications') {
+    const mod = await import('./mockups/notifications/index.jsx');
+    RootComponent = mod.default;
+    wrapWithErrorBoundary = false;
+  } else if (_mkParam === 'boss-dashboard') {
+    const mod = await import('./components/mockups/BossDashboard/BossDashboard.jsx');
+    RootComponent = mod.default;
+    wrapWithErrorBoundary = false;
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    <React.StrictMode>
+      {wrapWithErrorBoundary ? (
+        <ErrorBoundary><RootComponent /></ErrorBoundary>
+      ) : (
+        <RootComponent />
+      )}
+    </React.StrictMode>,
+  );
+}
+
+mountApp();
+// ─────────────────────────────────────────────────────────────────
