@@ -2,12 +2,10 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
-      "comment": "Cho /api/* di thang toi ham may chu. Phai dat TRUOC luat bat-tat-ca ben duoi vi Vercel xet theo thu tu.",
       "source": "/api/:path*",
       "destination": "/api/:path*"
     },
     {
-      "comment": "App la dang mot-trang: khong co file that cho /orders/<id>, /tasks/<id>, /company-feed/<id>. Bam vao thong bao day luc app dang DONG thi he dieu hanh mo thang dia chi do -> khong co luat nay se ra 404 trang xoa. Vercel kiem tra file that TRUOC nen assets/*.js, sw.js, version.json van duoc phuc vu binh thuong (da kiem chung: JS van tra ve dung Content-Type).",
       "source": "/:path*",
       "destination": "/index.html"
     }
