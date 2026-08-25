@@ -2,7 +2,13 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
+import { readFileSync } from 'fs'
+const pkg = JSON.parse(readFileSync('./package.json', 'utf8'))
+
 export default defineConfig({
+  // Nhúng số phiên bản vào bản build để app tự biết mình đang là bản nào,
+  // rồi đối chiếu với /version.json trên máy chủ.
+  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   plugins: [
     react(),
     VitePWA({

@@ -58,3 +58,46 @@ export async function disablePush() {
   await supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
   await sub.unsubscribe();
 }
+
+// ---------------------------------------------------------------------------
+// TỰ ĐỘNG ĐĂNG KÝ khi nhân viên mở app.
+//
+// Vì sao cần: toàn bộ hạ tầng push đã có sẵn (Service Worker, API gửi, trigger
+// trong database) NHƯNG không nơi nào gọi enablePush() — nên chỉ 1/30 máy từng
+// đăng ký được, và khi đóng gói thì cả file này bị loại bỏ vì không ai import.
+//
+// Gọi hàm này một lần sau khi đăng nhập. Nó im lặng bỏ qua nếu máy không hỗ
+// trợ hoặc người dùng đã từ chối — không làm phiền, không chặn màn hình.
+// ---------------------------------------------------------------------------
+export async function autoEnablePush(staffId) {
+  try {
+    if (!staffId) return 'no_staff';
+    if (!isPushSupported()) {
+      return isIosSafariNotInstalled() ? 'ios_add_to_home' : 'unsupported';
+    }
+    if (Notification.permission === 'denied') return 'denied';
+
+    const reg = await navigator.serviceWorker.ready;
+    const existing = await reg.pushManager.getSubscription();
+
+    // Đã đăng ký rồi thì chỉ cần chắc chắn máy chủ vẫn còn bản ghi.
+    // Endpoint có thể bị trình duyệt cấp lại, nên upsert cho chắc.
+    if (existing) {
+      const json = existing.toJSON();
+      await supabase.from('push_subscriptions').upsert({
+        staff_id: staffId,
+        endpoint: json.endpoint,
+        p256dh: json.keys.p256dh,
+        auth_key: json.keys.auth,
+      }, { onConflict: 'endpoint' });
+      return 'subscribed';
+    }
+
+    // Chưa hỏi quyền bao giờ -> hỏi. Đã cho phép rồi -> đăng ký luôn.
+    await enablePush(staffId);
+    return 'subscribed';
+  } catch (err) {
+    console.warn('[Push] Không đăng ký được nhận thông báo:', err?.message || err);
+    return 'error';
+  }
+}

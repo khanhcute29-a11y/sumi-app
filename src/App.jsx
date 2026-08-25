@@ -17,7 +17,10 @@ import { setupAutoRefresh, cleanupAllSubscriptions, subscribeToMultipleTables, s
 import { ConnectivityBanner } from './components/ConnectivityBanner';
 import ToastHost from './components/ToastHost';
 import AudioUnlockBanner from './components/AudioUnlockBanner';
+import UpdateRequiredModal from './components/UpdateRequiredModal';
 import { notify, showToast, NOTIFY_KINDS } from './lib/toast';
+import { autoEnablePush } from './lib/push';
+import { initDeepLinkFromPush } from './lib/deepLink';
 import { AuthProvider, useAuth } from './lib/AuthContext';
 import LoginScreen from './screens/LoginScreen';
 import ResetPasswordScreen from './screens/ResetPasswordScreen';
@@ -122,6 +125,8 @@ function OpsApp({ onSignOut }) {
     initOfflineSync(OFFLINE_HANDLERS, () => window.dispatchEvent(new Event('sumi-queue-changed')));
     applyUiScale(getUiScale());
     requestNotificationPermission();
+    initDeepLinkFromPush();
+
 
     // Setup real-time subscriptions for critical tables
     const unsubscribe = subscribeToMultipleTables(
@@ -240,6 +245,14 @@ function OpsApp({ onSignOut }) {
     };
   }, []);
 
+  // Đăng ký nhận thông báo đẩy — thứ giúp nhân viên vẫn nghe chuông khi TẮT
+  // MÀN HÌNH hoặc app bị đóng. Đặt ở effect riêng phụ thuộc profile?.id vì lúc
+  // app vừa mở có thể chưa biết ai đang đăng nhập.
+  useEffect(() => {
+    if (!profile?.id) return;
+    autoEnablePush(profile.id).then((kq) => console.log('[Push] Trạng thái đăng ký:', kq));
+  }, [profile?.id]);
+
   useEffect(() => { loadFeatureFlags().then(setFeatureFlags).catch(() => {}); }, [profile?.id]);
   useEffect(() => {
     const go = (e) => {
@@ -298,6 +311,7 @@ function OpsApp({ onSignOut }) {
     <div className="sb-shell">
       <ToastHost />
       <AudioUnlockBanner />
+      <UpdateRequiredModal />
       <ConnectivityBanner />
       <div className="sb-body">
         <div className="sb-sidebar"><Sidebar active={tab} activeStation={kdsStation} onSelectStation={setKdsStation} activeBranch={warehouseBranch} onSelectBranch={setWarehouseBranch} onSelect={setTab} badges={badgeCounts} /></div>
