@@ -139,14 +139,16 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
  const suggestions=TEABREAK_CATALOG.filter(x=>!catalogSearch||normalizeSearch(`${x.code} ${x.name} ${x.group}`).includes(normalizeSearch(catalogSearch))).slice(0,8);
  const schoolSuggestions=SCHOOL_DELIVERY_POINTS.filter(x=>!schoolSearch||normalizeSearch(`${x.code} ${x.name} ${x.address} ${x.type}`).includes(normalizeSearch(schoolSearch))).slice(0,10);
  const chooseSchool=(school)=>{setSelectedSchool(school);setCustomerName(school.name);setAddress(school.address);setSchoolSearch('');};
- const loadLibraryPhotos=async()=>{setLibraryLoading(true);try{const {data,error:err}=await supabase.from('macaron_photo_library').select('id,storage_path,caption,created_at').order('created_at',{ascending:false});if(err)throw err;setLibraryPhotos((data||[]).map(p=>({...p,url:supabase.storage.from('uploads').getPublicUrl(p.storage_path).data?.publicUrl})));}catch(e){setError(e.message);}finally{setLibraryLoading(false);}};
+ const libraryTable=type==='school'?'school_photo_library':'macaron_photo_library';
+ const libraryStoragePrefix=type==='school'?'school-library':'macaron-library';
+ const loadLibraryPhotos=async()=>{setLibraryLoading(true);try{const {data,error:err}=await supabase.from(libraryTable).select('id,storage_path,caption,created_at').order('created_at',{ascending:false});if(err)throw err;setLibraryPhotos((data||[]).map(p=>({...p,url:supabase.storage.from('uploads').getPublicUrl(p.storage_path).data?.publicUrl})));}catch(e){setError(e.message);}finally{setLibraryLoading(false);}};
  const openLibraryPicker=()=>{setShowLibraryPicker(true);loadLibraryPhotos();};
  const toggleLibraryPhoto=(p)=>{setSelectedLibraryPhotos(x=>x.some(y=>y.id===p.id)?x.filter(y=>y.id!==p.id):[...x,p]);};
  const deleteLibraryPhoto=async(p)=>{
   if(!window.confirm('Xoá ảnh này khỏi kho? Không thể hoàn tác.'))return;
   try{
    await supabase.storage.from('uploads').remove([p.storage_path]);
-   const {error:err}=await supabase.from('macaron_photo_library').delete().eq('id',p.id);
+   const {error:err}=await supabase.from(libraryTable).delete().eq('id',p.id);
    if(err)throw err;
    setSelectedLibraryPhotos(x=>x.filter(y=>y.id!==p.id));
    await loadLibraryPhotos();
@@ -156,10 +158,10 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
   setLibraryUploading(true);setError('');
   try{
    const cleanExt=(file.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';
-   const safePath=`macaron-library/${newId()}.${cleanExt}`;
+   const safePath=`${libraryStoragePrefix}/${newId()}.${cleanExt}`;
    const {error:upErr}=await supabase.storage.from('uploads').upload(safePath,file,{contentType:file.type||'image/jpeg'});
    if(upErr)throw upErr;
-   const {error:insErr}=await supabase.from('macaron_photo_library').insert({storage_path:safePath,uploaded_by:profile?.id||null,uploaded_by_name:profile?.full_name||null});
+   const {error:insErr}=await supabase.from(libraryTable).insert({storage_path:safePath,uploaded_by:profile?.id||null,uploaded_by_name:profile?.full_name||null});
    if(insErr)throw insErr;
    await loadLibraryPhotos();
   }catch(e){setError(e.message);}finally{setLibraryUploading(false);}
@@ -384,7 +386,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
    <div className="sumi-upload-grid">
      <label>📷<span>Chụp ảnh</span><input hidden type="file" accept="image/*" capture="environment" multiple onChange={e=>{const files=Array.from(e.target.files||[]);setPhotos([...photos,...files]);e.target.value='';}}/></label>
      <label>🖼️<span>Chọn ảnh có sẵn</span><input hidden type="file" accept="image/*" multiple onChange={e=>{const files=Array.from(e.target.files||[]);setPhotos([...photos,...files]);e.target.value='';}}/></label>
-     {type==='macaron'&&<button type="button" onClick={openLibraryPicker} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4,minHeight:70,border:'2px dashed #d96b43',borderRadius:14,background:'#fdf6ef',cursor:'pointer'}}>🎨<span>Ảnh mẫu đã lưu</span></button>}
+     {(type==='macaron'||type==='school')&&<button type="button" onClick={openLibraryPicker} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4,minHeight:70,border:'2px dashed #d96b43',borderRadius:14,background:'#fdf6ef',cursor:'pointer'}}>🎨<span>Ảnh mẫu đã lưu</span></button>}
    </div>
    {photos.length>0&&(
      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(80px,1fr))',gap:8,marginTop:10}}>
