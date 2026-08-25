@@ -16,7 +16,7 @@ import { playKitchenReceiveSound, playKitchenCompleteSound, playShipperReceiveSo
 import { setupAutoRefresh, cleanupAllSubscriptions, subscribeToMultipleTables, subscribeToBroadcast, BroadcastEvents } from './lib/realtimeSync';
 import { ConnectivityBanner } from './components/ConnectivityBanner';
 import ToastHost from './components/ToastHost';
-import { notify } from './lib/toast';
+import { notify, showToast, NOTIFY_KINDS } from './lib/toast';
 import { AuthProvider, useAuth } from './lib/AuthContext';
 import LoginScreen from './screens/LoginScreen';
 import ResetPasswordScreen from './screens/ResetPasswordScreen';
@@ -210,7 +210,18 @@ function OpsApp({ onSignOut }) {
           if (n.notification_type === 'task_assigned' || n.notification_type === 'task_reminder') {
             playOnce('task:' + n.id, () => {
               playTaskAssignedSound();
-              notify(n.notification_type, n.body || n.title, n.entity_id);
+              // Đích đến lấy theo LOẠI ĐỐI TƯỢNG, không cứng theo loại tin:
+              //  - việc giao trong đơn  -> entity_type 'order' -> mở chi tiết đơn
+              //    (đầu việc loại order_work chỉ hiện trong hộp chi tiết đơn,
+              //     tab "Việc được giao" lọc category='assigned' nên không có nó)
+              //  - việc giao thường     -> entity_type 'task'  -> mở trang Công việc
+              const laViecTrongDon = n.entity_type === 'order';
+              showToast({
+                ...NOTIFY_KINDS[n.notification_type],
+                message: n.body || n.title,
+                entityId: n.entity_id,
+                ...(laViecTrongDon ? { tab: 'orders' } : {}),
+              });
             });
           }
         } catch (err) {
