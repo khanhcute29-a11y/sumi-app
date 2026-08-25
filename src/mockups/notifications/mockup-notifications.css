@@ -1,0 +1,266 @@
+/* ============================================================
+   MOCKUP CSS — Notifications & Sound Origin Inspector
+   Scope: .mkn-* (cô lập hoàn toàn, không đụng production)
+   ============================================================ */
+
+.mkn-shell {
+  min-height: 100dvh;
+  background: #FAF6F0;
+  color: #2d1c10;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  display: flex;
+  flex-direction: column;
+  max-width: 540px;
+  margin: 0 auto;
+}
+
+/* ── Header ── */
+.mkn-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #C88A4B;
+  padding: 14px 16px 12px;
+  box-shadow: 0 2px 12px rgba(80,40,10,.18);
+}
+.mkn-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.mkn-header-title { color: #fff; font-size: 18px; font-weight: 900; }
+.mkn-header-sub   { color: rgba(255,255,255,.8); font-size: 12px; font-weight: 700; margin-top: 2px; }
+.mkn-back {
+  background: rgba(255,255,255,.2);
+  border: none;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* ── Navigation Tabs ── */
+.mkn-nav-tabs {
+  display: flex;
+  gap: 6px;
+  background: rgba(0,0,0,.15);
+  border-radius: 14px;
+  padding: 4px;
+  margin-top: 10px;
+}
+.mkn-nav-tab {
+  flex: 1;
+  border: none;
+  border-radius: 10px;
+  padding: 8px 6px;
+  font-size: 13px;
+  font-weight: 800;
+  background: transparent;
+  color: rgba(255,255,255,.8);
+  cursor: pointer;
+  transition: all .15s;
+  text-align: center;
+  white-space: nowrap;
+}
+.mkn-nav-tab.active {
+  background: #fff;
+  color: #2d1c10;
+  box-shadow: 0 2px 6px rgba(0,0,0,.1);
+}
+
+/* ── Sound Inspector Card ── */
+.mkn-inspector-card {
+  background: #fff;
+  border: 2px solid #eadcca;
+  border-radius: 18px;
+  padding: 16px;
+  margin-bottom: 14px;
+  box-shadow: 0 2px 8px rgba(80,40,10,.05);
+  transition: border-color .15s;
+}
+.mkn-inspector-card.active-playing {
+  border-color: #C88A4B;
+  background: #fffdfa;
+}
+.mkn-card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.mkn-card-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+.mkn-card-title {
+  font-size: 16px;
+  font-weight: 900;
+  color: #2d1c10;
+}
+.mkn-card-pattern {
+  font-size: 12px;
+  font-weight: 800;
+  color: #a08060;
+  margin-top: 2px;
+}
+.mkn-play-btn {
+  margin-left: auto;
+  border: none;
+  border-radius: 12px;
+  padding: 8px 14px;
+  background: #2d1c10;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: transform .1s;
+}
+.mkn-play-btn:active { transform: scale(0.95); }
+
+/* ── Origin Detail Sections ── */
+.mkn-detail-box {
+  background: #faf6f0;
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.mkn-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.mkn-row:last-child { margin-bottom: 0; }
+.mkn-row-label {
+  font-weight: 800;
+  color: #725f50;
+  min-width: 80px;
+  flex-shrink: 0;
+}
+.mkn-row-val {
+  color: #2d1c10;
+  font-weight: 700;
+}
+.mkn-code-pill {
+  display: inline-block;
+  background: #eee3d3;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 12px;
+  color: #a94a21;
+}
+
+/* ── Notification Feed Item ── */
+.mkn-notif-item {
+  background: #fff;
+  border: 2px solid #eadcca;
+  border-radius: 16px;
+  padding: 14px;
+  margin-bottom: 10px;
+  display: flex;
+  gap: 12px;
+  cursor: pointer;
+  transition: all .15s;
+}
+.mkn-notif-item.unread {
+  border-color: #fcd34d;
+  background: #fffefb;
+}
+.mkn-notif-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.mkn-notif-body { flex: 1; min-width: 0; }
+.mkn-notif-title { font-size: 15px; font-weight: 900; margin-bottom: 4px; }
+.mkn-notif-text  { font-size: 13px; color: #725f50; font-weight: 600; line-height: 1.4; margin-bottom: 6px; }
+.mkn-notif-footer{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #a08060;
+  font-weight: 700;
+}
+.mkn-notif-badge {
+  padding: 3px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+/* ── Simulator Controls ── */
+.mkn-sim-panel {
+  background: #2d1c10;
+  border-radius: 20px;
+  padding: 18px;
+  color: #fff;
+  margin-bottom: 16px;
+}
+.mkn-sim-title { font-size: 16px; font-weight: 900; color: #ffd284; margin-bottom: 6px; }
+.mkn-sim-desc  { font-size: 13px; color: #f6dcc7; margin-bottom: 14px; line-height: 1.4; }
+.mkn-sim-grid  {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.mkn-sim-btn {
+  background: rgba(255,255,255,0.12);
+  border: 1.5px solid rgba(255,255,255,0.25);
+  border-radius: 14px;
+  padding: 12px;
+  color: #fff;
+  text-align: left;
+  cursor: pointer;
+  transition: all .15s;
+}
+.mkn-sim-btn:active {
+  background: #C88A4B;
+  border-color: #fff;
+}
+.mkn-sim-btn-name { font-size: 13px; font-weight: 900; display: block; margin-top: 4px; }
+.mkn-sim-btn-sub  { font-size: 11px; color: rgba(255,255,255,0.7); display: block; margin-top: 2px; }
+
+/* ── Floating Visualizer Banner ── */
+.mkn-sound-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #2d1c10;
+  color: #fff;
+  border: 2px solid #C88A4B;
+  border-radius: 20px;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.3);
+  z-index: 200;
+  animation: mkn-pop .2s ease;
+  white-space: nowrap;
+}
+@keyframes mkn-pop {
+  from { transform: translate(-50%, 20px); opacity: 0; }
+  to   { transform: translate(-50%, 0); opacity: 1; }
+}

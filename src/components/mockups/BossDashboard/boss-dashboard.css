@@ -1,0 +1,387 @@
+/* ============================================================
+   SUMI BAKERY — BOSS DASHBOARD MOBILE FULL SUITE CSS
+   Đối chiếu và hiển thị đầy đủ 6 phân khu chức năng
+   ============================================================ */
+
+.sb-boss-app {
+  min-height: 100vh;
+  background-color: #fff7e8;
+  color: #2d1c10;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  padding: 12px 14px 110px;
+  box-sizing: border-box;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+/* ── Top Header ── */
+.sb-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding: 4px 2px;
+}
+.sb-brand-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sb-brand-icon {
+  width: 48px;
+  height: 48px;
+  background: #2d1c10;
+  color: #fff;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  box-shadow: 0 4px 10px rgba(45, 28, 16, 0.15);
+}
+.sb-brand-text small {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  color: #a08060;
+  display: block;
+}
+.sb-brand-text h1 {
+  font-size: 18px;
+  font-weight: 900;
+  color: #2d1c10;
+  margin: 0;
+}
+
+.sb-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sb-top-btn {
+  width: 42px;
+  height: 42px;
+  background: #fff;
+  border: 2px solid #eadcca;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  cursor: pointer;
+}
+.sb-boss-tag-badge {
+  background: #ef642b;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 900;
+  box-shadow: 0 4px 0 #b93e13;
+}
+
+/* ── Universal Section Card ── */
+.sb-card {
+  background: #fff;
+  border: 2px solid #eadcca;
+  border-radius: 20px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  box-shadow: 0 3px 0 #eadcca;
+}
+.sb-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1.5px solid #f0e6da;
+}
+.sb-card-title {
+  font-size: 14px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #2d1c10;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sb-card-badge {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #a94a21;
+  background: #fff0d4;
+  padding: 3px 8px;
+  border-radius: 8px;
+  border: 1px solid #fcd34d;
+}
+
+/* ── 1. HR & Chấm Công Widget ── */
+.sb-hr-stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.sb-hr-stat-box {
+  background: #faf6f0;
+  border: 1.5px solid #eadcca;
+  border-radius: 14px;
+  padding: 10px 6px;
+  text-align: center;
+}
+.sb-hr-stat-val {
+  font-size: 20px;
+  font-weight: 900;
+  color: #2d1c10;
+  line-height: 1.1;
+}
+.sb-hr-stat-lbl {
+  font-size: 11px;
+  font-weight: 800;
+  color: #725f50;
+  margin-top: 3px;
+}
+
+.sb-attendance-panel {
+  background: #2d1c10;
+  color: #fff;
+  border-radius: 16px;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+.sb-att-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.sb-att-live {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 900;
+  color: #ffd284;
+  text-transform: uppercase;
+}
+.sb-live-dot {
+  width: 8px;
+  height: 8px;
+  background: #22c55e;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.35);
+  animation: sb-pulse 1.8s infinite;
+}
+@keyframes sb-pulse {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.sb-avatar-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+.sb-avatar-strip::-webkit-scrollbar { display: none; }
+.sb-avatar-circle {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #3b82f6;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  display: grid;
+  place-items: center;
+  position: relative;
+  flex-shrink: 0;
+  border: 2px solid #fff;
+}
+.sb-avatar-circle.female { background: #ec4899; }
+.sb-avatar-circle.lead { background: #f59e0b; }
+.sb-avatar-dot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 9px;
+  height: 9px;
+  background: #22c55e;
+  border: 1.5px solid #fff;
+  border-radius: 50%;
+}
+
+/* ── 2. Tổng Đơn Hàng Hero Card ── */
+.sb-order-hero-card {
+  background: linear-gradient(135deg, #2d1c10 0%, #4a2818 100%);
+  color: #fff;
+  border-radius: 20px;
+  padding: 18px 16px;
+  margin-bottom: 14px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(45, 28, 16, 0.15);
+  border: 2px solid #5a3420;
+}
+.sb-order-hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sb-order-hero-val {
+  font-size: 34px;
+  font-weight: 900;
+  color: #ffd284;
+  line-height: 1.1;
+  margin: 8px 0 4px;
+}
+.sb-order-hero-sub {
+  font-size: 12.5px;
+  color: #f6dcc7;
+  font-weight: 700;
+}
+
+/* ── Grid 6 Ô Trạng Thái Đơn ── */
+.sb-order-tiles-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.sb-order-tile-mini {
+  background: #fff;
+  border: 2px solid #eadcca;
+  border-radius: 16px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.sb-tile-mini-num {
+  font-size: 18px;
+  font-weight: 900;
+  color: #b93e13;
+  margin-left: auto;
+}
+
+/* ── 3. Quản Lý Chi Tiêu ── */
+.sb-expense-item {
+  background: #faf6f0;
+  border: 1.5px solid #eadcca;
+  border-radius: 14px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+.sb-expense-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+}
+.sb-expense-name {
+  font-size: 13.5px;
+  font-weight: 900;
+  color: #2d1c10;
+}
+.sb-expense-spender {
+  font-size: 11.5px;
+  color: #725f50;
+  font-weight: 700;
+  margin-top: 2px;
+}
+.sb-expense-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid #eadcca;
+}
+
+/* ── 4. Giao Việc & Form Nhanh ── */
+.sb-task-form {
+  background: #faf6f0;
+  border: 1.5px solid #eadcca;
+  border-radius: 16px;
+  padding: 12px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sb-input {
+  width: 100%;
+  border: 1.5px solid #eadcca;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+  background: #fff;
+  box-sizing: border-box;
+  outline: none;
+}
+.sb-input:focus { border-color: #C88A4B; }
+
+.sb-task-item {
+  background: #fff;
+  border: 1.5px solid #eadcca;
+  border-left: 5px solid #d1d5db;
+  border-radius: 14px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+.sb-task-item.overdue { border-left-color: #dc2626; background: #fff5f5; }
+.sb-task-item.in_progress { border-left-color: #f59e0b; }
+.sb-task-item.completed { border-left-color: #16a34a; }
+
+/* ── 5. Thông Báo & Bình Luận Công Khai ── */
+.sb-feed-post {
+  background: #faf6f0;
+  border: 1.5px solid #eadcca;
+  border-radius: 16px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+.sb-comment-card {
+  background: #fff;
+  border: 1px solid #eadcca;
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin-top: 6px;
+  font-size: 12.5px;
+}
+
+/* ── Bottom Sheet Modal ── */
+.sb-bottom-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+  z-index: 1000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.sb-bottom-sheet-content {
+  width: 100%;
+  max-width: 500px;
+  background: #fff;
+  border-radius: 24px 24px 0 0;
+  max-height: 88vh;
+  overflow-y: auto;
+  padding: 16px 16px 36px;
+  box-sizing: border-box;
+  animation: sb-sheet-up 0.22s ease-out;
+}
+@keyframes sb-sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.sb-sheet-grab-bar {
+  width: 36px;
+  height: 4px;
+  background: #d1d5db;
+  border-radius: 99px;
+  margin: 0 auto 12px;
+}
