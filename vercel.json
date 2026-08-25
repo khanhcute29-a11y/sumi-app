@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "comment": "App là dạng một-trang: không có file thật cho /orders/<id>, /tasks/<id>... Khi bấm vào thông báo đẩy lúc app đang ĐÓNG, hệ điều hành mở thẳng địa chỉ đó -> máy chủ không tìm thấy file -> 404 trắng xoá. Quy tắc này trả về index.html cho mọi đường dẫn, rồi app tự đọc địa chỉ và mở đúng đơn (xem src/lib/deepLink.js). Loại trừ /api/ để các hàm máy chủ vẫn chạy.",
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ]
+}
