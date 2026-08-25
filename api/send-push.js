@@ -95,5 +95,22 @@ export default async function handler(req, res) {
   );
 
   const sent = results.filter((r) => r.status === 'fulfilled').length;
-  res.status(200).json({ sent, total: subs?.length || 0 });
+
+  // Báo rõ máy nào lỗi vì sao. Trước đây chỉ trả về con số, gặp lỗi là phải
+  // ngồi suy đoán. Chỉ nêu mã lỗi và tên nhân viên — không lộ endpoint hay khoá.
+  const loi = results
+    .map((r, i) => (r.status === 'rejected' ? { r, s: subs[i] } : null))
+    .filter(Boolean)
+    .map(({ r, s }) => {
+      const code = r.reason?.statusCode;
+      const giai_thich =
+        code === 403 ? 'Đăng ký tạo bằng khoá VAPID cũ — máy cần mở lại app để đăng ký lại'
+        : code === 404 || code === 410 ? 'Đăng ký đã hết hạn (đã tự dọn)'
+        : code === 413 ? 'Nội dung thông báo quá dài'
+        : code === 429 ? 'Bị giới hạn tần suất, thử lại sau'
+        : 'Lỗi khác';
+      return { staff_id: s.staff_id, ma_loi: code || 'khong ro', ly_do: giai_thich };
+    });
+
+  res.status(200).json({ sent, total: subs?.length || 0, that_bai: loi });
 }

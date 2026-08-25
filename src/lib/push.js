@@ -69,6 +69,23 @@ export async function disablePush() {
 // Gọi hàm này một lần sau khi đăng nhập. Nó im lặng bỏ qua nếu máy không hỗ
 // trợ hoặc người dùng đã từ chối — không làm phiền, không chặn màn hình.
 // ---------------------------------------------------------------------------
+// So khoá của đăng ký hiện có với khoá máy chủ đang dùng.
+// Trả về true nếu khớp (hoặc không đọc được -> coi như khớp, tránh huỷ nhầm).
+function khopKhoaHienTai(sub) {
+  try {
+    const cu = sub.options?.applicationServerKey;
+    if (!cu) return true;
+    const moi = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+    const cuBytes = new Uint8Array(cu);
+    if (cuBytes.length !== moi.length) return false;
+    for (let i = 0; i < moi.length; i++) if (cuBytes[i] !== moi[i]) return false;
+    return true;
+  } catch (e) {
+    console.warn('[Push] Không so được khoá, giữ nguyên đăng ký:', e?.message || e);
+    return true;
+  }
+}
+
 export async function autoEnablePush(staffId) {
   try {
     if (!staffId) return 'no_staff';
@@ -78,7 +95,19 @@ export async function autoEnablePush(staffId) {
     if (Notification.permission === 'denied') return 'denied';
 
     const reg = await navigator.serviceWorker.ready;
-    const existing = await reg.pushManager.getSubscription();
+    let existing = await reg.pushManager.getSubscription();
+
+    // Đăng ký push bị RÀNG BUỘC với khoá VAPID lúc tạo. Nếu khoá máy chủ đã
+    // đổi (ví dụ sinh khoá mới), đăng ký cũ vẫn "tồn tại" nhưng dịch vụ đẩy
+    // sẽ TỪ CHỐI mọi thông báo — máy đó câm vĩnh viễn mà không ai biết.
+    // Đã gặp thật: 1 máy đăng ký từ 08/08 không nhận được, 3 máy đăng ký sau
+    // khi đổi khoá thì nhận bình thường.
+    if (existing && !khopKhoaHienTai(existing)) {
+      console.warn('[Push] Đăng ký cũ dùng khoá khác — huỷ và đăng ký lại');
+      try { await existing.unsubscribe(); } catch (e) { /* bỏ qua */ }
+      await supabase.from('push_subscriptions').delete().eq('endpoint', existing.endpoint);
+      existing = null;
+    }
 
     // Đã đăng ký rồi thì chỉ cần chắc chắn máy chủ vẫn còn bản ghi.
     // Endpoint có thể bị trình duyệt cấp lại, nên upsert cho chắc.
