@@ -17,10 +17,12 @@ function ToastCard({ item }) {
 
   const handleOpen = () => {
     if (!clickable) return;
-    // Dùng lại đúng cơ chế điều hướng sẵn có của app
+    // Dùng lại đúng cơ chế điều hướng sẵn có của app.
+    // Có entityId -> App.jsx bắn tiếp 'sumi-open-order' -> mở THẲNG hộp chi
+    // tiết của đúng đơn đó. Không có thì chỉ mở đúng tab lọc như trước.
     window.dispatchEvent(
       new CustomEvent('sumi-navigate', {
-        detail: { tab: item.tab, filter: item.filter },
+        detail: { tab: item.tab, filter: item.filter, entityId: item.entityId },
       })
     );
     dismissToast(item.id);

@@ -40,6 +40,7 @@ const MAX_VISIBLE = 4;
  * @param {string} t.tone     'primary' | 'success' | 'info' | 'warning'
  * @param {string} [t.tab]    Trang sẽ mở khi bấm vào tin
  * @param {string} [t.filter] Tab lọc trong màn Đơn Hàng
+ * @param {string} [t.entityId] Mã đơn — có mã này thì bấm vào MỞ THẲNG chi tiết đơn
  * @param {number} [t.duration] Số mili-giây tự tắt (mặc định 9000)
  */
 export const showToast = (t) => {
@@ -114,14 +115,17 @@ export const NOTIFY_KINDS = {
 };
 
 /**
- * Cách gọi gọn: notify('kitchen_receive', 'SUMI-20260825-37981')
- * Tự lấy sẵn biểu tượng, tiêu đề và đích đến theo bảng ở trên.
+ * Cách gọi gọn: notify('kitchen_receive', 'SUMI-20260825-37981', orderId)
+ *
+ * orderId (nếu có) làm cho việc bấm vào tin MỞ THẲNG chi tiết đơn đó, thay vì
+ * chỉ nhảy tới danh sách chung — người dùng biết ngay tin thuộc về đơn nào.
+ * Không có orderId thì lùi về mở đúng tab lọc như cũ.
  */
-export const notify = (kind, message) => {
+export const notify = (kind, message, entityId) => {
   const preset = NOTIFY_KINDS[kind];
   if (!preset) {
     console.warn('[toast] Không rõ loại thông báo:', kind);
     return null;
   }
-  return showToast({ ...preset, message: message || undefined });
+  return showToast({ ...preset, message: message || undefined, entityId: entityId || undefined });
 };

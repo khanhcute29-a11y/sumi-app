@@ -21,7 +21,7 @@ export function useOrderNotifications() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, (payload) => {
         playNewOrderSound();
         // Tin nhắn hiện song song với chuông — bấm vào mở tab "Đơn chờ làm"
-        notify('new_order', payload.new?.order_code);
+        notify('new_order', payload.new?.order_code, payload.new?.id);
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, (payload) => {
         const justCompleted =
@@ -30,7 +30,7 @@ export function useOrderNotifications() {
         if (justCompleted) {
           playDeliveredSound();
           // Tin nhắn đi kèm — bấm vào mở tab "Giao thành công"
-          notify('shipper_complete', payload.new?.order_code);
+          notify('shipper_complete', payload.new?.order_code, payload.new?.id);
           return;
         }
 
@@ -47,15 +47,16 @@ export function useOrderNotifications() {
         // Chuông giữ NGUYÊN. Tin nhắn gọi ngay cạnh, trong cùng playOnce để
         // hai thứ luôn xuất hiện cùng nhau và cùng bị chặn khi trùng lặp.
         const code = payload.new?.order_code;
+        const oid = payload.new?.id;
         switch (after) {
           case 'in_production': // Bếp nhận đơn
-            playOnce('kitchen_receive', () => { playKitchenReceiveSound(); notify('kitchen_receive', code); });
+            playOnce('kitchen_receive', () => { playKitchenReceiveSound(); notify('kitchen_receive', code, oid); });
             break;
           case 'ready_for_fulfillment': // Bếp báo xong mẻ bánh
-            playOnce('kitchen_complete', () => { playKitchenCompleteSound(); notify('kitchen_complete', code); });
+            playOnce('kitchen_complete', () => { playKitchenCompleteSound(); notify('kitchen_complete', code, oid); });
             break;
           case 'in_delivery': // Shipper nhận giao
-            playOnce('shipper_receive', () => { playShipperReceiveSound(); notify('shipper_receive', code); });
+            playOnce('shipper_receive', () => { playShipperReceiveSound(); notify('shipper_receive', code, oid); });
             break;
           default:
             break;

@@ -163,7 +163,7 @@ function OpsApp({ onSignOut }) {
         // khi trùng lặp) — không bao giờ lệch nhau.
         playOnce(soundType, () => {
           fn();
-          if (soundType !== 'task_assigned') notify(soundType, data?.orderCode);
+          if (soundType !== 'task_assigned') notify(soundType, data?.orderCode, data?.orderId);
         });
       } catch (err) {
         console.error('[App] Error playing sound:', err);
