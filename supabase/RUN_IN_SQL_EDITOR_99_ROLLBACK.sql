@@ -18,6 +18,10 @@ declare
   v_def   text;
   v_count int := 0;
 begin
+  if to_regclass('public.function_backups') is null then
+    raise exception 'Chưa có bảng sao lưu — nghĩa là bước 1 chưa từng chạy. Không có gì để khôi phục.';
+  end if;
+
   for v_def in
     select definition
     from public.function_backups
@@ -39,13 +43,29 @@ end $$;
 -- (2) Trả trạng thái các đơn đã dọn ở bước 2 về như cũ
 --     (bỏ qua nếu bro chưa chạy bước 2)
 -- ---------------------------------------------------------------------
-update public.orders o
-set status_v2 = b.old_status_v2,
-    version   = version + 1
-from public.order_status_backups b
-where b.order_id = o.id
-  and b.label = '202608260020_backfill'
-  and o.status_v2 = 'in_production';
+-- Bọc trong khối kiểm tra: nếu bro chưa chạy bước 2 thì bảng sao lưu đơn
+-- chưa tồn tại. Trước đây chỗ này làm cả file khôi phục chết giữa chừng và
+-- KHÔNG khôi phục được gì. Giờ nó chỉ bỏ qua và chạy tiếp.
+do $$
+declare
+  v_count int := 0;
+begin
+  if to_regclass('public.order_status_backups') is null then
+    raise notice 'Chưa chạy bước 2 — bỏ qua phần khôi phục trạng thái đơn.';
+    return;
+  end if;
+
+  update public.orders o
+  set status_v2 = b.old_status_v2,
+      version   = version + 1
+  from public.order_status_backups b
+  where b.order_id = o.id
+    and b.label = '202608260020_backfill'
+    and o.status_v2 = 'in_production';
+
+  get diagnostics v_count = row_count;
+  raise notice 'Đã trả % đơn về trạng thái cũ.', v_count;
+end $$;
 
 -- Xoá dấu vết migration để hệ thống coi như chưa từng chạy
 delete from public.migration_runs
