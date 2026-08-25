@@ -312,6 +312,24 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
     }
   };
 
+  // Sau khi một thao tác đã THÀNH CÔNG: làm mới danh sách, đóng hộp chi tiết
+  // và đưa người dùng về đúng tab cần theo dõi tiếp.
+  //
+  // Mọi bước ở đây đều được bọc riêng: việc dọn dẹp mà vấp thì CHỈ ghi vào
+  // nhật ký, TUYỆT ĐỐI không hiện dòng đỏ. Trước đây các bước này nằm chung
+  // khối bắt lỗi với lời gọi máy chủ, nên chỉ cần một bước dọn dẹp lỗi là
+  // màn hình báo đỏ như thể giao hàng thất bại — dù thực tế đã xong xuôi
+  // (chuông và tin nhắn đã phát đi rồi).
+  const hoanTatVaChuyenTrang = (filter) => {
+    try { onChanged?.(); } catch (err) { console.error('[OrderV2] Làm mới danh sách lỗi (bỏ qua):', err); }
+    try { onClose?.(); } catch (err) { console.error('[OrderV2] Đóng hộp chi tiết lỗi (bỏ qua):', err); }
+    try {
+      window.dispatchEvent(new CustomEvent('sumi-navigate', { detail: { tab: 'orders', filter } }));
+    } catch (err) {
+      console.error('[OrderV2] Chuyển trang lỗi (bỏ qua):', err);
+    }
+  };
+
   const acceptDeliveryAssignment = async () => {
     setBusy(true);
     setError('');
@@ -339,18 +357,25 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       });
 
       if (error) throw error;
-      if (!data.success) throw new Error(data.message || data.error || 'Failed to accept delivery');
+      // data có thể là null nếu máy chủ trả về rỗng -> dùng ?. để không vỡ
+      if (!data?.success) throw new Error(data?.message || data?.error || 'Không nhận giao được');
 
-      // Play notification sound for delivery accepted
-      const { playNotificationSound } = await import('../lib/notificationSound.js');
-      playNotificationSound('delivery_assigned');
+      // Từ đây trở đi việc giao hàng ĐÃ THÀNH CÔNG. Không được để bất kỳ
+      // bước phụ nào biến nó thành lỗi trên màn hình.
+      try {
+        const { playNotificationSound } = await import('../lib/notificationSound.js');
+        playNotificationSound('delivery_assigned');
+      } catch (err) {
+        console.error('[OrderV2] Chuông nhận giao lỗi (bỏ qua):', err);
+      }
 
       setShowDeliveryModal(false);
       setGpsCoords(null);
       setPhotoFile(null);
       setPhotoPreview(null);
-      await load();
-      onChanged?.();
+
+      // Về danh sách "Đang vận chuyển" để shipper theo dõi chuyến của mình
+      hoanTatVaChuyenTrang('delivery');
     } catch (e) {
       setError(e.message);
     } finally {
@@ -603,18 +628,23 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       });
 
       if (error) throw error;
-      if (!data.success) throw new Error(data.message || data.error || 'Failed to complete delivery');
+      if (!data?.success) throw new Error(data?.message || data?.error || 'Không hoàn thành giao được');
 
-      // Play notification sound
-      const { playNotificationSound } = await import('../lib/notificationSound.js');
-      playNotificationSound('fully_completed');
+      // Từ đây trở đi đơn ĐÃ GIAO XONG. Bước phụ vấp thì bỏ qua, không báo đỏ.
+      try {
+        const { playNotificationSound } = await import('../lib/notificationSound.js');
+        playNotificationSound('fully_completed');
+      } catch (err) {
+        console.error('[OrderV2] Chuông hoàn thành lỗi (bỏ qua):', err);
+      }
 
       setShowCompletionModal(false);
       setGpsCoords(null);
       setPhotoFile(null);
       setPhotoPreview(null);
-      await load();
-      onChanged?.();
+
+      // Về danh sách "Giao thành công" để xem lại đơn vừa giao xong
+      hoanTatVaChuyenTrang('completed');
     } catch (e) {
       setError(e.message);
     } finally {

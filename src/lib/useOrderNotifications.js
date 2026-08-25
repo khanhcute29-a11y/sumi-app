@@ -6,6 +6,7 @@ import {
   playKitchenReceiveSound,
   playKitchenCompleteSound,
   playShipperReceiveSound,
+  playShipperCompleteSound,
   playOnce,
 } from './sound';
 import { notify } from './toast';
@@ -28,9 +29,16 @@ export function useOrderNotifications() {
           (payload.new?.status === 'hoan_thanh' && payload.old?.status !== 'hoan_thanh') ||
           (payload.new?.status_v2 === 'completed' && payload.old?.status_v2 !== 'completed');
         if (justCompleted) {
-          playDeliveredSound();
-          // Tin nhắn đi kèm — bấm vào mở tab "Giao thành công"
-          notify('shipper_complete', payload.new?.order_code, payload.new?.id);
+          // TRƯỚC ĐÂY dùng playDeliveredSound: chỉ 3 tiếng bíp dài 0,44 giây,
+          // trong khi MỌI mốc khác đều là giai điệu lặp 6 giây. Máy ở xa có
+          // phát tiếng nhưng ngắn quá, giữa tiệm ồn thì không ai kịp nghe —
+          // nên mọi người tưởng là im lặng.
+          // playShipperCompleteSound là giai điệu dành riêng cho mốc này,
+          // đã có sẵn trong sound.js nhưng chưa từng được gọi.
+          playOnce('shipper_complete', () => {
+            playShipperCompleteSound();
+            notify('shipper_complete', payload.new?.order_code, payload.new?.id);
+          });
           return;
         }
 

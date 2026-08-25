@@ -329,7 +329,7 @@ export function playShipperCompleteSound() {
     { freq: 1046, duration: 0.12, delay: 0.45, volume: 1.0 },
     { freq: 1046, duration: 0.12, delay: 0.6, volume: 1.0 }
   ];
-  playPatternLooped(pattern, 10000);
+  playPatternLooped(pattern, 6000, 1.0); // 0.72s tiếng + 0.28s lặng, đồng bộ 6s như các tiếng khác
   console.log('[playShipperCompleteSound] ✓ Done');
 }
 
