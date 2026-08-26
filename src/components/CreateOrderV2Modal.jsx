@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useOrderDraftAutosave, DraftSaveIndicator, listOrderDrafts, deleteOrderDraft } from '../lib/useDraftAutosave';
 import { supabase } from '../lib/supabaseClient';
 import { createOrderV2 } from '../lib/featureFlags';
 import { useAuth } from '../lib/AuthContext';
@@ -95,7 +96,7 @@ function OrderPreviewV2({type,customerName,customerPhone,selectedSchool,items,gu
  </div>;
 }
 
-export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
+export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,resumeDraftId=null}){
  const {profile}=useAuth();
  const isOwnerAdmin=['owner','admin'].includes(profile?.role)||(profile?.extra_roles||[]).some(r=>['owner','admin'].includes(r));
  const isDirector=isOwnerAdmin||['deputy_director_x42'].includes(profile?.role)||(profile?.extra_roles||[]).some(r=>['deputy_director_x42'].includes(r));
@@ -141,6 +142,23 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
  const [productCatalog,setProductCatalog]=useState([]);
  const [isMobile,setIsMobile]=useState(typeof window!=='undefined'?window.innerWidth<860:false);
  const [isRecording,setIsRecording]=useState(false); const [voiceLoading,setVoiceLoading]=useState(false);
+ // Tự động lưu nháp: chỉ các field kiểu văn bản/số/mảng dữ liệu (KHÔNG đưa
+ // `photos` — mảng File — vào đây, ảnh không khôi phục được sau khi tải lại
+ // trang). Khôi phục xong người dùng vẫn cần chọn/chụp lại ảnh nếu có.
+ // Nháp: mỗi đơn đang soạn có 1 draftId riêng (sinh mới khi chọn loại đơn,
+ // hoặc truyền vào từ danh sách "Nháp đã lưu" để tiếp tục đúng đơn đó) — nhiều
+ // đơn bỏ dở cùng lúc không ghi đè lên nhau.
+ const [activeDraftId,setActiveDraftId]=useState(resumeDraftId);
+ const draftValues={type,requiredAt,customerName,customerPhone,fulfillment,address,note,items,isReadyStock,guestCount,selectedSchool,entryMode,cakeLine,hasShipFee,shipFee,paymentMethod,deposit,selectedLibraryPhotos};
+ const draftSetters={type:setType,requiredAt:setRequiredAt,customerName:setCustomerName,customerPhone:setCustomerPhone,fulfillment:setFulfillment,address:setAddress,note:setNote,items:setItems,isReadyStock:setIsReadyStock,guestCount:setGuestCount,selectedSchool:setSelectedSchool,entryMode:setEntryMode,cakeLine:setCakeLine,hasShipFee:setHasShipFee,shipFee:setShipFee,paymentMethod:setPaymentMethod,deposit:setDeposit,selectedLibraryPhotos:setSelectedLibraryPhotos};
+ const {saveStatus:draftSaveStatus,clearDraft}=useOrderDraftAutosave(activeDraftId,draftValues,draftSetters);
+ const resetDraftForm=()=>{
+  clearDraft();
+  setActiveDraftId(null);
+  setType(null);setRequiredAt('');setCustomerName('');setCustomerPhone('');setFulfillment('delivery');setAddress('');setNote('');
+  setItems([]);setPhotos([]);setIsReadyStock(false);setGuestCount('');setSchoolSearch('');setSelectedSchool(null);setEntryMode('manual');
+  setCakeLine('decorated_cake');setHasShipFee('no');setShipFee('');setPaymentMethod('cod');setDeposit('');setSelectedLibraryPhotos([]);
+ };
  useEffect(()=>{const onResize=()=>setIsMobile(window.innerWidth<860);window.addEventListener('resize',onResize);return()=>window.removeEventListener('resize',onResize)},[]);
  useEffect(()=>{let active=true;supabase.from('products').select('id,name,category,unit,price,product_variants(id,label,price)').eq('active',true).order('name').limit(500).then(({data,error})=>{if(active&&!error)setProductCatalog([...(data||[]),...MOONCAKE_CATALOG])});return()=>{active=false}},[]);
  const change=(i,key,value)=>setItems(x=>x.map((it,n)=>n===i?{...it,[key]:value}:it));
@@ -153,7 +171,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
  const grandTotal=getTotalPrice()+effectiveShipFee;
  const remaining=grandTotal-(Number(deposit)||0);
  const blankItem=(key)=>({id:crypto.randomUUID(),flow_type:key,name:'',quantity:1,unit:'cái',specification:{product_flow:key,...(key==='cake'?{cake_line:cakeLine}:{})}});
- const selectFlow=(key)=>{if(key==='school'&&!isDirector)return;if(key==='macaron'&&!isMacaronCreator)return;setType(key);setItems(key==='teabreak'?[]:[blankItem(key)]);};
+ const selectFlow=(key)=>{if(key==='school'&&!isDirector)return;if(key==='macaron'&&!isMacaronCreator)return;setActiveDraftId(crypto.randomUUID());setType(key);setItems(key==='teabreak'?[]:[blankItem(key)]);};
  const addFlow=(key)=>{if(type==='school'||key==='school'){setError('Đơn trường học cần tạo riêng để bảo vệ thông tin.');return}if(key==='macaron'&&!isMacaronCreator){setError('Chỉ Trợ lý Giám đốc mới được thêm sản phẩm Macaron.');return}setError('');setItems(x=>[...x,blankItem(key)]);setTimeout(()=>document.querySelector('.sumi-mixed-summary')?.scrollIntoView({behavior:'smooth',block:'start'}),0)};
  const changeCakeLine=(key)=>{setCakeLine(key);setItems(current=>current.map(item=>(item.flow_type||type)==='cake'?{...item,specification:{...item.specification,cake_line:key}}:item));};
  const addCatalogItem=(product)=>{setItems(current=>{
@@ -303,6 +321,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
     createdAt: new Date().toISOString(),
   });
   notifyOtherTabs(BroadcastEvents.ORDER_CREATED, { orderId });
+  clearDraft();
   onCreated?.(orderId);
 
   // Đóng màn hình tạo đơn rồi đưa về đúng danh sách cần theo dõi tiếp:
@@ -332,6 +351,10 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
    <div className="sumi-create-head"><button onClick={()=>setType(null)} aria-label="Chọn lại loại đơn">←</button><h2>{isMixed?'🧺 Đơn nhiều sản phẩm':`${flow?.icon} ${flow?.title}`}</h2></div>
    <button className="sumi-change-flow" onClick={()=>setType(null)}>Đổi loại đơn</button>
    {entryMode!=='manual'&&<div className="sumi-entry-note">{entryMode==='photo'?'📷 Đơn được nhập từ ảnh — cần kiểm tra trước khi tạo':'🎤 Đơn được nhập bằng giọng nói — cần xác nhận lại nội dung'}</div>}
+   <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,margin:'6px 0'}}>
+    <DraftSaveIndicator status={draftSaveStatus}/>
+    <button type="button" onClick={()=>{if(window.confirm('Xoá bản nháp và nhập lại từ đầu?'))resetDraftForm();}} style={{border:'1px solid #e0d5c7',background:'#fff',color:'#8c5a3c',fontSize:12,fontWeight:700,borderRadius:8,padding:'4px 10px',cursor:'pointer'}}>Xoá bản nháp</button>
+   </div>
    <div style={{display:'flex',flexDirection:isMobile?'column':'row',gap:20,alignItems:'flex-start'}}>
    <div style={{flex:isMobile?'1 1 auto':'1 1 480px',minWidth:0}}>
    <p style={{color:'#725f50',fontWeight:700}}>Người tạo: {profile?.full_name||'Nhân viên'} · tự lưu ngày giờ</p>
