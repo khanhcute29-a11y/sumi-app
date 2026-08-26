@@ -903,12 +903,56 @@ export async function fetchOpenIncidentOrderIds() {
   return new Set(data.map((r) => r.order_id));
 }
 
-export async function resolveApprovalRequest(id, { status, resolvedBy }) {
-  const { error } = await supabase.from('approval_requests').update({
-    status, resolved_by: resolvedBy || null, resolved_at: new Date().toISOString(),
-  }).eq('id', id);
-  if (error) throw error;
+// Duyệt / từ chối một đề xuất.
+//
+// ⚠️ TRƯỚC 26/08/2026 hàm này ghi THẲNG vào bảng. Nghĩa là ai đã đăng nhập, mở
+// F12 lên, cũng tự duyệt được đơn xin nghỉ CỦA CHÍNH MÌNH — giao diện ẩn nút
+// nhưng ẩn nút không phải là chặn. Nay quyền UPDATE đã bị rút khỏi vai trò
+// `authenticated`, mọi quyết định đi qua RPC `sumi_duyet_de_xuat`. Chính hàm
+// dưới database quyết người bấm đang đứng cấp nào, và chặn tự duyệt.
+//
+// `resolvedBy` giữ lại cho tương thích với màn hình cũ nhưng KHÔNG còn được
+// dùng — tên người duyệt lấy từ phiên đăng nhập, không lấy từ trình duyệt.
+export async function resolveApprovalRequest(id, { status, note } = {}) {
+  const { data, error } = await supabase.rpc('sumi_duyet_de_xuat', {
+    p_id: id,
+    p_dong_y: status === 'approved',
+    p_ghi_chu: note || null,
+  });
+  if (error) {
+    if (/function .* does not exist|schema cache/i.test(error.message || '')) {
+      throw new Error('Máy chủ chưa bật luồng duyệt hai cấp. Báo quản trị chạy bản cập nhật database.');
+    }
+    throw error;
+  }
+  if (data && data.thanh_cong === false) throw new Error(data.thong_bao || 'Không duyệt được đề xuất.');
   notifyBadgesChanged();
+  return data;
+}
+
+// Gửi một đề xuất mới. Người gửi luôn là người đang đăng nhập — hàm dưới
+// database lấy từ phiên, không nhận từ trình duyệt, nên không ai gửi được đơn
+// dưới tên đồng nghiệp.
+export async function guiDeXuat({ type, reason, leaveDate, leaveTo, leaveScope, leaveKind, orderCode, photoUrl }) {
+  const { data, error } = await supabase.rpc('sumi_gui_de_xuat', {
+    p_type: type,
+    p_reason: reason,
+    p_leave_date: leaveDate || null,
+    p_leave_to: leaveTo || null,
+    p_leave_scope: leaveScope || null,
+    p_leave_kind: leaveKind || null,
+    p_order_code: orderCode || null,
+    p_photo_url: photoUrl || null,
+  });
+  if (error) {
+    if (/function .* does not exist|schema cache/i.test(error.message || '')) {
+      throw new Error('Máy chủ chưa bật tính năng gửi đề xuất. Báo quản trị chạy bản cập nhật database.');
+    }
+    throw error;
+  }
+  if (data && data.thanh_cong === false) throw new Error(data.thong_bao || 'Không gửi được đề xuất.');
+  notifyBadgesChanged();
+  return data;
 }
 
 // ---- Cấu hình tiệm (vị trí GPS, giá xăng, tốc độ trung bình) ----

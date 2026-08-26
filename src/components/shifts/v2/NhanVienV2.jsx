@@ -1,6 +1,7 @@
 import React from 'react';
 import { TEN_BO_PHAN } from '../../../lib/chamCong';
 import { LichSuCham, gioThanhChu, TheChenhLech, doDaiPhut } from './dungChung';
+import DonTuCuaToi from './DonTuCuaToi';
 
 // Màn hình Chấm Công của NHÂN VIÊN — dựng theo mockup time-attendance-v2.html.
 //
@@ -21,7 +22,7 @@ function nhanTrangThai(cham) {
 
 export default function NhanVienV2({
   hoSo, cham, danhSachCa, boPhan, logsHomNay, tomTat, thuong = [],
-  gioHienTai, onCheckin, onCheckout, onXinNghi, onXemThang,
+  gioHienTai, onCheckin, onCheckout, onXemThang, deXuatGia = null,
 }) {
   const ca = cham?.ca || null;
   const daVao = !!cham?.vaoISO;
@@ -170,7 +171,6 @@ export default function NhanVienV2({
           )}
         </section>
 
-        <button className="cc2-quiet-action" onClick={onXinNghi}>📋 XIN NGHỈ / ĐỀ XUẤT</button>
 
         {/* ── Tóm tắt tháng ── */}
         {tomTat && (
@@ -207,6 +207,9 @@ export default function NhanVienV2({
             </div>
           </>
         )}
+
+        {/* ── Đơn từ của tôi — gửi mới bằng nút ➕ ở góc phải dưới ── */}
+        <DonTuCuaToi hoSo={hoSo} duLieuGia={deXuatGia} />
 
         {/* ── Lịch sử ── */}
         <div className="cc2-section-title"><span>LỊCH SỬ CHẤM CÔNG</span></div>

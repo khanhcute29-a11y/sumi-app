@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { fetchApprovalRequests, resolveApprovalRequest } from '../../../lib/queries';
-import { chuCaiDau } from './dungChung';
+import TheDeXuat from './TheDeXuat';
 
 // Mục "ĐỀ XUẤT ĐỢI DUYỆT" trên màn hình Giám đốc.
 //
@@ -9,30 +9,10 @@ import { chuCaiDau } from './dungChung';
 // dữ liệu mới. Duyệt ở đây hay duyệt ở màn hình cũ đều ra cùng một kết quả,
 // cùng một dấu vết.
 
-const NHAN_LOAI = {
-  order_edit: { ten: 'Xin sửa đơn', icon: '✏️' },
-  order_cancel: { ten: 'Khách xin huỷ đơn', icon: '🚫' },
-  order_delete: { ten: 'Xin xoá đơn', icon: '🗑' },
-  shift_recheck: { ten: 'Xin chấm công lại', icon: '⏱' },
-  leave_request: { ten: 'Xin nghỉ', icon: '🏖' },
-  task_exemption: { ten: 'Xin miễn công việc', icon: '📋' },
-};
-
-function khiNao(iso) {
-  if (!iso) return '';
-  const t = new Date(iso);
-  const phut = Math.round((Date.now() - t.getTime()) / 60000);
-  if (phut < 1) return 'vừa xong';
-  if (phut < 60) return `${phut} phút trước`;
-  const gio = Math.floor(phut / 60);
-  if (gio < 24) return `${gio} giờ trước`;
-  return t.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
-}
-
 // `duLieuGia` chỉ dùng cho trang xem thử `?mockup=cham-cong-v2` — nơi không có
 // phiên đăng nhập nên không gọi được database. Trong app thật prop này luôn
 // rỗng và dữ liệu đến từ `fetchApprovalRequests` như mọi màn hình khác.
-export default function DeXuatChoDuyet({ hoSo, coQuyenDuyet, duLieuGia = null }) {
+export default function DeXuatChoDuyet({ hoSo, capCuaToi = 1, duLieuGia = null, onDaXuLy }) {
   const [ds, setDs] = useState([]);
   const [dangTai, setDangTai] = useState(true);
   const [loi, setLoi] = useState('');
@@ -44,7 +24,9 @@ export default function DeXuatChoDuyet({ hoSo, coQuyenDuyet, duLieuGia = null })
     setDangTai(true);
     try {
       const data = await fetchApprovalRequests({ status: 'pending' });
-      setDs(data || []);
+      // Đơn của CHÍNH MÌNH không hiện ở đây — không ai tự duyệt đơn mình gửi.
+      // Database cũng chặn, nhưng bày ra rồi bấm vào báo lỗi thì khó chịu.
+      setDs((data || []).filter((r) => r.requester_id !== hoSo?.id));
       setLoi('');
     } catch (e) {
       // Không để hỏng cả màn hình chấm công chỉ vì mục phụ này lỗi.
@@ -52,22 +34,20 @@ export default function DeXuatChoDuyet({ hoSo, coQuyenDuyet, duLieuGia = null })
     } finally {
       setDangTai(false);
     }
-  }, [duLieuGia]);
+  }, [duLieuGia, hoSo?.id]);
 
   useEffect(() => { tai(); }, [tai]);
 
-  const quyet = async (req, trangThai) => {
+  const quyet = async (req, dongY) => {
     setDangXuLy(req.id); setLoi('');
     try {
       if (duLieuGia) {            // bản xem thử: không ghi gì xuống database
         setDs((cu) => cu.filter((x) => x.id !== req.id));
         return;
       }
-      await resolveApprovalRequest(req.id, {
-        status: trangThai,
-        resolvedBy: hoSo?.full_name || null,
-      });
-      setDs((cu) => cu.filter((x) => x.id !== req.id));
+      await resolveApprovalRequest(req.id, { status: dongY ? 'approved' : 'rejected' });
+      await tai();
+      await onDaXuLy?.();
     } catch (e) {
       setLoi(e?.message || 'Không lưu được quyết định. Thử lại giúp tôi.');
     } finally {
@@ -75,17 +55,25 @@ export default function DeXuatChoDuyet({ hoSo, coQuyenDuyet, duLieuGia = null })
     }
   };
 
-  const hien = moRong ? ds : ds.slice(0, 3);
+  // Cấp 1 chỉ thấy đơn còn đang chờ mình. Cấp 2 (Giám đốc) thấy tất cả đơn
+  // đang treo — cả đơn cấp 1 chưa xử để biết chỗ nào đang tắc.
+  const thuocVeToi = (r) => {
+    const cap1 = r.cap1_status || 'pending';
+    return capCuaToi === 2 ? true : cap1 === 'pending';
+  };
+
+  const canXu = ds.filter(thuocVeToi);
+  const hien = moRong ? canXu : canXu.slice(0, 3);
 
   return (
     <>
       <div className="cc2-section-title">
         <span>ĐỀ XUẤT ĐỢI DUYỆT</span>
-        {ds.length > 0 && (
+        {canXu.length > 0 && (
           <span style={{
             minWidth: 26, padding: '3px 9px', borderRadius: 10,
             background: 'var(--cc2-red)', color: '#fff', fontWeight: 950, fontSize: 13,
-          }}>{ds.length}</span>
+          }}>{canXu.length}</span>
         )}
       </div>
 
@@ -93,62 +81,25 @@ export default function DeXuatChoDuyet({ hoSo, coQuyenDuyet, duLieuGia = null })
 
       {dangTai ? (
         <div className="cc2-empty">Đang tải đề xuất…</div>
-      ) : ds.length === 0 ? (
-        <div className="cc2-empty">✅ Không có đề xuất nào đang chờ.</div>
+      ) : canXu.length === 0 ? (
+        <div className="cc2-empty">✅ Không có đề xuất nào đang chờ bạn.</div>
       ) : (
         <>
           <div className="cc2-history">
-            {hien.map((r) => {
-              const loai = NHAN_LOAI[r.type] || { ten: r.type, icon: '📄' };
-              const dang = dangXuLy === r.id;
-              return (
-                <article className="cc2-dexuat" key={r.id}>
-                  <div className="cc2-dexuat-top">
-                    <div className="cc2-staff-face" style={{ width: 42, height: 42, fontSize: 15, fontWeight: 900 }}>
-                      {chuCaiDau(r.requester_name)}
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <b>{loai.icon} {loai.ten}</b>
-                      <small>
-                        {r.requester_name || 'Không rõ'}
-                        {r.requester_role ? ` · ${r.requester_role}` : ''}
-                        {' · '}{khiNao(r.created_at)}
-                      </small>
-                    </div>
-                  </div>
-
-                  <div className="cc2-dexuat-than">
-                    {r.leave_date && <div>📅 Ngày nghỉ: <b>{r.leave_date}</b></div>}
-                    {r.order_code && <div>🧾 Đơn: <b>{r.order_code}</b></div>}
-                    {r.reason && <div>📝 {r.reason}</div>}
-                    {!r.reason && !r.leave_date && !r.order_code && <div>Không có ghi chú kèm theo.</div>}
-                  </div>
-
-                  {r.photo_url && (
-                    <img src={r.photo_url} alt="Ảnh kèm đề xuất" loading="lazy"
-                      style={{ width: '100%', maxHeight: 160, objectFit: 'cover', borderRadius: 12, marginTop: 8 }} />
-                  )}
-
-                  {coQuyenDuyet ? (
-                    <div className="cc2-dexuat-nut">
-                      <button className="tuchoi" disabled={dang} onClick={() => quyet(r, 'rejected')}>
-                        {dang ? '…' : '✕ Từ chối'}
-                      </button>
-                      <button className="dongy" disabled={dang} onClick={() => quyet(r, 'approved')}>
-                        {dang ? 'Đang lưu…' : '✓ Đồng ý'}
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="cc2-dexuat-cho">Đang chờ Giám đốc duyệt</div>
-                  )}
-                </article>
-              );
-            })}
+            {hien.map((r) => (
+              <TheDeXuat
+                key={r.id}
+                don={r}
+                dangXuLy={dangXuLy === r.id}
+                onDongY={(d) => quyet(d, true)}
+                onTuChoi={(d) => quyet(d, false)}
+              />
+            ))}
           </div>
 
-          {ds.length > 3 && (
+          {canXu.length > 3 && (
             <button className="cc2-quiet-action" onClick={() => setMoRong(!moRong)}>
-              {moRong ? '▴ Thu gọn' : `▾ Xem thêm ${ds.length - 3} đề xuất`}
+              {moRong ? '▴ Thu gọn' : `▾ Xem thêm ${canXu.length - 3} đề xuất`}
             </button>
           )}
         </>

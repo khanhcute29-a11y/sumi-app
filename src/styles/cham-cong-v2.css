@@ -524,3 +524,104 @@
 @media (min-width: 760px) {
   .cc2-drill-row { min-height: 60px; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ĐƠN TỪ / ĐỀ XUẤT — dựng theo ảnh mẫu anh Nghĩa gửi
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Thẻ lọc Chờ duyệt / Đã duyệt / Không duyệt */
+.cc2-tab-loc {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px;
+  padding: 4px; margin-bottom: 12px;
+  border-radius: 14px; background: var(--cc2-paper);
+}
+.cc2-tab {
+  min-height: 46px; padding: 0 6px;
+  border: 0; border-radius: 11px; background: transparent;
+  color: #7a6250; font-size: 13px; font-weight: 900; cursor: pointer;
+}
+.cc2-tab.active {
+  background: #fff; color: var(--cc2-cocoa);
+  box-shadow: 0 2px 8px rgba(74, 43, 22, .12);
+}
+
+/* Một lá đơn. Vạch màu bên trái cho biết kết quả ngay từ xa. */
+.cc2-don {
+  padding: 14px;
+  border: 1px solid var(--cc2-line);
+  border-left: 5px solid var(--cc2-amber);
+  border-radius: 16px; background: #fff;
+  box-shadow: var(--cc2-soft-shadow);
+}
+.cc2-don-ten { margin: 0 0 9px; font-size: 16.5px; font-weight: 950; }
+.cc2-don-dong {
+  margin-top: 6px;
+  font-size: 13px; line-height: 1.55; color: #5f4b3d; font-weight: 700;
+}
+.cc2-don-dong.noi-dung {
+  padding: 9px 11px; border-radius: 12px; background: var(--cc2-paper);
+}
+.cc2-don-anh {
+  width: 100%; max-height: 170px; object-fit: cover;
+  border-radius: 12px; margin-top: 9px;
+}
+.cc2-don-trangthai {
+  display: inline-block; margin-top: 10px;
+  padding: 6px 11px; border-radius: 10px;
+  font-size: 12px; font-weight: 950; letter-spacing: .03em;
+}
+.cc2-don-nguoi {
+  display: flex; align-items: center; gap: 8px; margin-top: 10px;
+  font-size: 13.5px;
+}
+.cc2-don-nguoi small { color: var(--cc2-muted); font-weight: 700; }
+
+/* Thang duyệt hai cấp — luôn hiện đủ cả hai bậc */
+.cc2-thang {
+  margin-top: 11px; padding: 10px 11px;
+  border-radius: 12px; background: var(--cc2-navy-soft);
+}
+.cc2-thang-nhan {
+  font-size: 11.5px; font-weight: 950; letter-spacing: .06em;
+  color: var(--cc2-navy); margin-bottom: 7px;
+}
+.cc2-bac { display: flex; align-items: flex-start; gap: 9px; }
+.cc2-bac + .cc2-bac { margin-top: 8px; }
+.cc2-bac-so {
+  width: 26px; height: 26px; flex-shrink: 0;
+  display: grid; place-items: center;
+  border-radius: 9px; font-size: 12.5px; font-weight: 950;
+}
+.cc2-bac-chu { min-width: 0; }
+.cc2-bac-chu b { display: block; font-size: 13px; }
+.cc2-bac-chu small {
+  display: block; margin-top: 2px; font-size: 12px; font-weight: 800;
+  line-height: 1.4;
+}
+
+/* Nút ➕ nổi ở góc phải dưới — như ảnh mẫu.
+   sticky + float để nút đi theo mục Đơn từ, không đè lên thanh điều hướng
+   dưới đáy app (thanh đó là của khung app, không phải của màn hình này). */
+.cc2-fab {
+  position: sticky; float: right;
+  bottom: 14px; z-index: 5;
+  width: 58px; height: 58px; margin: 10px 4px 0;
+  border: 0; border-radius: 18px;
+  background: var(--cc2-caramel); color: #fff;
+  font-size: 30px; font-weight: 400; line-height: 1;
+  box-shadow: 0 7px 0 #a64829, 0 12px 26px rgba(74, 43, 22, .28);
+  cursor: pointer;
+}
+.cc2-fab:active { transform: translateY(3px); box-shadow: 0 4px 0 #a64829; }
+
+/* ── Lịch sử gom theo ngày ─────────────────────────────────────────────── */
+.cc2-lichsu-nhom { display: grid; gap: 14px; }
+.cc2-ngay-nhan {
+  margin: 0 2px 8px;
+  font-size: 12px; font-weight: 950; letter-spacing: .07em;
+  color: #7a6250;
+}
+
+@media (min-width: 760px) {
+  .cc2-lichsu-nhom .cc2-history { grid-template-columns: 1fr 1fr; }
+}

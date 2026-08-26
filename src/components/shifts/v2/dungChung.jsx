@@ -126,24 +126,60 @@ export function DongLichSu({ log, ca, tenNguoi }) {
   );
 }
 
+/** "THỨ 3, 26/08/2026" — tiêu đề nhóm ngày, đúng cách ảnh mẫu chia. */
+function tieuDeNgay(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return 'Không rõ ngày';
+  const thu = ['CHỦ NHẬT', 'THỨ 2', 'THỨ 3', 'THỨ 4', 'THỨ 5', 'THỨ 6', 'THỨ 7'][d.getDay()];
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${thu}, ${dd}/${mm}/${d.getFullYear()}`;
+}
+
 /**
- * Danh sách lịch sử. Tự tìm ca chuẩn của từng dòng để tính chênh lệch.
+ * Danh sách lịch sử, GOM THEO NGÀY.
+ *
+ * Trước đây đổ thẳng một mạch, xem lịch sử vài ngày là không biết dòng nào của
+ * hôm nào. Nay mỗi ngày một tiêu đề, mới nhất lên trên — giống cách ảnh mẫu
+ * anh Nghĩa gửi chia màn hình "Hoạt động".
  */
-export function LichSuCham({ logs, danhSachCa, boPhanTheoNguoi = {}, tenTheoId = {}, hienTen = false, rong = 'Chưa có lần chấm công nào.' }) {
+export function LichSuCham({
+  logs, danhSachCa, boPhanTheoNguoi = {}, tenTheoId = {}, hienTen = false,
+  gomTheoNgay = true, rong = 'Chưa có lần chấm công nào.',
+}) {
   const ds = [...(logs || [])].sort(
     (a, b) => new Date(b.checkin_time || b.created_at || 0) - new Date(a.checkin_time || a.created_at || 0),
   );
   if (!ds.length) return <div className="cc2-empty">{rong}</div>;
 
+  const dong = (l) => (
+    <DongLichSu
+      key={l.id}
+      log={l}
+      ca={caChuanCuaLog(l, danhSachCa, boPhanTheoNguoi[l.staff_id] || null)}
+      tenNguoi={hienTen ? (tenTheoId[l.staff_id] || l.staff_name) : null}
+    />
+  );
+
+  if (!gomTheoNgay) return <div className="cc2-history">{ds.map(dong)}</div>;
+
+  // Gom theo `work_date` nếu có — đó là ngày công thật, không phải ngày của
+  // đồng hồ. Ca đêm chấm ra lúc 00:30 vẫn thuộc ngày công hôm trước.
+  const nhom = [];
+  ds.forEach((l) => {
+    const khoa = l.work_date || String(l.checkin_time || l.created_at || '').slice(0, 10);
+    let g = nhom.find((x) => x.khoa === khoa);
+    if (!g) { g = { khoa, ds: [] }; nhom.push(g); }
+    g.ds.push(l);
+  });
+
   return (
-    <div className="cc2-history">
-      {ds.map((l) => (
-        <DongLichSu
-          key={l.id}
-          log={l}
-          ca={caChuanCuaLog(l, danhSachCa, boPhanTheoNguoi[l.staff_id] || null)}
-          tenNguoi={hienTen ? (tenTheoId[l.staff_id] || l.staff_name) : null}
-        />
+    <div className="cc2-lichsu-nhom">
+      {nhom.map((g) => (
+        <section key={g.khoa}>
+          <div className="cc2-ngay-nhan">{tieuDeNgay(g.khoa)}</div>
+          <div className="cc2-history">{g.ds.map(dong)}</div>
+        </section>
       ))}
     </div>
   );

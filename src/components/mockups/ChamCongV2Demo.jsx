@@ -81,29 +81,55 @@ const LOGS = [
 
 // Đề xuất giả — trang xem thử không đăng nhập nên không đọc được database thật.
 const DE_XUAT_GIA = [
+  // Đang chờ cấp 1
   {
     id: 'dx1', type: 'leave_request', status: 'pending',
-    requester_name: 'Ngô Kim Chi', requester_role: 'Shipper trường học',
-    leave_date: HOM_NAY, reason: 'Con ốm phải đưa đi khám, xin nghỉ cả ngày.',
+    requester_id: 'u11', requester_name: 'Ngô Kim Chi', requester_role: 'Shipper trường học',
+    leave_date: HOM_NAY, leave_scope: 'ca_ngay', leave_kind: 'om_dau',
+    reason: 'Gửi anh Quân, con em bị ốm phải đưa đi khám nên em xin phép nghỉ cả ngày hôm nay ạ. Em cảm ơn!',
+    cap1_status: 'pending',
     created_at: new Date(Date.now() - 42 * 60000).toISOString(),
   },
+  // Cấp 1 đã duyệt, đang chờ Giám đốc
   {
     id: 'dx2', type: 'shift_recheck', status: 'pending',
-    requester_name: 'Nguyễn An', requester_role: 'Bếp trưởng bếp lạnh',
-    reason: 'Kẹt xe cầu Vĩnh Phú, xin xem lại 28 phút đi muộn sáng nay.',
+    requester_id: 'u3', requester_name: 'Nguyễn An', requester_role: 'Bếp trưởng bếp lạnh',
+    reason: 'Kẹt xe cầu Vĩnh Phú, xin xem lại 28 phút đi muộn sáng nay giúp em ạ.',
+    cap1_status: 'approved', cap1_name: 'Phạm Thị Mai Phương',
+    cap1_at: new Date(Date.now() - 2 * 3600000).toISOString(),
+    cap1_note: 'Có xác nhận của tổ trưởng',
+    cap2_status: 'pending',
     created_at: new Date(Date.now() - 3 * 3600000).toISOString(),
   },
+  // Đã duyệt xong cả hai cấp
   {
-    id: 'dx3', type: 'order_edit', status: 'pending',
-    requester_name: 'Võ Thu Hà', requester_role: 'Thu ngân',
-    order_code: 'SUMI-20260826-014', reason: 'Khách đổi từ size 18 sang size 22.',
-    created_at: new Date(Date.now() - 26 * 3600000).toISOString(),
+    id: 'dx3', type: 'leave_request', status: 'approved',
+    requester_id: 'u1', requester_name: 'Hoàng Diễm', requester_role: 'Thợ bếp lạnh',
+    leave_date: '2026-08-20', leave_scope: 'nua_ca_sau', leave_kind: 'phep_nam',
+    reason: 'Gửi anh Quân & chị Phượng, gia đình em có việc nên em xin phép nghỉ làm chiều nay để về quê ạ. Em cảm ơn!',
+    cap1_status: 'approved', cap1_name: 'Phạm Thị Mai Phương',
+    cap1_at: '2026-08-19T09:12:00+07:00',
+    cap2_status: 'approved', cap2_name: 'Đinh Minh Quân',
+    cap2_at: '2026-08-19T14:03:00+07:00',
+    created_at: '2026-08-19T08:40:00+07:00',
+  },
+  // Bị từ chối ngay ở cấp 1
+  {
+    id: 'dx4', type: 'task_exemption', status: 'rejected',
+    requester_id: 'u1', requester_name: 'Hoàng Diễm', requester_role: 'Thợ bếp lạnh',
+    reason: 'Máy đánh kem hỏng, xin miễn việc chuẩn bị cốt bánh chiều nay.',
+    cap1_status: 'rejected', cap1_name: 'Phạm Thị Mai Phương',
+    cap1_at: '2026-08-24T10:20:00+07:00',
+    cap1_note: 'Đã có máy dự phòng ở bếp nóng, em qua mượn nhé.',
+    created_at: '2026-08-24T09:55:00+07:00',
   },
   {
-    id: 'dx4', type: 'task_exemption', status: 'pending',
-    requester_name: 'Kim Tiến', requester_role: 'Thợ bếp lạnh',
-    reason: 'Máy đánh kem hỏng, xin miễn việc chuẩn bị cốt bánh chiều nay.',
-    created_at: new Date(Date.now() - 50 * 3600000).toISOString(),
+    id: 'dx5', type: 'order_edit', status: 'pending',
+    requester_id: 'u6', requester_name: 'Võ Thu Hà', requester_role: 'Thu ngân',
+    order_code: 'SUMI-20260826-014',
+    reason: 'Khách đổi từ size 18 sang size 22, xin sửa lại đơn giúp em.',
+    cap1_status: 'pending',
+    created_at: new Date(Date.now() - 26 * 3600000).toISOString(),
   },
 ];
 
