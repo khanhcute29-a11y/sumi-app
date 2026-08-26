@@ -25,13 +25,13 @@ import ChamCongV2 from '../components/shifts/v2/ChamCongV2';
 import '../styles/cham-cong.css';
 
 // Giao diện Chấm Công V2 (dựng theo mockup time-attendance-v2.html).
-// CHƯA BẬT MẶC ĐỊNH: chỉ hiện khi mở kèm `?ccv2=1`.
-// Nhân viên đang dùng bản cũ không bị ảnh hưởng gì cho tới khi thử xong trên
-// máy thật của từng bộ phận. Bật thật = đổi giá trị mặc định ở dòng dưới.
+// ĐÃ BẬT MẶC ĐỊNH cho mọi người — anh Nghĩa duyệt và chốt bật ngày 27/08/2026.
+// Thêm `?ccv2=0` vào địa chỉ để tạm quay lại bản cũ nếu cần xem lại gấp
+// (chỉ ảnh hưởng máy đang mở, không tắt cho người khác).
 const DUNG_GIAO_DIEN_V2 = (() => {
   try {
-    return new URLSearchParams(window.location.search).get('ccv2') === '1';
-  } catch { return false; }
+    return new URLSearchParams(window.location.search).get('ccv2') !== '0';
+  } catch { return true; }
 })();
 
 const BRANCHES = ['Vĩnh Phú 42', 'Quốc lộ 13'];
