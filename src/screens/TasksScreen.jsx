@@ -3,15 +3,13 @@ import { useAuth } from '../lib/AuthContext';
 import { hasAnyRole } from '../lib/roles';
 import { supabase } from '../lib/supabaseClient';
 import { fetchAllProfiles } from '../lib/queries';
-import { Tabs } from '../components/navigation/Tabs';
 import { Input } from '../components/forms/Input';
 import { Select } from '../components/forms/Select';
-import { Button } from '../components/forms/Button';
 import { DailyChecklistTab } from '../components/tasks/DailyChecklistTab';
-import { AdhocTasksTab } from '../components/tasks/AdhocTasksTab';
 import CongViecV2 from '../components/tasks/v2/CongViecV2';
 import { ProductionLogModal } from '../components/ProductionLogModal';
 import { ProductionLogList } from '../components/ProductionLogList';
+import '../styles/cong-viec.css';
 
 function StaffPicker({ label, value, onChange, options }) {
   const [open, setOpen] = useState(false);
@@ -104,6 +102,7 @@ export default function TasksScreen() {
   const [showProductionLogList, setShowProductionLogList] = useState(false);
   const [productionLogRefreshKey, setProductionLogRefreshKey] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [metrics, setMetrics] = useState({ dangLam: 0, choDuyet: 0, xongHomNay: 0 });
 
 
   useEffect(() => {
@@ -192,56 +191,56 @@ export default function TasksScreen() {
     })),
   ];
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* Header & Thanh điều hướng nhanh */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-        <div>
-          <div style={{ font: 'var(--text-display-md)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span>
-              {isViewingOtherStaff ? `Công việc · ${viewingStaffName}` : `Quản Lý Công Việc ${viewingStaffName ? `(${viewingStaffName})` : ''}`}
-            </span>
-            {viewingStation && (
-              <span style={{ fontSize: 13, padding: '2px 8px', borderRadius: 'var(--radius-pill)', background: 'var(--surface-sunken)', color: 'var(--text-secondary)' }}>
-                {viewingStation}
-              </span>
-            )}
-          </div>
-          <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>
-            {isViewingOtherStaff ? `Đang xem và giao việc cho ${viewingStaffName}` : 'Tự tạo việc, giao việc cho nhân viên và theo dõi tiến độ'}
-          </div>
-        </div>
+  const tenHienThi = profile?.full_name || 'Bạn';
+  const chuCai = tenHienThi.trim().charAt(0).toUpperCase() || '?';
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          {isOwner && hasActiveFilter && (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={handleResetToOverview}
-              style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}
-            >
-              🔄 ← Quay lại Tổng quan
-            </Button>
-          )}
-          {isOwner && (
-            <button
-              onClick={() => window.dispatchEvent(new CustomEvent('sumi-navigate', { detail: { tab: 'staff' } }))}
-              style={{
-                padding: '6px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)',
-                background: 'var(--surface-card)', color: 'var(--text-primary)', font: 'var(--text-body-sm)',
-                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
-              }}
-            >
-              👥 Danh sách nhân viên
-            </button>
-          )}
-          <Button variant="secondary" size="sm" onClick={() => setShowProductionLog(true)}>
-            Ghi Sản Xuất
-          </Button>
-          <Button variant={showProductionLogList ? 'primary' : 'ghost'} size="sm" onClick={() => setShowProductionLogList((v) => !v)}>
-            Đã ghi sản xuất {showProductionLogList ? '▲' : '▼'}
-          </Button>
+  return (
+    <div className="cv-wrap" style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+      {/* Hero — mockup task-lifecycle-v2-approved: cam cho thợ, xanh cho Quản lý/Giám đốc */}
+      <div className={`cv-hero${isOwner ? ' blue' : ''}`}>
+        <div className="cv-hero-top">
+          <div className="cv-hero-identity">
+            <div className="cv-hero-avatar">{chuCai}</div>
+            <div style={{ minWidth: 0 }}>
+              <p className="cv-hero-eyebrow">{isOwner ? 'Quản lý / Giám đốc' : 'Công việc của tôi'}</p>
+              <h1 className="cv-hero-name">
+                {isViewingOtherStaff ? `Đang xem: ${viewingStaffName}` : tenHienThi}
+              </h1>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="cv-hero-bell"
+            title="Thông báo việc"
+            onClick={() => window.dispatchEvent(new CustomEvent('sumi-navigate', { detail: { tab: 'notifications' } }))}
+          >
+            🔔
+          </button>
         </div>
+        <div className="cv-hero-metrics">
+          <div className="cv-hero-metric"><strong>{metrics.dangLam}</strong><span>Đang làm</span></div>
+          <div className="cv-hero-metric"><strong>{metrics.choDuyet}</strong><span>Chờ duyệt</span></div>
+          <div className="cv-hero-metric"><strong>{metrics.xongHomNay}</strong><span>Xong hôm nay</span></div>
+        </div>
+      </div>
+
+      {/* Hàng thao tác nhanh */}
+      <div className="cv-quick-actions">
+        <button className="cv-btn outline" onClick={() => setShowProductionLog(true)}>Ghi Sản Xuất</button>
+        <button className="cv-btn outline" onClick={() => setShowProductionLogList((v) => !v)}>
+          Đã ghi sản xuất {showProductionLogList ? '▲' : '▼'}
+        </button>
+        {isOwner && (
+          <button
+            className="cv-btn outline"
+            onClick={() => window.dispatchEvent(new CustomEvent('sumi-navigate', { detail: { tab: 'staff' } }))}
+          >
+            👥 Danh sách nhân viên
+          </button>
+        )}
+        {isOwner && hasActiveFilter && (
+          <button className="cv-btn primary" onClick={handleResetToOverview}>🔄 Quay lại Tổng quan</button>
+        )}
       </div>
 
       {showProductionLogList && <ProductionLogList refreshKey={productionLogRefreshKey} />}
@@ -253,11 +252,18 @@ export default function TasksScreen() {
         />
       )}
 
-      {/* Bộ lọc Khâu & Chọn nhân viên */}
-      {isOwner && (
+      {/* Tabs dạng viên thuốc */}
+      <div className="cv-pill-tabs">
+        <button className={`cv-pill-tab${tab === 'assigned' ? ' active' : ''}`} onClick={() => setTab('assigned')}>Việc được giao</button>
+        <button className={`cv-pill-tab${tab === 'daily' ? ' active' : ''}`} onClick={() => setTab('daily')}>Hằng ngày</button>
+      </div>
+
+      {/* Bộ lọc Khâu & Chọn nhân viên — chỉ Hằng ngày còn cần (Việc được giao tự phân quyền qua RLS) */}
+      {isOwner && tab === 'daily' && (
         <div style={{
           display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end',
-          padding: '12px', background: 'var(--surface-card)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)'
+          padding: '12px', background: 'var(--surface-card)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)',
+          marginBottom: 14
         }}>
           <div style={{ flex: '1 1 180px', minWidth: 150 }}>
             <Select
@@ -284,33 +290,18 @@ export default function TasksScreen() {
             />
           </div>
           {hasActiveFilter && (
-            <Button variant="ghost" size="sm" onClick={handleResetToOverview} style={{ alignSelf: 'flex-end', marginBottom: 2 }}>
-              Xóa bộ lọc
-            </Button>
+            <button className="cv-btn outline" onClick={handleResetToOverview} style={{ flex: '0 0 auto' }}>Xóa bộ lọc</button>
           )}
         </div>
       )}
 
-      {/* Tabs công việc */}
-      <Tabs
-        tabs={[
-          { key: 'assigned', label: 'Việc được giao' },
-          { key: 'daily', label: 'Hằng ngày' },
-          { key: 'adhoc', label: 'Phát sinh & Báo cáo' }
-        ]}
-        active={tab}
-        onChange={setTab}
-      />
-
       {/* Nội dung theo tab */}
       {!viewingStaffId ? (
-        <div style={{ font: 'var(--text-body)', color: 'var(--text-muted)', padding: 20, textAlign: 'center' }}>
-          Chọn một nhân viên hoặc bấm "Quay lại Tổng quan" để xem việc.
-        </div>
+        <div className="cv-empty">Chọn một nhân viên hoặc bấm "Quay lại Tổng quan" để xem việc.</div>
       ) : (
         <React.Fragment>
           {tab === 'assigned' && (
-            <CongViecV2 profile={profile} staffList={staffList} />
+            <CongViecV2 profile={profile} staffList={staffList} onMetrics={setMetrics} />
           )}
           {tab === 'daily' && (
             <DailyChecklistTab
@@ -320,16 +311,6 @@ export default function TasksScreen() {
               viewingStaffId={viewingStaffId}
               viewingStaffName={viewingStaffName}
               viewingStation={viewingStation}
-            />
-          )}
-          {tab === 'adhoc' && (
-            <AdhocTasksTab
-              refreshKey={refreshKey}
-              profile={profile}
-              isOwner={isOwner}
-              viewingStaffId={viewingStaffId}
-              viewingStaffName={viewingStaffName}
-              orderCodeFilter={orderCodeFilter}
             />
           )}
         </React.Fragment>

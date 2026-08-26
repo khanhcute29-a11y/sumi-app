@@ -15,7 +15,7 @@ import '../../../styles/cong-viec.css';
 
 const GIOI_HAN = 300;   // không kéo cả bảng về máy
 
-export default function CongViecV2({ profile, staffList = [] }) {
+export default function CongViecV2({ profile, staffList = [], onMetrics }) {
   const [tasks, setTasks] = useState([]);
   const [duAn, setDuAn] = useState([]);
   const [dangTai, setDangTai] = useState(true);
@@ -73,6 +73,18 @@ export default function CongViecV2({ profile, staffList = [] }) {
   }, [profile?.id]);
 
   useEffect(() => { if (profile?.id) tai(); }, [profile?.id, tai]);
+
+  // Số liệu nhỏ cho hero-metrics ở khung ngoài (TasksScreen.jsx) — dùng chung
+  // một lần tải `tasks` ở đây, không mở thêm truy vấn riêng chỉ để đếm.
+  useEffect(() => {
+    if (!onMetrics) return;
+    const homNay = new Date().toDateString();
+    onMetrics({
+      dangLam: tasks.filter((t) => t.status === 'accepted').length,
+      choDuyet: tasks.filter((t) => t.status === 'pending_approval').length,
+      xongHomNay: tasks.filter((t) => t.status === 'done' && t.completed_at && new Date(t.completed_at).toDateString() === homNay).length,
+    });
+  }, [tasks, onMetrics]);
 
   // Dự án chỉ cần cho Giám đốc. Bảng có thể chưa tạo (migration chưa chạy) —
   // trường hợp đó coi như không có dự án nào, KHÔNG làm hỏng cả màn hình.

@@ -238,6 +238,58 @@
 
 .cv-wrap :focus-visible { outline: 3px solid var(--cv-primary); outline-offset: 2px; }
 
+/* ── Khung ngoài màn Việc — mockup task-lifecycle-v2-approved (hero + tab viên thuốc) ── */
+.cv-hero {
+  position: relative; border-radius: 22px; padding: 18px 18px 16px; margin-bottom: 14px;
+  color: #fff; overflow: hidden;
+  background: linear-gradient(145deg, #dd7d58, #c5532e);
+  box-shadow: 0 10px 22px rgba(197,83,46,0.25);
+}
+.cv-hero.blue { background: linear-gradient(145deg, #24557f, #102d4b); box-shadow: 0 10px 22px rgba(16,45,75,0.3); }
+.cv-hero-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.cv-hero-identity { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.cv-hero-avatar {
+  width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(255,255,255,0.22); display: grid; place-items: center;
+  font-weight: 900; font-size: 16px; color: #fff;
+}
+.cv-hero-eyebrow { font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; opacity: .8; margin: 0 0 2px; }
+.cv-hero-name { font-size: 18px; font-weight: 900; margin: 0; line-height: 1.25; }
+.cv-hero-bell {
+  width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(255,255,255,0.16); border: none; color: #fff; font-size: 17px;
+  display: grid; place-items: center; cursor: pointer; position: relative;
+}
+.cv-hero-bell .badge {
+  position: absolute; top: -2px; right: -2px; min-width: 16px; height: 16px; padding: 0 4px;
+  border-radius: 999px; background: var(--cv-danger, #d03027); color: #fff;
+  font-size: 10px; font-weight: 900; display: grid; place-items: center; line-height: 1;
+}
+.cv-hero-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 16px; }
+.cv-hero-metric { background: rgba(255,255,255,0.14); border-radius: 14px; padding: 9px 8px; text-align: center; }
+.cv-hero-metric strong { display: block; font-size: 19px; font-weight: 900; line-height: 1.2; }
+.cv-hero-metric span { display: block; font-size: 10px; font-weight: 700; opacity: .85; margin-top: 2px; }
+
+.cv-quick-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.cv-quick-actions .cv-btn { flex: 1 1 140px; }
+
+.cv-pill-tabs {
+  display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none;
+  background: var(--cv-sunken); border: 1px solid var(--cv-border);
+  border-radius: 16px; padding: 5px; margin-bottom: 14px;
+}
+.cv-pill-tabs::-webkit-scrollbar { display: none; }
+.cv-pill-tab {
+  flex: 1 0 auto; min-height: 40px; padding: 8px 16px; border-radius: 12px;
+  border: none; background: transparent; color: var(--cv-muted);
+  font-weight: 800; font-size: 13px; cursor: pointer; white-space: nowrap; font-family: inherit;
+}
+.cv-pill-tab.active { background: var(--cv-surface); color: var(--cv-text); box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+
+@media (min-width: 700px) {
+  .cv-hero-metrics { grid-template-columns: repeat(3, minmax(0,180px)); }
+}
+
 /* ── Vòng đời 6 bước — mockup task-lifecycle-v2-approved ────────────────── */
 .cv-vongdoi {
   display: grid;
