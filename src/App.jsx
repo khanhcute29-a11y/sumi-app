@@ -260,6 +260,13 @@ function OpsApp({ onSignOut }) {
   useEffect(() => {
     const go = (e) => {
       const nextTab = e.detail?.tab || 'orders';
+      // Tin nhắn Messenger nội bộ mở bằng cửa sổ nổi (ChatLauncher), không
+      // phải một trang trong sidebar — không đổi `tab` kẻo màn hình chính
+      // trống trơn vì 'messenger' không nằm trong danh sách SCREENS.
+      if (nextTab === 'messenger') {
+        window.dispatchEvent(new CustomEvent('sumi-open-messenger', { detail: { roomId: e.detail?.entityId } }));
+        return;
+      }
       setTab(nextTab);
       if (nextTab === 'orders' && e.detail?.entityId) {
         setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-order', { detail: { entityId: e.detail.entityId } })), 0);

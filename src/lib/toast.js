@@ -126,6 +126,15 @@ export const NOTIFY_KINDS = {
     tab: 'orders',
     filter: 'completed',
   },
+  // 8. Tin nhắn Messenger nội bộ mới -> mở thẳng cửa sổ chat (ChatLauncher
+  // lắng nghe tab 'messenger' trên sự kiện sumi-navigate để tự mở, không
+  // phải một trang/tab thật trong app).
+  chat_message: {
+    icon: '💬',
+    title: 'Tin nhắn nội bộ mới',
+    tone: 'info',
+    tab: 'messenger',
+  },
 };
 
 /**
