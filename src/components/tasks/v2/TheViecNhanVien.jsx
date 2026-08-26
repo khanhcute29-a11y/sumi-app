@@ -4,6 +4,7 @@ import {
   TRANG_THAI, ngayGio, gioNgan, nhanKpiNhanViec, nhanKpiHoanThanh,
   quaHan, docBuocCon, tienDoBuocCon, treBaoNhieu, doDaiThoiGian,
 } from '../../../lib/congViec';
+import VongDoiViec from './VongDoiViec';
 
 // Thẻ một công việc của thợ. Bấm vào mở rộng ra để xem chi tiết, các bước con
 // và luồng báo cáo tiến độ — đúng như bản mockup.
@@ -159,6 +160,10 @@ export default function TheViecNhanVien({ viec, hoSo, tenTheoId = {}, onDoi, onB
           )}
         </div>
       </div>
+
+      {/* Không hiện dải vòng đời cho việc đã miễn trừ — 6 bước không còn
+          nghĩa gì với một việc bị huỷ giữa chừng. */}
+      {!viec.exclusion_reason_code && <VongDoiViec viec={viec} />}
 
       {loiThe && <div className="cv-error">⚠️ {loiThe}</div>}
 

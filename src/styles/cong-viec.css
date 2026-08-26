@@ -237,3 +237,38 @@
 }
 
 .cv-wrap :focus-visible { outline: 3px solid var(--cv-primary); outline-offset: 2px; }
+
+/* ── Vòng đời 6 bước — mockup task-lifecycle-v2-approved ────────────────── */
+.cv-vongdoi {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  margin-top: 12px;
+}
+.cv-buoc {
+  position: relative;
+  min-height: 56px;
+  padding: 7px 3px;
+  border-radius: 12px;
+  background: #f3eee7;
+  text-align: center;
+  color: #988675;
+  font-size: 10px;
+  font-weight: 900;
+}
+.cv-buoc b { display: block; margin-bottom: 2px; font-size: 16px; }
+.cv-buoc time { display: block; margin-top: 2px; font-size: 9px; font-weight: 850; }
+.cv-buoc-done { background: var(--cv-success-soft, #e6f4ea); color: #1e7e4c; }
+.cv-buoc-now {
+  background: var(--cv-warning-soft, #fff3cd);
+  color: #805000;
+  box-shadow: inset 0 0 0 2px var(--cv-warning, #e3a008);
+}
+.cv-buoc-bad { background: var(--cv-danger-soft, #fee2e2); color: #d03027; }
+.cv-buoc-cho { background: #f3eee7; color: #988675; }
+
+@media (max-width: 380px) {
+  .cv-vongdoi { gap: 3px; }
+  .cv-buoc { font-size: 9px; padding: 6px 2px; }
+  .cv-buoc b { font-size: 14px; }
+}
