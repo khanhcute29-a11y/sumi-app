@@ -227,8 +227,9 @@ as $fn$
       count(*) filter (where k.su_kien = 'hoan_thanh') as so_viec_xong,
       count(*) filter (where k.su_kien = 'nhan_viec' and k.phut_lech > 15) as so_lan_tre,
       sum(k.diem) filter (where k.su_kien = 'hoan_thanh') as diem
-    from public.task_kpi_logs k, pham_vi
+    from public.task_kpi_logs k
     left join public.profiles p on p.id = k.staff_id
+    cross join pham_vi
     where k.created_at >= pham_vi.dau and k.created_at < pham_vi.cuoi
     group by k.staff_id, coalesce(k.staff_name, p.full_name)
   ),
@@ -236,8 +237,9 @@ as $fn$
     select
       g.staff_id, coalesce(g.staff_name, p.full_name) as staff_name,
       count(*) filter (where g.event_type = 'delivery_assigned') as so_lan_giao
-    from public.kpi_logs g, pham_vi
+    from public.kpi_logs g
     left join public.profiles p on p.id = g.staff_id
+    cross join pham_vi
     where g.created_at >= pham_vi.dau and g.created_at < pham_vi.cuoi
       and g.staff_id is not null
     group by g.staff_id, coalesce(g.staff_name, p.full_name)
