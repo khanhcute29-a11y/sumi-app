@@ -193,4 +193,21 @@ export function sortOrdersByPriority(orders) {
   });
 }
 
+// ---- 7. Báo cáo cuối ca hôm nay (staff_shift_reports) ----
+export async function fetchTodayShiftReports() {
+  const [reportsRes, profilesRes] = await Promise.all([
+    supabase
+      .from('staff_shift_reports')
+      .select('*')
+      .eq('work_date', todayStr())
+      .order('created_at', { ascending: false }),
+    supabase.from('profiles').select('id, station'),
+  ]);
+  if (reportsRes.error) throw reportsRes.error;
+  if (profilesRes.error) throw profilesRes.error;
+  const stationById = {};
+  (profilesRes.data || []).forEach((p) => { stationById[p.id] = p.station; });
+  return (reportsRes.data || []).map((r) => ({ ...r, station: stationById[r.staff_id] || null }));
+}
+
 export { monthStart, todayStr };

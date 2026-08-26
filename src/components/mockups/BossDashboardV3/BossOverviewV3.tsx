@@ -51,6 +51,7 @@ import {
   reviewSalaryAdvance,
   fetchPendingLeaveRequests,
   reviewLeaveRequest,
+  fetchTodayShiftReports,
 } from '../../../lib/bossOverviewV3';
 
 const formatVND = (amount: number) => {
@@ -87,11 +88,14 @@ export function BossOverviewV3Inner() {
   const [pendingAdvances, setPendingAdvances] = useState<any[]>([]);
   const [pendingLeaves, setPendingLeaves] = useState<any[]>([]);
 
+  // ── Dữ liệu thật: báo cáo cuối ca hôm nay (staff_shift_reports) ──
+  const [shiftReports, setShiftReports] = useState<any[]>([]);
+
   const loadAll = async () => {
     setLoading(true);
     setLoadError('');
     try {
-      const [rev, claims, status, staffOptions, orders, posts, advances, leaves] = await Promise.all([
+      const [rev, claims, status, staffOptions, orders, posts, advances, leaves, reports] = await Promise.all([
         fetchRevenueByChannel(),
         fetchExpenseClaimsToday(),
         fetchTodayStaffStatus(),
@@ -100,6 +104,7 @@ export function BossOverviewV3Inner() {
         fetchRecentFeedPosts(),
         fetchPendingSalaryAdvances(),
         fetchPendingLeaveRequests(),
+        fetchTodayShiftReports(),
       ]);
 
       setRevenueStreams(rev.channels.map((c) => ({ id: c.key, channel: c.title, amount: c.amount, percentage: c.percentage, icon: c.icon, note: `${c.count} đơn hoàn thành` })));
@@ -130,6 +135,7 @@ export function BossOverviewV3Inner() {
       setFeedPosts(posts);
       setPendingAdvances(advances);
       setPendingLeaves(leaves);
+      setShiftReports(reports);
     } catch (e: any) {
       setLoadError(e.message || 'Không tải được dữ liệu thật, thử lại sau.');
     } finally {
@@ -734,7 +740,7 @@ export function BossOverviewV3Inner() {
               </div>
               <div style={{ marginTop: 6 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>5. Báo cáo ngày</div>
-                <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>Báo cáo cuối ca</div>
+                <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>{shiftReports.length} báo cáo hôm nay</div>
               </div>
             </div>
 
@@ -1297,21 +1303,28 @@ export function BossOverviewV3Inner() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, paddingBottom: 8, borderBottom: '1.5px solid #eadcca' }}>
                 <div>
                   <div style={{ fontSize: 15, fontWeight: 900, color: '#db2777' }}>📋 Tổng Hợp Báo Cáo Ca Ngày</div>
-                  <div style={{ fontSize: 11, color: '#725f50' }}>Bàn giao doanh thu và hàng tồn 3 phân xưởng</div>
+                  <div style={{ fontSize: 11, color: '#725f50' }}>{shiftReports.length} báo cáo cuối ca đã nộp hôm nay</div>
                 </div>
                 <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
               </div>
 
+              {shiftReports.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Chưa có báo cáo cuối ca nào hôm nay.</div>
+              )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ background: '#faf6f0', border: '1.5px solid #eadcca', borderRadius: 12, padding: 10 }}>
-                  <div style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>🏪 Quầy Bakery (Ca sáng 06:00 - 14:00)</div>
-                  <div style={{ fontSize: 11.5, color: '#493526', marginTop: 2 }}>Tiền mặt trong két: <strong>4.850.000 đ</strong> · Bánh tồn quầy: 8 bánh kem bắp</div>
-                  <div style={{ fontSize: 10.5, color: '#15803d', fontWeight: 800, marginTop: 2 }}>✓ Đã bàn giao đủ cho ca chiều</div>
-                </div>
-                <div style={{ background: '#faf6f0', border: '1.5px solid #eadcca', borderRadius: 12, padding: 10 }}>
-                  <div style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>🥐 Xưởng 41 (Macaron & Bánh nóng)</div>
-                  <div style={{ fontSize: 11.5, color: '#493526', marginTop: 2 }}>Đã hoàn tất 160/200 bánh Macaron · Lò nướng vận hành bình thường</div>
-                </div>
+                {shiftReports.map((r: any) => (
+                  <div key={r.id} style={{ background: '#faf6f0', border: '1.5px solid #eadcca', borderRadius: 12, padding: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>👤 {r.staff_name}{r.station ? ` · ${r.station}` : ''}</div>
+                      <div style={{ fontSize: 10.5, color: '#725f50' }}>{new Date(r.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</div>
+                    </div>
+                    <div style={{ fontSize: 11.5, color: '#493526', marginTop: 2 }}>
+                      Doanh thu ca: <strong>{formatVND(r.revenue)}</strong> · Tiền mặt bàn giao: <strong>{formatVND(r.cash_handover)}</strong>
+                      {r.stock_remaining != null && <> · Tồn kho: <strong>{r.stock_remaining}</strong></>}
+                    </div>
+                    {r.note && <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>Ghi chú: {r.note}</div>}
+                  </div>
+                ))}
               </div>
             </div>
           </div>
