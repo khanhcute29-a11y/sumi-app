@@ -48,7 +48,7 @@ import InboxV2Screen from './screens/InboxV2Screen';
 import KpiV2Screen from './screens/KpiV2Screen';
 import StaffTasksAssignedScreen from './screens/StaffTasksAssignedScreen';
 import KpiDashboardScreen from './screens/KpiDashboardScreen';
-import MobileHomeScreen from './screens/MobileHomeScreen';
+import { EmployeeOverviewV4Inner } from './components/mockups/EmployeeDashboard/EmployeeOverviewV4';
 import MobileProfileScreen from './screens/MobileProfileScreen';
 import CompensationScreen from './screens/CompensationScreen';
 import FinanceRequestsScreen from './screens/FinanceRequestsScreen';
@@ -312,7 +312,7 @@ function OpsApp({ onSignOut }) {
   }, [profile?.role, (profile?.extra_roles || []).join(',')]);
 
   const screens = {
-    home: <MobileHomeScreen onNavigate={setTab} />, feed: <CompanyFeedScreen />,
+    home: <EmployeeOverviewV4Inner />, feed: <CompanyFeedScreen />,
     dashboard: <DashboardScreen />, orders: <OrdersV2Screen />, kds: <KdsScreen initialStation={kdsStation} />, warehouse: <WarehouseScreen branch={warehouseBranch} onBranchChange={setWarehouseBranch} />, cashbook: <CashbookScreen />,
     shipping: featureFlags.delivery_v2 ? <ShippingV2Screen /> : <ShippingScreen />, products: <ProductsScreen />, shifts: <ShiftsScreen />, compensation: <CompensationScreen />, financeRequests: <FinanceRequestsScreen />, approvals: <ApprovalRequestsScreen />, tasks: <TasksScreen />, incidents: <IncidentsScreen />, reports: <ReportsScreen />, kpi: featureFlags.kpi_v2 ? <KpiV2Screen /> : <KpiScreen />, inbox: <InboxV2Screen />, crm: <CustomersScreen />, staff: <StaffScreen />, settings: <SettingsScreen onSignOut={onSignOut} />, visualGuides: <VisualGuidesScreen />, staffTasks: <StaffTasksAssignedScreen />, kpiDashboard: <KpiDashboardScreen />, schoolRevenue: <SchoolRevenueScreen />, profile: <MobileProfileScreen onSignOut={onSignOut} onNavigate={setTab} />,
   };

@@ -90,7 +90,9 @@ function BottomSheet({ title, onClose, children }) {
   );
 }
 
-function EmployeeOverviewV4Inner() {
+// Dùng trực tiếp bên trong app thật (đã có AuthProvider ở gốc cây component
+// trong App.jsx) — tránh lồng 2 lớp AuthProvider không cần thiết.
+export function EmployeeOverviewV4Inner() {
   const { profile, loading: authLoading } = useAuth();
 
   const [activeSheet, setActiveSheet] = useState(null);
