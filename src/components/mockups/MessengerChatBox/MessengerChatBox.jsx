@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import './messenger-chat.css';
-import ChatWindowModal from './ChatWindowModal';
+import '../../Messenger/messenger-chat.css';
+import ChatWindowModal from '../../Messenger/ChatWindowModal';
 import { AuthProvider, useAuth } from '../../../lib/AuthContext';
 
 function MessengerChatBoxInner() {

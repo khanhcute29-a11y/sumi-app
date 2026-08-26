@@ -574,7 +574,10 @@
   padding: 8px 12px;
   border-radius: 18px;
   border: 1px solid #D8C7B5;
-  font-size: 13px;
+  /* 16px trở lên — dưới mức này Safari/Chrome trên điện thoại tự động
+     zoom-in màn hình mỗi khi ô nhập được focus, bắt người dùng phải
+     tự zoom out lại rất khó chịu. */
+  font-size: 16px;
   background: #FAF6F0;
   outline: none;
   resize: none;
@@ -680,4 +683,54 @@
   border-radius: 99px;
   opacity: 0.3;
   z-index: 60;
+}
+
+/* ==========================================================================
+   NÚT CHAT NỔI + CỬA SỔ THẬT TRONG APP (không phải mô phỏng điện thoại) —
+   dùng cho ChatLauncher, hiện xuyên suốt toàn hệ thống.
+   ========================================================================== */
+.sumi-chat-launcher-stack {
+  position: fixed;
+  right: 18px;
+  bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  z-index: 900;
+}
+
+.sumi-chat-launcher-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 950;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.sumi-chat-launcher-window {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #FAF6F0;
+}
+
+.sumi-chat-launcher-window .mobile-chat-fullscreen-modal {
+  top: 0;
+}
+
+@media (min-width: 860px) {
+  .sumi-chat-launcher-overlay {
+    align-items: flex-end;
+    justify-content: flex-end;
+    padding: 24px;
+    background: transparent;
+    pointer-events: none;
+  }
+  .sumi-chat-launcher-window {
+    width: 400px;
+    height: 620px;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    pointer-events: auto;
+  }
 }

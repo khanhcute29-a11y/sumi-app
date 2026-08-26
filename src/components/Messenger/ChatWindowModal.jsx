@@ -7,8 +7,8 @@ import {
   sendChatMessage,
   subscribeToRoomMessages,
   extractOrderCode,
-} from '../../../lib/chat';
-import { uploadFile } from '../../../lib/queries';
+} from '../../lib/chat';
+import { uploadFile } from '../../lib/queries';
 
 export default function ChatWindowModal({ onClose, profile }) {
   const [navTab, setNavTab] = useState('group'); // 'group' | 'direct'
@@ -28,6 +28,7 @@ export default function ChatWindowModal({ onClose, profile }) {
 
   const [showMentionPopup, setShowMentionPopup] = useState(false);
   const [mentionFilter, setMentionFilter] = useState('');
+  const [selectedMentionIds, setSelectedMentionIds] = useState([]);
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -109,17 +110,40 @@ export default function ChatWindowModal({ onClose, profile }) {
     } else if (lastAtPos !== -1 && lastAtPos < val.length - 1) {
       const query = val.slice(lastAtPos + 1).toLowerCase();
       if (!query.includes(' ')) { setShowMentionPopup(true); setMentionFilter(query); }
-      else setShowMentionPopup(false);
+      else { setShowMentionPopup(false); setSelectedMentionIds([]); }
     } else {
       setShowMentionPopup(false);
+      setSelectedMentionIds([]);
     }
   };
 
-  const handleSelectMention = (user) => {
+  // Bấm 1 người trong popup chỉ TICK chọn (không chèn ngay, không đóng popup)
+  // — cho phép chọn nhiều người liên tiếp rồi bấm "Xong" chèn tất cả 1 lượt,
+  // thay vì phải gõ lại "@" cho từng người.
+  const toggleMentionSelect = (user) => {
+    setSelectedMentionIds((prev) => (
+      prev.includes(user.id) ? prev.filter((id) => id !== user.id) : [...prev, user.id]
+    ));
+  };
+
+  const selectAllMentions = () => {
+    const ids = filteredMentionUsers.map((u) => u.id);
+    setSelectedMentionIds((prev) => (
+      ids.every((id) => prev.includes(id)) ? prev.filter((id) => !ids.includes(id)) : [...new Set([...prev, ...ids])]
+    ));
+  };
+
+  const confirmMentionSelection = () => {
+    if (!selectedMentionIds.length) { setShowMentionPopup(false); return; }
     const lastAtPos = inputText.lastIndexOf('@');
-    const prefix = inputText.slice(0, lastAtPos);
-    const tag = (user.full_name || '').replace(/\s+/g, '');
-    setInputText(`${prefix}@${tag} `);
+    const prefix = lastAtPos !== -1 ? inputText.slice(0, lastAtPos) : inputText;
+    const tags = selectedMentionIds
+      .map((id) => directory.find((u) => u.id === id))
+      .filter(Boolean)
+      .map((u) => `@${(u.full_name || '').replace(/\s+/g, '')}`)
+      .join(' ');
+    setInputText(`${prefix}${tags} `);
+    setSelectedMentionIds([]);
     setShowMentionPopup(false);
     inputRef.current?.focus();
   };
@@ -152,6 +176,7 @@ export default function ChatWindowModal({ onClose, profile }) {
       setInputText('');
       setPendingPhoto(null);
       setShowMentionPopup(false);
+      setSelectedMentionIds([]);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -247,17 +272,42 @@ export default function ChatWindowModal({ onClose, profile }) {
       <div className="m-chat-input-bottom">
         {showMentionPopup && (
           <div className="m-mention-autocomplete-menu">
-            <div style={{ fontSize: 10.5, fontWeight: 700, color: '#8C7A6B', padding: '2px 6px' }}>👥 Tag tên người vào trò chuyện:</div>
-            {filteredMentionUsers.map((u) => (
-              <div key={u.id} className="m-mention-item" onClick={() => handleSelectMention(u)}>
-                <div className="m-mention-avatar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5EBE1' }}>👤</div>
-                <div className="m-mention-info">
-                  <strong>{u.full_name}</strong>
-                  <span>{u.role}</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 6px' }}>
+              <span style={{ fontSize: 10.5, fontWeight: 700, color: '#8C7A6B' }}>👥 Chọn 1 hoặc nhiều người để tag:</span>
+              {filteredMentionUsers.length > 0 && (
+                <button type="button" onClick={selectAllMentions} style={{ border: 'none', background: 'none', color: '#C88A4B', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                  Chọn tất cả
+                </button>
+              )}
+            </div>
+            {filteredMentionUsers.map((u) => {
+              const checked = selectedMentionIds.includes(u.id);
+              return (
+                <div key={u.id} className="m-mention-item" onClick={() => toggleMentionSelect(u)} style={{ background: checked ? '#FDECE3' : undefined }}>
+                  <div className="m-mention-avatar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: checked ? '#C88A4B' : '#F5EBE1', color: checked ? '#fff' : undefined }}>
+                    {checked ? '✓' : '👤'}
+                  </div>
+                  <div className="m-mention-info">
+                    <strong>{u.full_name}</strong>
+                    <span>{u.role}</span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             {filteredMentionUsers.length === 0 && <div style={{ fontSize: 12, color: '#8C7A6B', padding: '4px 8px' }}>Không tìm thấy</div>}
+            <button
+              type="button"
+              onClick={confirmMentionSelection}
+              disabled={!selectedMentionIds.length}
+              style={{
+                width: '100%', marginTop: 6, padding: '8px 0', borderRadius: 8, border: 'none',
+                background: selectedMentionIds.length ? '#C88A4B' : '#EFE6DC',
+                color: selectedMentionIds.length ? '#fff' : '#8C7A6B',
+                fontWeight: 800, fontSize: 12.5, cursor: selectedMentionIds.length ? 'pointer' : 'not-allowed',
+              }}
+            >
+              ✓ Xong{selectedMentionIds.length ? ` (${selectedMentionIds.length} người)` : ''}
+            </button>
           </div>
         )}
 
@@ -286,7 +336,7 @@ export default function ChatWindowModal({ onClose, profile }) {
         <div className="m-tool-chips-row">
           <input ref={photoInputRef} type="file" accept="image/*" hidden onChange={handlePickPhoto} />
           <button type="button" className="m-tool-btn" onClick={() => photoInputRef.current?.click()}>📷 Gửi ảnh</button>
-          <button type="button" className="m-tool-btn" onClick={() => { setInputText((p) => `${p}@`); setShowMentionPopup(true); setMentionFilter(''); inputRef.current?.focus(); }}>🏷️ Tag người</button>
+          <button type="button" className="m-tool-btn" onClick={() => { setInputText((p) => `${p}@`); setShowMentionPopup(true); setMentionFilter(''); setSelectedMentionIds([]); inputRef.current?.focus(); }}>🏷️ Tag người</button>
           <button type="button" className="m-tool-btn" onClick={() => setInputText((p) => `${p}👍`)}>👍 Like</button>
         </div>
 
