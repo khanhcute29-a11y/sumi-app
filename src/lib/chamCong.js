@@ -73,7 +73,8 @@ export function boPhanCuaHoSo(hoSo) {
 
   const r = hoSo?.role;
   if (r === 'shipper') return 'van_tai';
-  if (r === 'cashier' || r === 'bakery' || r === 'kitchen_lead') return 'bakery';
+  // 'sale' = bán hàng tại tiệm, làm cùng ca với thu ngân và bếp.
+  if (r === 'cashier' || r === 'sale' || r === 'bakery' || r === 'kitchen_lead') return 'bakery';
   if (r === 'kho_xuong42' || r === 'deputy_director_x42') return 'xuong42';
   if (r === 'deputy_director_x41') return 'xuong41';
 
