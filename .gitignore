@@ -21,3 +21,6 @@ bang_cham_luong.md
 
 # Ghi chú nội bộ: có nhắc điểm yếu bảo mật chưa vá. Kho mã đang công khai.
 CHAM_CONG_PENDING.md
+
+# File tạm để dán vào SQL Editor, không cần lưu vào kho mã
+CHAY_TRONG_SQL_EDITOR_*.sql
