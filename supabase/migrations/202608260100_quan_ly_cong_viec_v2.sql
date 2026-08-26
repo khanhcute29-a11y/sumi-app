@@ -36,8 +36,45 @@ create index if not exists tasks_station_idx  on public.tasks(station_id);
 create index if not exists tasks_project_idx  on public.tasks(project_id);
 create index if not exists tasks_status_idx   on public.tasks(status, deadline);
 
+-- Bảng `tasks` có ràng buộc CHECK giới hạn các giá trị `status` được phép. Hai
+-- trạng thái mới ('accepted', 'pending_approval') sẽ bị nó chặn.
+--
+-- KHÔNG xoá ràng buộc đó — xoá là mở toang cho mọi giá trị rác lọt vào. Thay
+-- vào đó NỚI RỘNG: đọc lại chính định nghĩa đang có, giữ nguyên luật cũ, rồi
+-- thêm hai giá trị mới vào bằng phép HOẶC. Nhờ đọc lại định nghĩa nên không cần
+-- biết trước danh sách cũ gồm những gì — cách này an toàn kể cả khi có giá trị
+-- hợp lệ mà tôi chưa từng nhìn thấy trong dữ liệu.
+--
+-- Điều kiện `not like '%accepted%'` khiến đoạn này chạy lại nhiều lần vẫn không
+-- bọc chồng lên nhau.
+do $ext$
+declare
+  v_ten text;
+  v_def text;
+begin
+  for v_ten, v_def in
+    select c.conname, pg_get_constraintdef(c.oid)
+    from pg_constraint c
+    where c.conrelid = 'public.tasks'::regclass
+      and c.contype = 'c'
+      and pg_get_constraintdef(c.oid) like '%status%'
+      and pg_get_constraintdef(c.oid) not like '%accepted%'
+  loop
+    raise notice 'Nới rộng ràng buộc % : %', v_ten, v_def;
+    execute format('alter table public.tasks drop constraint %I', v_ten);
+    execute format(
+      'alter table public.tasks add constraint %I check ((status = any (array[''accepted''::text, ''pending_approval''::text])) or %s)',
+      v_ten, substring(v_def from 7));
+  end loop;
+end
+$ext$;
+
 -- Ảnh trong luồng báo cáo tiến độ (mockup có ảnh đính kèm trong hội thoại).
 alter table public.task_progress_reports add column if not exists image_url text;
+-- Ghi chú của QUẢN LÝ (duyệt / trả lại / nhắc nhở) không có "phần trăm hoàn
+-- thành" nào cả — đó là khái niệm của thợ. Cột `percent` đang bắt buộc phải có
+-- giá trị nên mọi ghi chú của quản lý bị chặn. Cho phép để trống.
+alter table public.task_progress_reports alter column percent drop not null;
 alter table public.task_progress_reports add column if not exists author_role text;
 
 -- Quản lý cũng phải trả lời được trong luồng báo cáo, không chỉ thợ.
@@ -282,6 +319,7 @@ declare
   v_phut  int;
   v_diem  int;
   v_ly_do text;
+  v_loi_ghi text;
 begin
   if v_uid is null then raise exception 'Chưa đăng nhập.'; end if;
   if not public.sumi_duoc_duyet_viec(p_task_id) then
@@ -304,15 +342,21 @@ begin
 
     if coalesce(btrim(p_ghi_chu), '') <> '' then
       begin
-        insert into public.task_progress_reports(task_id, staff_id, note, image_url, author_role)
-        values (p_task_id, v_uid, 'Trả lại: ' || btrim(p_ghi_chu), null, 'quan_ly');
+        insert into public.task_progress_reports(task_id, staff_id, note, percent, image_url, author_role)
+        values (p_task_id, v_uid, 'Trả lại: ' || btrim(p_ghi_chu), null, null, 'quan_ly');
       exception when others then
-        raise warning 'Ghi ghi chú trả lại bỏ qua lỗi: %', SQLERRM;
+        -- KHÔNG nuốt lỗi. Lý do trả lại mà không tới được tay thợ thì phải nói
+        -- cho quản lý biết ngay, chứ không im lặng nuốt mất.
+        v_loi_ghi := SQLERRM;
       end;
     end if;
 
     return jsonb_build_object('thanh_cong', true, 'da_duyet', false,
-      'thong_bao', 'Đã trả lại việc cho thợ làm tiếp.');
+      'ghi_chu_da_luu', v_loi_ghi is null,
+      'ly_do_khong_luu', v_loi_ghi,
+      'thong_bao', case when v_loi_ghi is null
+        then 'Đã trả lại việc cho thợ làm tiếp.'
+        else 'Đã trả lại việc, NHƯNG chưa lưu được lý do — hãy nhắn trực tiếp cho thợ. (' || v_loi_ghi || ')' end);
   end if;
 
   -- Chấm điểm: so giờ báo xong với hạn chót.
@@ -350,15 +394,16 @@ begin
 
   if coalesce(btrim(p_ghi_chu), '') <> '' then
     begin
-      insert into public.task_progress_reports(task_id, staff_id, note, image_url, author_role)
-      values (p_task_id, v_uid, btrim(p_ghi_chu), null, 'quan_ly');
+      insert into public.task_progress_reports(task_id, staff_id, note, percent, image_url, author_role)
+      values (p_task_id, v_uid, btrim(p_ghi_chu), null, null, 'quan_ly');
     exception when others then
-      raise warning 'Ghi ghi chú duyệt bỏ qua lỗi: %', SQLERRM;
+      v_loi_ghi := SQLERRM;
     end;
   end if;
 
   return jsonb_build_object('thanh_cong', true, 'da_duyet', true,
     'diem', v_diem, 'phut_lech', v_phut, 'ly_do', v_ly_do,
+    'ghi_chu_da_luu', v_loi_ghi is null, 'ly_do_khong_luu', v_loi_ghi,
     'thong_bao', 'Đã duyệt xong. ' || v_ly_do || ' (' ||
       case when v_diem >= 0 then '+' else '' end || v_diem || ' điểm).');
 end;
@@ -465,11 +510,11 @@ begin
     v_ai);
 
   begin
-    insert into public.task_progress_reports(task_id, staff_id, note, author_role)
+    insert into public.task_progress_reports(task_id, staff_id, note, percent, author_role)
     values (p_task_id, v_uid,
             '🚨 ' || coalesce(v_ten,'Giám đốc') || ' nhắc: ' ||
             coalesce(nullif(btrim(p_loi_nhan),''), 'việc này đã quá hạn, cần xử lý ngay.'),
-            'quan_ly');
+            null, 'quan_ly');
   exception when others then
     raise warning 'Ghi lời nhắc vào luồng báo cáo bỏ qua lỗi: %', SQLERRM;
   end;
