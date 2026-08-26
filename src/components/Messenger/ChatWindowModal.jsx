@@ -7,8 +7,8 @@ import {
   sendChatMessage,
   subscribeToRoomMessages,
   extractOrderCode,
-} from '../../../lib/chat';
-import { uploadFile } from '../../../lib/queries';
+} from '../../lib/chat';
+import { uploadFile } from '../../lib/queries';
 
 export default function ChatWindowModal({ onClose, profile }) {
   const [navTab, setNavTab] = useState('group'); // 'group' | 'direct'

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Sidebar } from './components/navigation/Sidebar';
 import { BottomNav } from './components/navigation/BottomNav';
+import { ChatLauncher } from './components/Messenger/ChatLauncher';
 import { supabase } from './lib/supabaseClient';
 import { initOfflineSync } from './lib/offlineQueue';
 import {
@@ -326,6 +327,7 @@ function OpsApp({ onSignOut }) {
           style={{ position: 'static', left: 'auto', right: 'auto', bottom: 'auto', width: '100%', flexShrink: 0 }} />
       </div>
       {showMore && <MoreSheet onClose={() => setShowMore(false)} onSelect={setTab} badges={badgeCounts} />}
+      <ChatLauncher profile={profile} />
     </div>
   );
 }
