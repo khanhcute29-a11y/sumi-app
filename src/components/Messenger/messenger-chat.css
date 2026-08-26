@@ -574,7 +574,10 @@
   padding: 8px 12px;
   border-radius: 18px;
   border: 1px solid #D8C7B5;
-  font-size: 13px;
+  /* 16px trở lên — dưới mức này Safari/Chrome trên điện thoại tự động
+     zoom-in màn hình mỗi khi ô nhập được focus, bắt người dùng phải
+     tự zoom out lại rất khó chịu. */
+  font-size: 16px;
   background: #FAF6F0;
   outline: none;
   resize: none;
