@@ -169,15 +169,22 @@ function CheckinModal({ staffName, staffId, defaultBranch, danhSachCa = [], boPh
               </div>
             );
           }
-          // Ca gần giờ bấm nhất — đúng cách database chọn.
+          // Chọn ca GIỐNG HỆT cách database chọn (M-202608260080):
+          // lần chấm thuộc ca nào có khung [mốc − 2 tiếng, giờ tan ca);
+          // rơi vào nhiều ca thì lấy ca có mốc gần nhất.
           const phut = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
-          let ca = cua[0]; let min = Infinity;
+          const t = phut(checkinTime);
+          let ca = null; let min = Infinity;
           cua.forEach((c) => {
-            let d = Math.abs(phut(checkinTime) - phut(c.moc));
+            const dau = phut(c.moc) - 120;
+            const dai = (((phut(c.ketThuc) - dau) % 1440) + 1440) % 1440 || 1440;
+            const viTri = (((t - dau) % 1440) + 1440) % 1440;
+            if (viTri >= dai) return;                 // ngoài khung ca này
+            let d = Math.abs(t - phut(c.moc));
             if (d > 720) d = 1440 - d;
             if (d < min) { min = d; ca = c; }
           });
-          const ngoai = min > 180;
+          const ngoai = !ca;
           const lech = ngoai ? null : tinhChenhLech(ca, checkinTime, null);
           return (
             <div style={{ padding: '12px 14px', borderRadius: 14, background: ngoai ? '#f9fafb' : lech?.loaiVao === 'late' ? '#fffbeb' : '#f0fdf4', border: `1.5px solid ${ngoai ? '#e5e7eb' : lech?.loaiVao === 'late' ? '#fcd34d' : '#86efac'}` }}>
