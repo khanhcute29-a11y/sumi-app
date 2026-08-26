@@ -55,6 +55,10 @@ async function mountApp() {
     const mod = await import('./components/mockups/BossDashboard/BossDashboard.jsx');
     RootComponent = mod.default;
     wrapWithErrorBoundary = false;
+  } else if (_mkParam === 'boss-v3' || _mkParam === 'boss-overview-v3') {
+    const mod = await import('./components/mockups/BossDashboardV3/BossOverviewV3.tsx');
+    RootComponent = mod.default;
+    wrapWithErrorBoundary = false;
   } else if (_mkParam === 'employee-v4') {
     const mod = await import('./components/mockups/EmployeeDashboard/EmployeeOverviewV4.jsx');
     RootComponent = mod.default;
