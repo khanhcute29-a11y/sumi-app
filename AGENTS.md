@@ -7,7 +7,7 @@
 > **Hệ thống thật KHÔNG dùng bất kỳ thứ nào trong số đó.** Tệp này mới là sự thật.
 > Khi hai tệp mâu thuẫn, **tệp này thắng**.
 
-Cập nhật: 26/08/2026 · Nhánh chính: `main` · Bản đang chạy thật: commit `5f00824`
+Cập nhật: 26/08/2026 · Nhánh chính: `main` · Bản đang chạy thật: commit `fd51510`
 
 ---
 
@@ -51,6 +51,7 @@ sumi-app/
     ├── screens/                  # 33 màn hình — mỗi tab một tệp
     ├── components/
     │   ├── Messenger/            # 🔒 CHAT — của đồng đội, xem §4
+    │   ├── EmployeeDashboard/     # 🔒 Màn hình "Hôm nay" — của đồng đội, xem §4
     │   ├── tasks/v2/             # Phân hệ VIỆC (bản mới, đang dùng)
     │   ├── shifts/               # Phân hệ CHẤM CÔNG
     │   ├── orders/               # Sửa đơn hàng
@@ -100,6 +101,18 @@ RPC:            get_or_create_dm_room
 
 Chuông phải nằm **cùng một lần `playOnce`** với tin nhắn toast tương ứng.
 Tách ra là chuông kêu hai lần hoặc câm hẳn.
+
+**D. Màn hình "Hôm nay" của nhân viên** — do đồng đội phụ trách (mới, 26/08)
+
+```
+src/components/EmployeeDashboard/EmployeeOverviewV4.jsx
+src/components/EmployeeDashboard/employee-overview-v4.css
+src/lib/employeeOverviewV4.js
+supabase/migrations/202608260150_staff_violations_rewards_shift_reports.sql
+```
+
+Đây đã **thay thế** `src/screens/MobileHomeScreen.jsx` làm tab "Hôm nay" thật.
+Xem `?mockup=employee-v4` để chạy thử riêng lẻ.
 
 **C. Web Push nền** — `src/lib/push.js` · `api/send-push.js` · Service Worker
 
