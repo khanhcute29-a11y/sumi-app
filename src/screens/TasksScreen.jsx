@@ -10,6 +10,7 @@ import { Button } from '../components/forms/Button';
 import { DailyChecklistTab } from '../components/tasks/DailyChecklistTab';
 import { AssignedTasksTab } from '../components/tasks/AssignedTasksTab';
 import { AdhocTasksTab } from '../components/tasks/AdhocTasksTab';
+import CongViecV2 from '../components/tasks/v2/CongViecV2';
 import { ProductionLogModal } from '../components/ProductionLogModal';
 import { ProductionLogList } from '../components/ProductionLogList';
 
@@ -104,6 +105,11 @@ export default function TasksScreen() {
   const [showProductionLogList, setShowProductionLogList] = useState(false);
   const [productionLogRefreshKey, setProductionLogRefreshKey] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Giao diện Công việc bản mới (theo mockup): tự chọn góc nhìn theo vai trò.
+  // Giữ nút chuyển về bản cũ để nếu bản mới có vấn đề thì vẫn làm việc được,
+  // không phải chờ sửa xong mới dùng lại được.
+  const [banMoi, setBanMoi] = useState(true);
 
   useEffect(() => {
     // Luôn tải danh sách nhân viên (không chỉ khi là chủ) để nhân viên
@@ -290,6 +296,19 @@ export default function TasksScreen() {
         </div>
       )}
 
+      {tab === 'assigned' && (
+        <button
+          onClick={() => setBanMoi((x) => !x)}
+          style={{
+            alignSelf: 'flex-start', minHeight: 40, padding: '0 14px', borderRadius: 12,
+            border: '1.5px solid var(--border-default)', background: 'var(--surface-card)',
+            color: 'var(--text-secondary)', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+          }}
+        >
+          {banMoi ? '↩ Dùng bản cũ' : '✨ Dùng giao diện mới'}
+        </button>
+      )}
+
       {/* Tabs công việc */}
       <Tabs
         tabs={[
@@ -308,7 +327,14 @@ export default function TasksScreen() {
         </div>
       ) : (
         <React.Fragment>
-          {tab === 'assigned' && (
+          {tab === 'assigned' && banMoi && (
+            <CongViecV2
+              profile={profile}
+              staffList={staffList}
+              onMoGiaoViec={() => setBanMoi(false)}
+            />
+          )}
+          {tab === 'assigned' && !banMoi && (
             <AssignedTasksTab
               refreshKey={refreshKey}
               profile={profile}
