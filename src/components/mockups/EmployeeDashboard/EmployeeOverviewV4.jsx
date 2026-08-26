@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import './employee-overview-v4.css';
 import {
   Bell,
@@ -20,39 +20,43 @@ import {
   Croissant,
   Send,
 } from 'lucide-react';
+import { AuthProvider, useAuth } from '../../../lib/AuthContext';
+import {
+  fetchManagerName,
+  fetchMyHoursThisMonth,
+  fetchMyRevenueThisMonth,
+  fetchMyAttendanceHistory,
+  fetchMySchedule,
+  fetchMyPayroll,
+  fetchMyAdvanceRequests,
+  submitMyAdvanceRequest,
+  fetchMyLeaveRequests,
+  submitMyLeaveRequest,
+  submitMyShiftReport,
+  fetchMyViolations,
+  fetchMyRewards,
+  fetchMyRewardsTotalThisMonth,
+  fetchMyOrders,
+  fetchCompanyFeed,
+} from '../../../lib/employeeOverviewV4';
 
 // ============================================================
-// EMPLOYEE OVERVIEW V4 — mockup 100% cô lập, không đụng dữ liệu
-// thật hay component nào khác. Mọi state/hành động ở đây chỉ mô
-// phỏng trên mock data cục bộ bên dưới, không gọi Supabase.
+// EMPLOYEE OVERVIEW V4 — nối dữ liệu THẬT (Supabase) cho nhân viên
+// đang đăng nhập. Cô lập trong Messenger/mockups + 1 file lib riêng
+// (src/lib/employeeOverviewV4.js), không đụng file dùng chung.
+//
+// 4 phần trước đây KHÔNG có dữ liệu thật trong toàn bộ app (đã rà
+// soát kỹ, không tự bịa): Doanh thu cá nhân, Báo cáo cuối ca, Vi
+// phạm, Thưởng nóng — đã thêm bảng thật (migration 202608260150)
+// cho 3/4 phần; Doanh thu cá nhân tính trực tiếp từ orders.created_by.
 // ============================================================
 
-const EMPLOYEE = {
-  name: 'Đăng Khánh 2',
-  code: 'K2',
-  roleLabel: '🏪 Nhân Viên Bán Hàng',
-  hierarchy: 'Giám đốc Kinh doanh → Quản lý trực tiếp → Đăng Khánh 2',
-};
-
-const ANNOUNCEMENT = {
-  tag: 'NHÂN VIÊN TEST APP',
-  text: 'Mọi người sử dụng mở bằng trình duyệt để hệ thống update được liên tục...',
-};
-
-const KPI = {
-  revenue: 1250000,
-  hours: 38.5,
-  reward: 250000,
-};
-
-const ORDER_TILES = [
-  { key: 'all', icon: Receipt, label: 'Tổng đơn hàng', count: 2, span: 1 },
-  { key: 'awaiting_assignment', icon: Inbox, label: 'Đơn chờ làm', count: 0, span: 1 },
-  { key: 'in_production', icon: ChefHat, label: 'Bếp đang làm', count: 0, span: 1 },
-  { key: 'ready_for_fulfillment', icon: PackageCheck, label: 'Chờ vận chuyển', count: 1, span: 1 },
-  { key: 'in_delivery', icon: Bike, label: 'Đang vận chuyển', count: 0, span: 1 },
-  { key: 'completed', icon: CheckCircle2, label: 'Giao thành công', count: 1, span: 1, tone: 'success' },
-  { key: 'issue', icon: AlertTriangle, label: 'Chưa thực hiện', count: 0, span: 2, tone: 'warning' },
+const ORDER_STATUS_META = [
+  { key: 'awaiting_assignment', icon: Inbox, label: 'Đơn chờ làm' },
+  { key: 'in_production', icon: ChefHat, label: 'Bếp đang làm' },
+  { key: 'ready_for_fulfillment', icon: PackageCheck, label: 'Chờ vận chuyển' },
+  { key: 'in_delivery', icon: Bike, label: 'Đang vận chuyển' },
+  { key: 'completed', icon: CheckCircle2, label: 'Giao thành công', tone: 'success' },
 ];
 
 const TILES = [
@@ -60,51 +64,14 @@ const TILES = [
   { key: 'schedule', icon: Calendar, title: '2. Lịch làm', sub: 'Phân ca tuần này' },
   { key: 'advance', icon: DollarSign, title: '3. Tạm ứng', sub: 'Yêu cầu ứng lương' },
   { key: 'leave', icon: FileText, title: '4. Xin nghỉ', sub: 'Đơn xin nghỉ phép' },
-  { key: 'payroll', icon: DollarSign, title: '5. Bảng lương', sub: 'Phiếu lương T8' },
+  { key: 'payroll', icon: DollarSign, title: '5. Bảng lương', sub: 'Phiếu lương tháng này' },
   { key: 'report', icon: ClipboardList, title: '6. Báo cáo ngày', sub: 'Báo cáo cuối ca' },
-  { key: 'violation', icon: AlertTriangle, title: '7. Vi phạm', sub: '0 lỗi vi phạm', subTone: 'success' },
-  { key: 'reward', icon: Gift, title: '8. Thưởng', sub: '+350.000đ', subTone: 'warning' },
+  { key: 'violation', icon: AlertTriangle, title: '7. Vi phạm', sub: null },
+  { key: 'reward', icon: Gift, title: '8. Thưởng', sub: null },
 ];
 
-const ATTENDANCE_HISTORY = [
-  { date: 'Thứ 2, 18/08', checkin: '05:58', checkout: '14:05', hours: '8.1h', note: 'Đúng giờ' },
-  { date: 'Thứ 3, 19/08', checkin: '06:02', checkout: '14:00', hours: '7.9h', note: 'Đúng giờ' },
-  { date: 'Thứ 4, 20/08', checkin: '06:10', checkout: '14:02', hours: '7.8h', note: 'Trễ 10 phút' },
-  { date: 'Thứ 5, 21/08', checkin: '05:55', checkout: '14:00', hours: '8.0h', note: 'Đúng giờ' },
-  { date: 'Thứ 6, 22/08', checkin: '06:00', checkout: '14:30', hours: '8.5h', note: 'Tăng ca 30p' },
-];
-
-const SCHEDULE_WEEK = [
-  { day: 'Thứ 2', shift: 'Ca Sáng 06:00–14:00' },
-  { day: 'Thứ 3', shift: 'Ca Sáng 06:00–14:00' },
-  { day: 'Thứ 4', shift: 'Ca Sáng 06:00–14:00' },
-  { day: 'Thứ 5', shift: 'Nghỉ' },
-  { day: 'Thứ 6', shift: 'Ca Chiều 14:00–22:00' },
-  { day: 'Thứ 7', shift: 'Ca Chiều 14:00–22:00' },
-  { day: 'CN', shift: 'Nghỉ' },
-];
-
-const PAYROLL_T8 = [
-  { label: 'Lương cứng', amount: 6000000 },
-  { label: 'Phụ cấp', amount: 500000 },
-  { label: 'Thưởng KPI', amount: 350000 },
-  { label: 'Tạm ứng đã nhận', amount: -1000000 },
-];
-
-const VIOLATIONS = []; // 0 lỗi vi phạm
-
-const REWARDS = [
-  { date: '20/08', title: 'Thưởng nóng — Doanh số tuần cao nhất', amount: 200000 },
-  { date: '15/08', title: 'Tích sao — Khách hàng khen thái độ phục vụ', amount: 50000 },
-  { date: '10/08', title: 'Thưởng chuyên cần tháng 8', amount: 100000 },
-];
-
-const ORDERS_MOCK = [
-  { code: 'SUMI-20260825-0231', status: 'ready_for_fulfillment', statusLabel: 'Chờ vận chuyển', customer: 'Chị Hạnh', total: 480000 },
-  { code: 'SUMI-20260824-0198', status: 'completed', statusLabel: 'Giao thành công', customer: 'Anh Huy', total: 620000 },
-];
-
-const formatVND = (n) => new Intl.NumberFormat('vi-VN').format(n) + 'đ';
+const formatVND = (n) => new Intl.NumberFormat('vi-VN').format(Math.round(n || 0)) + 'đ';
+const tomorrowStr = () => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); };
 
 function BottomSheet({ title, onClose, children }) {
   return (
@@ -123,374 +90,256 @@ function BottomSheet({ title, onClose, children }) {
   );
 }
 
-export default function EmployeeOverviewV4() {
+function EmployeeOverviewV4Inner() {
+  const { profile, loading: authLoading } = useAuth();
+
   const [activeSheet, setActiveSheet] = useState(null);
-  // 'feed' | 'attendance' | 'schedule' | 'advance' | 'leave' | 'payroll' | 'report' | 'violation' | 'reward' | 'revenue_kpi' | 'orders' | null
   const [selectedOrderFilter, setSelectedOrderFilter] = useState('all');
+  const [error, setError] = useState('');
+
+  const [managerName, setManagerName] = useState(null);
+  const [hours, setHours] = useState(null);
+  const [revenue, setRevenue] = useState(null);
+  const [attendance, setAttendance] = useState(null);
+  const [schedule, setSchedule] = useState(null);
+  const [payroll, setPayroll] = useState(undefined); // undefined = chưa tải, null = không có bảng lương tháng này
+  const [advanceRequests, setAdvanceRequests] = useState(null);
+  const [leaveRequests, setLeaveRequests] = useState(null);
+  const [violations, setViolations] = useState(null);
+  const [rewards, setRewards] = useState(null);
+  const [rewardsTotal, setRewardsTotal] = useState(null);
+  const [orders, setOrders] = useState(null);
+  const [feed, setFeed] = useState(null);
 
   const [advanceAmount, setAdvanceAmount] = useState(500000);
   const [advanceReason, setAdvanceReason] = useState('');
-  const [advanceSent, setAdvanceSent] = useState(false);
+  const [advanceNeededOn, setAdvanceNeededOn] = useState(tomorrowStr());
+  const [advanceSending, setAdvanceSending] = useState(false);
 
-  const [leaveStart, setLeaveStart] = useState('');
-  const [leaveEnd, setLeaveEnd] = useState('');
+  const [leaveDate, setLeaveDate] = useState('');
   const [leaveReason, setLeaveReason] = useState('');
-  const [leaveSent, setLeaveSent] = useState(false);
+  const [leaveSending, setLeaveSending] = useState(false);
 
   const [reportRevenue, setReportRevenue] = useState('');
   const [reportStock, setReportStock] = useState('');
   const [reportCash, setReportCash] = useState('');
-  const [reportSent, setReportSent] = useState(false);
+  const [reportNote, setReportNote] = useState('');
+  const [reportSending, setReportSending] = useState(false);
 
-  const closeSheet = () => setActiveSheet(null);
+  // Tải dữ liệu chính khi đã có profile — mỗi hàm tự bắt lỗi riêng để 1 phần
+  // lỗi không kéo sập cả trang.
+  useEffect(() => {
+    if (!profile?.id) return;
+    fetchManagerName(profile.manager_id).then(setManagerName).catch(() => {});
+    fetchMyHoursThisMonth(profile.id).then(setHours).catch((e) => setError(e.message));
+    fetchMyRevenueThisMonth(profile.id).then(setRevenue).catch((e) => setError(e.message));
+    fetchMyRewardsTotalThisMonth(profile.id).then(setRewardsTotal).catch(() => {});
+    fetchMyOrders(profile.full_name).then(setOrders).catch((e) => setError(e.message));
+    fetchCompanyFeed().then(setFeed).catch(() => {});
+  }, [profile?.id]);
 
-  const openOrders = (filterKey) => {
-    setSelectedOrderFilter(filterKey);
-    setActiveSheet('orders');
+  const loadSheetData = (sheet) => {
+    if (!profile?.id) return;
+    if (sheet === 'attendance' && !attendance) fetchMyAttendanceHistory(profile.id).then(setAttendance).catch((e) => setError(e.message));
+    if (sheet === 'schedule' && !schedule) fetchMySchedule(profile.id, profile.station).then(setSchedule).catch((e) => setError(e.message));
+    if (sheet === 'payroll' && payroll === undefined) fetchMyPayroll(profile.id).then(setPayroll).catch((e) => setError(e.message));
+    if (sheet === 'advance' && !advanceRequests) fetchMyAdvanceRequests(profile.id).then(setAdvanceRequests).catch((e) => setError(e.message));
+    if (sheet === 'leave' && !leaveRequests) fetchMyLeaveRequests(profile.id).then(setLeaveRequests).catch((e) => setError(e.message));
+    if (sheet === 'violation' && !violations) fetchMyViolations(profile.id).then(setViolations).catch((e) => setError(e.message));
+    if (sheet === 'reward' && !rewards) fetchMyRewards(profile.id).then(setRewards).catch((e) => setError(e.message));
   };
 
-  const filteredOrders = useMemo(() => {
-    if (selectedOrderFilter === 'all') return ORDERS_MOCK;
-    if (selectedOrderFilter === 'issue') return [];
-    return ORDERS_MOCK.filter((o) => o.status === selectedOrderFilter);
-  }, [selectedOrderFilter]);
+  const openSheet = (key) => { setActiveSheet(key); loadSheetData(key); };
+  const closeSheet = () => setActiveSheet(null);
 
-  const payrollNet = PAYROLL_T8.reduce((s, r) => s + r.amount, 0);
+  const openOrders = (filterKey) => { setSelectedOrderFilter(filterKey); setActiveSheet('orders'); };
+
+  const orderCounts = useMemo(() => {
+    const counts = { all: orders?.length || 0, awaiting_assignment: 0, in_production: 0, ready_for_fulfillment: 0, in_delivery: 0, completed: 0, issue: 0 };
+    for (const o of orders || []) {
+      if (counts[o.status] !== undefined) counts[o.status] += 1;
+      if (o.isOverdue) counts.issue += 1;
+    }
+    return counts;
+  }, [orders]);
+
+  const filteredOrders = useMemo(() => {
+    if (!orders) return [];
+    if (selectedOrderFilter === 'all') return orders;
+    if (selectedOrderFilter === 'issue') return orders.filter((o) => o.isOverdue);
+    return orders.filter((o) => o.status === selectedOrderFilter);
+  }, [orders, selectedOrderFilter]);
+
+  const handleAdvanceSubmit = async () => {
+    if (!advanceReason.trim()) { setError('Nhập lý do ứng lương giúp em.'); return; }
+    setAdvanceSending(true);
+    setError('');
+    try {
+      await submitMyAdvanceRequest({ amount: advanceAmount, reason: advanceReason.trim(), neededOn: advanceNeededOn });
+      const fresh = await fetchMyAdvanceRequests(profile.id);
+      setAdvanceRequests(fresh);
+      setAdvanceReason('');
+    } catch (e) { setError(e.message); } finally { setAdvanceSending(false); }
+  };
+
+  const handleLeaveSubmit = async () => {
+    if (!leaveDate) { setError('Chọn ngày nghỉ giúp em.'); return; }
+    if (!leaveReason.trim()) { setError('Nhập lý do nghỉ phép giúp em.'); return; }
+    setLeaveSending(true);
+    setError('');
+    try {
+      await submitMyLeaveRequest({ profile, leaveDate, reason: leaveReason.trim() });
+      const fresh = await fetchMyLeaveRequests(profile.id);
+      setLeaveRequests(fresh);
+      setLeaveReason('');
+    } catch (e) { setError(e.message); } finally { setLeaveSending(false); }
+  };
+
+  const handleReportSubmit = async () => {
+    setReportSending(true);
+    setError('');
+    try {
+      await submitMyShiftReport({ profile, revenue: reportRevenue, stockRemaining: reportStock, cashHandover: reportCash, note: reportNote });
+      setReportRevenue(''); setReportStock(''); setReportCash(''); setReportNote('');
+      setActiveSheet(null);
+    } catch (e) { setError(e.message); } finally { setReportSending(false); }
+  };
+
+  if (authLoading) return <div className="eov4-page eov4-loading-page">Đang tải...</div>;
+  if (!profile) return <div className="eov4-page eov4-loading-page">Chưa đăng nhập.</div>;
+
+  const roleLabel = profile.role ? `🏪 ${profile.role}` : '';
+  const hierarchy = managerName ? `${managerName} → ${profile.full_name}` : profile.full_name;
+  const initials = (profile.full_name || '?').trim().split(/\s+/).slice(-1)[0]?.[0]?.toUpperCase() || '?';
 
   return (
     <div className="eov4-page">
+      {error && (
+        <div className="eov4-error-banner" onClick={() => setError('')}>⚠️ {error} (bấm để đóng)</div>
+      )}
+
       {/* 1. HEADER */}
       <div className="eov4-header">
         <div className="eov4-brand">
           <div className="eov4-brand-logo"><Croissant size={22} /></div>
           <div>
             <div className="eov4-brand-name">SUMI BAKERY</div>
-            <div className="eov4-brand-greeting">Chào {EMPLOYEE.name}</div>
+            <div className="eov4-brand-greeting">Chào {profile.full_name}</div>
           </div>
         </div>
         <div className="eov4-header-actions">
-          <button className="eov4-icon-btn" title="Thông báo" onClick={() => setActiveSheet('feed')}>
+          <button className="eov4-icon-btn" title="Bảng tin công ty" onClick={() => openSheet('feed')}>
             <Bell size={18} />
           </button>
-          <button className="eov4-avatar-btn" title="Hồ sơ cá nhân" onClick={() => setActiveSheet('payroll')}>
-            {EMPLOYEE.code}
-          </button>
+          <button className="eov4-avatar-btn" title="Hồ sơ cá nhân">{initials}</button>
         </div>
       </div>
 
-      {/* 2. BANNER GHIM */}
-      <button className="eov4-banner" onClick={() => setActiveSheet('feed')}>
-        <span className="eov4-banner-icon">📢</span>
-        <span className="eov4-banner-body">
-          <strong>{ANNOUNCEMENT.tag}</strong>
-          <span>{ANNOUNCEMENT.text}</span>
-        </span>
-        <ChevronRight size={18} className="eov4-banner-arrow" />
-      </button>
-
-      {/* 3. VAI TRÒ & PHÂN CẤP */}
-      <div className="eov4-role-row">
-        <span className="eov4-role-badge">{EMPLOYEE.roleLabel}</span>
-      </div>
-      <div className="eov4-hierarchy">{EMPLOYEE.hierarchy}</div>
-
-      {/* 4. HIỆU SUẤT CÁ NHÂN */}
-      <div className="eov4-section-title">📊 HIỆU SUẤT CÁ NHÂN</div>
-      <div className="eov4-kpi-grid">
-        <button className="eov4-kpi-card eov4-kpi-green" onClick={() => setActiveSheet('revenue_kpi')}>
-          <div className="eov4-kpi-value">{formatVND(KPI.revenue)}</div>
-          <div className="eov4-kpi-label">Doanh Thu ›</div>
+      {feed && feed[0] && (
+        <button className="eov4-banner" onClick={() => openSheet('feed')}>
+          <span className="eov4-banner-icon">📢</span>
+          <span className="eov4-banner-body">
+            <strong>{feed[0].title || 'Thông báo công ty'}</strong>
+            <span>{feed[0].body}</span>
+          </span>
+          <ChevronRight size={18} className="eov4-banner-arrow" />
         </button>
-        <button className="eov4-kpi-card eov4-kpi-blue" onClick={() => setActiveSheet('attendance')}>
-          <div className="eov4-kpi-value">{KPI.hours}h</div>
+      )}
+
+      {/* 2. VAI TRÒ & PHÂN CẤP */}
+      {roleLabel && (
+        <div className="eov4-role-row">
+          <span className="eov4-role-badge">{roleLabel}</span>
+        </div>
+      )}
+      <div className="eov4-hierarchy">{hierarchy}</div>
+
+      {/* 3. HIỆU SUẤT CÁ NHÂN */}
+      <div className="eov4-section-title">📊 HIỆU SUẤT CÁ NHÂN (tháng này)</div>
+      <div className="eov4-kpi-grid">
+        <button className="eov4-kpi-card eov4-kpi-green" onClick={() => openOrders('all')}>
+          <div className="eov4-kpi-value">{revenue ? formatVND(revenue.total) : '…'}</div>
+          <div className="eov4-kpi-label">Doanh Thu ({revenue?.orderCount ?? 0} đơn) ›</div>
+        </button>
+        <button className="eov4-kpi-card eov4-kpi-blue" onClick={() => openSheet('attendance')}>
+          <div className="eov4-kpi-value">{hours === null ? '…' : `${hours}h`}</div>
           <div className="eov4-kpi-label">Tổng Giờ Làm ›</div>
         </button>
-        <button className="eov4-kpi-card eov4-kpi-amber" onClick={() => setActiveSheet('reward')}>
-          <div className="eov4-kpi-value">{formatVND(KPI.reward)}</div>
+        <button className="eov4-kpi-card eov4-kpi-amber" onClick={() => openSheet('reward')}>
+          <div className="eov4-kpi-value">{rewardsTotal === null ? '…' : formatVND(rewardsTotal)}</div>
           <div className="eov4-kpi-label">Tiền Thưởng ›</div>
         </button>
       </div>
 
-      {/* 5. TÔI — HỒ SƠ & TIỆN ÍCH */}
+      {/* 4. TÔI — HỒ SƠ & TIỆN ÍCH */}
       <div className="eov4-section-title">👤 TÔI (HỒ SƠ &amp; TIỆN ÍCH NHÂN SỰ)</div>
       <div className="eov4-tiles-grid">
         {TILES.map((t) => (
-          <button key={t.key} className="eov4-tile" onClick={() => setActiveSheet(t.key)}>
+          <button key={t.key} className="eov4-tile" onClick={() => openSheet(t.key)}>
             <div className="eov4-tile-icon"><t.icon size={22} /></div>
             <div className="eov4-tile-title">{t.title}</div>
-            <div className={`eov4-tile-sub ${t.subTone ? `eov4-tone-${t.subTone}` : ''}`}>{t.sub}</div>
+            {t.sub && <div className="eov4-tile-sub">{t.sub}</div>}
           </button>
         ))}
       </div>
 
-      {/* 6. TÌNH TRẠNG ĐƠN HÀNG */}
+      {/* 5. TÌNH TRẠNG ĐƠN HÀNG */}
       <div className="eov4-section-title-row">
-        <span className="eov4-section-title">📦 TÌNH TRẠNG ĐƠN HÀNG</span>
-        <span className="eov4-section-count">{ORDER_TILES[0].count} đơn</span>
+        <span className="eov4-section-title">📦 ĐƠN HÀNG CỦA TÔI (30 ngày)</span>
+        <span className="eov4-section-count">{orderCounts.all} đơn</span>
       </div>
       <div className="eov4-orders-grid">
-        {ORDER_TILES.map((o) => (
-          <button
-            key={o.key}
-            className={`eov4-order-tile ${o.span === 2 ? 'eov4-span-2' : ''}`}
-            onClick={() => openOrders(o.key)}
-          >
+        <button className="eov4-order-tile" onClick={() => openOrders('all')}>
+          <div className="eov4-order-icon"><Receipt size={20} /></div>
+          <span className="eov4-order-label">Tổng đơn hàng</span>
+          <span className="eov4-order-count">{orderCounts.all}</span>
+        </button>
+        {ORDER_STATUS_META.map((o) => (
+          <button key={o.key} className="eov4-order-tile" onClick={() => openOrders(o.key)}>
             <div className="eov4-order-icon"><o.icon size={20} /></div>
             <span className="eov4-order-label">{o.label}</span>
-            <span className={`eov4-order-count ${o.tone ? `eov4-tone-${o.tone}` : ''}`}>{o.count}</span>
+            <span className={`eov4-order-count ${o.tone ? `eov4-tone-${o.tone}` : ''}`}>{orderCounts[o.key]}</span>
           </button>
         ))}
+        <button className="eov4-order-tile eov4-span-2" onClick={() => openOrders('issue')}>
+          <div className="eov4-order-icon"><AlertTriangle size={20} /></div>
+          <span className="eov4-order-label">Trễ hạn / sự cố</span>
+          <span className="eov4-order-count eov4-tone-warning">{orderCounts.issue}</span>
+        </button>
       </div>
 
       {/* ===================== BOTTOM SHEETS ===================== */}
 
       {activeSheet === 'feed' && (
-        <BottomSheet title="📢 Bảng tin & Thông báo công ty" onClose={closeSheet}>
-          <div className="eov4-feed-item">
-            <strong>{ANNOUNCEMENT.tag}</strong>
-            <p>{ANNOUNCEMENT.text}</p>
-            <span className="eov4-feed-time">Hôm nay · 08:30</span>
-          </div>
-          <div className="eov4-feed-item">
-            <strong>🎉 Thông báo lương tháng 8</strong>
-            <p>Lương tháng 8 sẽ được chuyển vào ngày 05/09. Anh/chị kiểm tra phiếu lương ở mục Bảng lương.</p>
-            <span className="eov4-feed-time">2 ngày trước</span>
-          </div>
-          <div className="eov4-feed-item">
-            <strong>🥐 Lịch nghỉ Trung Thu</strong>
-            <p>Cửa hàng nghỉ Trung Thu ngày 15/9 (âm lịch). Ca làm sẽ được sắp xếp lại, để ý mục Lịch làm.</p>
-            <span className="eov4-feed-time">5 ngày trước</span>
-          </div>
+        <BottomSheet title="📢 Bảng tin công ty" onClose={closeSheet}>
+          {!feed ? <div className="eov4-empty-box">Đang tải...</div> : feed.length === 0 ? (
+            <div className="eov4-empty-box">Chưa có tin nào.</div>
+          ) : (
+            feed.map((p) => (
+              <div key={p.id} className="eov4-feed-item">
+                <strong>{p.title || (p.post_type === 'announcement' ? 'Thông báo' : 'Bảng tin')}</strong>
+                <p>{p.body}</p>
+                <span className="eov4-feed-time">{new Date(p.created_at).toLocaleString('vi-VN')}</span>
+              </div>
+            ))
+          )}
         </BottomSheet>
       )}
 
       {activeSheet === 'attendance' && (
         <BottomSheet title="⏰ Lịch sử chấm công & giờ làm" onClose={closeSheet}>
-          <div className="eov4-table">
-            {ATTENDANCE_HISTORY.map((r) => (
-              <div key={r.date} className="eov4-table-row">
-                <div className="eov4-table-main">
-                  <strong>{r.date}</strong>
-                  <span>{r.checkin} → {r.checkout}</span>
-                </div>
-                <div className="eov4-table-side">
-                  <span className="eov4-hours-pill">{r.hours}</span>
-                  <span className="eov4-note-text">{r.note}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-          <button className="eov4-primary-btn">📤 Xuất file công</button>
-        </BottomSheet>
-      )}
-
-      {activeSheet === 'schedule' && (
-        <BottomSheet title="📅 Lịch phân ca tuần này" onClose={closeSheet}>
-          <div className="eov4-table">
-            {SCHEDULE_WEEK.map((r) => (
-              <div key={r.day} className="eov4-table-row">
-                <div className="eov4-table-main">
-                  <strong>{r.day}</strong>
-                </div>
-                <span className={r.shift === 'Nghỉ' ? 'eov4-note-text' : 'eov4-hours-pill'}>{r.shift}</span>
-              </div>
-            ))}
-          </div>
-          <button className="eov4-primary-btn">🔄 Đăng ký đổi ca</button>
-        </BottomSheet>
-      )}
-
-      {activeSheet === 'advance' && (
-        <BottomSheet title="💵 Yêu cầu ứng lương" onClose={closeSheet}>
-          {advanceSent ? (
-            <div className="eov4-success-box">✅ Đã gửi yêu cầu ứng {formatVND(advanceAmount)} tới Sếp, chờ duyệt nhé.</div>
-          ) : (
-            <>
-              <div className="eov4-quick-amounts">
-                {[500000, 1000000, 2000000].map((amt) => (
-                  <button
-                    key={amt}
-                    className={`eov4-chip-btn ${advanceAmount === amt ? 'active' : ''}`}
-                    onClick={() => setAdvanceAmount(amt)}
-                  >
-                    {formatVND(amt)}
-                  </button>
-                ))}
-              </div>
-              <label className="eov4-field-label">Lý do ứng lương</label>
-              <textarea
-                className="eov4-textarea"
-                rows={3}
-                placeholder="VD: Cần tiền đóng học phí con..."
-                value={advanceReason}
-                onChange={(e) => setAdvanceReason(e.target.value)}
-              />
-              <button className="eov4-primary-btn" onClick={() => setAdvanceSent(true)}>
-                <Send size={16} /> Gửi Sếp duyệt
-              </button>
-            </>
-          )}
-        </BottomSheet>
-      )}
-
-      {activeSheet === 'leave' && (
-        <BottomSheet title="📝 Đơn xin nghỉ phép" onClose={closeSheet}>
-          {leaveSent ? (
-            <div className="eov4-success-box">✅ Đã gửi đơn xin nghỉ ({leaveStart || '?'} → {leaveEnd || '?'}), chờ Sếp duyệt.</div>
-          ) : (
-            <>
-              <label className="eov4-field-label">Ngày bắt đầu</label>
-              <input type="date" className="eov4-input" value={leaveStart} onChange={(e) => setLeaveStart(e.target.value)} />
-              <label className="eov4-field-label">Ngày kết thúc</label>
-              <input type="date" className="eov4-input" value={leaveEnd} onChange={(e) => setLeaveEnd(e.target.value)} />
-              <label className="eov4-field-label">Lý do nghỉ phép</label>
-              <textarea
-                className="eov4-textarea"
-                rows={3}
-                placeholder="VD: Về quê giỗ ông bà..."
-                value={leaveReason}
-                onChange={(e) => setLeaveReason(e.target.value)}
-              />
-              <button className="eov4-primary-btn" onClick={() => setLeaveSent(true)}>
-                <Send size={16} /> Gửi duyệt
-              </button>
-            </>
-          )}
-        </BottomSheet>
-      )}
-
-      {activeSheet === 'payroll' && (
-        <BottomSheet title="💰 Phiếu lương Tháng 8" onClose={closeSheet}>
-          <div className="eov4-table">
-            {PAYROLL_T8.map((r) => (
-              <div key={r.label} className="eov4-table-row">
-                <strong>{r.label}</strong>
-                <span className={r.amount < 0 ? 'eov4-tone-danger' : ''}>
-                  {r.amount < 0 ? '- ' : ''}{formatVND(Math.abs(r.amount))}
-                </span>
-              </div>
-            ))}
-          </div>
-          <div className="eov4-payroll-net">
-            <span>Thực nhận</span>
-            <strong>{formatVND(payrollNet)}</strong>
-          </div>
-        </BottomSheet>
-      )}
-
-      {activeSheet === 'report' && (
-        <BottomSheet title="📋 Báo cáo cuối ca" onClose={closeSheet}>
-          {reportSent ? (
-            <div className="eov4-success-box">✅ Đã gửi báo cáo cuối ca thành công.</div>
-          ) : (
-            <>
-              <label className="eov4-field-label">Doanh thu cuối ca</label>
-              <input
-                type="number"
-                className="eov4-input"
-                placeholder="VD: 1250000"
-                value={reportRevenue}
-                onChange={(e) => setReportRevenue(e.target.value)}
-              />
-              <label className="eov4-field-label">Số lượng bánh còn tồn quầy</label>
-              <input
-                type="number"
-                className="eov4-input"
-                placeholder="VD: 12"
-                value={reportStock}
-                onChange={(e) => setReportStock(e.target.value)}
-              />
-              <label className="eov4-field-label">Bàn giao két tiền mặt</label>
-              <input
-                type="number"
-                className="eov4-input"
-                placeholder="VD: 500000"
-                value={reportCash}
-                onChange={(e) => setReportCash(e.target.value)}
-              />
-              <button className="eov4-primary-btn" onClick={() => setReportSent(true)}>
-                <Send size={16} /> Gửi báo cáo
-              </button>
-            </>
-          )}
-        </BottomSheet>
-      )}
-
-      {activeSheet === 'violation' && (
-        <BottomSheet title="⚠️ Lịch sử vi phạm" onClose={closeSheet}>
-          {VIOLATIONS.length === 0 ? (
-            <div className="eov4-empty-box">🎉 Không có vi phạm nào — giữ vững phong độ nhé!</div>
-          ) : (
-            VIOLATIONS.map((v, i) => <div key={i} className="eov4-table-row">{v.title}</div>)
-          )}
-        </BottomSheet>
-      )}
-
-      {activeSheet === 'reward' && (
-        <BottomSheet title="🎁 Thưởng nóng & Sao tích lũy" onClose={closeSheet}>
-          <div className="eov4-table">
-            {REWARDS.map((r, i) => (
-              <div key={i} className="eov4-table-row">
-                <div className="eov4-table-main">
-                  <strong>{r.title}</strong>
-                  <span className="eov4-note-text">{r.date}</span>
-                </div>
-                <span className="eov4-tone-warning">+{formatVND(r.amount)}</span>
-              </div>
-            ))}
-          </div>
-        </BottomSheet>
-      )}
-
-      {activeSheet === 'revenue_kpi' && (
-        <BottomSheet title="📊 Chi tiết doanh thu & KPI cá nhân" onClose={closeSheet}>
-          <div className="eov4-kpi-detail-grid">
-            <div className="eov4-kpi-detail-card">
-              <div className="eov4-tile-sub">Doanh thu tháng này</div>
-              <strong>{formatVND(KPI.revenue)}</strong>
-            </div>
-            <div className="eov4-kpi-detail-card">
-              <div className="eov4-tile-sub">Số đơn đã chốt</div>
-              <strong>2 đơn</strong>
-            </div>
-            <div className="eov4-kpi-detail-card">
-              <div className="eov4-tile-sub">Giá trị đơn TB</div>
-              <strong>{formatVND(550000)}</strong>
-            </div>
-            <div className="eov4-kpi-detail-card">
-              <div className="eov4-tile-sub">Xếp hạng team</div>
-              <strong>#2 / 6</strong>
-            </div>
-          </div>
-        </BottomSheet>
-      )}
-
-      {activeSheet === 'orders' && (
-        <BottomSheet title="🧾 Danh sách đơn hàng" onClose={closeSheet}>
-          <div className="eov4-filter-row">
-            {ORDER_TILES.map((o) => (
-              <button
-                key={o.key}
-                className={`eov4-filter-chip ${selectedOrderFilter === o.key ? 'active' : ''}`}
-                onClick={() => setSelectedOrderFilter(o.key)}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
-          {filteredOrders.length === 0 ? (
-            <div className="eov4-empty-box">Không có đơn nào trong mục này.</div>
+          {!attendance ? <div className="eov4-empty-box">Đang tải...</div> : attendance.length === 0 ? (
+            <div className="eov4-empty-box">Chưa có dữ liệu chấm công 14 ngày gần đây.</div>
           ) : (
             <div className="eov4-table">
-              {filteredOrders.map((o) => (
-                <div key={o.code} className="eov4-table-row">
+              {attendance.map((r) => (
+                <div key={r.date} className="eov4-table-row">
                   <div className="eov4-table-main">
-                    <strong>#{o.code}</strong>
-                    <span className="eov4-note-text">{o.customer}</span>
+                    <strong>{r.date}</strong>
+                    <span>{r.checkin ? new Date(r.checkin).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '--:--'} → {r.checkout ? new Date(r.checkout).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '--:--'}</span>
                   </div>
                   <div className="eov4-table-side">
-                    <span className="eov4-hours-pill">{o.statusLabel}</span>
-                    <span className="eov4-note-text">{formatVND(o.total)}</span>
+                    {r.lateMinutes > 0 ? <span className="eov4-note-text eov4-tone-danger">Trễ {r.lateMinutes}p</span> : <span className="eov4-note-text eov4-tone-success">Đúng giờ</span>}
                   </div>
                 </div>
               ))}
@@ -498,6 +347,184 @@ export default function EmployeeOverviewV4() {
           )}
         </BottomSheet>
       )}
+
+      {activeSheet === 'schedule' && (
+        <BottomSheet title="📅 Lịch phân ca tuần này" onClose={closeSheet}>
+          {!schedule ? <div className="eov4-empty-box">Đang tải...</div> : schedule.length === 0 ? (
+            <div className="eov4-empty-box">Tuần này chưa được xếp ca.</div>
+          ) : (
+            <div className="eov4-table">
+              {schedule.map((r, i) => (
+                <div key={i} className="eov4-table-row">
+                  <strong>{r.date}</strong>
+                  <span className="eov4-hours-pill">{r.config ? `${r.config.label} ${r.config.start_time?.slice(0, 5) || ''}${r.config.end_time ? `–${r.config.end_time.slice(0, 5)}` : ''}` : 'Chưa rõ ca'}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </BottomSheet>
+      )}
+
+      {activeSheet === 'advance' && (
+        <BottomSheet title="💵 Yêu cầu ứng lương" onClose={closeSheet}>
+          <div className="eov4-quick-amounts">
+            {[500000, 1000000, 2000000].map((amt) => (
+              <button key={amt} className={`eov4-chip-btn ${advanceAmount === amt ? 'active' : ''}`} onClick={() => setAdvanceAmount(amt)}>{formatVND(amt)}</button>
+            ))}
+          </div>
+          <label className="eov4-field-label">Cần tiền vào ngày</label>
+          <input type="date" className="eov4-input" value={advanceNeededOn} onChange={(e) => setAdvanceNeededOn(e.target.value)} />
+          <label className="eov4-field-label">Lý do ứng lương</label>
+          <textarea className="eov4-textarea" rows={3} placeholder="VD: Cần tiền đóng học phí con..." value={advanceReason} onChange={(e) => setAdvanceReason(e.target.value)} />
+          <button className="eov4-primary-btn" disabled={advanceSending} onClick={handleAdvanceSubmit}>
+            <Send size={16} /> {advanceSending ? 'Đang gửi...' : 'Gửi Sếp duyệt'}
+          </button>
+          <div className="eov4-field-label" style={{ marginTop: 14 }}>Lịch sử gần đây</div>
+          {!advanceRequests ? <div className="eov4-empty-box">Đang tải...</div> : advanceRequests.length === 0 ? (
+            <div className="eov4-empty-box">Chưa có yêu cầu nào.</div>
+          ) : (
+            <div className="eov4-table">
+              {advanceRequests.map((r) => (
+                <div key={r.id} className="eov4-table-row">
+                  <div className="eov4-table-main"><strong>{formatVND(r.amount)}</strong><span className="eov4-note-text">{r.reason}</span></div>
+                  <span className="eov4-hours-pill">{r.status}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </BottomSheet>
+      )}
+
+      {activeSheet === 'leave' && (
+        <BottomSheet title="📝 Đơn xin nghỉ phép" onClose={closeSheet}>
+          <label className="eov4-field-label">Ngày nghỉ</label>
+          <input type="date" className="eov4-input" value={leaveDate} onChange={(e) => setLeaveDate(e.target.value)} />
+          <label className="eov4-field-label">Lý do nghỉ phép</label>
+          <textarea className="eov4-textarea" rows={3} placeholder="VD: Về quê giỗ ông bà..." value={leaveReason} onChange={(e) => setLeaveReason(e.target.value)} />
+          <button className="eov4-primary-btn" disabled={leaveSending} onClick={handleLeaveSubmit}>
+            <Send size={16} /> {leaveSending ? 'Đang gửi...' : 'Gửi duyệt'}
+          </button>
+          <div className="eov4-field-label" style={{ marginTop: 14 }}>Lịch sử gần đây</div>
+          {!leaveRequests ? <div className="eov4-empty-box">Đang tải...</div> : leaveRequests.length === 0 ? (
+            <div className="eov4-empty-box">Chưa có đơn nào.</div>
+          ) : (
+            <div className="eov4-table">
+              {leaveRequests.map((r) => (
+                <div key={r.id} className="eov4-table-row">
+                  <div className="eov4-table-main"><strong>{r.leave_date}</strong><span className="eov4-note-text">{r.reason}</span></div>
+                  <span className="eov4-hours-pill">{r.status}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </BottomSheet>
+      )}
+
+      {activeSheet === 'payroll' && (
+        <BottomSheet title="💰 Phiếu lương tháng này" onClose={closeSheet}>
+          {payroll === undefined ? <div className="eov4-empty-box">Đang tải...</div> : !payroll ? (
+            <div className="eov4-empty-box">Chưa có bảng lương tháng này.</div>
+          ) : (
+            <>
+              <div className="eov4-table">
+                <div className="eov4-table-row"><strong>Lương cơ bản</strong><span>{formatVND(payroll.base_pay)}</span></div>
+                <div className="eov4-table-row"><strong>Tăng ca</strong><span>{formatVND(payroll.overtime_pay)}</span></div>
+                <div className="eov4-table-row"><strong>Phụ cấp</strong><span>{formatVND(payroll.allowance)}</span></div>
+                <div className="eov4-table-row"><strong>Thưởng KPI</strong><span>{formatVND(payroll.kpi_bonus)}</span></div>
+                <div className="eov4-table-row"><strong>Thưởng sản lượng</strong><span>{formatVND(payroll.output_bonus)}</span></div>
+                <div className="eov4-table-row"><strong>Tạm ứng đã nhận</strong><span className="eov4-tone-danger">- {formatVND(payroll.advance_amount)}</span></div>
+                <div className="eov4-table-row"><strong>Khấu trừ</strong><span className="eov4-tone-danger">- {formatVND(payroll.deduction_amount)}</span></div>
+              </div>
+              <div className="eov4-payroll-net">
+                <span>Thực nhận</span>
+                <strong>{formatVND((payroll.base_pay || 0) + (payroll.overtime_pay || 0) + (payroll.allowance || 0) + (payroll.kpi_bonus || 0) + (payroll.output_bonus || 0) + (payroll.delegation_bonus || 0) + (payroll.other_bonus || 0) - (payroll.advance_amount || 0) - (payroll.deduction_amount || 0))}</strong>
+              </div>
+            </>
+          )}
+        </BottomSheet>
+      )}
+
+      {activeSheet === 'report' && (
+        <BottomSheet title="📋 Báo cáo cuối ca" onClose={closeSheet}>
+          <label className="eov4-field-label">Doanh thu cuối ca</label>
+          <input type="number" className="eov4-input" placeholder="VD: 1250000" value={reportRevenue} onChange={(e) => setReportRevenue(e.target.value)} />
+          <label className="eov4-field-label">Số lượng bánh còn tồn quầy</label>
+          <input type="number" className="eov4-input" placeholder="VD: 12" value={reportStock} onChange={(e) => setReportStock(e.target.value)} />
+          <label className="eov4-field-label">Bàn giao két tiền mặt</label>
+          <input type="number" className="eov4-input" placeholder="VD: 500000" value={reportCash} onChange={(e) => setReportCash(e.target.value)} />
+          <label className="eov4-field-label">Ghi chú thêm</label>
+          <textarea className="eov4-textarea" rows={2} value={reportNote} onChange={(e) => setReportNote(e.target.value)} />
+          <button className="eov4-primary-btn" disabled={reportSending} onClick={handleReportSubmit}>
+            <Send size={16} /> {reportSending ? 'Đang gửi...' : 'Gửi báo cáo'}
+          </button>
+        </BottomSheet>
+      )}
+
+      {activeSheet === 'violation' && (
+        <BottomSheet title="⚠️ Lịch sử vi phạm" onClose={closeSheet}>
+          {!violations ? <div className="eov4-empty-box">Đang tải...</div> : violations.length === 0 ? (
+            <div className="eov4-empty-box">🎉 Không có vi phạm nào — giữ vững phong độ nhé!</div>
+          ) : (
+            <div className="eov4-table">
+              {violations.map((v) => (
+                <div key={v.id} className="eov4-table-row">
+                  <div className="eov4-table-main"><strong>{v.title}</strong><span className="eov4-note-text">{v.occurred_on}</span></div>
+                  {v.penalty_amount > 0 && <span className="eov4-tone-danger">-{formatVND(v.penalty_amount)}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </BottomSheet>
+      )}
+
+      {activeSheet === 'reward' && (
+        <BottomSheet title="🎁 Thưởng nóng" onClose={closeSheet}>
+          {!rewards ? <div className="eov4-empty-box">Đang tải...</div> : rewards.length === 0 ? (
+            <div className="eov4-empty-box">Chưa có thưởng nóng nào.</div>
+          ) : (
+            <div className="eov4-table">
+              {rewards.map((r) => (
+                <div key={r.id} className="eov4-table-row">
+                  <div className="eov4-table-main"><strong>{r.title}</strong><span className="eov4-note-text">{r.awarded_on}</span></div>
+                  <span className="eov4-tone-warning">+{formatVND(r.amount)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </BottomSheet>
+      )}
+
+      {activeSheet === 'orders' && (
+        <BottomSheet title="🧾 Đơn hàng của tôi" onClose={closeSheet}>
+          <div className="eov4-filter-row">
+            <button className={`eov4-filter-chip ${selectedOrderFilter === 'all' ? 'active' : ''}`} onClick={() => setSelectedOrderFilter('all')}>Tổng đơn hàng</button>
+            {ORDER_STATUS_META.map((o) => (
+              <button key={o.key} className={`eov4-filter-chip ${selectedOrderFilter === o.key ? 'active' : ''}`} onClick={() => setSelectedOrderFilter(o.key)}>{o.label}</button>
+            ))}
+            <button className={`eov4-filter-chip ${selectedOrderFilter === 'issue' ? 'active' : ''}`} onClick={() => setSelectedOrderFilter('issue')}>Trễ hạn</button>
+          </div>
+          {!orders ? <div className="eov4-empty-box">Đang tải...</div> : filteredOrders.length === 0 ? (
+            <div className="eov4-empty-box">Không có đơn nào trong mục này.</div>
+          ) : (
+            <div className="eov4-table">
+              {filteredOrders.map((o) => (
+                <div key={o.code} className="eov4-table-row">
+                  <div className="eov4-table-main"><strong>#{o.code}</strong><span className="eov4-note-text">{o.quantity} sản phẩm</span></div>
+                  <span className="eov4-hours-pill">{o.statusLabel}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </BottomSheet>
+      )}
     </div>
+  );
+}
+
+export default function EmployeeOverviewV4() {
+  return (
+    <AuthProvider>
+      <EmployeeOverviewV4Inner />
+    </AuthProvider>
   );
 }

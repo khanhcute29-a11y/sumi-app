@@ -16,6 +16,25 @@
   box-sizing: border-box;
 }
 
+.eov4-loading-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8a7a66;
+  font-size: 13px;
+}
+
+.eov4-error-banner {
+  background: #fde3e3;
+  color: #c0392b;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 10px 14px;
+  border-radius: 12px;
+  margin-bottom: 12px;
+  cursor: pointer;
+}
+
 /* 1. Header */
 .eov4-header {
   display: flex;
