@@ -14,7 +14,7 @@ export async function fetchMyChatRooms() {
 export async function fetchChatDirectory() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, full_name, role, station, avatar_url')
+    .select('id, full_name, role, station')
     .eq('approved', true)
     .neq('active', false)
     .order('full_name');
