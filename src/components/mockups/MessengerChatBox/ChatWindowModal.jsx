@@ -43,7 +43,8 @@ export default function ChatWindowModal({ onClose, profile }) {
         if (cancelled) return;
         setRooms(roomList);
         setDirectory(dirList.filter((u) => u.id !== profile?.id));
-        if (roomList.length) setCurrentRoomId(roomList[0].id);
+        const firstGroup = roomList.find((r) => r.room_type === 'group');
+        if (firstGroup) setCurrentRoomId(firstGroup.id);
       })
       .catch((e) => setError(e.message))
       .finally(() => { if (!cancelled) setLoadingLists(false); });
@@ -73,6 +74,7 @@ export default function ChatWindowModal({ onClose, profile }) {
     return directory.find((u) => u.id === senderId)?.full_name || 'Nhân viên';
   };
 
+  const groupRooms = useMemo(() => rooms.filter((r) => r.room_type === 'group'), [rooms]);
   const activeRoom = rooms.find((r) => r.id === currentRoomId);
   const activeDirectUser = directory.find((u) => u.id === currentDirectUserId);
   const roomTitle = navTab === 'direct' && activeDirectUser
@@ -178,7 +180,7 @@ export default function ChatWindowModal({ onClose, profile }) {
       {/* 2. TABS */}
       <div className="m-chat-category-tabs">
         <button className={`m-cat-tab-btn ${navTab === 'group' ? 'active' : ''}`} onClick={() => setNavTab('group')}>
-          🥐 Nhóm Chat ({rooms.length})
+          🥐 Nhóm Chat ({groupRooms.length})
         </button>
         <button className={`m-cat-tab-btn ${navTab === 'direct' ? 'active' : ''}`} onClick={() => setNavTab('direct')}>
           👤 Chat Riêng 1-1 ({directory.length})
@@ -190,7 +192,7 @@ export default function ChatWindowModal({ onClose, profile }) {
         {loadingLists ? (
           <span style={{ fontSize: 12, color: '#8C7A6B', padding: '4px 8px' }}>Đang tải...</span>
         ) : navTab === 'group' ? (
-          rooms.map((r) => (
+          groupRooms.map((r) => (
             <button key={r.id} className={`m-pill-btn ${currentRoomId === r.id ? 'active' : ''}`} onClick={() => openGroupRoom(r.id)}>
               <span>{r.avatar_emoji || '💬'}</span>
               <span>{(r.name || '').replace(/^\S+\s/, '')}</span>
