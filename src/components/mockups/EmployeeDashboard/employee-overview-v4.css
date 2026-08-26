@@ -1,0 +1,636 @@
+/* ==========================================================================
+   EMPLOYEE OVERVIEW V4 — mockup cô lập, không dùng chung class với bất kỳ
+   component nào khác (mọi class đều bắt đầu bằng eov4-).
+   Tông màu: nền be sữa #faf6f0, chữ nâu đen #2d1c10, cam đất #c28c4e.
+   ========================================================================== */
+
+.eov4-page {
+  max-width: 420px;
+  margin: 0 auto;
+  min-height: 100vh;
+  padding: 16px;
+  padding-bottom: 80px;
+  background: #faf6f0;
+  color: #2d1c10;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  box-sizing: border-box;
+}
+
+/* 1. Header */
+.eov4-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.eov4-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.eov4-brand-logo {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid #eadcca;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #c28c4e;
+}
+
+.eov4-brand-name {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #c28c4e;
+}
+
+.eov4-brand-greeting {
+  font-size: 17px;
+  font-weight: 800;
+  color: #2d1c10;
+}
+
+.eov4-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.eov4-icon-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid #eadcca;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #2d1c10;
+}
+
+.eov4-avatar-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: #c28c4e;
+  color: #fff;
+  border: none;
+  font-weight: 800;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* 2. Banner ghim */
+.eov4-banner {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fdf3df;
+  border: 1px solid #f2dfa8;
+  border-radius: 16px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+
+.eov4-banner-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.eov4-banner-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.eov4-banner-body strong {
+  font-size: 12.5px;
+  color: #b8792b;
+}
+
+.eov4-banner-body span {
+  font-size: 12px;
+  color: #6b5c4a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.eov4-banner-arrow {
+  color: #c28c4e;
+  flex-shrink: 0;
+}
+
+/* 3. Vai trò & phân cấp */
+.eov4-role-row {
+  margin-bottom: 6px;
+}
+
+.eov4-role-badge {
+  display: inline-block;
+  background: #fde3e3;
+  color: #c0392b;
+  font-size: 12.5px;
+  font-weight: 800;
+  padding: 6px 12px;
+  border-radius: 99px;
+}
+
+.eov4-hierarchy {
+  font-size: 12.5px;
+  color: #6b5c4a;
+  margin-bottom: 18px;
+}
+
+/* Section titles */
+.eov4-section-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #2d1c10;
+  margin-bottom: 10px;
+}
+
+.eov4-section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.eov4-section-count {
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #c28c4e;
+}
+
+/* 4. KPI 3-grid */
+.eov4-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 22px;
+}
+
+.eov4-kpi-card {
+  border: none;
+  border-radius: 16px;
+  padding: 12px 8px;
+  text-align: center;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: inherit;
+}
+
+.eov4-kpi-green { background: #e8f7ee; }
+.eov4-kpi-blue { background: #e8f1fb; }
+.eov4-kpi-amber { background: #fdf1e0; }
+
+.eov4-kpi-value {
+  font-size: 14px;
+  font-weight: 800;
+}
+.eov4-kpi-green .eov4-kpi-value { color: #1f9d55; }
+.eov4-kpi-blue .eov4-kpi-value { color: #2563eb; }
+.eov4-kpi-amber .eov4-kpi-value { color: #c2790e; }
+
+.eov4-kpi-label {
+  font-size: 10.5px;
+  color: #6b5c4a;
+  font-weight: 700;
+}
+
+/* 5. Tiles grid (8 ô, 2 cột) */
+.eov4-tiles-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.eov4-tile {
+  background: #fff;
+  border: 1px solid #eadcca;
+  border-radius: 16px;
+  padding: 14px 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 1px 2px rgba(45, 28, 16, 0.04);
+  font-family: inherit;
+}
+
+.eov4-tile:hover,
+.eov4-tile:active {
+  border-color: #c28c4e;
+}
+
+.eov4-tile-icon {
+  color: #c28c4e;
+  margin-bottom: 8px;
+}
+
+.eov4-tile-title {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #2d1c10;
+  margin-bottom: 2px;
+}
+
+.eov4-tile-sub {
+  font-size: 11.5px;
+  color: #8a7a66;
+}
+
+/* 6. Orders grid (7 ô, 2 cột, ô cuối span 2) */
+.eov4-orders-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.eov4-order-tile {
+  background: #fff;
+  border: 1px solid #eadcca;
+  border-radius: 16px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.eov4-order-tile:hover,
+.eov4-order-tile:active {
+  border-color: #c28c4e;
+}
+
+.eov4-order-tile.eov4-span-2 {
+  grid-column: span 2;
+}
+
+.eov4-order-icon {
+  color: #8a7a66;
+  flex-shrink: 0;
+}
+
+.eov4-order-label {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 700;
+  color: #2d1c10;
+}
+
+.eov4-order-count {
+  font-size: 17px;
+  font-weight: 800;
+  color: #c0392b;
+}
+
+/* Tone helpers */
+.eov4-tone-success { color: #1f9d55 !important; }
+.eov4-tone-warning { color: #c2790e !important; }
+.eov4-tone-danger { color: #c0392b !important; }
+
+/* ==========================================================================
+   BOTTOM SHEET
+   ========================================================================== */
+.eov4-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  z-index: 1000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.eov4-sheet {
+  width: 100%;
+  max-width: 420px;
+  max-height: 85vh;
+  min-height: 75vh;
+  background: #fff;
+  border-radius: 28px 28px 0 0;
+  padding: 10px 20px 24px;
+  overflow-y: auto;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  animation: eov4-slide-up 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes eov4-slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.eov4-sheet-handle {
+  width: 44px;
+  height: 4px;
+  border-radius: 99px;
+  background: #e5d9c8;
+  margin: 6px auto 12px;
+  flex-shrink: 0;
+}
+
+.eov4-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  flex-shrink: 0;
+}
+
+.eov4-sheet-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: #2d1c10;
+}
+
+.eov4-sheet-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid #eadcca;
+  background: #faf6f0;
+  color: #6b5c4a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.eov4-sheet-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Sheet content helpers */
+.eov4-feed-item {
+  background: #faf6f0;
+  border: 1px solid #eadcca;
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.eov4-feed-item strong {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 4px;
+  color: #2d1c10;
+}
+
+.eov4-feed-item p {
+  margin: 0 0 6px;
+  font-size: 12.5px;
+  color: #6b5c4a;
+  line-height: 1.5;
+}
+
+.eov4-feed-time {
+  font-size: 10.5px;
+  color: #a0907c;
+}
+
+.eov4-table {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.eov4-table-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #faf6f0;
+  border: 1px solid #eadcca;
+  border-radius: 14px;
+  padding: 10px 14px;
+  font-size: 13px;
+}
+
+.eov4-table-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.eov4-table-main strong {
+  font-size: 13px;
+  color: #2d1c10;
+}
+
+.eov4-table-main span {
+  font-size: 11.5px;
+  color: #8a7a66;
+}
+
+.eov4-table-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+.eov4-hours-pill {
+  background: #fdf1e0;
+  color: #c2790e;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 99px;
+}
+
+.eov4-note-text {
+  font-size: 11px;
+  color: #8a7a66;
+}
+
+.eov4-primary-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 13px;
+  border-radius: 14px;
+  border: none;
+  background: #c28c4e;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  margin-top: 4px;
+  font-family: inherit;
+}
+
+.eov4-primary-btn:active {
+  background: #b07a3e;
+}
+
+.eov4-field-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #6b5c4a;
+  margin-top: 4px;
+}
+
+.eov4-input,
+.eov4-textarea {
+  width: 100%;
+  border: 1px solid #eadcca;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 13.5px;
+  font-family: inherit;
+  color: #2d1c10;
+  background: #faf6f0;
+  box-sizing: border-box;
+  resize: none;
+}
+
+.eov4-input:focus,
+.eov4-textarea:focus {
+  outline: none;
+  border-color: #c28c4e;
+  background: #fff;
+}
+
+.eov4-quick-amounts {
+  display: flex;
+  gap: 8px;
+}
+
+.eov4-chip-btn {
+  flex: 1;
+  padding: 10px 4px;
+  border-radius: 12px;
+  border: 1px solid #eadcca;
+  background: #faf6f0;
+  color: #2d1c10;
+  font-weight: 700;
+  font-size: 12.5px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.eov4-chip-btn.active {
+  background: #c28c4e;
+  border-color: #c28c4e;
+  color: #fff;
+}
+
+.eov4-success-box {
+  background: #e8f7ee;
+  border: 1px solid #bfe8cf;
+  color: #1f9d55;
+  border-radius: 14px;
+  padding: 16px;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.eov4-empty-box {
+  background: #faf6f0;
+  border: 1px dashed #eadcca;
+  border-radius: 14px;
+  padding: 24px;
+  text-align: center;
+  font-size: 13px;
+  color: #8a7a66;
+}
+
+.eov4-payroll-net {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fdf1e0;
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-top: 6px;
+}
+
+.eov4-payroll-net span {
+  font-size: 13px;
+  font-weight: 700;
+  color: #6b5c4a;
+}
+
+.eov4-payroll-net strong {
+  font-size: 18px;
+  font-weight: 800;
+  color: #c2790e;
+}
+
+.eov4-kpi-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.eov4-kpi-detail-card {
+  background: #faf6f0;
+  border: 1px solid #eadcca;
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.eov4-kpi-detail-card strong {
+  font-size: 15px;
+  color: #2d1c10;
+}
+
+.eov4-filter-row {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+  scrollbar-width: none;
+}
+.eov4-filter-row::-webkit-scrollbar { display: none; }
+
+.eov4-filter-chip {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-radius: 99px;
+  border: 1px solid #eadcca;
+  background: #faf6f0;
+  color: #6b5c4a;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: inherit;
+}
+
+.eov4-filter-chip.active {
+  background: #2d1c10;
+  border-color: #2d1c10;
+  color: #fff;
+}
