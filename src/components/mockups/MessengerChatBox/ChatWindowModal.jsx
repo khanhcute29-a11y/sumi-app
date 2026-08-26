@@ -41,6 +41,7 @@ export default function ChatWindowModal({ onClose, profile }) {
     Promise.all([fetchMyChatRooms(), fetchChatDirectory()])
       .then(([roomList, dirList]) => {
         if (cancelled) return;
+        console.log('[ChatDebug] roomList count=', roomList.length, JSON.stringify(roomList.slice(0, 6)));
         setRooms(roomList);
         setDirectory(dirList.filter((u) => u.id !== profile?.id));
         if (roomList.length) setCurrentRoomId(roomList[0].id);
