@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import EditOrderModal from './orders/EditOrderModal';
 import { supabase } from '../lib/supabaseClient';
 import { assignOrderPackage, acceptOrderPackage } from '../lib/featureFlags';
 import { useAuth } from '../lib/AuthContext';
@@ -112,18 +113,19 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
   const [photoPreview, setPhotoPreview] = useState(null);
   const cameraInputRef = React.useRef(null);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editLock, setEditLock] = useState(null);
-  const [editFormData, setEditFormData] = useState({});
-  const [changeHistory, setChangeHistory] = useState([]);
-  const [editReason, setEditReason] = useState('');
 
   const director = ['owner', 'admin'].includes(profile?.role) || (profile?.extra_roles || []).some(x => ['owner', 'admin'].includes(x));
-  const isKitchenLead = ['kitchen_lead', 'bep_truong'].includes(profile?.role) || (profile?.extra_roles || []).some(x => ['kitchen_lead', 'bep_truong'].includes(x));
-  const canEditOrder = data?.order?.created_by_id === profile?.id || isKitchenLead;
+
+  // Quyền sửa đơn KHÔNG đoán ở client nữa. Trước đây dòng này so `created_by_id`
+  // — một cột không hề tồn tại (tên thật là `created_by`) — nên người tạo đơn
+  // vĩnh viễn không sửa được đơn của chính mình, còn bếp trưởng thì sửa được
+  // MỌI đơn kể cả đơn không được giao. Giờ hỏi thẳng database qua
+  // `sumi_quyen_sua_don`, đúng hàm mà API sửa đơn dùng để chặn.
+  const [quyenSua, setQuyenSua] = useState(null);
 
   const load = async () => {
-    const [o, i, p, u, e, kpi, ops, att, changes] = await Promise.all([
-      supabase.from('orders').select('id,order_code,order_type,status_v2,required_at,fulfillment_method_v2,address,note,created_by_name,created_at,confidentiality,version,ship_fee,deposit,payment_method,total,customers(name,phone)').eq('id', orderId).single(),
+    const [o, i, p, u, e, kpi, ops, att, changes, qs] = await Promise.all([
+      supabase.from('orders').select('id,order_code,order_type,status_v2,required_at,fulfillment_method_v2,address,note,created_by,created_by_name,created_at,confidentiality,version,ship_fee,deposit,payment_method,total,customers(name,phone)').eq('id', orderId).single(),
       supabase.from('order_items').select('id,name_snapshot,quantity,unit,specification,unit_price,display_order').eq('order_id', orderId).order('display_order'),
       supabase.from('order_work_packages_readable').select('id,unit_id,status,due_at,accepted_at,completed_at,version,organization_units(name,code),work_package_items(order_item_id,quantity)').eq('order_id', orderId),
       supabase.from('organization_units').select('id,name,code').eq('unit_type', 'kitchen').eq('active', true),
@@ -131,8 +133,11 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       supabase.from('kpi_logs').select('id,event_type,created_at,staff_name,staff_id,gps_latitude,gps_longitude,photo_url,notes').eq('order_id', orderId).order('created_at', { ascending: false }),
       supabase.from('order_operations_list').select('production_started_at,production_completed_at,production_minutes,delivery_started_at,delivery_completed_at,delivery_minutes,delivery_provider,provider_label,shipping_fee,driver_name,is_overdue,overdue_stage,overdue_minutes,was_late,late_staff_names').eq('id', orderId).single(),
       supabase.from('order_attachments').select('id,attachment_type,storage_path,mime_type,created_at').eq('order_id', orderId).order('created_at', { ascending: false }),
-      supabase.from('order_change_logs').select('id,field_name,old_value,new_value,edited_by_name,created_at').eq('order_id', orderId).order('created_at', { ascending: false })
+      supabase.from('order_change_logs').select('id,field_name,old_value,new_value,edited_by_name,created_at').eq('order_id', orderId).order('created_at', { ascending: false }),
+      supabase.rpc('sumi_quyen_sua_don', { p_order_id: orderId })
     ]);
+
+    setQuyenSua(qs?.data || null);
 
     if (o.error) throw o.error;
 
@@ -469,72 +474,9 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
     }
   };
 
-  const checkEditLock = async () => {
-    try {
-      const { data, error } = await supabase.rpc('check_order_edit_lock', {
-        p_order_id: orderId
-      });
-      if (error) throw error;
-      setEditLock(data);
-      await fetchChangeHistory();
-      return data;
-    } catch (e) {
-      setError(e.message);
-      return null;
-    }
-  };
 
-  const fetchChangeHistory = async () => {
-    try {
-      const { data, error } = await supabase.rpc('get_order_change_history', {
-        p_order_id: orderId
-      });
-      if (error) throw error;
-      setChangeHistory(data || []);
-    } catch (e) {
-      // Silent fail
-    }
-  };
 
-  const handleEditOpen = async () => {
-    const lock = await checkEditLock();
-    if (lock) {
-      setEditFormData({
-        address: o.address || '',
-        delivery_address: o.delivery_address || '',
-        delivery_date: o.delivery_date || '',
-        required_at: o.required_at || '',
-        note: o.note || ''
-      });
-      setShowEditModal(true);
-    }
-  };
 
-  const saveEdit = async (fieldName, oldValue, newValue) => {
-    setBusy(true);
-    setError('');
-    try {
-      const { data, error } = await supabase.rpc('edit_order_field', {
-        p_order_id: orderId,
-        p_editor_id: profile.id,
-        p_editor_name: profile.full_name || profile.email,
-        p_field_name: fieldName,
-        p_old_value: String(oldValue || ''),
-        p_new_value: String(newValue || '')
-      });
-
-      if (error) throw error;
-      if (!data.success) throw new Error(data.message || 'Failed to save edit');
-
-      await load();
-      await fetchChangeHistory();
-      onChanged?.();
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const loadStaffForPackage = async (pkg) => {
     setStaffLoading(true);
@@ -733,18 +675,23 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                 ⚡ Bánh có sẵn (Vào kho ngay)
               </button>
             )}
-            {canEditOrder && o.status_v2 === 'pending' && (
+            {quyenSua && (quyenSua.duoc_sua || quyenSua.ly_do === 'qua_han') && (
               <button
                 type="button"
                 disabled={busy}
-                onClick={handleEditOpen}
+                onClick={() => setShowEditModal(true)}
                 style={{
-                  minHeight: 38, padding: '0 12px', borderRadius: 10, border: '1.5px solid #d96b43',
-                  background: '#fde8de', color: '#d96b43', fontWeight: 800, fontSize: 13, cursor: 'pointer'
+                  minHeight: 44, padding: '0 12px', borderRadius: 10,
+                  border: `1.5px solid ${quyenSua.duoc_sua ? '#d96b43' : '#96690a'}`,
+                  background: quyenSua.duoc_sua ? '#fde8de' : '#fff8e6',
+                  color: quyenSua.duoc_sua ? '#d96b43' : '#96690a',
+                  fontWeight: 800, fontSize: 13, cursor: 'pointer'
                 }}
-                title="Chỉnh sửa thông tin đơn hàng (creator hoặc bếp trưởng)"
+                title={quyenSua.thong_bao || ''}
               >
-                ✏️ Chỉnh sửa
+                {quyenSua.duoc_sua
+                  ? '✏️ Chỉnh sửa đơn'
+                  : quyenSua.dang_cho_duyet ? '⏳ Đang chờ duyệt' : '📨 Gửi yêu cầu chỉnh sửa'}
               </button>
             )}
             <button
@@ -1517,125 +1464,13 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
         </div>
       )}
 
-      {/* Modal: Chỉnh sửa đơn hàng */}
       {showEditModal && (
-        <div onClick={() => !busy && setShowEditModal(false)} style={{
-          position: 'fixed', inset: 0, zIndex: 115, background: 'rgba(0,0,0,0.5)',
-          display: 'flex', justifyContent: 'center', alignItems: 'flex-end'
-        }}>
-          <div onClick={e => e.stopPropagation()} style={{
-            width: '100%', maxWidth: 600, background: 'var(--surface-app)', borderRadius: '20px 20px 0 0',
-            padding: 24, maxHeight: '85vh', overflowY: 'auto'
-          }}>
-            <h3 style={{ margin: '0 0 16px 0', fontSize: 18, color: 'var(--text-primary)', fontWeight: 900 }}>
-              ✏️ Chỉnh sửa đơn hàng
-            </h3>
-
-            {editLock && !editLock.can_edit && (
-              <div style={{
-                marginBottom: 16, padding: 12, background: '#fde8de', borderRadius: 12,
-                color: '#d96b43', fontWeight: 700, fontSize: 13
-              }}>
-                ⏰ Đã quá 30 phút. Cần yêu cầu duyệt từ Giám đốc để chỉnh sửa.
-              </div>
-            )}
-
-            {editLock?.can_edit && (
-              <>
-                <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: 'block', fontWeight: 700, fontSize: 13, marginBottom: 6, color: 'var(--text-primary)' }}>
-                    📍 Địa chỉ giao
-                  </label>
-                  <textarea
-                    value={editFormData.delivery_address || ''}
-                    onChange={(e) => setEditFormData({...editFormData, delivery_address: e.target.value})}
-                    style={{
-                      width: '100%', padding: 10, borderRadius: 10, border: '1px solid var(--border-default)',
-                      fontSize: 14, fontFamily: 'inherit', minHeight: 60
-                    }}
-                    placeholder="Nhập địa chỉ giao hàng"
-                  />
-                </div>
-
-                <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: 'block', fontWeight: 700, fontSize: 13, marginBottom: 6, color: 'var(--text-primary)' }}>
-                    📅 Ngày giao dự kiến
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={editFormData.required_at || ''}
-                    onChange={(e) => setEditFormData({...editFormData, required_at: e.target.value})}
-                    style={{
-                      width: '100%', padding: 10, borderRadius: 10, border: '1px solid var(--border-default)',
-                      fontSize: 14
-                    }}
-                  />
-                </div>
-
-                <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: 'block', fontWeight: 700, fontSize: 13, marginBottom: 6, color: 'var(--text-primary)' }}>
-                    📝 Ghi chú
-                  </label>
-                  <textarea
-                    value={editFormData.note || ''}
-                    onChange={(e) => setEditFormData({...editFormData, note: e.target.value})}
-                    style={{
-                      width: '100%', padding: 10, borderRadius: 10, border: '1px solid var(--border-default)',
-                      fontSize: 14, fontFamily: 'inherit', minHeight: 60
-                    }}
-                    placeholder="Ghi chú đơn hàng"
-                  />
-                </div>
-
-                {error && (
-                  <div style={{
-                    marginBottom: 14, padding: 10, background: '#fee2e2', borderRadius: 10,
-                    color: '#b42318', fontWeight: 700, fontSize: 14
-                  }}>
-                    ⚠️ {error}
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', gap: 10 }}>
-                  <button
-                    onClick={() => setShowEditModal(false)}
-                    disabled={busy}
-                    style={{
-                      flex: 1, padding: '12px 16px', background: 'var(--surface-sunken)', color: 'var(--text-primary)',
-                      border: 0, borderRadius: 10, fontWeight: 700, cursor: 'pointer', fontSize: 14
-                    }}
-                  >
-                    Huỷ
-                  </button>
-                  <button
-                    onClick={async () => {
-                      if (editFormData.delivery_address !== o.delivery_address) {
-                        await saveEdit('delivery_address', o.delivery_address, editFormData.delivery_address);
-                      }
-                      if (editFormData.required_at !== o.required_at) {
-                        await saveEdit('required_at', o.required_at, editFormData.required_at);
-                      }
-                      if (editFormData.note !== o.note) {
-                        await saveEdit('note', o.note, editFormData.note);
-                      }
-                      setShowEditModal(false);
-                    }}
-                    disabled={busy}
-                    style={{
-                      flex: 1, padding: '12px 16px', background: '#d96b43', color: '#fff',
-                      border: 0, borderRadius: 10, fontWeight: 700, cursor: busy ? 'not-allowed' : 'pointer',
-                      fontSize: 14, opacity: busy ? 0.5 : 1
-                    }}
-                  >
-                    {busy ? '⏳ Đang lưu...' : '✓ Lưu thay đổi'}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+        <EditOrderModal
+          orderId={orderId}
+          onClose={() => setShowEditModal(false)}
+          onSaved={async () => { await load(); onChanged?.(); }}
+        />
       )}
     </div>
   );
 }
-
