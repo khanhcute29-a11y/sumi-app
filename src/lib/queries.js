@@ -721,11 +721,27 @@ export async function fetchShiftLogsRange(fromDate, toDate) {
   return data;
 }
 
-export async function addShiftCheckin({ staffId, staffName, workDate, shiftLabel, branch, expectedStart, lateMinutes, wageEarned, reason, photoUrl }) {
+// Tách chuỗi "10.912,106.735" mà màn hình chấm công gửi lên thành hai số.
+//
+// ⚠️ LỖI CŨ ĐÃ TỪNG XẢY RA Ở ĐÂY: hàm `addShiftCheckin` nhận `gpsCoords` trong
+// payload nhưng KHÔNG khai báo trường đó, nên JavaScript âm thầm bỏ qua và chưa
+// một lần chấm công nào có toạ độ được lưu. Nhân viên vẫn thấy "đã lấy vị trí"
+// trên màn hình và tin là hệ thống có ghi. Không có lỗi nào bắn ra.
+// => Thêm trường mới vào đây thì PHẢI thêm cả vào lệnh insert bên dưới.
+function tachToaDo(gpsCoords) {
+  if (!gpsCoords) return { lat: null, lng: null };
+  const [lat, lng] = String(gpsCoords).split(',').map((x) => Number(String(x).trim()));
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return { lat: null, lng: null };
+  return { lat, lng };
+}
+
+export async function addShiftCheckin({ staffId, staffName, workDate, shiftLabel, branch, expectedStart, lateMinutes, wageEarned, reason, photoUrl, gpsCoords, gpsAccuracy }) {
+  const { lat, lng } = tachToaDo(gpsCoords);
   const { error } = await supabase.from('shift_logs').insert({
     staff_id: staffId, staff_name: staffName, work_date: workDate, shift_label: shiftLabel, branch: branch || null,
     expected_start: expectedStart, type: 'checkin', checkin_time: new Date().toISOString(),
     late_minutes: lateMinutes || 0, wage_earned: wageEarned || 0, reason: reason || null, photo_url: photoUrl || null,
+    gps_lat: lat, gps_lng: lng, gps_accuracy_m: Number.isFinite(gpsAccuracy) ? gpsAccuracy : null,
   });
   if (error) throw error;
 }
@@ -739,10 +755,12 @@ export async function addLeaveRequest({ staffId, staffName, workDate, shiftLabel
   if (error) throw error;
 }
 
-export async function addShiftCheckout({ staffId, staffName, workDate, shiftLabel, branch, photoUrl }) {
+export async function addShiftCheckout({ staffId, staffName, workDate, shiftLabel, branch, photoUrl, gpsCoords, gpsAccuracy }) {
+  const { lat, lng } = tachToaDo(gpsCoords);
   const { error } = await supabase.from('shift_logs').insert({
     staff_id: staffId, staff_name: staffName, work_date: workDate, shift_label: shiftLabel, branch: branch || null,
     type: 'checkout', checkin_time: new Date().toISOString(), photo_url: photoUrl || null,
+    gps_lat: lat, gps_lng: lng, gps_accuracy_m: Number.isFinite(gpsAccuracy) ? gpsAccuracy : null,
   });
   if (error) throw error;
 }

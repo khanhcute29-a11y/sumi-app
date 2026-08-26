@@ -59,6 +59,10 @@ async function mountApp() {
     const mod = await import('./components/mockups/EmployeeDashboard/EmployeeOverviewV4.jsx');
     RootComponent = mod.default;
     wrapWithErrorBoundary = false;
+  } else if (_mkParam === 'cham-cong-v2') {
+    const mod = await import('./components/mockups/ChamCongV2Demo.jsx');
+    RootComponent = mod.default;
+    wrapWithErrorBoundary = false;
   } else if (_mkParam === 'messenger-chat' || _mkParam === 'chat-box' || _mkParam === 'chat') {
     const mod = await import('./components/mockups/MessengerChatBox/MessengerChatBox.jsx');
     RootComponent = mod.default;

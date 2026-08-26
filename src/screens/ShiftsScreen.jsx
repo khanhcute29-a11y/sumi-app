@@ -21,7 +21,18 @@ import { supabase } from '../lib/supabaseClient';
 import { chuanHoaCa, gomChamCongNgay, tomTatThang, tinhChenhLech, boPhanCuaHoSo, caCuaBoPhan, TEN_BO_PHAN } from '../lib/chamCong';
 import ChamCongNhanVien from '../components/shifts/ChamCongNhanVien';
 import ChamCongQuanLy from '../components/shifts/ChamCongQuanLy';
+import ChamCongV2 from '../components/shifts/v2/ChamCongV2';
 import '../styles/cham-cong.css';
+
+// Giao diện Chấm Công V2 (dựng theo mockup time-attendance-v2.html).
+// CHƯA BẬT MẶC ĐỊNH: chỉ hiện khi mở kèm `?ccv2=1`.
+// Nhân viên đang dùng bản cũ không bị ảnh hưởng gì cho tới khi thử xong trên
+// máy thật của từng bộ phận. Bật thật = đổi giá trị mặc định ở dòng dưới.
+const DUNG_GIAO_DIEN_V2 = (() => {
+  try {
+    return new URLSearchParams(window.location.search).get('ccv2') === '1';
+  } catch { return false; }
+})();
 
 const BRANCHES = ['Vĩnh Phú 42', 'Quốc lộ 13'];
 const SHIFT_PRESETS = [
@@ -73,6 +84,7 @@ function CheckinModal({ staffName, staffId, defaultBranch, danhSachCa = [], boPh
   const [photoUrl, setPhotoUrl] = useState('');
   const [useGps, setUseGps] = useState(false);
   const [gpsCoords, setGpsCoords] = useState(null);
+  const [gpsAccuracy, setGpsAccuracy] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -85,8 +97,9 @@ function CheckinModal({ staffName, staffId, defaultBranch, danhSachCa = [], boPh
     try {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          const { latitude, longitude } = position.coords;
+          const { latitude, longitude, accuracy } = position.coords;
           setGpsCoords(`${latitude},${longitude}`);
+          setGpsAccuracy(Number.isFinite(accuracy) ? Math.round(accuracy) : null);
         },
         (err) => setError(`GPS lỗi: ${err.message}`)
       );
@@ -109,6 +122,7 @@ function CheckinModal({ staffName, staffId, defaultBranch, danhSachCa = [], boPh
       expectedStart: null, lateMinutes: 0, wageEarned: 0,
       reason: null, photoUrl: photoUrl || null,
       gpsCoords: gpsCoords || null,
+      gpsAccuracy: gpsAccuracy ?? null,
     };
 
     try {
@@ -321,6 +335,7 @@ function CheckoutModal({ staffName, staffId, activeCheckins, defaultBranch, onCl
   const [photoUrl, setPhotoUrl] = useState('');
   const [useGps, setUseGps] = useState(false);
   const [gpsCoords, setGpsCoords] = useState(null);
+  const [gpsAccuracy, setGpsAccuracy] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -339,8 +354,9 @@ function CheckoutModal({ staffName, staffId, activeCheckins, defaultBranch, onCl
     try {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          const { latitude, longitude } = position.coords;
+          const { latitude, longitude, accuracy } = position.coords;
           setGpsCoords(`${latitude},${longitude}`);
+          setGpsAccuracy(Number.isFinite(accuracy) ? Math.round(accuracy) : null);
         },
         (err) => setError(`GPS lỗi: ${err.message}`)
       );
@@ -361,7 +377,8 @@ function CheckoutModal({ staffName, staffId, activeCheckins, defaultBranch, onCl
       shiftLabel: currentShiftLabel,
       branch: selectedCheckin?.branch || defaultBranch || null,
       photoUrl: photoUrl || null,
-      gpsCoords: gpsCoords || null
+      gpsCoords: gpsCoords || null,
+      gpsAccuracy: gpsAccuracy ?? null
     };
     try {
       if (!navigator.onLine) throw new Error('offline');
@@ -726,6 +743,27 @@ export default function ShiftsScreen() {
           )}
           {loading ? (
             <div style={{ padding: 30, textAlign: 'center', color: 'var(--text-muted)' }}>Đang tải chấm công…</div>
+          ) : DUNG_GIAO_DIEN_V2 ? (
+            /* Giao diện mới. Nhận ĐÚNG dữ liệu mà bản cũ đang dùng và gọi lại
+               ĐÚNG các hàm mở modal cũ — không có đường ghi dữ liệu nào mới. */
+            <ChamCongV2
+              hoSo={profile}
+              laQuanLy={laQuanLy}
+              laGiamDoc={laGiamDoc}
+              danhSachQuanLy={danhSachQuanLy}
+              toiTrongDanhSach={toiTrongDanhSach}
+              chamCuaToi={chamCuaToi}
+              danhSachCa={danhSachCa}
+              boPhanTheoNguoi={boPhanTheoNguoi}
+              boPhanCuaToi={boPhanCuaToi}
+              logsHomNay={logs}
+              tomTat={tomTat}
+              gioHienTai={currentTime}
+              onCheckin={() => setShowCheckin(true)}
+              onCheckout={() => setShowCheckout(true)}
+              onXinNghi={() => setShowLeave(true)}
+              onTaiLai={async () => { loadLogs(); }}
+            />
           ) : (laQuanLy && !xemChamCongCuaToi) ? (
             <ChamCongQuanLy
               danhSach={danhSachQuanLy}
