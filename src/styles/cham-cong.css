@@ -386,7 +386,7 @@
 
 /* ── Máy tính bảng trở lên ── */
 @media (min-width: 700px) {
-  .cc-summary-grid { grid-template-columns: repeat(4, 1fr); }
+  .cc-summary-grid { grid-template-columns: repeat(5, 1fr); }
   .cc-stats-grid   { grid-template-columns: repeat(4, 1fr); }
   .cc-today-card   { padding: 20px 22px; }
   .cc-today-date   { font-size: 22px; }

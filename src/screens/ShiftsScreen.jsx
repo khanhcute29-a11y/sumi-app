@@ -18,7 +18,7 @@ import { localDateStr } from '../lib/date';
 import { IconClipboard, IconCheck, IconClock, IconQuestion } from '../components/icons/FrogIcons';
 import { WeeklyScheduleSection } from '../components/WeeklyScheduleSection';
 import { supabase } from '../lib/supabaseClient';
-import { chuanHoaCa, gomChamCongNgay, tomTatThang, caGanNhat, tinhChenhLech } from '../lib/chamCong';
+import { chuanHoaCa, gomChamCongNgay, tomTatThang, tinhChenhLech, boPhanCuaHoSo, caCuaBoPhan, TEN_BO_PHAN } from '../lib/chamCong';
 import ChamCongNhanVien from '../components/shifts/ChamCongNhanVien';
 import ChamCongQuanLy from '../components/shifts/ChamCongQuanLy';
 import '../styles/cham-cong.css';
@@ -64,7 +64,7 @@ function calculateNetWorkHours(inTimeStr, outTimeStr) {
   };
 }
 
-function CheckinModal({ staffName, staffId, defaultBranch, danhSachCa = [], onClose, onDone }) {
+function CheckinModal({ staffName, staffId, defaultBranch, danhSachCa = [], boPhan = null, onClose, onDone }) {
   const now = new Date();
   const [workDate, setWorkDate] = useState(localDateStr(now));
   const [checkinTime, setCheckinTime] = useState(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
@@ -75,16 +75,6 @@ function CheckinModal({ staffName, staffId, defaultBranch, danhSachCa = [], onCl
   const [gpsCoords, setGpsCoords] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  // Ca CHUẨN (giờ quy định) — tách hẳn khỏi "tên ca/khâu" ở dưới.
-  // Trước đây `expected_start` bị ghi bằng CHÍNH giờ bấm vào, nên hệ thống
-  // không bao giờ tính được đi muộn. Chọn ca ở đây thì mới có mốc để đối chiếu.
-  const [caChuan, setCaChuan] = useState('');
-  useEffect(() => {
-    if (caChuan || !danhSachCa.length) return;
-    const goiY = caGanNhat(checkinTime, danhSachCa);
-    if (goiY) setCaChuan(goiY.batDau);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [danhSachCa.length]);
 
   // Get GPS location
   const captureGps = async () => {
@@ -111,16 +101,12 @@ function CheckinModal({ staffName, staffId, defaultBranch, danhSachCa = [], onCl
     setSaving(true);
     setError('');
 
-    // Có chọn ca chuẩn thì ghi giờ quy định thật + số phút muộn thật.
-    // Không chọn thì giữ nguyên nếp cũ (giờ bấm vào, muộn 0) để không làm lệch
-    // dữ liệu của những người không theo ca cố định.
-    const ca = danhSachCa.find((x) => x.batDau === caChuan) || null;
-    const lech = ca ? tinhChenhLech(ca, checkinTime, null) : null;
+    // Giờ chuẩn và số phút muộn KHÔNG do màn hình này quyết nữa — trigger
+    // `sumi_tu_tinh_di_muon` dưới database sẽ ghi đè bằng con số đúng theo bộ
+    // phận. Gửi lên đây chỉ để hàng đợi offline có đủ trường.
     const payload = {
       staffId, staffName, workDate, shiftLabel: shiftLabel.trim(), branch: branch || null,
-      expectedStart: ca ? `${ca.batDau}:00` : `${checkinTime}:00`,
-      lateMinutes: lech ? Math.max(0, lech.lechVao || 0) : 0,
-      wageEarned: 0,
+      expectedStart: null, lateMinutes: 0, wageEarned: 0,
       reason: null, photoUrl: photoUrl || null,
       gpsCoords: gpsCoords || null,
     };
@@ -172,34 +158,49 @@ function CheckinModal({ staffName, staffId, defaultBranch, danhSachCa = [], onCl
           </div>
         </div>
 
-        {/* Ca chuẩn — mốc để tính đi muộn / tăng ca */}
-        {danhSachCa.length > 0 && (() => {
-          const ca = danhSachCa.find((x) => x.batDau === caChuan) || null;
-          const lech = ca ? tinhChenhLech(ca, checkinTime, null) : null;
+        {/* Ca chuẩn của bộ phận — CHỈ ĐỌC. Nhân viên không tự chọn được mốc
+            tính muộn của chính mình; database mới là nơi quyết. */}
+        {(() => {
+          const cua = caCuaBoPhan(danhSachCa, boPhan);
+          if (!boPhan || !cua.length) {
+            return (
+              <div style={{ padding: '10px 12px', borderRadius: 12, background: '#f9fafb', border: '1px solid #e5e7eb', fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
+                Bộ phận của bạn <b>không theo ca cố định</b> nên lần chấm này không tính đi muộn.
+              </div>
+            );
+          }
+          // Ca gần giờ bấm nhất — đúng cách database chọn.
+          const phut = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+          let ca = cua[0]; let min = Infinity;
+          cua.forEach((c) => {
+            let d = Math.abs(phut(checkinTime) - phut(c.moc));
+            if (d > 720) d = 1440 - d;
+            if (d < min) { min = d; ca = c; }
+          });
+          const ngoai = min > 180;
+          const lech = ngoai ? null : tinhChenhLech(ca, checkinTime, null);
           return (
-            <div>
-              <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
-                Ca chuẩn (dùng để tính đi muộn / tăng ca)
-              </label>
-              <select
-                value={caChuan}
-                onChange={(e) => setCaChuan(e.target.value)}
-                style={{ width: '100%', minHeight: 44, padding: '0 10px', fontSize: 14, fontWeight: 700, border: '1px solid var(--border-default)', borderRadius: 10, background: 'var(--surface-card)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
-              >
-                <option value="">Không theo ca cố định</option>
-                {danhSachCa.map((x) => (
-                  <option key={x.batDau} value={x.batDau}>{x.icon} {x.ten} ({x.batDau}–{x.ketThuc})</option>
-                ))}
-              </select>
-              {lech && (
-                <div style={{ marginTop: 6, fontSize: 13, fontWeight: 800, color: lech.loaiVao === 'late' ? '#b45309' : '#15803d' }}>
-                  {lech.loaiVao === 'late' ? '⏰ ' : lech.loaiVao === 'early' ? '🟢 ' : '✓ '}{lech.nhanVao}
+            <div style={{ padding: '12px 14px', borderRadius: 14, background: ngoai ? '#f9fafb' : lech?.loaiVao === 'late' ? '#fffbeb' : '#f0fdf4', border: `1.5px solid ${ngoai ? '#e5e7eb' : lech?.loaiVao === 'late' ? '#fcd34d' : '#86efac'}` }}>
+              <div style={{ fontSize: 11.5, fontWeight: 900, letterSpacing: '.06em', color: '#a08060', textTransform: 'uppercase', marginBottom: 4 }}>
+                Ca chuẩn của bạn · {TEN_BO_PHAN[boPhan] || boPhan}
+              </div>
+              {ngoai ? (
+                <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
+                  Giờ bạn chấm nằm <b>ngoài khung ca</b> của bộ phận nên không tính đi muộn.
                 </div>
-              )}
-              {!ca && (
-                <div style={{ marginTop: 6, fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                  Không chọn ca thì hệ thống <b>không tính được</b> đi muộn hay tăng ca cho lần chấm này.
-                </div>
+              ) : (
+                <>
+                  <div style={{ fontSize: 15, fontWeight: 900, color: 'var(--text-primary)' }}>
+                    {ca.icon} {ca.ten} · {ca.batDau}–{ca.ketThuc}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: '#725f50', marginTop: 2 }}>
+                    Phải có mặt trước <b>{ca.moc}</b> ({ca.phutSom} phút trước giờ vào ca) · {ca.soGio} tiếng có mặt
+                  </div>
+                  <div style={{ marginTop: 6, fontSize: 14, fontWeight: 900, color: lech.loaiVao === 'late' ? '#b45309' : '#15803d' }}>
+                    {lech.loaiVao === 'late' ? '⏰ ' : lech.loaiVao === 'early' ? '🟢 ' : '✓ '}{lech.nhanVao}
+                    {lech.viPhamDiTre && <span style={{ marginLeft: 6, fontSize: 12, color: '#b42318' }}>· quá 15 phút, sẽ bị ghi nhận vi phạm</span>}
+                  </div>
+                </>
               )}
             </div>
           );
@@ -485,7 +486,7 @@ function AddManualShiftModal({ staffName, staffId, defaultBranch, onClose, onDon
     setSaving(true);
     setError('');
     try {
-      await addShiftCheckin({ staffId, staffName, workDate, shiftLabel: shiftLabel.trim(), branch, expectedStart: `${startTime}:00`, lateMinutes: 0, wageEarned: 0, reason: reason.trim() || 'Bổ sung ca làm' });
+      await addShiftCheckin({ staffId, staffName, workDate, shiftLabel: shiftLabel.trim(), branch, expectedStart: `${startTime}:00`, lateMinutes: 0, wageEarned: 0, reason: '[BỔ SUNG] ' + (reason.trim() || 'Bổ sung ca làm') });
       await addShiftCheckout({ staffId, staffName, workDate, shiftLabel: shiftLabel.trim(), branch, photoUrl: null });
       onDone();
     } catch (err) {
@@ -597,10 +598,13 @@ export default function ShiftsScreen() {
   }, []);
   const refreshAfterAction = () => { loadLogs(); window.dispatchEvent(new Event('sumi-shift-changed')); };
 
-  // Giờ chuẩn của các ca lấy từ shift_configs (bảng này đang có bản ghi trùng,
-  // chuanHoaCa() gộp lại). Hồ sơ nhân sự dùng cho màn hình quản lý.
+  // Hồ sơ nhân sự dùng cho màn hình quản lý.
   useEffect(() => {
-    fetchShiftConfigs().then(setCauHinhCa).catch(() => setCauHinhCa([]));
+    // Giờ chuẩn lấy từ bảng quy định MỚI `sumi_quy_dinh_ca` (theo bộ phận),
+    // không dùng `shift_configs` nữa — bảng đó vẫn để cho Lịch tuần và KPI.
+    supabase.from('sumi_quy_dinh_ca').select('*').eq('active', true)
+      .then(({ data }) => setCauHinhCa(data || []))
+      .catch(() => setCauHinhCa([]));
     supabase.from('profiles').select('id,full_name,role,station,phone')
       .eq('approved', true).neq('active', false).order('full_name')
       .then(({ data }) => setHoSoList(data || []))
@@ -626,25 +630,28 @@ export default function ShiftsScreen() {
   const laGiamDoc = vaiTro.some((r) => ['owner', 'admin'].includes(r));
   const khauQuanLy = vaiTro.includes('deputy_director_x41') ? 'xuong41'
     : vaiTro.includes('deputy_director_x42') ? 'xuong42'
-      : vaiTro.some((r) => String(r).startsWith('kitchen_lead')) ? (profile?.station || '_khac')
+      : vaiTro.some((r) => String(r).startsWith('kitchen_lead')) ? (boPhanCuaHoSo(profile) || '_khac')
         : null;
   const laQuanLy = laGiamDoc || !!khauQuanLy;
 
   const danhSachCa = chuanHoaCa(cauHinhCa);
-  const chamNgay = gomChamCongNgay(logs, danhSachCa);
+  // Mỗi người thuộc bộ phận nào -> để biết ca chuẩn nào áp cho họ.
+  const boPhanTheoNguoi = {};
+  hoSoList.forEach((h) => { boPhanTheoNguoi[h.id] = boPhanCuaHoSo(h); });
+  const boPhanCuaToi = boPhanTheoNguoi[profile?.id] ?? boPhanCuaHoSo(profile);
+  const chamNgay = gomChamCongNgay(logs, danhSachCa, boPhanTheoNguoi);
   const rong = (id, ten) => ({
     staffId: id, ten, vaoISO: null, raISO: null, vao: null, ra: null,
     ca: null, coCaChuan: false, chenhLech: null, trangThai: 'upcoming',
     ghiChu: '', xinNghi: false, soGio: null,
   });
   const chamCuaToi = chamNgay.get(profile?.id) || rong(profile?.id, profile?.full_name);
-  const tomTat = tomTatThang(logsThang, profile?.id, danhSachCa);
+  const tomTat = tomTatThang(logsThang, profile?.id, danhSachCa, boPhanCuaToi);
 
   const trongPhamVi = hoSoList.filter((h) => {
     if (laGiamDoc) return true;
     if (!khauQuanLy) return h.id === profile?.id;
-    const st = (h.station || '').trim() || '_khac';
-    return st === khauQuanLy || h.id === profile?.id;
+    return (boPhanCuaHoSo(h) || '_khac') === khauQuanLy || h.id === profile?.id;
   });
   const danhSachQuanLy = trongPhamVi.map((h) => ({
     hoSo: h,
@@ -761,6 +768,7 @@ export default function ShiftsScreen() {
       {showCheckin && (
         <CheckinModal
           danhSachCa={danhSachCa}
+          boPhan={boPhanCuaToi}
           staffId={profile?.id}
           staffName={profile?.full_name}
           defaultBranch={profile?.station}

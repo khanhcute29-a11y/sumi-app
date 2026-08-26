@@ -13,3 +13,8 @@ pnpm-debug.log*
 .superpowers/
 .env*
 CURRENT_STATUS.md
+
+# Bảng lương: chứa lương, BHXH, thực lĩnh của 22 nhân viên có tên thật.
+# Kho mã này ĐANG CÔNG KHAI -> tuyệt đối không đẩy lên.
+bang_cham_luong.md
+*.xlsx

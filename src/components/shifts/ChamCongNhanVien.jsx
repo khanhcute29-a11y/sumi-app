@@ -88,8 +88,8 @@ export default function ChamCongNhanVien({
               <div className="cc-today-shift-name">{tenCa}</div>
               <div className="cc-today-shift-time">
                 {ca
-                  ? `Quy định: ${ca.batDau}–${ca.ketThuc}${ca.soGio ? ` (${ca.soGio} tiếng)` : ''}`
-                  : 'Chưa gán ca chuẩn cho lần chấm này'}
+                  ? `Quy định: ${ca.batDau}–${ca.ketThuc} (${ca.soGio} tiếng có mặt) · phải tới trước ${ca.moc}`
+                  : 'Bộ phận của bạn không theo ca cố định'}
               </div>
             </div>
             {tt && (
@@ -114,9 +114,14 @@ export default function ChamCongNhanVien({
               Chuẩn {dev.chuanVao}–{dev.chuanRa}
             </span>
           </div>
+          {dev.viPhamDiTre && (
+            <div style={{ marginBottom: 10, padding: '9px 12px', borderRadius: 12, background: '#fee2e2', border: '1px solid #fca5a5', color: '#b42318', fontSize: 13, fontWeight: 800, lineHeight: 1.5 }}>
+              ⚠️ Đi trễ quá 15 phút — theo Bảng vi phạm của công ty, lần này bị ghi nhận là một lỗi (ảnh hưởng tiền chuyên cần cuối tháng).
+            </div>
+          )}
           <div className="cc-deviation-grid">
             <div className={`cc-deviation-box${dev.loaiVao === 'late' ? ' alert' : dev.loaiVao === 'early' ? ' success' : ''}`}>
-              <span className="cc-dev-label">Vào ca (Quy định: {dev.chuanVao})</span>
+              <span className="cc-dev-label">Vào ca · mốc {dev.moc} (vào ca {dev.chuanVao})</span>
               <span className="cc-dev-val">{n.vao || 'Chưa vào ca'}</span>
               {n.vao && (
                 <span className={`cc-dev-diff ${dev.loaiVao}`}>
@@ -125,7 +130,7 @@ export default function ChamCongNhanVien({
               )}
             </div>
             <div className={`cc-deviation-box${dev.loaiRa === 'ot' ? ' success' : dev.loaiRa === 'early' ? ' alert' : ''}`}>
-              <span className="cc-dev-label">Ra ca (Quy định: {dev.chuanRa})</span>
+              <span className="cc-dev-label">Ra ca · tan ca {dev.chuanRa}</span>
               <span className="cc-dev-val">{n.ra || 'Đang trong ca…'}</span>
               {n.ra ? (
                 <span className={`cc-dev-diff ${dev.loaiRa}`}>
@@ -143,8 +148,8 @@ export default function ChamCongNhanVien({
             <span className="cc-deviation-title">⏱️ Chênh lệch so với quy định</span>
           </div>
           <div style={{ fontSize: 13, color: '#725f50', lineHeight: 1.6 }}>
-            Lần chấm này <b>không gắn với ca chuẩn nào</b> nên chưa tính được đi muộn / tăng ca.
-            Lần sau khi chấm vào, hãy chọn đúng <b>Ca chuẩn</b> trong ô đầu tiên của biểu mẫu.
+            Lần chấm này <b>không thuộc ca cố định nào</b> nên không tính đi muộn / tăng ca —
+            có thể do bộ phận của bạn không theo ca, hoặc bạn chấm ngoài khung giờ ca.
           </div>
           <div className="cc-deviation-grid" style={{ marginTop: 10 }}>
             <div className="cc-deviation-box">
@@ -272,7 +277,15 @@ export default function ChamCongNhanVien({
           </div>
           <div className="cc-stat-card" style={{ background: '#fffbeb', color: '#b45309' }}>
             <div className="cc-stat-val">{tomTat.soMuon}</div>
-            <div className="cc-stat-label">Lần đi muộn</div>
+            <div className="cc-stat-label">Lần đi muộn{tomTat.phutMuon ? ` · ${tomTat.phutMuon}p` : ''}</div>
+          </div>
+          <div className="cc-stat-card" style={{ background: tomTat.soViPham ? '#fef2f2' : '#f0fdf4', color: tomTat.soViPham ? '#b42318' : '#15803d' }}>
+            <div className="cc-stat-val">{tomTat.soViPham}</div>
+            <div className="cc-stat-label">Lỗi đi trễ &gt;15 phút</div>
+          </div>
+          <div className="cc-stat-card" style={{ background: '#f5f3ff', color: '#6d28d9' }}>
+            <div className="cc-stat-val">{(tomTat.chuyenCan / 1000)}K</div>
+            <div className="cc-stat-label">Chuyên cần dự kiến</div>
           </div>
         </div>
       </div>

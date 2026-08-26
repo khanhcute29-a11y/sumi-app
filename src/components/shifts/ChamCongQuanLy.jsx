@@ -1,24 +1,31 @@
 import React, { useState } from 'react';
-import { TRANG_THAI, tongHopChenhLech } from '../../lib/chamCong';
+import { TRANG_THAI, tongHopChenhLech, boPhanCuaHoSo } from '../../lib/chamCong';
 
 // Khâu lấy từ `profiles.station`. Phần lớn hồ sơ đang để trống nên có thêm
 // nhóm "Chưa gán khâu" để không ai bị rơi ra khỏi danh sách.
 export const KHAU = [
   { key: 'all', nhan: 'Toàn xưởng', icon: '🏭' },
-  { key: 'lanh', nhan: 'Bếp Lạnh', icon: '🧊', lop: 'cold' },
-  { key: 'nong', nhan: 'Bếp Nóng', icon: '🔥', lop: 'hot' },
-  { key: 'xuong41', nhan: 'Macaron X41', icon: '🧁', lop: 'macaron' },
+  { key: 'bakery', nhan: 'Bakery', icon: '🧊', lop: 'cold' },
+  { key: 'xuong41', nhan: 'Xưởng 41', icon: '🧁', lop: 'macaron' },
   { key: 'xuong42', nhan: 'Xưởng 42', icon: '🏫', lop: 'x42' },
-  { key: '_khac', nhan: 'Chưa gán khâu', icon: '🏬', lop: 'owner' },
+  { key: 'van_tai', nhan: 'Vận tải', icon: '🛵', lop: 'ship' },
+  { key: '_khac', nhan: 'Không theo ca', icon: '🏬', lop: 'owner' },
 ];
 
+// Nhóm theo BỘ PHẬN CHẤM CÔNG (giống hệt cách database chia ca), không theo
+// cột `station` thô — vì 21/25 hồ sơ bỏ trống cột đó, mà shipper thì vẫn thuộc
+// Vận tải và thu ngân vẫn thuộc Bakery.
 export function khauCua(hoSo) {
-  const s = (hoSo?.station || '').trim();
-  return KHAU.some((k) => k.key === s) ? s : '_khac';
+  return boPhanCuaHoSo(hoSo) || '_khac';
 }
 
-export function nhanKhau(key) {
-  return KHAU.find((k) => k.key === key)?.nhan || 'Chưa gán khâu';
+// Nhãn hiển thị thì chi tiết hơn: phân biệt Bếp Lạnh với Bếp Nóng nếu có.
+export function nhanKhau(hoSo) {
+  const st = (hoSo?.station || '').trim();
+  if (st === 'lanh') return 'Bếp Lạnh';
+  if (st === 'nong') return 'Bếp Nóng';
+  const k = khauCua(hoSo);
+  return KHAU.find((x) => x.key === k)?.nhan || 'Không theo ca';
 }
 
 function lopAvatar(key) {
@@ -39,6 +46,7 @@ function BangTongHop({ danhSach, tieuDe }) {
     { so: t.soOT, nhan: 'Tăng ca (OT)', phu: `+${t.phutOT}p`, nen: '#eff6ff', vien: '#93c5fd', mau: '#1d4ed8', mauPhu: '#1e40af' },
     { so: t.soDungGio, nhan: 'Đúng/Sớm', phu: 'Chuẩn giờ', nen: '#f0fdf4', vien: '#86efac', mau: '#15803d', mauPhu: '#166534' },
     { so: t.soChuaCham, nhan: 'Chưa chấm', phu: 'Chưa vào ca', nen: '#fef2f2', vien: '#fca5a5', mau: '#dc2626', mauPhu: '#991b1b' },
+    { so: t.soViPham, nhan: 'Lỗi trễ >15p', phu: 'Tính vi phạm', nen: '#fdf2f8', vien: '#f9a8d4', mau: '#be185d', mauPhu: '#9d174d' },
   ];
   return (
     <div className="cc-summary-card">
@@ -76,6 +84,11 @@ function VienChenhLech({ cham }) {
         <span className="cc-diff-pill" style={{ background: '#f9fafb', borderColor: '#e5e7eb', color: '#374151' }}>✓ Đúng {d.chuanVao}</span>
       )}
       {d.loaiRa === 'ot' && <span className="cc-diff-pill ot">⚡ OT +{d.lechRa}p</span>}
+      {d.viPhamDiTre && (
+        <span className="cc-diff-pill" style={{ background: '#fee2e2', borderColor: '#fca5a5', color: '#b42318' }}>
+          ⚠️ Trễ &gt;15p
+        </span>
+      )}
     </>
   );
 }
@@ -95,13 +108,13 @@ function TheNhanVien({ muc, laToi, onClick }) {
           {laToi && <span className="cc-me-tag">● TÔI</span>}
         </div>
         <div className="cc-staff-role">
-          {nhanKhau(k)}{hoSo.phone ? ` · SĐT: ${hoSo.phone}` : ''}
+          {nhanKhau(hoSo)}{hoSo.phone ? ` · SĐT: ${hoSo.phone}` : ''}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
           {cham.ca ? (
             <>
               <span style={{ fontSize: 12, color: '#725f50', fontWeight: 800 }}>
-                {cham.ca.icon} Chuẩn: {cham.ca.batDau}–{cham.ca.ketThuc}
+                {cham.ca.icon} {cham.ca.batDau}–{cham.ca.ketThuc} · mốc {cham.ca.moc}
               </span>
               <span style={{ fontSize: 12, color: '#a08060' }}>➔</span>
             </>
@@ -135,7 +148,7 @@ function NganKeo({ muc, onClose }) {
           <div className={`cc-avatar ${lopAvatar(k)}`}>{chuCaiDau(hoSo.full_name)}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="cc-staff-name">{hoSo.full_name || '?'}</div>
-            <div className="cc-staff-role">{nhanKhau(k)}{hoSo.phone ? ` · SĐT: ${hoSo.phone}` : ''}</div>
+            <div className="cc-staff-role">{nhanKhau(hoSo)}{hoSo.phone ? ` · SĐT: ${hoSo.phone}` : ''}</div>
           </div>
           <button className="cc-drawer-close" onClick={onClose} aria-label="Đóng">×</button>
         </div>
@@ -146,8 +159,8 @@ function NganKeo({ muc, onClose }) {
 
         {cham.ca && (
           <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 12, background: '#eff6ff', color: '#1d4ed8', fontWeight: 800, fontSize: 13 }}>
-            {cham.ca.icon} {cham.ca.ten} · Quy định: {cham.ca.batDau} – {cham.ca.ketThuc}
-            {cham.ca.soGio ? ` (${cham.ca.soGio} tiếng)` : ''}
+            {cham.ca.icon} {cham.ca.ten} · {cham.ca.batDau} – {cham.ca.ketThuc} ({cham.ca.soGio} tiếng có mặt)
+            <div style={{ fontSize: 12, fontWeight: 700, marginTop: 2 }}>Phải có mặt trước {cham.ca.moc}</div>
           </div>
         )}
 
@@ -158,12 +171,12 @@ function NganKeo({ muc, onClose }) {
           {d ? (
             <div className="cc-deviation-grid">
               <div className={`cc-deviation-box${d.loaiVao === 'late' ? ' alert' : d.loaiVao === 'early' ? ' success' : ''}`}>
-                <span className="cc-dev-label">Giờ vào chuẩn: {d.chuanVao}</span>
+                <span className="cc-dev-label">Mốc phải có mặt: {d.moc} (vào ca {d.chuanVao})</span>
                 <span className="cc-dev-val">{cham.vao || 'Chưa vào ca'}</span>
                 {cham.vao && <span className={`cc-dev-diff ${d.loaiVao}`}>{d.nhanVao}</span>}
               </div>
               <div className={`cc-deviation-box${d.loaiRa === 'ot' ? ' success' : d.loaiRa === 'early' ? ' alert' : ''}`}>
-                <span className="cc-dev-label">Giờ ra chuẩn: {d.chuanRa}</span>
+                <span className="cc-dev-label">Giờ tan ca: {d.chuanRa}</span>
                 <span className="cc-dev-val">{cham.ra || 'Đang làm…'}</span>
                 {cham.ra
                   ? <span className={`cc-dev-diff ${d.loaiRa}`}>{d.nhanRa}</span>
@@ -276,7 +289,7 @@ export default function ChamCongQuanLy({ danhSach, toi, laGiamDoc, tieuDeTongHop
               <div className="cc-staff-name">
                 {toi.hoSo.full_name} <span style={{ fontSize: 11, color: '#C88A4B', fontWeight: 900 }}>● Tôi</span>
               </div>
-              <div className="cc-staff-role">{nhanKhau(khauCua(toi.hoSo))}</div>
+              <div className="cc-staff-role">{nhanKhau(toi.hoSo)}</div>
               {toi.cham.ca && (
                 <div className="cc-staff-shift">{toi.cham.ca.icon} {toi.cham.ca.ten} ({toi.cham.ca.batDau}–{toi.cham.ca.ketThuc})</div>
               )}
