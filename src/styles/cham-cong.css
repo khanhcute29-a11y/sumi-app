@@ -1,0 +1,426 @@
+/* Giao diện Chấm Công — dựng theo bản mockup ?mockup=shifts.
+   Tiền tố `cc-` (chấm công) để không đụng lớp nào khác trong dự án.
+   File mockup gốc giữ nguyên, không import chéo giữa hai bên. */
+/* ============================================================
+   MOCKUP CSS — Shifts & Attendance
+   Scope: .cc-* (không xung đột production)
+   ============================================================ */
+
+/* ── Shell ── */
+.cc-shell {
+  min-height: 100dvh;
+  background: #FAF6F0;
+  color: #2d1c10;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  display: flex; flex-direction: column;
+  max-width: 480px; margin: 0 auto;
+}
+
+/* ── Header ── */
+.cc-header {
+  position: sticky; top: 0; z-index: 20;
+  background: #C88A4B;
+  padding: 14px 16px 14px;
+  box-shadow: 0 2px 12px rgba(80,40,10,.18);
+}
+.cc-header-top {
+  display: flex; align-items: center;
+  justify-content: space-between; gap: 10px;
+}
+.cc-header-title { color: #fff; font-size: 18px; font-weight: 900; }
+.cc-header-sub   { color: rgba(255,255,255,.75); font-size: 12px; font-weight: 700; margin-top: 2px; }
+.cc-back {
+  background: rgba(255,255,255,.2); border: none;
+  border-radius: 12px; color: #fff;
+  font-size: 13px; font-weight: 700;
+  padding: 8px 12px; cursor: pointer;
+  white-space: nowrap;
+}
+
+/* ── Role Switcher (demo only) ── */
+.cc-role-bar {
+  background: rgba(0,0,0,.15);
+  border-radius: 14px; padding: 4px; margin-top: 10px;
+  display: flex; gap: 4px; overflow-x: auto;
+  scrollbar-width: none;
+}
+.cc-role-bar::-webkit-scrollbar { display: none; }
+.cc-role-btn {
+  flex-shrink: 0; border: none; border-radius: 11px;
+  padding: 7px 11px; font-size: 12px; font-weight: 800;
+  background: transparent; color: rgba(255,255,255,.8);
+  cursor: pointer; transition: all .15s; white-space: nowrap;
+}
+.cc-role-btn.active { background: #fff; color: #2d1c10; }
+
+/* ── Today Header Card ── */
+.cc-today-card {
+  margin: 14px 16px 0;
+  background: #2d1c10; border-radius: 20px;
+  padding: 16px 18px; color: #fff;
+}
+.cc-today-label { font-size: 11px; font-weight: 900; letter-spacing: .1em; color: #d4a96a; text-transform: uppercase; }
+.cc-today-date  { font-size: 17px; font-weight: 900; margin: 3px 0 10px; }
+.cc-today-shift {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(255,255,255,.1); border-radius: 14px;
+  padding: 12px 14px;
+}
+.cc-today-shift-icon { font-size: 24px; }
+.cc-today-shift-info { flex: 1; }
+.cc-today-shift-name { font-size: 15px; font-weight: 900; }
+.cc-today-shift-time { font-size: 13px; color: rgba(255,255,255,.7); }
+.cc-today-status-badge {
+  padding: 5px 12px; border-radius: 20px;
+  font-size: 12px; font-weight: 900;
+}
+
+/* ── Deviation & Time Comparison Card ── */
+.cc-deviation-card {
+  margin: 10px 16px 0;
+  background: #fff;
+  border: 2px solid #eadcca;
+  border-radius: 18px;
+  padding: 14px 16px;
+  box-shadow: 0 2px 8px rgba(80,40,10,.05);
+}
+.cc-deviation-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.cc-deviation-title {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #a08060;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cc-deviation-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.cc-deviation-box {
+  background: #faf6f0;
+  border-radius: 14px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cc-deviation-box.alert {
+  background: #fffbeb;
+  border: 1.5px solid #fcd34d;
+}
+.cc-deviation-box.success {
+  background: #f0fdf4;
+  border: 1.5px solid #86efac;
+}
+.cc-deviation-box.danger {
+  background: #fef2f2;
+  border: 1.5px solid #fca5a5;
+}
+.cc-dev-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: #725f50;
+}
+.cc-dev-val {
+  font-size: 15px;
+  font-weight: 900;
+  color: #2d1c10;
+}
+.cc-dev-diff {
+  font-size: 12px;
+  font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.cc-dev-diff.late  { color: #b45309; }
+.cc-dev-diff.early { color: #15803d; }
+.cc-dev-diff.ot    { color: #1d4ed8; }
+.cc-dev-diff.on_time { color: #16a34a; }
+
+/* ── Inline Diff Badges ── */
+.cc-diff-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 900;
+}
+.cc-diff-pill.late  { background: #fffbeb; color: #b45309; border: 1px solid #fcd34d; }
+.cc-diff-pill.early { background: #f0fdf4; color: #15803d; border: 1px solid #86efac; }
+.cc-diff-pill.ot    { background: #eff6ff; color: #1d4ed8; border: 1px solid #93c5fd; }
+
+/* ── Check-in/out Buttons ── */
+.cc-checkin-area {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 14px 16px 0;
+}
+.cc-checkin-btn {
+  min-height: 60px; border: none; border-radius: 18px;
+  font-size: 17px; font-weight: 900; cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px; transition: opacity .15s;
+}
+.cc-checkin-btn:active { opacity: .85; }
+.cc-checkin-btn.start  { background: #16a34a; color: #fff; box-shadow: 0 5px 0 #15803d; }
+.cc-checkin-btn.end    { background: #f97316; color: #fff; box-shadow: 0 5px 0 #c2410c; }
+.cc-checkin-btn.done   { background: #f0fdf4; color: #16a34a; border: 2px solid #86efac; }
+.cc-checkin-btn.leave  { background: #fff; color: #725f50; border: 2px solid #e5d9c9; }
+.cc-checkin-timestamp  { font-size: 22px; font-weight: 900; font-variant-numeric: tabular-nums; }
+
+/* ── Section ── */
+.cc-section { padding: 16px 16px 0; }
+.cc-section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px;
+}
+.cc-section-title { font-size: 12px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; color: #a08060; }
+.cc-section-action { font-size: 13px; font-weight: 800; color: #C88A4B; background: none; border: none; cursor: pointer; }
+
+/* ── Monthly Mini Calendar ── */
+.cc-mini-cal {
+  background: #fff; border-radius: 18px;
+  padding: 14px; border: 2px solid #eadcca;
+}
+.cc-cal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.cc-cal-month { font-size: 15px; font-weight: 900; }
+.cc-cal-nav { background: #f4efe8; border: none; border-radius: 10px; width: 32px; height: 32px; font-size: 16px; cursor: pointer; }
+.cc-cal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 3px; }
+.cc-cal-dow { text-align: center; font-size: 10px; font-weight: 900; color: #a08060; padding: 4px 0 6px; }
+.cc-cal-day {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 5px 2px; border-radius: 10px; min-height: 42px;
+  cursor: pointer; position: relative;
+}
+.cc-cal-day.today { background: #2d1c10; }
+.cc-cal-day.today .cc-cal-num { color: #fff; }
+.cc-cal-num { font-size: 13px; font-weight: 800; color: #2d1c10; }
+.cc-cal-dot { width: 6px; height: 6px; border-radius: 50%; margin-top: 3px; }
+
+/* ── Stat Cards ── */
+.cc-stats-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.cc-stat-card {
+  border-radius: 16px; padding: 14px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.cc-stat-val  { font-size: 28px; font-weight: 900; line-height: 1; }
+.cc-stat-label{ font-size: 12px; font-weight: 800; opacity: .8; }
+
+/* ── Timeline ── */
+.cc-timeline { display: flex; flex-direction: column; gap: 0; }
+.cc-tl-row {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 10px 0; border-bottom: 1px solid #f0e8dd;
+}
+.cc-tl-row:last-child { border-bottom: none; }
+.cc-tl-dot-col { display: flex; flex-direction: column; align-items: center; width: 18px; }
+.cc-tl-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
+.cc-tl-line { width: 2px; flex: 1; background: #eadcca; min-height: 24px; margin-top: 4px; }
+.cc-tl-time { font-size: 13px; font-weight: 900; color: #2d1c10; width: 46px; flex-shrink: 0; }
+.cc-tl-label { flex: 1; font-size: 14px; font-weight: 700; color: #2d1c10; }
+.cc-tl-note  { font-size: 12px; color: #a08060; margin-top: 2px; }
+
+/* ── Staff Attendance List (Manager/Director view) ── */
+.cc-staff-list { display: flex; flex-direction: column; gap: 8px; padding-bottom: 100px; }
+.cc-staff-card {
+  background: #fff; border: 2px solid #eadcca;
+  border-radius: 16px; padding: 12px 14px;
+  display: flex; align-items: center; gap: 12px;
+  cursor: pointer; transition: box-shadow .15s;
+}
+.cc-staff-card:active { box-shadow: 0 0 0 3px #C88A4B44; }
+.cc-staff-card.is-me { border-color: #C88A4B; background: #fffbf5; }
+.cc-avatar {
+  width: 44px; height: 44px; border-radius: 14px;
+  background: #2d1c10; color: #fff;
+  display: grid; place-items: center;
+  font-size: 13px; font-weight: 900; flex-shrink: 0;
+}
+.cc-avatar.cold    { background: #1d4ed8; }
+.cc-avatar.hot     { background: #c2410c; }
+.cc-avatar.macaron { background: #7c3aed; }
+.cc-avatar.x42     { background: #065f46; }
+.cc-avatar.ship    { background: #374151; }
+.cc-avatar.owner   { background: #92400e; }
+.cc-staff-info     { flex: 1; min-width: 0; }
+.cc-staff-name     { font-size: 15px; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cc-staff-role     { font-size: 12px; color: #a08060; font-weight: 700; margin-top: 1px; }
+.cc-staff-shift    { font-size: 12px; color: #725f50; font-weight: 700; margin-top: 2px; }
+.cc-staff-right    { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.cc-staff-status   { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 900; }
+.cc-staff-time     { font-size: 12px; font-weight: 800; color: #725f50; }
+.cc-me-tag         { font-size: 10px; font-weight: 900; color: #C88A4B; letter-spacing: .05em; }
+
+/* ── Quick Summary Bar (Manager/Director) ── */
+.cc-summary-bar {
+  display: flex; gap: 8px;
+  padding: 12px 16px 0; overflow-x: auto; scrollbar-width: none;
+}
+.cc-summary-bar::-webkit-scrollbar { display: none; }
+.cc-summary-pill {
+  flex-shrink: 0; display: flex; align-items: center; gap: 6px;
+  padding: 8px 14px; border-radius: 20px;
+  font-size: 13px; font-weight: 900;
+}
+
+/* ── Filter Tabs (Manager/Director) ── */
+.cc-filter-tabs {
+  display: flex; gap: 6px;
+  padding: 10px 16px 0; overflow-x: auto; scrollbar-width: none;
+}
+.cc-filter-tabs::-webkit-scrollbar { display: none; }
+.cc-filter-tab {
+  flex-shrink: 0; padding: 7px 14px;
+  border: 2px solid #eadcca; border-radius: 20px;
+  background: #fff; color: #725f50;
+  font-size: 13px; font-weight: 800; cursor: pointer;
+}
+.cc-filter-tab.active { border-color: #2d1c10; background: #2d1c10; color: #fff; }
+
+/* ── Staff Detail Drawer ── */
+.cc-drawer-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.45); z-index: 100;
+  display: flex; align-items: flex-end;
+}
+.cc-drawer {
+  width: 100%; max-width: 480px; margin: 0 auto;
+  background: #fff; border-radius: 24px 24px 0 0;
+  padding: 20px 20px 48px;
+  max-height: 80dvh; overflow-y: auto;
+}
+.cc-drawer-handle {
+  width: 40px; height: 4px;
+  background: #ddd; border-radius: 4px; margin: 0 auto 16px;
+}
+.cc-drawer-head {
+  display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px;
+}
+.cc-drawer-close {
+  background: #f4efe8; border: none; border-radius: 12px;
+  width: 36px; height: 36px; font-size: 18px; cursor: pointer; flex-shrink: 0;
+}
+
+/* ── Toast ── */
+.cc-toast {
+  position: fixed; bottom: 110px; left: 50%; transform: translateX(-50%);
+  background: #2d1c10; color: #fff;
+  padding: 12px 24px; border-radius: 20px;
+  font-size: 15px; font-weight: 800; z-index: 200;
+  white-space: nowrap; pointer-events: none;
+}
+
+/* ── Empty ── */
+.cc-empty {
+  text-align: center; padding: 48px 24px; color: #a08060;
+}
+.cc-empty-icon { font-size: 48px; margin-bottom: 12px; }
+
+/* ════════════════════════════════════════════════════════════════════
+   PHẦN BỔ SUNG CHO BẢN THẬT
+   Bản mockup là một cột cố định 480px. Trong app thật màn hình phải co
+   giãn: điện thoại giữ nguyên một cột, máy tính trải rộng ra.
+   ════════════════════════════════════════════════════════════════════ */
+
+.cc-wrap {
+  color: #2d1c10;
+  --cc-pad: 16px;
+}
+.cc-wrap * { box-sizing: border-box; }
+
+/* Bảng tổng hợp 4 ô của quản lý */
+.cc-summary-card {
+  background: #fff;
+  border: 2px solid #eadcca;
+  border-radius: 18px;
+  padding: 14px 16px;
+  margin: 10px var(--cc-pad) 0;
+  box-shadow: 0 2px 8px rgba(80, 40, 10, .05);
+}
+.cc-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+
+/* Hàng thẻ lọc khâu */
+.cc-chip-row {
+  display: flex; gap: 6px; overflow-x: auto;
+  scrollbar-width: none; padding-bottom: 4px;
+}
+.cc-chip-row::-webkit-scrollbar { display: none; }
+.cc-chip {
+  padding: 9px 14px; border-radius: 16px;
+  border: 2px solid #eadcca; background: #fff; color: #725f50;
+  font-size: 12px; font-weight: 800; cursor: pointer; white-space: nowrap;
+  min-height: 44px;               /* chạm được bằng ngón tay trên điện thoại */
+}
+.cc-chip.active { background: #C88A4B; color: #fff; border-color: #C88A4B; }
+
+/* Vùng nút chấm công: bảo đảm bấm được bằng ngón tay */
+.cc-checkin-btn { min-height: 56px; }
+.cc-filter-tab  { min-height: 44px; }
+.cc-cal-day     { min-height: 44px; }
+
+/* Thẻ nhân viên bấm được bằng bàn phím */
+.cc-staff-card:focus-visible,
+.cc-chip:focus-visible,
+.cc-filter-tab:focus-visible { outline: 3px solid #C88A4B; outline-offset: 2px; }
+
+/* ── Máy tính bảng trở lên ── */
+@media (min-width: 700px) {
+  .cc-summary-grid { grid-template-columns: repeat(4, 1fr); }
+  .cc-stats-grid   { grid-template-columns: repeat(4, 1fr); }
+  .cc-today-card   { padding: 20px 22px; }
+  .cc-today-date   { font-size: 22px; }
+}
+
+/* ── Máy tính: trải rộng, danh sách nhân viên 2 cột ── */
+@media (min-width: 1024px) {
+  .cc-wrap { --cc-pad: 0px; }
+  .cc-staff-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    align-items: start;
+  }
+  .cc-summary-card { margin-left: 0; margin-right: 0; }
+  .cc-section      { padding-left: 0; padding-right: 0; }
+  .cc-today-card,
+  .cc-deviation-card { margin-left: 0; margin-right: 0; }
+  .cc-checkin-area   { padding-left: 0; padding-right: 0; flex-direction: row; flex-wrap: wrap; }
+  .cc-checkin-area > * { flex: 1 1 260px; }
+  .cc-drawer {
+    max-width: 560px; margin: 0 auto;
+    border-radius: 20px;
+    align-self: center;
+  }
+  .cc-drawer-overlay { align-items: center; }
+}
+
+@media (min-width: 1400px) {
+  .cc-staff-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* Không dùng vỏ của mockup trong app thật (app đã có vỏ và thanh điều hướng riêng) */
+.cc-wrap .cc-shell { max-width: none; min-height: 0; background: transparent; }
+
+/* Nút chuyển tháng phải bấm được bằng ngón tay (quy định 44x44px của dự án) */
+.cc-cal-nav { min-width: 44px; min-height: 44px; display: grid; place-items: center; }

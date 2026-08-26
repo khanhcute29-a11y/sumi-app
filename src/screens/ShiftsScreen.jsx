@@ -17,6 +17,11 @@ import { enqueue } from '../lib/offlineQueue';
 import { localDateStr } from '../lib/date';
 import { IconClipboard, IconCheck, IconClock, IconQuestion } from '../components/icons/FrogIcons';
 import { WeeklyScheduleSection } from '../components/WeeklyScheduleSection';
+import { supabase } from '../lib/supabaseClient';
+import { chuanHoaCa, gomChamCongNgay, tomTatThang, caGanNhat, tinhChenhLech } from '../lib/chamCong';
+import ChamCongNhanVien from '../components/shifts/ChamCongNhanVien';
+import ChamCongQuanLy from '../components/shifts/ChamCongQuanLy';
+import '../styles/cham-cong.css';
 
 const BRANCHES = ['Vĩnh Phú 42', 'Quốc lộ 13'];
 const SHIFT_PRESETS = [
@@ -59,7 +64,7 @@ function calculateNetWorkHours(inTimeStr, outTimeStr) {
   };
 }
 
-function CheckinModal({ staffName, staffId, defaultBranch, onClose, onDone }) {
+function CheckinModal({ staffName, staffId, defaultBranch, danhSachCa = [], onClose, onDone }) {
   const now = new Date();
   const [workDate, setWorkDate] = useState(localDateStr(now));
   const [checkinTime, setCheckinTime] = useState(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
@@ -70,6 +75,16 @@ function CheckinModal({ staffName, staffId, defaultBranch, onClose, onDone }) {
   const [gpsCoords, setGpsCoords] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  // Ca CHUẨN (giờ quy định) — tách hẳn khỏi "tên ca/khâu" ở dưới.
+  // Trước đây `expected_start` bị ghi bằng CHÍNH giờ bấm vào, nên hệ thống
+  // không bao giờ tính được đi muộn. Chọn ca ở đây thì mới có mốc để đối chiếu.
+  const [caChuan, setCaChuan] = useState('');
+  useEffect(() => {
+    if (caChuan || !danhSachCa.length) return;
+    const goiY = caGanNhat(checkinTime, danhSachCa);
+    if (goiY) setCaChuan(goiY.batDau);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [danhSachCa.length]);
 
   // Get GPS location
   const captureGps = async () => {
@@ -96,9 +111,16 @@ function CheckinModal({ staffName, staffId, defaultBranch, onClose, onDone }) {
     setSaving(true);
     setError('');
 
+    // Có chọn ca chuẩn thì ghi giờ quy định thật + số phút muộn thật.
+    // Không chọn thì giữ nguyên nếp cũ (giờ bấm vào, muộn 0) để không làm lệch
+    // dữ liệu của những người không theo ca cố định.
+    const ca = danhSachCa.find((x) => x.batDau === caChuan) || null;
+    const lech = ca ? tinhChenhLech(ca, checkinTime, null) : null;
     const payload = {
       staffId, staffName, workDate, shiftLabel: shiftLabel.trim(), branch: branch || null,
-      expectedStart: `${checkinTime}:00`, lateMinutes: 0, wageEarned: 0,
+      expectedStart: ca ? `${ca.batDau}:00` : `${checkinTime}:00`,
+      lateMinutes: lech ? Math.max(0, lech.lechVao || 0) : 0,
+      wageEarned: 0,
       reason: null, photoUrl: photoUrl || null,
       gpsCoords: gpsCoords || null,
     };
@@ -150,9 +172,42 @@ function CheckinModal({ staffName, staffId, defaultBranch, onClose, onDone }) {
           </div>
         </div>
 
+        {/* Ca chuẩn — mốc để tính đi muộn / tăng ca */}
+        {danhSachCa.length > 0 && (() => {
+          const ca = danhSachCa.find((x) => x.batDau === caChuan) || null;
+          const lech = ca ? tinhChenhLech(ca, checkinTime, null) : null;
+          return (
+            <div>
+              <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>
+                Ca chuẩn (dùng để tính đi muộn / tăng ca)
+              </label>
+              <select
+                value={caChuan}
+                onChange={(e) => setCaChuan(e.target.value)}
+                style={{ width: '100%', minHeight: 44, padding: '0 10px', fontSize: 14, fontWeight: 700, border: '1px solid var(--border-default)', borderRadius: 10, background: 'var(--surface-card)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
+              >
+                <option value="">Không theo ca cố định</option>
+                {danhSachCa.map((x) => (
+                  <option key={x.batDau} value={x.batDau}>{x.icon} {x.ten} ({x.batDau}–{x.ketThuc})</option>
+                ))}
+              </select>
+              {lech && (
+                <div style={{ marginTop: 6, fontSize: 13, fontWeight: 800, color: lech.loaiVao === 'late' ? '#b45309' : '#15803d' }}>
+                  {lech.loaiVao === 'late' ? '⏰ ' : lech.loaiVao === 'early' ? '🟢 ' : '✓ '}{lech.nhanVao}
+                </div>
+              )}
+              {!ca && (
+                <div style={{ marginTop: 6, fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                  Không chọn ca thì hệ thống <b>không tính được</b> đi muộn hay tăng ca cho lần chấm này.
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {/* Shift Selection - Main Shifts Only */}
         <div>
-          <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8 }}>Chọn ca làm việc</label>
+          <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8 }}>Chọn tên ca / khâu</label>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
             {SHIFT_PRESETS.map((p) => (
               <button
@@ -510,27 +565,6 @@ function LeaveModal({ staffName, staffId, staffRole, defaultBranch, onClose, onD
   );
 }
 
-function ShiftCardRow({ checkin, checkout }) {
-  const inTime = checkin?.checkin_time ? new Date(checkin.checkin_time) : null;
-  const outTime = checkout?.checkin_time ? new Date(checkout.checkin_time) : null;
-  const timeCalc = inTime && outTime ? calculateNetWorkHours(checkin.checkin_time, checkout.checkin_time) : null;
-  return (
-    <div style={{ padding: 14, borderRadius: 16, background: '#fff', border: '1px solid var(--border-default)', display: 'flex', flexDirection: 'column', gap: 8, boxShadow: '0 2px 4px rgba(0,0,0,0.03)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
-        <div><b style={{ fontSize: 16, color: 'var(--text-primary)' }}>{checkin?.staff_name || 'Nhân viên'}</b><div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2, fontWeight: 700 }}>{checkin?.shift_label || 'Ca làm việc'}{checkin?.branch ? ` · ${checkin.branch}` : ''}</div></div>
-        <Badge tone={outTime ? 'success' : inTime ? 'warning' : 'neutral'}>{outTime ? '✓ Đã kết thúc' : inTime ? '● Đang trong ca' : 'Chưa bắt đầu'}</Badge>
-      </div>
-      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 13, color: 'var(--text-secondary)', padding: '6px 10px', background: 'var(--surface-sunken)', borderRadius: 10 }}>
-        <div><span>Giờ bắt đầu: </span><b style={{ color: 'var(--brand-primary)', fontSize: 14 }}>{inTime ? inTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }) : '--:--'}</b></div>
-        <div><span>Giờ kết thúc: </span><b>{outTime ? outTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }) : 'Đang làm'}</b></div>
-        {timeCalc && (<div><span>Thời gian thực tế: </span><b style={{ color: '#087f5b', fontSize: 14 }}>{timeCalc.netHours} giờ</b>{timeCalc.lunchDeduction > 0 && <small style={{ color: '#b93e13' }}> (Đã trừ {timeCalc.lunchDeduction}h ăn trưa)</small>}</div>)}
-      </div>
-      {checkin?.reason && (<div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconClipboard size={13} /> {checkin.reason}</div>)}
-      {checkout?.photo_url && (<a href={checkout.photo_url} target="_blank" rel="noreferrer" style={{ marginTop: 4 }}><img src={checkout.photo_url} alt="Minh chứng" style={{ width: 52, height: 52, borderRadius: 8, objectFit: 'cover' }} /></a>)}
-    </div>
-  );
-}
-
 export default function ShiftsScreen() {
   const { profile } = useAuth();
   const [date, setDate] = useState(localDateStr());
@@ -541,9 +575,13 @@ export default function ShiftsScreen() {
   const [showCheckout, setShowCheckout] = useState(false);
   const [showAddManual, setShowAddManual] = useState(false);
   const [showLeave, setShowLeave] = useState(false);
-  const [branchFilter, setBranchFilter] = useState('all');
   const [viewMode, setViewMode] = useState('checkin');
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [cauHinhCa, setCauHinhCa] = useState([]);
+  const [hoSoList, setHoSoList] = useState([]);
+  const [logsThang, setLogsThang] = useState([]);
+  const [thangXem, setThangXem] = useState(() => { const d = new Date(); return { nam: d.getFullYear(), thang: d.getMonth() + 1 }; });
+  const [xemChamCongCuaToi, setXemChamCongCuaToi] = useState(false);
 
   useEffect(() => { const timer = setInterval(() => setCurrentTime(new Date()), 1000); return () => clearInterval(timer); }, []);
   const loadLogs = () => { setLoading(true); fetchShiftLogs({ date }).then((data) => { setLogs(data || []); setError(''); }).catch((err) => setError(err.message)).finally(() => setLoading(false)); };
@@ -559,30 +597,101 @@ export default function ShiftsScreen() {
   }, []);
   const refreshAfterAction = () => { loadLogs(); window.dispatchEvent(new Event('sumi-shift-changed')); };
 
-  const byBranch = (l) => branchFilter === 'all' || l.branch === branchFilter;
-  const filteredLogs = logs.filter(byBranch);
-  const checkins = filteredLogs.filter(l => l.type === 'checkin');
-  const checkouts = filteredLogs.filter(l => l.type === 'checkout');
-  const leaves = filteredLogs.filter(l => l.type === 'leave_request');
+  // Giờ chuẩn của các ca lấy từ shift_configs (bảng này đang có bản ghi trùng,
+  // chuanHoaCa() gộp lại). Hồ sơ nhân sự dùng cho màn hình quản lý.
+  useEffect(() => {
+    fetchShiftConfigs().then(setCauHinhCa).catch(() => setCauHinhCa([]));
+    supabase.from('profiles').select('id,full_name,role,station,phone')
+      .eq('approved', true).neq('active', false).order('full_name')
+      .then(({ data }) => setHoSoList(data || []))
+      .catch(() => setHoSoList([]));
+  }, []);
+
+  // Nhật ký cả tháng để dựng tóm tắt + lịch chấm công của bản thân.
+  useEffect(() => {
+    const { nam, thang } = thangXem;
+    const tu = `${nam}-${String(thang).padStart(2, '0')}-01`;
+    const den = `${nam}-${String(thang).padStart(2, '0')}-${String(new Date(nam, thang, 0).getDate()).padStart(2, '0')}`;
+    fetchShiftLogsRange(tu, den).then((d) => setLogsThang(d || [])).catch(() => setLogsThang([]));
+  }, [thangXem, logs]);
+
   const myTodayLogs = logs.filter(l => l.staff_id === profile?.id);
   const myCheckins = myTodayLogs.filter(l => l.type === 'checkin');
   const myCheckouts = myTodayLogs.filter(l => l.type === 'checkout');
   const activeCheckins = myCheckins.slice(myCheckouts.length);
-  const shiftPairs = checkins.map((ci, index) => {
-    const co = checkouts.find(co => co.staff_id === ci.staff_id && new Date(co.checkin_time) >= new Date(ci.checkin_time));
-    return { id: ci.id || index, checkin: ci, checkout: co };
+  // ── Phân vai để chọn góc nhìn ──────────────────────────────────────────
+  // Giám đốc/Quản lý: cả xưởng. Bếp trưởng & trợ lý GĐ xưởng: khâu của mình.
+  // Còn lại: chỉ chấm công của bản thân.
+  const vaiTro = [profile?.role, ...(profile?.extra_roles || [])].filter(Boolean);
+  const laGiamDoc = vaiTro.some((r) => ['owner', 'admin'].includes(r));
+  const khauQuanLy = vaiTro.includes('deputy_director_x41') ? 'xuong41'
+    : vaiTro.includes('deputy_director_x42') ? 'xuong42'
+      : vaiTro.some((r) => String(r).startsWith('kitchen_lead')) ? (profile?.station || '_khac')
+        : null;
+  const laQuanLy = laGiamDoc || !!khauQuanLy;
+
+  const danhSachCa = chuanHoaCa(cauHinhCa);
+  const chamNgay = gomChamCongNgay(logs, danhSachCa);
+  const rong = (id, ten) => ({
+    staffId: id, ten, vaoISO: null, raISO: null, vao: null, ra: null,
+    ca: null, coCaChuan: false, chenhLech: null, trangThai: 'upcoming',
+    ghiChu: '', xinNghi: false, soGio: null,
   });
+  const chamCuaToi = chamNgay.get(profile?.id) || rong(profile?.id, profile?.full_name);
+  const tomTat = tomTatThang(logsThang, profile?.id, danhSachCa);
+
+  const trongPhamVi = hoSoList.filter((h) => {
+    if (laGiamDoc) return true;
+    if (!khauQuanLy) return h.id === profile?.id;
+    const st = (h.station || '').trim() || '_khac';
+    return st === khauQuanLy || h.id === profile?.id;
+  });
+  const danhSachQuanLy = trongPhamVi.map((h) => ({
+    hoSo: h,
+    cham: chamNgay.get(h.id) || rong(h.id, h.full_name),
+  }));
+  const toiTrongDanhSach = danhSachQuanLy.find((x) => x.hoSo.id === profile?.id) || null;
+
+  const doiThang = (buoc) => setThangXem(({ nam, thang }) => {
+    const d = new Date(nam, thang - 1 + buoc, 1);
+    return { nam: d.getFullYear(), thang: d.getMonth() + 1 };
+  });
+
+  const tieuDe = laGiamDoc ? 'Chấm Công — Toàn Xưởng'
+    : khauQuanLy ? 'Chấm Công — Khâu Của Tôi'
+      : 'Chấm Công Của Tôi';
+  const tieuDePhu = laGiamDoc ? 'Thấy tất cả nhân viên toàn xưởng'
+    : khauQuanLy ? 'Thấy bản thân + nhân viên trong khâu'
+      : 'Chỉ thấy chấm công của bản thân';
+
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10 }}>
-        <div>
-          <div style={{ font: 'var(--text-display-md)', color: 'var(--text-primary)' }}>Chấm Công & Ca Làm Việc</div>
-          <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)', marginTop: 2 }}>Chấm công linh hoạt theo realtime, tự động theo dõi KPI giờ bắt đầu theo bộ phận</div>
+      <div className="cc-header" style={{ borderRadius: 18 }}>
+        <div className="cc-header-top">
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="cc-header-title">{tieuDe}</div>
+            <div className="cc-header-sub">{tieuDePhu}</div>
+          </div>
+          <div style={{ textAlign: 'right', color: '#fff' }}>
+            <div style={{ fontSize: 22, fontWeight: 900, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
+              {currentTime.toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
+            </div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,.75)' }}>
+              {currentTime.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit' })}
+            </div>
+          </div>
         </div>
-        <div style={{ padding: '8px 16px', borderRadius: 14, background: 'var(--surface-card)', border: '1px solid var(--border-default)', textAlign: 'right', boxShadow: '0 2px 4px rgba(0,0,0,0.04)' }}>
-          <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--brand-primary)', fontVariantNumeric: 'tabular-nums' }}>{currentTime.toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</div>
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{currentTime.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, fontWeight: 800, color: 'rgba(255,255,255,.8)' }}>Xem ngày:</span>
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+            style={{ minHeight: 40, padding: '0 10px', borderRadius: 12, border: 0, fontSize: 14, fontWeight: 700 }} />
+          {date !== localDateStr() && (
+            <button onClick={() => setDate(localDateStr())}
+              style={{ minHeight: 40, padding: '0 12px', borderRadius: 12, border: 0, background: 'rgba(255,255,255,.2)', color: '#fff', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>
+              ↩ Về hôm nay
+            </button>
+          )}
         </div>
       </div>
       <div style={{ padding: '12px 16px', borderRadius: 14, background: '#fff0d4', border: '1px solid #d7c3aa', display: 'flex', alignItems: 'center', gap: 10, color: '#2d1c10' }}>
@@ -595,134 +704,55 @@ export default function ShiftsScreen() {
       <Tabs tabs={[{ key: 'checkin', label: 'Chấm công realtime' }, { key: 'schedule', label: 'Lịch tuần' }]} active={viewMode} onChange={setViewMode} />
 
       {viewMode === 'checkin' && (
-        <React.Fragment>
-          {/* Bảng Nút Thao Tác Chấm Công */}
-          <div style={{
-            display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center',
-            padding: 14, borderRadius: 18, background: 'var(--surface-card)', border: '1px solid var(--border-default)'
-          }}>
-            <Button
-              variant="primary"
-              onClick={() => setShowCheckin(true)}
-              style={{ minHeight: 46, fontSize: 15, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 6 }}
-            >
-              ▶ Bắt đầu ca (Chấm vào)
-            </Button>
-
-            <Button
-              variant="secondary"
-              onClick={() => setShowCheckout(true)}
-              disabled={activeCheckins.length === 0}
-              style={{ minHeight: 46, fontSize: 15, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6 }}
-            >
-              ⏹ Kết thúc ca (Chấm ra)
-              {activeCheckins.length > 0 && <span style={{ background: 'var(--brand-primary)', color: '#fff', padding: '2px 7px', borderRadius: 999, fontSize: 12 }}>{activeCheckins.length}</span>}
-            </Button>
-
-            <Button
-              variant="secondary"
-              onClick={() => setShowAddManual(true)}
-              style={{ minHeight: 46, fontSize: 14, fontWeight: 700 }}
-            >
-              ＋ Thêm ca / Bổ sung
-            </Button>
-
-            <Button
-              variant="warning"
-              onClick={() => setShowLeave(true)}
-              style={{ minHeight: 46, fontSize: 14, fontWeight: 700 }}
-            >
-              📝 Xin nghỉ đột xuất
-            </Button>
-
-            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Xem ngày:</span>
-              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: 150 }} />
-            </div>
-          </div>
-
-          <Tabs tabs={[{ key: 'all', label: 'Tất cả chi nhánh' }, ...BRANCHES.map((b) => ({ key: b, label: b }))]} active={branchFilter} onChange={setBranchFilter} />
-
-          {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>Lỗi tải dữ liệu: {error}</div>}
-
-          {/* Danh sách ca làm việc theo ngày */}
-          {loading ? (
-            <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)', padding: 20, textAlign: 'center' }}>Đang tải danh sách chấm công...</div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {/* CA LÀM VIỆC CỦA TÔI - PROMINENT */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span>👤 CA LÀM VIỆC CỦA TÔI ({myCheckins.length})</span>
-                  {activeCheckins.length > 0 && <span style={{ background: '#E53935', color: '#fff', padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700 }}>ĐANG LÀM</span>}
-                </div>
-                {myCheckins.length === 0 ? (
-                  <div style={{ padding: 20, borderRadius: 14, background: 'var(--surface-sunken)', color: 'var(--text-muted)', textAlign: 'center' }}>
-                    Chưa chấm công trong ngày {date}.
-                  </div>
-                ) : (
-                  myCheckins.map((checkin, idx) => {
-                    const checkout = myCheckouts.find(co => new Date(co.checkin_time) >= new Date(checkin.checkin_time));
-                    const isActive = !checkout;
-                    return (
-                      <div
-                        key={checkin.id}
-                        style={{
-                          padding: 14,
-                          borderRadius: 14,
-                          background: isActive ? '#e6f6ed' : 'var(--surface-card)',
-                          border: isActive ? '2px solid #138a53' : '1px solid var(--border-default)',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 8,
-                          position: 'relative'
-                        }}
-                      >
-                        {isActive && <div style={{ position: 'absolute', top: 10, right: 10, fontSize: 12, fontWeight: 700, color: '#09663d', background: '#fff', padding: '4px 8px', borderRadius: 6 }}>🔴 ĐANG LÀM</div>}
-                        <div style={{ fontSize: 15, fontWeight: 900, color: 'var(--text-primary)' }}>
-                          {checkin.shift_label}
-                        </div>
-                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between' }}>
-                          <span>🕐 Vào: {new Date(checkin.checkin_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' })}</span>
-                          {checkout && <span>Ra: {new Date(checkout.checkin_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' })}</span>}
-                        </div>
-                        {isActive && (
-                          <button onClick={() => setShowCheckout(true)} style={{ padding: '8px 12px', borderRadius: 8, background: '#D96B43', color: '#fff', border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                            ⏹ KẾT THÚC CA NGAY
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-
-              {/* XIN NGHỈ ĐỘT XUẤT */}
-              {leaves.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>
-                    📋 Xin nghỉ đột xuất ({leaves.length})
-                  </div>
-                  {leaves.map((l) => (
-                    <div key={l.id} style={{ padding: 14, borderRadius: 14, background: '#fff', border: '1px solid var(--border-default)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <b style={{ fontSize: 15 }}>{l.staff_name}</b>
-                        <Badge tone="danger">Xin nghỉ</Badge>
-                      </div>
-                      {l.leave_from_at && (
-                        <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                          Thời gian: {new Date(l.leave_from_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
-                          {l.leave_to_at ? ` → ${new Date(l.leave_to_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}` : ''}
-                        </div>
-                      )}
-                      {l.reason && <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Lý do: {l.reason}</div>}
-                    </div>
-                  ))}
-                </div>
-              )}
+        <div className="cc-wrap">
+          {error && (
+            <div style={{ margin: '0 16px 10px', padding: 12, borderRadius: 12, background: '#fee2e2', color: '#b42318', fontWeight: 700, fontSize: 14 }}>
+              ⚠️ Lỗi tải dữ liệu: {error}
             </div>
           )}
-        </React.Fragment>
+          {loading ? (
+            <div style={{ padding: 30, textAlign: 'center', color: 'var(--text-muted)' }}>Đang tải chấm công…</div>
+          ) : (laQuanLy && !xemChamCongCuaToi) ? (
+            <ChamCongQuanLy
+              danhSach={danhSachQuanLy}
+              toi={toiTrongDanhSach}
+              laGiamDoc={laGiamDoc}
+              tieuDeTongHop={laGiamDoc ? 'Báo cáo chênh lệch toàn xưởng' : 'Chênh lệch giờ — khâu của tôi'}
+              onXemChamCongCuaToi={() => setXemChamCongCuaToi(true)}
+            />
+          ) : (
+            <>
+              {laQuanLy && (
+                <div style={{ padding: '12px 16px 0' }}>
+                  <button onClick={() => setXemChamCongCuaToi(false)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f4efe8', border: 0, borderRadius: 12, minHeight: 44, padding: '0 14px', fontSize: 14, fontWeight: 800, cursor: 'pointer', color: '#2d1c10' }}>
+                    ← Quay lại quản lý nhóm
+                  </button>
+                </div>
+              )}
+              <ChamCongNhanVien
+                hoSo={profile}
+                homNay={localDateStr()}
+                ngayXem={date}
+                canCham={chamCuaToi}
+                tomTat={tomTat}
+                nam={thangXem.nam}
+                thang={thangXem.thang}
+                onLuiThang={() => doiThang(-1)}
+                onToiThang={() => doiThang(1)}
+                onCheckin={() => setShowCheckin(true)}
+                onCheckout={() => setShowCheckout(true)}
+                onXinNghi={() => setShowLeave(true)}
+              />
+              <div className="cc-section" style={{ marginTop: 12, paddingBottom: 20 }}>
+                <button onClick={() => setShowAddManual(true)}
+                  style={{ width: '100%', minHeight: 48, borderRadius: 14, border: '2px dashed #d7c3aa', background: 'transparent', color: '#8c5a3c', fontWeight: 800, fontSize: 14, cursor: 'pointer' }}>
+                  ＋ Bổ sung ca đã làm (quên chấm)
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       )}
 
       {viewMode === 'schedule' && <WeeklyScheduleSection profile={profile} />}
@@ -730,6 +760,7 @@ export default function ShiftsScreen() {
       {/* Các Modal Thao Tác */}
       {showCheckin && (
         <CheckinModal
+          danhSachCa={danhSachCa}
           staffId={profile?.id}
           staffName={profile?.full_name}
           defaultBranch={profile?.station}
