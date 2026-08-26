@@ -18,7 +18,7 @@ import { localDateStr } from '../lib/date';
 import { IconClipboard, IconCheck, IconClock, IconQuestion } from '../components/icons/FrogIcons';
 import { WeeklyScheduleSection } from '../components/WeeklyScheduleSection';
 import { supabase } from '../lib/supabaseClient';
-import { chuanHoaCa, gomChamCongNgay, tomTatThang, tinhChenhLech, boPhanCuaHoSo, caCuaBoPhan, TEN_BO_PHAN } from '../lib/chamCong';
+import { chuanHoaCa, gomChamCongNgay, tomTatThang, boPhanCuaHoSo, TEN_BO_PHAN } from '../lib/chamCong';
 import ChamCongNhanVien from '../components/shifts/ChamCongNhanVien';
 import ChamCongQuanLy from '../components/shifts/ChamCongQuanLy';
 import ChamCongV2 from '../components/shifts/v2/ChamCongV2';
@@ -41,15 +41,8 @@ const SHIFT_PRESETS = [
   '🧁 Xưởng Macaron (X41)',
   '🏫 Xưởng 42 (Trường học)',
 ];
-const SHIFT_PRESETS_EXTENDED = [
-  '☕ Teabreak',
-  '🏬 Bán Hàng',
-  '🛵 Giao Hàng',
-  '⚡ Ca Tăng Ca',
-  '☀️ Ca Sáng',
-  '🌤️ Ca Chiều',
-  '🌙 Ca Tối'
-];
+// SHIFT_PRESETS_EXTENDED đã bị bỏ cùng lúc với ô "Chọn ca khác..." trong
+// CheckinModal (không còn nơi nào dùng) — xoá luôn, không để rác trong file.
 
 function calculateNetWorkHours(inTimeStr, outTimeStr) {
   if (!inTimeStr || !outTimeStr) return null;
@@ -79,7 +72,11 @@ function CheckinModal({ staffName, staffId, defaultBranch, danhSachCa = [], boPh
   const now = new Date();
   const [workDate, setWorkDate] = useState(localDateStr(now));
   const [checkinTime, setCheckinTime] = useState(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
-  const [shiftLabel, setShiftLabel] = useState(SHIFT_PRESETS[0]);
+  // Tên ca lấy THẲNG từ bộ phận thật của nhân viên (database đã biết), không
+  // còn bắt tự chọn tay từ danh sách chung chung nữa — tránh chọn nhầm bộ
+  // phận, và đây cũng chỉ là chữ hiển thị (xem ShiftTodayCard.jsx), không ảnh
+  // hưởng gì tới cách tính đi muộn — chuyện đó database tự quyết qua trigger.
+  const [shiftLabel] = useState(() => TEN_BO_PHAN[boPhan] || 'Ca làm việc');
   const [branch, setBranch] = useState(defaultBranch || BRANCHES[0]);
   const [photoUrl, setPhotoUrl] = useState('');
   const [useGps, setUseGps] = useState(false);
@@ -172,101 +169,15 @@ function CheckinModal({ staffName, staffId, defaultBranch, danhSachCa = [], boPh
           </div>
         </div>
 
-        {/* Ca chuẩn của bộ phận — CHỈ ĐỌC. Nhân viên không tự chọn được mốc
-            tính muộn của chính mình; database mới là nơi quyết. */}
-        {(() => {
-          const cua = caCuaBoPhan(danhSachCa, boPhan);
-          if (!boPhan || !cua.length) {
-            return (
-              <div style={{ padding: '10px 12px', borderRadius: 12, background: '#f9fafb', border: '1px solid #e5e7eb', fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
-                Bộ phận của bạn <b>không theo ca cố định</b> nên lần chấm này không tính đi muộn.
-              </div>
-            );
-          }
-          // Chọn ca GIỐNG HỆT cách database chọn (M-202608260080):
-          // lần chấm thuộc ca nào có khung [mốc − 2 tiếng, giờ tan ca);
-          // rơi vào nhiều ca thì lấy ca có mốc gần nhất.
-          const phut = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
-          const t = phut(checkinTime);
-          let ca = null; let min = Infinity;
-          cua.forEach((c) => {
-            const dau = phut(c.moc) - 120;
-            const dai = (((phut(c.ketThuc) - dau) % 1440) + 1440) % 1440 || 1440;
-            const viTri = (((t - dau) % 1440) + 1440) % 1440;
-            if (viTri >= dai) return;                 // ngoài khung ca này
-            let d = Math.abs(t - phut(c.moc));
-            if (d > 720) d = 1440 - d;
-            if (d < min) { min = d; ca = c; }
-          });
-          const ngoai = !ca;
-          const lech = ngoai ? null : tinhChenhLech(ca, checkinTime, null);
-          return (
-            <div style={{ padding: '12px 14px', borderRadius: 14, background: ngoai ? '#f9fafb' : lech?.loaiVao === 'late' ? '#fffbeb' : '#f0fdf4', border: `1.5px solid ${ngoai ? '#e5e7eb' : lech?.loaiVao === 'late' ? '#fcd34d' : '#86efac'}` }}>
-              <div style={{ fontSize: 11.5, fontWeight: 900, letterSpacing: '.06em', color: '#a08060', textTransform: 'uppercase', marginBottom: 4 }}>
-                Ca chuẩn của bạn · {TEN_BO_PHAN[boPhan] || boPhan}
-              </div>
-              {ngoai ? (
-                <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
-                  Giờ bạn chấm nằm <b>ngoài khung ca</b> của bộ phận nên không tính đi muộn.
-                </div>
-              ) : (
-                <>
-                  <div style={{ fontSize: 15, fontWeight: 900, color: 'var(--text-primary)' }}>
-                    {ca.icon} {ca.ten} · {ca.batDau}–{ca.ketThuc}
-                  </div>
-                  <div style={{ fontSize: 12.5, color: '#725f50', marginTop: 2 }}>
-                    Phải có mặt trước <b>{ca.moc}</b> ({ca.phutSom} phút trước giờ vào ca) · {ca.soGio} tiếng có mặt
-                  </div>
-                  <div style={{ marginTop: 6, fontSize: 14, fontWeight: 900, color: lech.loaiVao === 'late' ? '#b45309' : '#15803d' }}>
-                    {lech.loaiVao === 'late' ? '⏰ ' : lech.loaiVao === 'early' ? '🟢 ' : '✓ '}{lech.nhanVao}
-                    {lech.viPhamDiTre && <span style={{ marginLeft: 6, fontSize: 12, color: '#b42318' }}>· quá 15 phút, sẽ bị ghi nhận vi phạm</span>}
-                  </div>
-                </>
-              )}
-            </div>
-          );
-        })()}
-
-        {/* Shift Selection - Main Shifts Only */}
+        {/* Chi nhánh. Trước đây phần này còn có thêm ô "Chọn tên ca / khâu"
+            (bắt tự chọn tay từ danh sách chung chung) và một ô xem trước
+            "Ca chuẩn của bạn" — cả hai bị bỏ vì THỪA: màn hình Chấm Công đã
+            hiện đúng ca thật của nhân viên (đọc từ database) ngay trước khi
+            mở popup này rồi, không cần lặp lại. Tự chọn tay còn có rủi ro
+            chọn NHẦM bộ phận. Việc tính đi muộn/đúng giờ luôn do database
+            quyết qua trigger — không phụ thuộc gì vào ô đã bỏ này. */}
         <div>
-          <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8 }}>Chọn tên ca / khâu</label>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
-            {SHIFT_PRESETS.map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setShiftLabel(p)}
-                style={{
-                  padding: '8px 10px',
-                  borderRadius: 8,
-                  border: '1px solid var(--border-default)',
-                  background: shiftLabel === p ? 'var(--brand-primary)' : 'var(--surface-sunken)',
-                  color: shiftLabel === p ? '#fff' : 'var(--text-primary)',
-                  fontSize: 12,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  textAlign: 'center',
-                  minHeight: 36
-                }}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-
-          {/* Extended Shifts - Optional */}
-          {!SHIFT_PRESETS.some(p => p === shiftLabel) && (
-            <Select
-              value={shiftLabel}
-              onChange={(e) => setShiftLabel(e.target.value)}
-              options={[
-                { value: '', label: 'Chọn ca khác...' },
-                ...SHIFT_PRESETS_EXTENDED.map(s => ({ value: s, label: s }))
-              ]}
-              style={{ fontSize: 13, marginBottom: 8 }}
-            />
-          )}
-
+          <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8 }}>Chi nhánh</label>
           <Select value={branch} onChange={(e) => setBranch(e.target.value)} options={BRANCHES.map(b => ({ value: b, label: b }))} style={{ fontSize: 13 }} />
         </div>
 
@@ -532,12 +443,12 @@ function AddManualShiftModal({ staffName, staffId, defaultBranch, onClose, onDon
         <div>
           <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Chọn ca / Bộ phận</label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-            {SHIFT_PRESETS.map((p) => (<button key={p} type="button" onClick={() => setShiftLabel(p)} style={{ padding: '5px 10px', borderRadius: 999, border: '1px solid var(--border-default)', background: shiftLabel === p ? 'var(--brand-primary)' : 'var(--surface-sunken)', color: shiftLabel === p ? '#fff' : 'var(--text-primary)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{p}</button>))}
+            {SHIFT_PRESETS.map((p) => (<button key={p} type="button" onClick={() => setShiftLabel(p)} style={{ padding: '5px 10px', borderRadius: 999, border: '1px solid var(--border-default)', background: shiftLabel === p ? 'var(--action-primary)' : 'var(--surface-sunken)', color: shiftLabel === p ? 'var(--text-on-primary)' : 'var(--text-primary)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{p}</button>))}
           </div>
           <Input placeholder="Hoặc tự gõ tên ca..." value={shiftLabel} onChange={(e) => setShiftLabel(e.target.value)} />
         </div>
         <Select label="Chi nhánh" value={branch} onChange={(e) => setBranch(e.target.value)} options={BRANCHES.map(b => ({ value: b, label: b }))} />
-        {timeCalc && (<div style={{ padding: '10px 12px', borderRadius: 10, background: 'var(--surface-sunken)', fontSize: 13 }}><span>Thời lượng: <b>{timeCalc.grossHours}h</b></span>{timeCalc.lunchDeduction > 0 && <span style={{ color: '#b93e13' }}> (Đã trừ {timeCalc.lunchDeduction}h ăn trưa 11:30–12:30)</span>}<span style={{ display: 'block', marginTop: 4, fontWeight: 800, color: 'var(--brand-primary)' }}>→ Giờ làm thực tế: {timeCalc.netHours} giờ</span></div>)}
+        {timeCalc && (<div style={{ padding: '10px 12px', borderRadius: 10, background: 'var(--surface-sunken)', fontSize: 13 }}><span>Thời lượng: <b>{timeCalc.grossHours}h</b></span>{timeCalc.lunchDeduction > 0 && <span style={{ color: '#b93e13' }}> (Đã trừ {timeCalc.lunchDeduction}h ăn trưa 11:30–12:30)</span>}<span style={{ display: 'block', marginTop: 4, fontWeight: 800, color: 'var(--action-primary)' }}>→ Giờ làm thực tế: {timeCalc.netHours} giờ</span></div>)}
         <Input label="Lý do bổ sung" placeholder="VD: Bổ sung ca làm phụ bánh ngày 23/8..." value={reason} onChange={(e) => setReason(e.target.value)} />
         {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}><Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>Huỷ</Button><Button variant="primary" size="sm" onClick={submit} disabled={saving || !shiftLabel.trim()}>{saving ? 'Đang lưu...' : '✓ Lưu ca làm'}</Button></div>
