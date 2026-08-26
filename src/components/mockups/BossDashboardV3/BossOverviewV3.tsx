@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Crown,
   TrendingUp,
@@ -31,234 +31,232 @@ import {
   Megaphone,
   Gift
 } from 'lucide-react';
+import { AuthProvider, useAuth } from '../../../lib/AuthContext';
+import { listOrdersV2 } from '../../../lib/featureFlags';
+import { ORDER_FLOWS } from '../../../data/orderCatalogs';
+import {
+  fetchRevenueByChannel,
+  fetchExpenseClaimsToday,
+  reviewExpenseClaim,
+  fetchTodayStaffStatus,
+  remindStaff,
+  waiveLatePenalty,
+  fetchAssignableStaff,
+  assignTaskToStaff,
+  fetchRecentFeedPosts,
+  postCompanyAnnouncement,
+  summarizeOrderCounts,
+  sortOrdersByPriority,
+  fetchPendingSalaryAdvances,
+  reviewSalaryAdvance,
+  fetchPendingLeaveRequests,
+  reviewLeaveRequest,
+} from '../../../lib/bossOverviewV3';
 
 const formatVND = (amount: number) => {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
 };
 
-export default function BossOverviewV3() {
+export function BossOverviewV3Inner() {
+  const { profile } = useAuth();
+
   // ── States Quản Lý Bottom Sheets & Bộ Lọc Đơn Hàng ──
   const [activeSheet, setActiveSheet] = useState<
     'revenue_detail' | 'expense_detail' | 'order_drawer' | 'staff_detail' | 'task_sheet' | 'feed_sheet' | 'advance_sheet' | 'leave_sheet' | 'report_sheet' | 'schedule_sheet' | null
   >(null);
   const [selectedOrderFilter, setSelectedOrderFilter] = useState<string>('all');
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
-  // ── Dữ Liệu 5 Nguồn Thu ──
-  const revenueStreams = [
-    { id: 'rev-1', channel: 'Bakery Trực Tiếp (POS)', amount: 5800000, percentage: '37.6%', icon: '🥐', note: '142 lượt khách mua bánh tại quầy' },
-    { id: 'rev-2', channel: 'Hợp Đồng Trường Học', amount: 3000000, percentage: '19.5%', icon: '🏫', note: '3 trường mầm non & tiểu học' },
-    { id: 'rev-3', channel: 'Sỉ Bánh Macaron', amount: 2500000, percentage: '16.2%', icon: '🧁', note: 'Set mix 6 & 12 màu' },
-    { id: 'rev-4', channel: 'Tiệc Teabreak Doanh Nghiệp', amount: 2120000, percentage: '13.7%', icon: '☕', note: 'Teabreak FPT Software' },
-    { id: 'rev-5', channel: 'Giao Sỉ Đại Lý & B2B', amount: 2000000, percentage: '13.0%', icon: '🚚', note: 'Các quán cafe đối tác' },
-  ];
-  const totalRevenue = 15420000;
+  // ── Dữ liệu thật: doanh thu 5 kênh ──
+  const [revenueStreams, setRevenueStreams] = useState<any[]>([]);
+  const [totalRevenue, setTotalRevenue] = useState(0);
 
-  // ── Dữ Liệu Khoản Chi ──
-  const expenseStreams = [
-    { id: 'exp-1', title: 'Chi mua nguyên liệu (Bột mì, bơ sữa X42)', amount: 2500000, category: 'Nguyên liệu', time: '08:15', icon: '🧈' },
-    { id: 'exp-2', title: 'Chi tạm ứng lương nhân viên (Đăng Khánh 2)', amount: 1000000, category: 'Nhân sự', time: '10:30', icon: '💵' },
-    { id: 'exp-3', title: 'Chi tiền điện nước & internet xưởng', amount: 400000, category: 'Vận hành', time: '11:45', icon: '⚡' },
-    { id: 'exp-4', title: 'Chi bảo trì lò nướng bánh xoay X41', amount: 250000, category: 'Bảo trì', time: '14:20', icon: '🔧' },
-  ];
-  const totalExpense = 4150000;
+  // ── Dữ liệu thật: sổ cái khoản chi (expense_claims) ──
+  const [expenseStreams, setExpenseStreams] = useState<any[]>([]);
+  const [totalExpense, setTotalExpense] = useState(0);
 
   const [selectedStaffTab, setSelectedStaffTab] = useState<'working' | 'late' | 'off'>('working');
 
-  // ── Dữ Liệu Nhân Sự 3 Phân Nhóm Rõ Ràng (Đang làm, Đi trễ, Nghỉ phép) ──
-  const staffList = [
-    // 🟢 Nhóm Đang Làm Việc
-    { id: 'st-1', name: 'Võ Đăng Khánh', role: 'Kỹ Thuật & Vận Hành', zone: 'Bakery', status: 'working', checkinTime: '05:50', shift: 'Ca Sáng (06:00 - 14:00)', note: 'Đúng giờ', avatar: '👨‍🍳' },
-    { id: 'st-3', name: 'Hồ Hoàng Diễm', role: 'Quản Lý Bếp Bánh', zone: 'Bakery', status: 'working', checkinTime: '05:55', shift: 'Ca Sáng (06:00 - 14:00)', note: 'Đúng giờ', avatar: '👩‍💼' },
-    { id: 'st-5', name: 'Trần Thị Mai', role: 'Bếp Trưởng Bánh Mì', zone: 'Xưởng 41', status: 'working', checkinTime: '05:45', shift: 'Ca Sáng (06:00 - 14:00)', note: 'Đúng giờ', avatar: '🥖' },
-    { id: 'st-7', name: 'Nguyễn Văn An', role: 'Thợ Cốt Bánh Kem', zone: 'Bakery', status: 'working', checkinTime: '05:58', shift: 'Ca Sáng (06:00 - 14:00)', note: 'Đúng giờ', avatar: '🎂' },
-    { id: 'st-9', name: 'Đoàn Thu Thảo', role: 'Bán Hàng Quầy Chiều', zone: 'Bakery', status: 'working', checkinTime: '13:50', shift: 'Ca Chiều (14:00 - 22:00)', note: 'Đúng giờ', avatar: '👩‍🍳' },
+  // ── Dữ liệu thật: chấm công toàn công ty hôm nay ──
+  const [staffList, setStaffList] = useState<any[]>([]);
+  const [staffCounts, setStaffCounts] = useState({ total: 0, working: 0, late: 0, off: 0 });
+  const [assignableStaff, setAssignableStaff] = useState<any[]>([]);
 
-    // ⏰ Nhóm Đi Trễ
-    { id: 'st-2', name: 'Đăng Khánh 2', role: 'Bán Hàng & Thu Ngân', zone: 'Bakery', status: 'late', checkinTime: '06:25', lateMinutes: 25, reason: 'Kẹt xe cầu Rạch Miễu giờ cao điểm', shift: 'Ca Sáng (06:00 - 14:00)', avatar: '🍰' },
-    { id: 'st-6', name: 'Vũ Thị Yến', role: 'Thủ Kho & Đóng Gói', zone: 'Xưởng 42', status: 'late', checkinTime: '06:30', lateMinutes: 30, reason: 'Hỏng xe máy giữa đường đã báo Quản lý', shift: 'Ca Sáng (06:00 - 14:00)', avatar: '📦' },
-    { id: 'st-10', name: 'Bùi Quốc Bảo', role: 'Thợ Nướng Bánh Mì', zone: 'Xưởng 41', status: 'late', checkinTime: '06:15', lateMinutes: 15, reason: 'Đưa con đi khám bệnh sáng sớm', shift: 'Ca Sáng (06:00 - 14:00)', avatar: '🍞' },
+  // ── Dữ liệu thật: tạm ứng lương + nghỉ phép đang chờ Sếp duyệt ──
+  const [pendingAdvances, setPendingAdvances] = useState<any[]>([]);
+  const [pendingLeaves, setPendingLeaves] = useState<any[]>([]);
 
-    // 🔴 Nhóm Nghỉ Phép / Nghỉ Ca
-    { id: 'st-4', name: 'Lê Hoàng Khoa', role: 'Thợ Bánh Macaron', zone: 'Xưởng 41', status: 'off', leaveType: 'Nghỉ phép năm', reason: 'Về quê có việc gia đình (Đã duyệt phép)', approvedBy: 'Sếp Khánh', avatar: '🧁' },
-    { id: 'st-8', name: 'Phạm Minh Trí', role: 'Đóng Gói Bánh X42', zone: 'Xưởng 42', status: 'off', leaveType: 'Nghỉ ốm', reason: 'Sốt xuất huyết có giấy chứng nhận viện', approvedBy: 'Quản lý Diễm', avatar: '🏥' },
-  ];
+  const loadAll = async () => {
+    setLoading(true);
+    setLoadError('');
+    try {
+      const [rev, claims, status, staffOptions, orders, posts, advances, leaves] = await Promise.all([
+        fetchRevenueByChannel(),
+        fetchExpenseClaimsToday(),
+        fetchTodayStaffStatus(),
+        fetchAssignableStaff(),
+        listOrdersV2(),
+        fetchRecentFeedPosts(),
+        fetchPendingSalaryAdvances(),
+        fetchPendingLeaveRequests(),
+      ]);
 
-  const staffCounts = {
-    total: 50,
-    working: 45,
-    late: 3,
-    off: 2
+      setRevenueStreams(rev.channels.map((c) => ({ id: c.key, channel: c.title, amount: c.amount, percentage: c.percentage, icon: c.icon, note: `${c.count} đơn hoàn thành` })));
+      setTotalRevenue(rev.total);
+
+      setExpenseStreams(claims.map((c: any) => ({
+        id: c.id,
+        title: c.description || c.note || 'Khoản chi',
+        amount: Number(c.amount) || 0,
+        category: c.status === 'pending_director' ? '⏳ Chờ Sếp duyệt' : c.status === 'pending_accounting' ? '✓ Đã duyệt · chờ ghi sổ' : c.status === 'recorded' ? '✓ Đã ghi sổ' : '✕ Đã từ chối',
+        time: new Date(c.occurred_at || c.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+        icon: '💸',
+        status: c.status,
+        claimantName: c.claimant_name,
+      })));
+      setTotalExpense(claims.reduce((s: number, c: any) => s + (Number(c.amount) || 0), 0));
+
+      const mapCommon = (p: any) => ({ id: p.id, name: p.full_name, role: p.role || 'Nhân viên', zone: p.station || 'Chưa gán khu vực', avatar: '👤' });
+      setStaffList([
+        ...status.working.map((p: any) => ({ ...mapCommon(p), status: 'working', checkinTime: p.checkinTime, shift: p.shiftLabel || 'Ca hôm nay', note: 'Đúng giờ' })),
+        ...status.late.map((p: any) => ({ ...mapCommon(p), status: 'late', checkinTime: p.checkinTime, lateMinutes: p.lateMinutes, reason: p.reason || 'Không ghi lý do', shift: p.shiftLabel || 'Ca hôm nay', shiftLogId: p.shiftLogId })),
+        ...status.off.map((p: any) => ({ ...mapCommon(p), status: 'off', leaveType: 'Nghỉ ca', reason: p.reason || 'Không ghi lý do', approvedBy: 'Đã ghi nhận trong hệ thống' })),
+      ]);
+      setStaffCounts({ total: status.total, working: status.working.length, late: status.late.length, off: status.off.length });
+      setAssignableStaff(staffOptions);
+
+      setAllOrders(sortOrdersByPriority(orders));
+      setFeedPosts(posts);
+      setPendingAdvances(advances);
+      setPendingLeaves(leaves);
+    } catch (e: any) {
+      setLoadError(e.message || 'Không tải được dữ liệu thật, thử lại sau.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // ── Dữ Liệu Bảng Tin & Tag Tên ──
-  const [comments, setComments] = useState([
-    {
-      id: 'cm-1',
-      author: 'Võ Đăng Khánh (Sếp Tổng 👑)',
-      time: '14:30 · Hôm nay',
-      text: 'Toàn bộ ca chiều chú ý mẻ bánh Macaron giao đối tác FPT lúc 16h30. @Lê_Hoàng_Khoa kiểm tra kỹ nhiệt độ đóng hộp!',
-      taggedUsers: ['Lê_Hoàng_Khoa'],
-      reactions: 8
-    },
-    {
-      id: 'cm-2',
-      author: 'Lê Hoàng Khoa (Thợ Bánh Macaron)',
-      time: '14:35 · Vừa xong',
-      text: 'Dạ Sếp @Võ_Đăng_Khánh, em đã đóng gói xong 50 hộp Set 6 màu, bánh đang giữ lạnh 4°C chuẩn bị giao ạ! ❤️',
-      taggedUsers: ['Võ_Đăng_Khánh'],
-      reactions: 5
-    }
-  ]);
+  useEffect(() => { loadAll(); }, []);
+
+  // ── Dữ liệu thật: bảng tin công ty (company_feed_posts) ──
+  const [feedPosts, setFeedPosts] = useState<any[]>([]);
   const [inputComment, setInputComment] = useState('');
+  const [sendingComment, setSendingComment] = useState(false);
+  const comments = feedPosts.map((p: any) => ({
+    id: p.id,
+    author: p.author_name,
+    time: new Date(p.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' · ' + new Date(p.created_at).toLocaleDateString('vi-VN'),
+    text: p.body,
+  }));
 
-  // ── Dữ Liệu Giao Việc Nhanh ──
-  const [taskTitle, setTaskTitle] = useState('Kiểm tra chất lượng mẻ bánh Macaron');
-  const [taskDesc, setTaskDesc] = useState('Đo chuẩn đường kính vỏ bánh 4.5cm, nhân phô mai dâu mềm mịn không chảy');
-  const [taskDeadline, setTaskDeadline] = useState('16:00 Hôm nay');
-  const [taskAssignee, setTaskAssignee] = useState('Lê Hoàng Khoa');
-  const [managedTasks, setManagedTasks] = useState([
-    {
-      id: 'tsk-1',
-      title: 'Kiểm tra chất lượng mẻ bánh Macaron',
-      desc: 'Đo chuẩn đường kính vỏ bánh 4.5cm, nhân phô mai dâu',
-      assignee: 'Lê Hoàng Khoa',
-      deadline: '16:00 Hôm nay',
-      status: 'in_progress',
-      statusLabel: 'Đang làm'
-    },
-    {
-      id: 'tsk-2',
-      title: 'Bảo trì máy trộn bột xoay 30L',
-      desc: 'Tra dầu mỡ định kỳ và kiểm tra độ căng dây curoa',
-      assignee: 'Vũ Thị Yến',
-      deadline: '17:30 Hôm nay',
-      status: 'pending',
-      statusLabel: 'Chưa xong'
-    }
-  ]);
+  // ── Giao việc nhanh — ghi thật vào bảng tasks, hiện ngay trên màn Nhân viên ──
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskDesc, setTaskDesc] = useState('');
+  const [taskAssignee, setTaskAssignee] = useState(''); // profile id
+  const [sendingTask, setSendingTask] = useState(false);
+  // Chỉ lưu ngay trong phiên này để Sếp thấy đã giao gì — hệ thống chưa có
+  // view "toàn bộ việc tôi đã giao cho tất cả nhân viên" để tải lại từ DB.
+  const [managedTasks, setManagedTasks] = useState<any[]>([]);
 
-  // ── 7 TRẠNG THÁI ĐƠN HÀNG CHUẨN ĐỐI CHIẾU 100% VỚI HỆ THỐNG WEB THẬT ──
-  const allOrders = [
-    {
-      id: 'ord-1',
-      code: 'BK-0826-01',
-      customer: 'Chị Minh Thư (VIP Tiệc Cưới)',
-      item: '1x Bánh Cưới 3 Tầng Dâu Tây & Hoa Tươi',
-      total: 1850000,
-      deliveryTime: '15:15 (Khẩn cấp ⚡)',
-      status_v2: 'in_production',
-      statusLabel: 'Bếp đang làm 👩‍🍳',
-      station: 'Bakery Bếp Lạnh',
-      isUrgent: true,
-      priorityRank: 1
-    },
-    {
-      id: 'ord-2',
-      code: 'MC-0826-02',
-      customer: 'FPT Software (Teabreak Văn Phòng)',
-      item: '50x Macaron Set 6 màu + 20x Croissant',
-      total: 2000000,
-      deliveryTime: '16:00 (Giao gấp ⚡)',
-      status_v2: 'ready_for_fulfillment',
-      statusLabel: 'Chờ vận chuyển 📦',
-      station: 'Xưởng 41',
-      isUrgent: true,
-      priorityRank: 2
-    },
-    {
-      id: 'ord-3',
-      code: 'SCH-0826-03',
-      customer: 'Trường Mầm Non Họa Mi (Hợp đồng)',
-      item: '120x Bánh Mì Bơ Sữa X42',
-      total: 3620000,
-      deliveryTime: '16:45',
-      status_v2: 'in_production',
-      statusLabel: 'Bếp đang làm 👩‍🍳',
-      station: 'Xưởng 42',
-      isUrgent: false,
-      priorityRank: 3
-    },
-    {
-      id: 'ord-4',
-      code: 'BK-0826-04',
-      customer: 'Anh Tuấn Khang (Sinh Nhật Bé)',
-      item: '1x Bánh Kem Bắp Phô Mai 20cm',
-      total: 420000,
-      deliveryTime: '17:30',
-      status_v2: 'awaiting_assignment',
-      statusLabel: 'Đơn chờ làm 📥',
-      station: 'Bakery',
-      isUrgent: false,
-      priorityRank: 4
-    },
-    {
-      id: 'ord-5',
-      code: 'SHP-0826-05',
-      customer: 'Chị Lan Hương (Giao Tận Nơi)',
-      item: '2x Hộp Macaron 12 viên Luxury',
-      total: 580000,
-      deliveryTime: '17:45',
-      status_v2: 'in_delivery',
-      statusLabel: 'Đang vận chuyển 🛵',
-      station: 'Shipper Hoàng Dũng',
-      isUrgent: false,
-      priorityRank: 5
-    },
-    {
-      id: 'ord-6',
-      code: 'RT-0826-06',
-      customer: 'Khách vãng lai Quầy Bakery',
-      item: '10x Su Kem Phô Mai + 5x Tart Trứng',
-      total: 380000,
-      deliveryTime: '14:00',
-      status_v2: 'completed',
-      statusLabel: 'Giao thành công ✅',
-      station: 'Quầy Bakery',
-      isUrgent: false,
-      priorityRank: 6
-    },
-    {
-      id: 'ord-7',
-      code: 'X41-0826-07',
-      customer: 'Tiệm Trà Sữa TocoToco',
-      item: '30x Bánh Mì Phô Mai Tan Chảy',
-      total: 750000,
-      deliveryTime: '13:30 (Trễ hẹn ⚠️)',
-      status_v2: 'overdue',
-      statusLabel: 'Chưa thực hiện ⚠️',
-      station: 'Xưởng 41',
-      isUrgent: true,
-      priorityRank: 0 // Đơn trễ hẹn ưu tiên xử lý khẩn cấp nhất
-    }
-  ];
+  useEffect(() => {
+    if (!taskAssignee && assignableStaff.length) setTaskAssignee(assignableStaff[0].id);
+  }, [assignableStaff]);
 
-  // Tính toán số lượng theo đúng logic chuẩn của MobileHomeScreen / OrderStatusOverview
-  const orderCounts = useMemo(() => {
-    return {
-      total: allOrders.length,
-      waiting: allOrders.filter(o => o.status_v2 === 'awaiting_assignment').length,
-      production: allOrders.filter(o => o.status_v2 === 'in_production').length,
-      ready: allOrders.filter(o => o.status_v2 === 'ready_for_fulfillment').length,
-      delivery: allOrders.filter(o => o.status_v2 === 'in_delivery').length,
-      completed: allOrders.filter(o => o.status_v2 === 'completed').length,
-      overdue: allOrders.filter(o => o.status_v2 === 'overdue').length,
-    };
-  }, [allOrders]);
+  // ── Dữ liệu thật: đơn hàng (order_operations_list qua listOrdersV2) ──
+  const [allOrders, setAllOrders] = useState<any[]>([]);
+
+  const orderCounts = useMemo(() => summarizeOrderCounts(allOrders), [allOrders]);
 
   // Lọc và sắp xếp đơn hàng theo thứ tự ưu tiên giảm dần từ trên xuống
   const filteredOrders = useMemo(() => {
-    let list = [...allOrders];
-    if (selectedOrderFilter !== 'all') {
-      list = list.filter(o => o.status_v2 === selectedOrderFilter);
+    let list = allOrders;
+    if (selectedOrderFilter === 'overdue') {
+      list = allOrders.filter((o: any) => o.is_overdue);
+    } else if (selectedOrderFilter !== 'all') {
+      const statusMap: Record<string, string[]> = {
+        awaiting_assignment: ['awaiting_assignment', 'awaiting_acceptance'],
+        in_production: ['in_production'],
+        ready_for_fulfillment: ['ready_for_fulfillment'],
+        in_delivery: ['in_delivery'],
+        completed: ['completed'],
+      };
+      const wanted = statusMap[selectedOrderFilter] || [selectedOrderFilter];
+      list = allOrders.filter((o: any) => wanted.includes(o.status_v2) && (selectedOrderFilter === 'completed' || !o.is_overdue));
     }
-    // Sắp xếp ưu tiên: đơn khẩn cấp/trễ hẹn (priorityRank thấp) lên trên cùng
-    return list.sort((a, b) => a.priorityRank - b.priorityRank);
+    return list;
   }, [allOrders, selectedOrderFilter]);
 
   // Mở Drawer lọc đơn theo từng ô
   const handleOpenOrderDrawer = (filterKey: string = 'all') => {
     setSelectedOrderFilter(filterKey);
     setActiveSheet('order_drawer');
+  };
+
+  // ── Duyệt/Từ chối khoản chi — ghi thật vào expense_claims ──
+  const handleReviewExpense = async (id: string, approve: boolean) => {
+    try {
+      await reviewExpenseClaim(id, approve);
+      showToast(approve ? '✓ Sếp đã DUYỆT khoản chi' : '✕ Sếp đã từ chối khoản chi');
+      const claims = await fetchExpenseClaimsToday();
+      setExpenseStreams(claims.map((c: any) => ({
+        id: c.id, title: c.description || c.note || 'Khoản chi', amount: Number(c.amount) || 0,
+        category: c.status === 'pending_director' ? '⏳ Chờ Sếp duyệt' : c.status === 'pending_accounting' ? '✓ Đã duyệt · chờ ghi sổ' : c.status === 'recorded' ? '✓ Đã ghi sổ' : '✕ Đã từ chối',
+        time: new Date(c.occurred_at || c.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }), icon: '💸', status: c.status, claimantName: c.claimant_name,
+      })));
+      setTotalExpense(claims.reduce((s: number, c: any) => s + (Number(c.amount) || 0), 0));
+    } catch (e: any) {
+      showToast(`⚠️ ${e.message || 'Không thao tác được'}`);
+    }
+  };
+
+  // ── Duyệt/Từ chối tạm ứng lương — ghi thật vào salary_advance_requests ──
+  const handleReviewAdvance = async (id: string, approve: boolean) => {
+    try {
+      await reviewSalaryAdvance(id, approve);
+      showToast(approve ? '✓ Sếp đã DUYỆT tạm ứng' : '✕ Sếp đã từ chối tạm ứng');
+      setPendingAdvances(await fetchPendingSalaryAdvances());
+    } catch (e: any) {
+      showToast(`⚠️ ${e.message || 'Không thao tác được'}`);
+    }
+  };
+
+  // ── Duyệt/Từ chối đơn nghỉ phép — ghi thật vào approval_requests ──
+  const handleReviewLeave = async (id: string, approve: boolean) => {
+    try {
+      await reviewLeaveRequest(id, approve);
+      showToast(approve ? '✓ Sếp đã ĐỒNG Ý đơn nghỉ phép' : '✕ Sếp đã từ chối đơn nghỉ phép');
+      setPendingLeaves(await fetchPendingLeaveRequests());
+    } catch (e: any) {
+      showToast(`⚠️ ${e.message || 'Không thao tác được'}`);
+    }
+  };
+
+  // ── Nhắc nhở / Bỏ qua phạt trễ — ghi thật qua RPC director-only ──
+  const handleRemindStaff = async (staffId: string, name: string) => {
+    try {
+      await remindStaff(staffId, `Sếp nhắc ${name} chú ý giờ giấc đi làm.`);
+      showToast(`💬 Đã gửi tin nhắn nhắc nhở đến ${name}`);
+    } catch (e: any) {
+      showToast(`⚠️ ${e.message || 'Không gửi được'}`);
+    }
+  };
+
+  const handleWaivePenalty = async (shiftLogId: string, name: string) => {
+    try {
+      await waiveLatePenalty(shiftLogId);
+      showToast(`✓ Đã miễn trừ phạt trễ cho ${name}`);
+      const status = await fetchTodayStaffStatus();
+      const mapCommon = (p: any) => ({ id: p.id, name: p.full_name, role: p.role || 'Nhân viên', zone: p.station || 'Chưa gán khu vực', avatar: '👤' });
+      setStaffList([
+        ...status.working.map((p: any) => ({ ...mapCommon(p), status: 'working', checkinTime: p.checkinTime, shift: p.shiftLabel || 'Ca hôm nay', note: 'Đúng giờ' })),
+        ...status.late.map((p: any) => ({ ...mapCommon(p), status: 'late', checkinTime: p.checkinTime, lateMinutes: p.lateMinutes, reason: p.reason || 'Không ghi lý do', shift: p.shiftLabel || 'Ca hôm nay', shiftLogId: p.shiftLogId })),
+        ...status.off.map((p: any) => ({ ...mapCommon(p), status: 'off', leaveType: 'Nghỉ ca', reason: p.reason || 'Không ghi lý do', approvedBy: 'Đã ghi nhận trong hệ thống' })),
+      ]);
+      setStaffCounts({ total: status.total, working: status.working.length, late: status.late.length, off: status.off.length });
+    } catch (e: any) {
+      showToast(`⚠️ ${e.message || 'Không thao tác được'}`);
+    }
   };
 
   // ── Toast Alert ──
@@ -268,49 +266,45 @@ export default function BossOverviewV3() {
     setTimeout(() => setToast(''), 2800);
   };
 
-  // ── Gửi Bình Luận Tag Tên ──
-  const handleSendComment = (e: React.FormEvent) => {
+  // ── Gửi Bình Luận Tag Tên — ghi thật vào company_feed_posts ──
+  const handleSendComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputComment.trim()) return;
-
-    const tagMatches = inputComment.match(/@([a-zA-Z0-9_À-ỹ]+)/g) || [];
-    const tags = tagMatches.map(t => t.replace('@', ''));
-
-    const newCm = {
-      id: `cm-${Date.now()}`,
-      author: 'Võ Đăng Khánh (Sếp Tổng 👑)',
-      time: 'Vừa xong',
-      text: inputComment.trim(),
-      taggedUsers: tags,
-      reactions: 1
-    };
-
-    setComments([newCm, ...comments]);
-    setInputComment('');
-    showToast('💬 Đã phát thông báo chỉ đạo công khai đến toàn thể nhân viên!');
+    if (!inputComment.trim() || !profile?.id) return;
+    setSendingComment(true);
+    try {
+      await postCompanyAnnouncement({ authorId: profile.id, authorName: profile.full_name, body: inputComment.trim() });
+      setInputComment('');
+      const posts = await fetchRecentFeedPosts();
+      setFeedPosts(posts);
+      showToast('💬 Đã phát thông báo chỉ đạo công khai đến toàn thể nhân viên!');
+    } catch (err: any) {
+      showToast(`⚠️ ${err.message || 'Không gửi được, thử lại sau.'}`);
+    } finally {
+      setSendingComment(false);
+    }
   };
 
-  // ── Giao Việc Nhanh ──
-  const handleCreateTask = (e: React.FormEvent) => {
+  // ── Giao Việc Nhanh — ghi thật vào bảng tasks, hiện ngay trên màn Nhân viên ──
+  const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!taskTitle.trim()) {
       showToast('⚠️ Vui lòng nhập tên công việc!');
       return;
     }
-
-    const newTask = {
-      id: `tsk-${Date.now()}`,
-      title: taskTitle.trim(),
-      desc: taskDesc.trim() || 'Thực hiện nghiêm túc theo chỉ đạo',
-      assignee: taskAssignee,
-      deadline: taskDeadline,
-      status: 'in_progress',
-      statusLabel: 'Mới giao'
-    };
-
-    setManagedTasks([newTask, ...managedTasks]);
-    setActiveSheet(null);
-    showToast(`⚡ Đã giao việc "${newTask.title}" cho ${newTask.assignee}!`);
+    if (!taskAssignee || !profile?.id) return;
+    setSendingTask(true);
+    try {
+      const assignee = assignableStaff.find((s) => s.id === taskAssignee);
+      await assignTaskToStaff({ assigneeId: taskAssignee, title: taskTitle.trim(), description: taskDesc.trim() || null, createdBy: profile.id });
+      setManagedTasks([{ id: `tsk-${Date.now()}`, title: taskTitle.trim(), desc: taskDesc.trim(), assignee: assignee?.full_name || 'Nhân viên', statusLabel: 'Mới giao' }, ...managedTasks]);
+      setTaskTitle('');
+      setTaskDesc('');
+      showToast(`⚡ Đã giao việc "${taskTitle.trim()}" cho ${assignee?.full_name || 'nhân viên'}!`);
+    } catch (err: any) {
+      showToast(`⚠️ ${err.message || 'Không giao được việc, thử lại sau.'}`);
+    } finally {
+      setSendingTask(false);
+    }
   };
 
   // Render nội dung có highlight tag @Name
@@ -339,8 +333,17 @@ export default function BossOverviewV3() {
     });
   };
 
+  if (!profile) {
+    return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8a7a66', fontSize: 13 }}>Chưa đăng nhập.</div>;
+  }
+
   return (
     <div style={{ background: '#dcd3c7', minHeight: '100vh', padding: '16px 8px', boxSizing: 'border-box' }}>
+      {loadError && (
+        <div style={{ maxWidth: 420, margin: '0 auto 8px', background: '#fee2e2', color: '#dc2626', fontSize: 12, fontWeight: 700, padding: '8px 12px', borderRadius: 10, cursor: 'pointer' }} onClick={loadAll}>
+          ⚠️ {loadError} — bấm để tải lại
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* ── SMARTPHONE FRAME CONTAINER (CHUẨN DI ĐỘNG 420PX) ── */}
@@ -428,7 +431,7 @@ export default function BossOverviewV3() {
                 SUMI BAKERY ENTERPRISE
               </div>
               <h1 style={{ fontSize: 16, fontWeight: 900, margin: 0, color: '#2d1c10' }}>
-                Tổng Giám Đốc (Sếp Võ Đăng Khánh)
+                Tổng Giám Đốc (Sếp {profile?.full_name || '...'})
               </h1>
             </div>
           </div>
@@ -554,12 +557,11 @@ export default function BossOverviewV3() {
               </div>
 
               <div style={{ fontSize: 20, fontWeight: 900, color: '#2d1c10' }}>
-                50 <span style={{ fontSize: 12, fontWeight: 800, color: '#725f50' }}>người</span>
+                {staffCounts.total} <span style={{ fontSize: 12, fontWeight: 800, color: '#725f50' }}>người</span>
               </div>
 
-              <div style={{ display: 'flex', gap: 6, marginTop: 4, fontSize: 11, fontWeight: 800 }}>
-                <span style={{ color: '#2563eb' }}>👨 Nam: 20</span>
-                <span style={{ color: '#db2777' }}>👩 Nữ: 30</span>
+              <div style={{ marginTop: 4, fontSize: 11, fontWeight: 800, color: '#725f50' }}>
+                Đã duyệt &amp; đang hoạt động
               </div>
             </div>
 
@@ -583,14 +585,14 @@ export default function BossOverviewV3() {
               </div>
 
               <div style={{ fontSize: 20, fontWeight: 900, color: '#15803d' }}>
-                45/50 <span style={{ fontSize: 12, fontWeight: 800, color: '#725f50' }}>online</span>
+                {staffCounts.working + staffCounts.late}/{staffCounts.total} <span style={{ fontSize: 12, fontWeight: 800, color: '#725f50' }}>đã chấm công</span>
               </div>
 
               {/* Tóm tắt 3 luồng trực quan */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: 10.5, fontWeight: 800 }}>
-                <span style={{ color: '#15803d', background: '#dcfce7', padding: '1px 5px', borderRadius: 4 }}>🟢 45 Làm</span>
-                <span style={{ color: '#b45309', background: '#fef3c7', padding: '1px 5px', borderRadius: 4 }}>⏰ 3 Trễ</span>
-                <span style={{ color: '#dc2626', background: '#fee2e2', padding: '1px 5px', borderRadius: 4 }}>🔴 2 Nghỉ</span>
+                <span style={{ color: '#15803d', background: '#dcfce7', padding: '1px 5px', borderRadius: 4 }}>🟢 {staffCounts.working} Làm</span>
+                <span style={{ color: '#b45309', background: '#fef3c7', padding: '1px 5px', borderRadius: 4 }}>⏰ {staffCounts.late} Trễ</span>
+                <span style={{ color: '#dc2626', background: '#fee2e2', padding: '1px 5px', borderRadius: 4 }}>🔴 {staffCounts.off} Nghỉ</span>
               </div>
             </div>
           </div>
@@ -680,7 +682,7 @@ export default function BossOverviewV3() {
               </div>
               <div style={{ marginTop: 6 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>3. Tạm ứng</div>
-                <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>1 đơn chờ duyệt</div>
+                <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>{pendingAdvances.length} đơn chờ duyệt</div>
               </div>
             </div>
 
@@ -996,20 +998,33 @@ export default function BossOverviewV3() {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {expenseStreams.map(exp => (
+                {expenseStreams.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Chưa có khoản chi nào hôm nay.</div>
+                )}
+                {expenseStreams.map((exp: any) => (
                   <div key={exp.id} style={{ background: '#fff', border: '1.5px solid #fecaca', borderRadius: 14, padding: 12 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ fontSize: 20 }}>{exp.icon}</span>
                         <div>
                           <div style={{ fontSize: 12.5, fontWeight: 900, color: '#2d1c10' }}>{exp.title}</div>
-                          <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>Phân loại: <strong>{exp.category}</strong> · {exp.time}</div>
+                          <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>{exp.claimantName} · <strong>{exp.category}</strong> · {exp.time}</div>
                         </div>
                       </div>
                       <div style={{ fontSize: 13.5, fontWeight: 900, color: '#dc2626' }}>
                         -{formatVND(exp.amount)}
                       </div>
                     </div>
+                    {exp.status === 'pending_director' && (
+                      <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                        <button onClick={() => handleReviewExpense(exp.id, true)} style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 8, padding: '7px 0', fontWeight: 900, fontSize: 11.5, cursor: 'pointer' }}>
+                          ✓ Duyệt Chi
+                        </button>
+                        <button onClick={() => handleReviewExpense(exp.id, false)} style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, padding: '7px 0', fontWeight: 900, fontSize: 11.5, cursor: 'pointer' }}>
+                          ✕ Từ Chối
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1055,35 +1070,24 @@ export default function BossOverviewV3() {
                   />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 800, color: '#725f50', marginBottom: 2 }}>Người nhận việc</div>
-                    <select
-                      value={taskAssignee}
-                      onChange={e => setTaskAssignee(e.target.value)}
-                      style={{ width: '100%', padding: '7px 8px', borderRadius: 8, border: '1.5px solid #eadcca', fontSize: 11.5, fontWeight: 700, outline: 'none', background: '#faf6f0' }}
-                    >
-                      {staffList.map(st => (
-                        <option key={st.id} value={st.name}>
-                          {st.avatar} {st.name} ({st.zone})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 800, color: '#725f50', marginBottom: 2 }}>Hạn hoàn thành</div>
-                    <input
-                      type="text"
-                      value={taskDeadline}
-                      onChange={e => setTaskDeadline(e.target.value)}
-                      style={{ width: '100%', padding: '7px 8px', borderRadius: 8, border: '1.5px solid #eadcca', fontSize: 11.5, outline: 'none', background: '#faf6f0', boxSizing: 'border-box' }}
-                    />
-                  </div>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: '#725f50', marginBottom: 2 }}>Người nhận việc</div>
+                  <select
+                    value={taskAssignee}
+                    onChange={e => setTaskAssignee(e.target.value)}
+                    style={{ width: '100%', padding: '7px 8px', borderRadius: 8, border: '1.5px solid #eadcca', fontSize: 11.5, fontWeight: 700, outline: 'none', background: '#faf6f0' }}
+                  >
+                    {assignableStaff.map((st: any) => (
+                      <option key={st.id} value={st.id}>
+                        {st.full_name} ({st.station || st.role})
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <button
                   type="submit"
+                  disabled={sendingTask}
                   style={{
                     background: '#c28c4e',
                     color: '#fff',
@@ -1100,25 +1104,29 @@ export default function BossOverviewV3() {
                     marginTop: 4
                   }}
                 >
-                  <Plus size={16} /> Giao Việc Ngay (Tự Động Đồng Bộ)
+                  <Plus size={16} /> {sendingTask ? 'Đang giao...' : 'Giao Việc Ngay (Tự Động Đồng Bộ)'}
                 </button>
               </form>
 
-              {/* Danh sách việc đã giao */}
-              <div style={{ fontSize: 12, fontWeight: 900, color: '#2d1c10', marginBottom: 6 }}>
-                📋 Danh sách việc Sếp vừa giao:
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {managedTasks.map(t => (
-                  <div key={t.id} style={{ background: '#faf6f0', border: '1px solid #eadcca', borderRadius: 10, padding: 8 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 12.5, fontWeight: 900 }}>{t.title}</span>
-                      <span style={{ fontSize: 10.5, color: '#c28c4e', fontWeight: 800 }}>{t.statusLabel}</span>
-                    </div>
-                    <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>👤 Người nhận: <strong>{t.assignee}</strong> · Hạn: {t.deadline}</div>
+              {/* Danh sách việc đã giao trong phiên này */}
+              {managedTasks.length > 0 && (
+                <>
+                  <div style={{ fontSize: 12, fontWeight: 900, color: '#2d1c10', marginBottom: 6 }}>
+                    📋 Vừa giao trong phiên này:
                   </div>
-                ))}
-              </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {managedTasks.map((t: any) => (
+                      <div key={t.id} style={{ background: '#faf6f0', border: '1px solid #eadcca', borderRadius: 10, padding: 8 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: 12.5, fontWeight: 900 }}>{t.title}</span>
+                          <span style={{ fontSize: 10.5, color: '#c28c4e', fontWeight: 800 }}>{t.statusLabel}</span>
+                        </div>
+                        <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>👤 Người nhận: <strong>{t.assignee}</strong></div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -1133,7 +1141,7 @@ export default function BossOverviewV3() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingBottom: 8, borderBottom: '1.5px solid #eadcca' }}>
                 <div>
                   <div style={{ fontSize: 15, fontWeight: 900, color: '#166534' }}>📢 Bảng Tin & Chỉ Đạo Công Khai</div>
-                  <div style={{ fontSize: 11, color: '#725f50' }}>Toàn thể 50 nhân viên đều nhìn thấy và tương tác</div>
+                  <div style={{ fontSize: 11, color: '#725f50' }}>Toàn thể {staffCounts.total} nhân viên đều nhìn thấy</div>
                 </div>
                 <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
               </div>
@@ -1204,27 +1212,34 @@ export default function BossOverviewV3() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, paddingBottom: 8, borderBottom: '1.5px solid #eadcca' }}>
                 <div>
                   <div style={{ fontSize: 15, fontWeight: 900, color: '#ca8a04' }}>💵 Phê Duyệt Tạm Ứng Lương</div>
-                  <div style={{ fontSize: 11, color: '#725f50' }}>1 đơn yêu cầu đang chờ Sếp duyệt</div>
+                  <div style={{ fontSize: 11, color: '#725f50' }}>{pendingAdvances.length} đơn yêu cầu đang chờ Sếp duyệt</div>
                 </div>
                 <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
               </div>
 
-              <div style={{ background: '#fefce8', border: '1.5px solid #facc15', borderRadius: 14, padding: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
-                    <div style={{ fontSize: 13.5, fontWeight: 900, color: '#2d1c10' }}>🍰 Đăng Khánh 2 (Bán Hàng)</div>
-                    <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>Lý do: Đóng tiền trọ tháng 8 · Nộp lúc 08:30</div>
+              {pendingAdvances.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Không có yêu cầu tạm ứng nào đang chờ.</div>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {pendingAdvances.map((a: any) => (
+                  <div key={a.id} style={{ background: '#fefce8', border: '1.5px solid #facc15', borderRadius: 14, padding: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <div style={{ fontSize: 13.5, fontWeight: 900, color: '#2d1c10' }}>{a.employee_name}</div>
+                        <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>Lý do: {a.reason} · Nộp lúc {new Date(a.created_at).toLocaleString('vi-VN')}</div>
+                      </div>
+                      <span style={{ fontSize: 15, fontWeight: 900, color: '#b45309' }}>{formatVND(a.amount)}</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                      <button onClick={() => handleReviewAdvance(a.id, true)} style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
+                        ✓ Duyệt Chi Tiền
+                      </button>
+                      <button onClick={() => handleReviewAdvance(a.id, false)} style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
+                        ✕ Từ Chối
+                      </button>
+                    </div>
                   </div>
-                  <span style={{ fontSize: 15, fontWeight: 900, color: '#b45309' }}>1.000.000 đ</span>
-                </div>
-                <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
-                  <button onClick={() => { showToast('✓ Sếp đã DUYỆT tạm ứng 1.000.000đ cho Đăng Khánh 2'); setActiveSheet(null); }} style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
-                    ✓ Duyệt Chi Tiền
-                  </button>
-                  <button onClick={() => { showToast('✕ Sếp đã từ chối yêu cầu tạm ứng'); setActiveSheet(null); }} style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
-                    ✕ Từ Chối
-                  </button>
-                </div>
+                ))}
               </div>
             </div>
           </div>
@@ -1240,27 +1255,33 @@ export default function BossOverviewV3() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, paddingBottom: 8, borderBottom: '1.5px solid #eadcca' }}>
                 <div>
                   <div style={{ fontSize: 15, fontWeight: 900, color: '#2563eb' }}>📝 Phê Duyệt Đơn Nghỉ Phép</div>
-                  <div style={{ fontSize: 11, color: '#725f50' }}>1 đơn xin nghỉ phép năm 02/09</div>
+                  <div style={{ fontSize: 11, color: '#725f50' }}>{pendingLeaves.length} đơn đang chờ duyệt</div>
                 </div>
                 <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
               </div>
 
-              <div style={{ background: '#eff6ff', border: '1.5px solid #93c5fd', borderRadius: 14, padding: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
-                    <div style={{ fontSize: 13.5, fontWeight: 900, color: '#2d1c10' }}>🧁 Lê Hoàng Khoa (Thợ Macaron)</div>
-                    <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>Ngày nghỉ: <strong>02/09/2026</strong> (Nghỉ phép năm gia đình)</div>
+              {pendingLeaves.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Không có đơn nghỉ phép nào đang chờ.</div>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {pendingLeaves.map((l: any) => (
+                  <div key={l.id} style={{ background: '#eff6ff', border: '1.5px solid #93c5fd', borderRadius: 14, padding: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <div style={{ fontSize: 13.5, fontWeight: 900, color: '#2d1c10' }}>{l.requester_name}</div>
+                        <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>Ngày nghỉ: <strong>{l.leave_date}</strong> {l.reason ? `· ${l.reason}` : ''}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                      <button onClick={() => handleReviewLeave(l.id, true)} style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
+                        ✓ Đồng Ý Duyệt
+                      </button>
+                      <button onClick={() => handleReviewLeave(l.id, false)} style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
+                        ✕ Từ Chối
+                      </button>
+                    </div>
                   </div>
-                  <span style={{ fontSize: 11, fontWeight: 900, color: '#2563eb', background: '#fff', padding: '3px 8px', borderRadius: 6 }}>1 ngày</span>
-                </div>
-                <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
-                  <button onClick={() => { showToast('✓ Sếp đã DUYỆT đơn nghỉ phép của Lê Hoàng Khoa'); setActiveSheet(null); }} style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
-                    ✓ Đồng Ý Duyệt
-                  </button>
-                  <button onClick={() => { showToast('✕ Sếp đã từ chối đơn nghỉ phép'); setActiveSheet(null); }} style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
-                    ✕ Từ Chối
-                  </button>
-                </div>
+                ))}
               </div>
             </div>
           </div>
@@ -1415,36 +1436,43 @@ export default function BossOverviewV3() {
 
               {/* Danh sách đơn hàng ưu tiên */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto' }}>
-                {filteredOrders.map((ord, idx) => (
-                  <div
-                    key={ord.id}
-                    style={{
-                      background: ord.isUrgent ? '#fff9f0' : '#fff',
-                      border: ord.isUrgent ? '2px solid #f59e0b' : '1.5px solid #eadcca',
-                      borderRadius: 14,
-                      padding: 10
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                      <span style={{ fontSize: 11, fontWeight: 900, background: ord.isUrgent ? '#fef3c7' : '#f4efe8', color: ord.isUrgent ? '#b45309' : '#725f50', padding: '2px 6px', borderRadius: 6 }}>
-                        #{idx + 1} · {ord.code}
-                      </span>
-                      <span style={{ fontSize: 11, fontWeight: 900, color: ord.isUrgent ? '#dc2626' : '#725f50' }}>
-                        ⏰ {ord.deliveryTime}
-                      </span>
-                    </div>
+                {filteredOrders.map((ord: any, idx: number) => {
+                  const flow = ORDER_FLOWS.find((f) => f.key === ord.order_type);
+                  const statusLabelMap: Record<string, string> = {
+                    awaiting_assignment: 'Đơn chờ làm 📥', awaiting_acceptance: 'Đơn chờ làm 📥',
+                    in_production: 'Bếp đang làm 👩‍🍳', ready_for_fulfillment: 'Chờ vận chuyển 📦',
+                    in_delivery: 'Đang vận chuyển 🛵', completed: 'Giao thành công ✅',
+                  };
+                  return (
+                    <div
+                      key={ord.id}
+                      style={{
+                        background: ord.is_overdue ? '#fff9f0' : '#fff',
+                        border: ord.is_overdue ? '2px solid #f59e0b' : '1.5px solid #eadcca',
+                        borderRadius: 14,
+                        padding: 10
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <span style={{ fontSize: 11, fontWeight: 900, background: ord.is_overdue ? '#fef3c7' : '#f4efe8', color: ord.is_overdue ? '#b45309' : '#725f50', padding: '2px 6px', borderRadius: 6 }}>
+                          #{idx + 1} · {ord.order_code}
+                        </span>
+                        <span style={{ fontSize: 11, fontWeight: 900, color: ord.is_overdue ? '#dc2626' : '#725f50' }}>
+                          ⏰ {ord.required_at ? new Date(ord.required_at).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : 'Chưa có hạn'}
+                        </span>
+                      </div>
 
-                    <div style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>{ord.customer}</div>
-                    <div style={{ fontSize: 11.5, color: '#493526', margin: '2px 0' }}>• {ord.item}</div>
+                      <div style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>{flow ? `${flow.icon} ${flow.title}` : ord.order_type} · {ord.total_quantity} sản phẩm</div>
+                      <div style={{ fontSize: 11.5, color: '#493526', margin: '2px 0' }}>• Người tạo: {ord.created_by_name || 'Không rõ'}</div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, paddingTop: 4, borderTop: '1px solid #f2e9de' }}>
-                      <span style={{ fontSize: 11, fontWeight: 800, color: ord.status_v2 === 'completed' ? '#16a34a' : ord.status_v2 === 'overdue' ? '#dc2626' : '#138a53' }}>
-                        {ord.statusLabel} · <strong>[{ord.station}]</strong>
-                      </span>
-                      <span style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>{formatVND(ord.total)}</span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, paddingTop: 4, borderTop: '1px solid #f2e9de' }}>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: ord.status_v2 === 'completed' ? '#16a34a' : ord.is_overdue ? '#dc2626' : '#138a53' }}>
+                          {ord.is_overdue ? 'Chưa thực hiện ⚠️' : (statusLabelMap[ord.status_v2] || ord.status_v2)}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
 
                 {filteredOrders.length === 0 && (
                   <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>
@@ -1597,13 +1625,13 @@ export default function BossOverviewV3() {
 
                         <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                           <button
-                            onClick={() => showToast(`💬 Đã gửi tin nhắn nhắc nhở đến ${st.name}`)}
+                            onClick={() => handleRemindStaff(st.id, st.name)}
                             style={{ flex: 1, background: '#ea580c', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 0', fontSize: 11, fontWeight: 900, cursor: 'pointer' }}
                           >
                             ⚡ Nhắc Nhở
                           </button>
                           <button
-                            onClick={() => showToast(`✓ Đã miễn trừ phạt trễ cho ${st.name}`)}
+                            onClick={() => handleWaivePenalty(st.shiftLogId, st.name)}
                             style={{ flex: 1, background: '#f4efe8', color: '#725f50', border: 'none', borderRadius: 6, padding: '6px 0', fontSize: 11, fontWeight: 800, cursor: 'pointer' }}
                           >
                             Bỏ Qua Lý Do Chính Đáng
@@ -1673,8 +1701,27 @@ export default function BossOverviewV3() {
           </div>
         )}
 
+        {/* Loading skeleton — chỉ hiện lần tải đầu, tránh giật màn hình mỗi lần refresh */}
+        {loading && staffCounts.total === 0 && (
+          <div style={{ position: 'absolute', inset: 0, background: '#faf6f0', zIndex: 1500, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 8 }}>
+            <div style={{ width: 32, height: 32, border: '3px solid #eadcca', borderTopColor: '#c28c4e', borderRadius: '50%', animation: 'sumi-boss-spin 0.8s linear infinite' }} />
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#8a7a66' }}>Đang tải dữ liệu thật...</div>
+            <style>{`@keyframes sumi-boss-spin { to { transform: rotate(360deg); } }`}</style>
+          </div>
+        )}
+
       </div>
 
     </div>
+  );
+}
+
+// Dùng khi mở qua ?mockup=boss-v3 (chưa nằm trong cây AuthProvider gốc của
+// app thật) — bên trong app thật thì import BossOverviewV3Inner trực tiếp.
+export default function BossOverviewV3() {
+  return (
+    <AuthProvider>
+      <BossOverviewV3Inner />
+    </AuthProvider>
   );
 }

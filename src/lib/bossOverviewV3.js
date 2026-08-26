@@ -1,0 +1,196 @@
+import { supabase } from './supabaseClient';
+import { ORDER_FLOWS } from '../data/orderCatalogs';
+import { createAdhocTask, fetchApprovalRequests, resolveApprovalRequest } from './queries';
+
+const todayStr = () => new Date().toISOString().slice(0, 10);
+const monthStart = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`; };
+
+// ---- 1. Doanh thu theo 5 kênh (orders.order_type khớp ORDER_FLOWS) ----
+export async function fetchRevenueByChannel({ from, to } = {}) {
+  const fromIso = from || `${todayStr()}T00:00:00`;
+  const toIso = to || new Date().toISOString();
+  const { data, error } = await supabase
+    .from('orders')
+    .select('order_type, total')
+    .eq('status_v2', 'completed')
+    .gte('completed_at', fromIso)
+    .lte('completed_at', toIso);
+  if (error) throw error;
+  const rows = data || [];
+  const byKey = {};
+  ORDER_FLOWS.forEach((f) => { byKey[f.key] = { ...f, amount: 0, count: 0 }; });
+  byKey.other = { key: 'other', icon: '🧺', title: 'Khác', amount: 0, count: 0 };
+  rows.forEach((o) => {
+    const bucket = byKey[o.order_type] || byKey.other;
+    bucket.amount += Number(o.total) || 0;
+    bucket.count += 1;
+  });
+  const total = rows.reduce((s, o) => s + (Number(o.total) || 0), 0);
+  const channels = [...ORDER_FLOWS.map((f) => byKey[f.key]), byKey.other]
+    .filter((b) => b.count > 0)
+    .map((b) => ({ ...b, percentage: total > 0 ? `${((b.amount / total) * 100).toFixed(1)}%` : '0%' }))
+    .sort((a, b) => b.amount - a.amount);
+  return { channels, total };
+}
+
+// ---- 2. Sổ cái khoản chi (expense_claims) ----
+export async function fetchExpenseClaimsToday() {
+  const { data, error } = await supabase
+    .from('expense_claims')
+    .select('*')
+    .gte('created_at', `${todayStr()}T00:00:00`)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function reviewExpenseClaim(id, approve, note) {
+  const { data, error } = await supabase.rpc('review_expense_claim', { p_id: id, p_approve: approve, p_note: note || null });
+  if (error) throw error;
+  return data;
+}
+
+// ---- 3. Trạng thái chấm công toàn công ty hôm nay ----
+export async function fetchTodayStaffStatus() {
+  const today = todayStr();
+  const [profilesRes, logsRes] = await Promise.all([
+    supabase.from('profiles').select('id, full_name, role, station').eq('approved', true).neq('active', false),
+    supabase.from('shift_logs').select('*').eq('work_date', today),
+  ]);
+  if (profilesRes.error) throw profilesRes.error;
+  if (logsRes.error) throw logsRes.error;
+  const profiles = profilesRes.data || [];
+  const logs = logsRes.data || [];
+
+  const working = [];
+  const late = [];
+  const off = [];
+
+  for (const p of profiles) {
+    const mine = logs.filter((l) => l.staff_id === p.id);
+    const checkin = mine.find((l) => l.type === 'checkin');
+    const leave = mine.find((l) => l.type === 'leave_request');
+    if (leave) {
+      off.push({ ...p, shiftLogId: leave.id, reason: leave.reason || 'Nghỉ ca' });
+    } else if (checkin) {
+      const entry = {
+        ...p,
+        shiftLogId: checkin.id,
+        checkinTime: checkin.checkin_time
+          ? new Date(checkin.checkin_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+          : '--:--',
+        lateMinutes: checkin.late_minutes || 0,
+        reason: checkin.reason || '',
+        shiftLabel: checkin.shift_label || '',
+      };
+      if ((checkin.late_minutes || 0) > 0) late.push(entry); else working.push(entry);
+    }
+    // Không có bản ghi nào hôm nay -> chưa chấm công, không xếp vào nhóm nào cả
+    // (khác với "nghỉ ca" — chỉ tính là nghỉ khi có leave_request thật).
+  }
+
+  return { total: profiles.length, working, late, off };
+}
+
+// ---- Hành động thật cho nhân sự đi trễ ----
+export async function remindStaff(staffId, message) {
+  const { error } = await supabase.rpc('remind_staff', { p_staff_id: staffId, p_message: message || null });
+  if (error) throw error;
+}
+
+export async function waiveLatePenalty(shiftLogId) {
+  const { error } = await supabase.rpc('waive_late_penalty', { p_shift_log_id: shiftLogId });
+  if (error) throw error;
+}
+
+// ---- 3b. Tạm ứng lương đang chờ duyệt ----
+export async function fetchPendingSalaryAdvances() {
+  const { data, error } = await supabase
+    .from('salary_advance_requests')
+    .select('*')
+    .eq('status', 'pending_director')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function reviewSalaryAdvance(id, approve, note) {
+  const { error } = await supabase.rpc('review_salary_advance', { p_id: id, p_approve: approve, p_note: note || null });
+  if (error) throw error;
+}
+
+// ---- 3c. Đơn xin nghỉ phép đang chờ duyệt ----
+export async function fetchPendingLeaveRequests() {
+  return fetchApprovalRequests({ status: 'pending', type: 'leave_request' });
+}
+
+export async function reviewLeaveRequest(id, approved, note) {
+  await resolveApprovalRequest(id, { status: approved ? 'approved' : 'rejected', note });
+}
+
+// ---- 4. Giao việc nhanh cho 1 nhân viên ----
+export async function fetchAssignableStaff() {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, role, station')
+    .eq('approved', true)
+    .neq('active', false)
+    .order('full_name');
+  if (error) throw error;
+  return data || [];
+}
+
+export async function assignTaskToStaff({ assigneeId, title, description, createdBy }) {
+  await createAdhocTask({ assigneeId, title, description, createdBy });
+}
+
+// ---- 5. Bảng tin công ty (company_feed_posts) ----
+export async function fetchRecentFeedPosts(limit = 10) {
+  const { data, error } = await supabase
+    .from('company_feed_posts')
+    .select('id, author_name, title, body, severity, created_at')
+    .eq('post_type', 'announcement')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function postCompanyAnnouncement({ authorId, authorName, body, severity = 'important' }) {
+  const { error } = await supabase.from('company_feed_posts').insert({
+    author_id: authorId,
+    author_name: authorName,
+    post_type: 'announcement',
+    title: 'Chỉ đạo từ Sếp',
+    body,
+    severity,
+    pinned: severity !== 'normal',
+    safe_for_company: true,
+  });
+  if (error) throw error;
+}
+
+// ---- 6. Đơn hàng ưu tiên (order_operations_list, dùng chung listOrdersV2) ----
+export function summarizeOrderCounts(orders) {
+  return {
+    total: orders.length,
+    waiting: orders.filter((o) => ['awaiting_assignment', 'awaiting_acceptance'].includes(o.status_v2) && !o.is_overdue).length,
+    production: orders.filter((o) => o.status_v2 === 'in_production' && !o.is_overdue).length,
+    ready: orders.filter((o) => o.status_v2 === 'ready_for_fulfillment' && !o.is_overdue).length,
+    delivery: orders.filter((o) => o.status_v2 === 'in_delivery' && !o.is_overdue).length,
+    completed: orders.filter((o) => o.status_v2 === 'completed').length,
+    overdue: orders.filter((o) => Boolean(o.is_overdue)).length,
+  };
+}
+
+export function sortOrdersByPriority(orders) {
+  return [...orders].sort((a, b) => {
+    const aRank = a.is_overdue ? 0 : 1;
+    const bRank = b.is_overdue ? 0 : 1;
+    if (aRank !== bRank) return aRank - bRank;
+    return new Date(a.required_at || 0) - new Date(b.required_at || 0);
+  });
+}
+
+export { monthStart, todayStr };
