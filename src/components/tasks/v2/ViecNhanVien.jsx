@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import TheViecNhanVien from './TheViecNhanVien';
 import BaoXongModal from './BaoXongModal';
+import DonKiemNhiem from './DonKiemNhiem';
 import { nhomViecNhanVien } from '../../../lib/congViec';
 
 // Màn hình Công việc của THỢ — dựng theo mockup "Quản Lý Công Việc (Thợ Bếp)".
@@ -53,6 +54,7 @@ export default function ViecNhanVien({ tasks, hoSo, tenTheoId, dangTai, loi, onT
 
       {!dangTai && (
         <>
+          <DonKiemNhiem hoSo={hoSo} onDaNhan={onTaiLai} />
           <Khoi tieuDe="Chờ xác nhận" danhSach={nhom.choNhan} {...chung} />
           <Khoi tieuDe="Đang làm" danhSach={nhom.dangLam} {...chung} />
           <Khoi tieuDe="Chờ quản lý duyệt" danhSach={nhom.choDuyet} {...chung} />
