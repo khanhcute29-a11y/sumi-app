@@ -3,6 +3,7 @@ import { supabase } from '../../../lib/supabaseClient';
 import ViecNhanVien from './ViecNhanVien';
 import ViecQuanLy from './ViecQuanLy';
 import ViecGiamDoc from './ViecGiamDoc';
+import GiaoViecModal from './GiaoViecModal';
 import '../../../styles/cong-viec.css';
 
 // Cửa ngõ của phân hệ Công việc: tự chọn góc nhìn theo vai trò người đăng nhập,
@@ -14,19 +15,30 @@ import '../../../styles/cong-viec.css';
 
 const GIOI_HAN = 300;   // không kéo cả bảng về máy
 
-export default function CongViecV2({ profile, staffList = [], onMoGiaoViec }) {
+export default function CongViecV2({ profile, staffList = [] }) {
   const [tasks, setTasks] = useState([]);
   const [duAn, setDuAn] = useState([]);
   const [dangTai, setDangTai] = useState(true);
   const [loi, setLoi] = useState('');
+  const [moGiaoViec, setMoGiaoViec] = useState(false);
 
-  const vaiTro = [profile?.role, ...(profile?.extra_roles || [])].filter(Boolean);
-  const laGiamDoc = vaiTro.some((r) => ['owner', 'admin'].includes(r));
-  const khauQuanLy = vaiTro.includes('deputy_director_x41') ? 'xuong41'
-    : vaiTro.includes('deputy_director_x42') ? 'xuong42'
-      : vaiTro.some((r) => String(r).startsWith('kitchen_lead')) ? ((profile?.station || '').trim() || null)
-        : null;
-  const laQuanLy = !laGiamDoc && (khauQuanLy !== null || vaiTro.some((r) => String(r).startsWith('kitchen_lead')));
+  // Vai trò do DATABASE quyết, không đoán từ `profiles.role`/`station`.
+  // Hai cột đó không khớp sơ đồ tổ chức: một bếp trưởng đang được ghi là
+  // role='sale', còn `station` thì gần như cả tiệm bỏ trống. Hàm
+  // `sumi_vai_tro_cong_viec` đọc đúng nguồn mà hàng rào RLS đang dùng, nên góc
+  // nhìn trên màn hình luôn khớp với dữ liệu người đó thật sự đọc được.
+  const [vaiTro, setVaiTro] = useState(null);
+  useEffect(() => {
+    if (!profile?.id) return;
+    let huy = false;
+    supabase.rpc('sumi_vai_tro_cong_viec')
+      .then(({ data, error }) => { if (!huy) setVaiTro(error ? {} : (data || {})); })
+      .catch(() => { if (!huy) setVaiTro({}); });
+    return () => { huy = true; };
+  }, [profile?.id]);
+
+  const laGiamDoc = !!vaiTro?.la_giam_doc;
+  const laQuanLy = !!vaiTro?.la_quan_ly;
 
   const tenTheoId = {};
   (staffList || []).forEach((p) => { tenTheoId[p.id] = p.full_name; });
@@ -35,22 +47,18 @@ export default function CongViecV2({ profile, staffList = [], onMoGiaoViec }) {
   const tai = useCallback(async () => {
     setDangTai(true);
     try {
-      let q = supabase.from('tasks').select('*')
+      // KHÔNG tự lọc theo khâu ở đây nữa.
+      //
+      // Trước đây tôi lọc `.or('station_id.eq...')` — sai hai lần: cột đó rỗng
+      // trên toàn bộ việc cũ, và quan trọng hơn, HÀNG RÀO RLS DƯỚI DATABASE MỚI
+      // LÀ NƠI QUYẾT ai thấy gì. Lọc thêm ở đây chỉ cắt bớt một cách sai lệch.
+      //   Giám đốc  -> thấy toàn xưởng
+      //   Bếp trưởng -> thấy việc của người cùng đơn vị (chính sách mới)
+      //   Thợ       -> chỉ thấy việc của mình
+      const q = supabase.from('tasks').select('*')
         .in('category', ['assigned', 'adhoc'])
         .order('created_at', { ascending: false })
         .limit(GIOI_HAN);
-
-      if (laGiamDoc) {
-        // Giám đốc thấy toàn xưởng.
-      } else if (laQuanLy && khauQuanLy) {
-        // Bếp trưởng: việc của khâu mình, cộng việc mình giao hoặc mình làm.
-        q = q.or(`station_id.eq.${khauQuanLy},assignee_id.eq.${profile?.id},created_by.eq.${profile?.id}`);
-      } else if (laQuanLy) {
-        // Bếp trưởng chưa gán khâu: chỉ thấy việc mình giao hoặc mình làm.
-        q = q.or(`assignee_id.eq.${profile?.id},created_by.eq.${profile?.id}`);
-      } else {
-        q = q.eq('assignee_id', profile?.id);
-      }
 
       const { data, error } = await q;
       if (error) throw error;
@@ -62,7 +70,7 @@ export default function CongViecV2({ profile, staffList = [], onMoGiaoViec }) {
     } finally {
       setDangTai(false);
     }
-  }, [laGiamDoc, laQuanLy, khauQuanLy, profile?.id]);
+  }, [profile?.id]);
 
   useEffect(() => { if (profile?.id) tai(); }, [profile?.id, tai]);
 
@@ -101,7 +109,13 @@ export default function CongViecV2({ profile, staffList = [], onMoGiaoViec }) {
     return (
       <div className="cv-wrap">
         <ViecGiamDoc {...chung} duAn={duAn}
-          onMoGiaoViec={onMoGiaoViec} onMoTaoDuAn={onMoGiaoViec} onNhacNho={nhacNho} />
+          onMoGiaoViec={() => setMoGiaoViec(true)}
+          onMoTaoDuAn={() => setMoGiaoViec(true)} onNhacNho={nhacNho} />
+        {moGiaoViec && (
+          <GiaoViecModal hoSo={profile} danhSachTho={staffList}
+            onClose={() => setMoGiaoViec(false)}
+            onXong={async () => { setMoGiaoViec(false); await tai(); }} />
+        )}
       </div>
     );
   }
@@ -109,7 +123,13 @@ export default function CongViecV2({ profile, staffList = [], onMoGiaoViec }) {
   if (laQuanLy) {
     return (
       <div className="cv-wrap">
-        <ViecQuanLy {...chung} hoSo={profile} danhSachTho={staffList} onMoGiaoViec={onMoGiaoViec} />
+        <ViecQuanLy {...chung} hoSo={profile} danhSachTho={staffList}
+          onMoGiaoViec={() => setMoGiaoViec(true)} />
+        {moGiaoViec && (
+          <GiaoViecModal hoSo={profile} danhSachTho={staffList}
+            onClose={() => setMoGiaoViec(false)}
+            onXong={async () => { setMoGiaoViec(false); await tai(); }} />
+        )}
       </div>
     );
   }

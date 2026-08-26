@@ -159,8 +159,11 @@ export function nhomViecNhanVien(tasks) {
 export function nhomViecQuanLy(tasks, toiId) {
   const ds = tasks || [];
   return {
-    // Việc chưa có người làm -> cần điều phối (tự làm hoặc giao cho thợ).
-    choDieuPhoi: ds.filter((t) => !t.assignee_id && !daDong(t)),
+    // Đã giao nhưng thợ CHƯA bấm xác nhận — quản lý cần nhắc.
+    // Phải chặn theo CẢ trạng thái, không chỉ dựa vào `accepted_at`: dữ liệu cũ
+    // (trước 26/08) không có cột đó, nên một việc đang "chờ duyệt" vẫn lọt vào
+    // nhóm "chưa nhận" nếu chỉ nhìn `accepted_at`.
+    chuaNhan: ds.filter((t) => t.assignee_id && t.status === 'open' && !t.accepted_at),
     // Việc mình được giao.
     duocGiao: ds.filter((t) => t.assignee_id === toiId && !daDong(t)),
     // Việc mình đã giao cho người khác, đang chạy.

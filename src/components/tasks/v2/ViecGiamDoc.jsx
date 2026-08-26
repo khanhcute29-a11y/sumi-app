@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { supabase } from '../../../lib/supabaseClient';
 import DuyetViecModal from './DuyetViecModal';
 import {
-  KHAU, TRANG_THAI, tomTatViec, demTheoKhau, sapXepQuaHan, khauCuaViec, nhanKhau,
+  TRANG_THAI, tomTatViec, sapXepQuaHan, khauCuaViec,
   locTheoTuKhoa, ngayGio, doDaiThoiGian, treBaoNhieu, tienDoDuAn, quaHan,
 } from '../../../lib/congViec';
 
@@ -9,13 +10,23 @@ import {
 // Dựng theo mockup: tìm kiếm → lọc khâu → hai nút quyền lực → ô đếm →
 // dự án đang chạy → danh sách QUÁ HẠN đẩy lên đầu.
 
+// Bộ lọc khâu dựng từ DỮ LIỆU THẬT trong database, không gõ cứng trong code.
+// Trước đây tôi gõ cứng 6 khâu theo `profiles.station` — cột đó gần như cả tiệm
+// bỏ trống nên bộ lọc hiện toàn số 0, trông như một bức ảnh tĩnh.
+function dungBoLocKhau(danhSachKhau, tasks) {
+  const tong = (tasks || []).length;
+  const ds = [{ ma: 'all', ten: 'Tất cả', so_viec: tong }];
+  (danhSachKhau || []).forEach((k) => ds.push(k));
+  return ds;
+}
+
 function chuCaiDau(ten) {
   const t = (ten || '?').trim().split(/\s+/);
   if (t.length === 1) return t[0].slice(0, 2).toUpperCase();
   return (t[t.length - 2][0] + t[t.length - 1][0]).toUpperCase();
 }
 
-function TheQuaHan({ viec, tenTheoId, onNhacNho, onXem, dangNhac }) {
+function TheQuaHan({ viec, tenTheoId, tenKhau, onNhacNho, onXem, dangNhac }) {
   const tre = treBaoNhieu(viec);
   const tho = tenTheoId[viec.assignee_id];
   const quanLy = tenTheoId[viec.created_by];
@@ -23,7 +34,7 @@ function TheQuaHan({ viec, tenTheoId, onNhacNho, onXem, dangNhac }) {
     <div className="cv-card tre">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
         <div style={{ minWidth: 0 }}>
-          <span className="cv-dept-tag">{nhanKhau(khauCuaViec(viec))}</span>
+          <span className="cv-dept-tag">{tenKhau(viec)}</span>
           <h3 className="cv-title" style={{ marginTop: 6 }}>{viec.title}</h3>
           {viec.deadline && (
             <div className="cv-meta"><span className="cv-meta-item">🎯 Hạn: {ngayGio(viec.deadline)}</span></div>
@@ -63,12 +74,26 @@ export default function ViecGiamDoc({
 }) {
   const [tuKhoa, setTuKhoa] = useState('');
   const [khau, setKhau] = useState('all');
+  const [danhSachKhau, setDanhSachKhau] = useState([]);
+
+  useEffect(() => {
+    let huy = false;
+    supabase.rpc('sumi_danh_sach_khau_viec')
+      .then(({ data, error }) => { if (!huy) setDanhSachKhau(error ? [] : (data || [])); })
+      .catch(() => { if (!huy) setDanhSachKhau([]); });
+    return () => { huy = true; };
+  }, [tasks.length]);
   const [xem, setXem] = useState(null);
   const [dangNhac, setDangNhac] = useState('');
   const [loiChung, setLoiChung] = useState('');
 
-  const dem = demTheoKhau(tasks);
-  const theoKhau = khau === 'all' ? (tasks || []) : (tasks || []).filter((t) => khauCuaViec(t) === khau);
+  const tenKhau = (t) => {
+    const ma = t?.station_id || '_khac';
+    return danhSachKhau.find((k) => k.ma === ma)?.ten || 'Chưa gán khâu';
+  };
+  const theoKhau = khau === 'all'
+    ? (tasks || [])
+    : (tasks || []).filter((t) => (t.station_id || '_khac') === khau);
   const daLoc = locTheoTuKhoa(theoKhau, tuKhoa, tenTheoId);
   const tomTat = tomTatViec(daLoc);
   const quaHanDs = sapXepQuaHan(daLoc);
@@ -95,10 +120,10 @@ export default function ViecGiamDoc({
       </div>
 
       <div className="cv-chips">
-        {KHAU.map((k) => (
-          <button key={k.key} className={`cv-chip${khau === k.key ? ' active' : ''}`}
-            onClick={() => setKhau(k.key)}>
-            {k.icon} {k.nhan} ({dem[k.key] || 0})
+        {dungBoLocKhau(danhSachKhau, tasks).map((k) => (
+          <button key={k.ma} className={`cv-chip${khau === k.ma ? ' active' : ''}`}
+            onClick={() => setKhau(k.ma)}>
+            {k.ten} ({k.so_viec})
           </button>
         ))}
       </div>
@@ -167,7 +192,7 @@ export default function ViecGiamDoc({
       {quaHanDs.length ? (
         <div className="cv-list">
           {quaHanDs.map((v) => (
-            <TheQuaHan key={v.id} viec={v} tenTheoId={tenTheoId}
+            <TheQuaHan key={v.id} viec={v} tenTheoId={tenTheoId} tenKhau={tenKhau}
               onNhacNho={nhac} onXem={setXem} dangNhac={dangNhac} />
           ))}
         </div>
@@ -187,7 +212,7 @@ export default function ViecGiamDoc({
               const tt = TRANG_THAI.pending_approval;
               return (
                 <div className="cv-card" key={v.id} style={{ borderColor: 'var(--cv-success)' }}>
-                  <span className="cv-dept-tag">{nhanKhau(khauCuaViec(v))}</span>
+                  <span className="cv-dept-tag">{tenKhau(v)}</span>
                   <h3 className="cv-title" style={{ marginTop: 6 }}>{v.title}</h3>
                   <div className="cv-meta">
                     <span className="cv-meta-item">👨‍🍳 {tenTheoId[v.assignee_id] || 'Chưa rõ'}</span>

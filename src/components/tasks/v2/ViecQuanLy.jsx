@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { supabase } from '../../../lib/supabaseClient';
 import DuyetViecModal from './DuyetViecModal';
 import TheViecNhanVien from './TheViecNhanVien';
 import {
@@ -14,32 +13,6 @@ function chuCaiDau(ten) {
   const t = (ten || '?').trim().split(/\s+/);
   if (t.length === 1) return t[0].slice(0, 2).toUpperCase();
   return (t[t.length - 2][0] + t[t.length - 1][0]).toUpperCase();
-}
-
-// ── Thẻ việc chưa có người làm: bếp trưởng phải điều phối ──
-function TheDieuPhoi({ viec, hoSo, tenTheoId, onGiao, onTuLam, dangChay }) {
-  return (
-    <div className="cv-card moi">
-      {viec.order_code && <span className="cv-order-link">📦 Đơn {viec.order_code}</span>}
-      <h3 className="cv-title">{viec.title}</h3>
-      <div className="cv-meta">
-        <span className="cv-meta-item">
-          Giao bởi: {tenTheoId[viec.created_by] || 'Hệ thống (đơn khách)'}
-        </span>
-        {viec.deadline && <span className="cv-meta-item">🎯 Hạn chót: {ngayGio(viec.deadline)}</span>}
-      </div>
-      <div className="cv-actions">
-        <button className="cv-btn outline" disabled={dangChay === viec.id}
-          style={{ borderColor: 'var(--cv-primary)', color: 'var(--cv-primary)' }}
-          onClick={() => onTuLam(viec)}>
-          👤 Tự làm
-        </button>
-        <button className="cv-btn primary" disabled={dangChay === viec.id} onClick={() => onGiao(viec)}>
-          👨‍🍳 Giao nhân viên
-        </button>
-      </div>
-    </div>
-  );
 }
 
 // ── Thẻ theo dõi thợ ──
@@ -104,26 +77,15 @@ export default function ViecQuanLy({
   const [tab, setTab] = useState('daGiao');
   const [duyet, setDuyet] = useState(null);
   const [xemBaoCao, setXemBaoCao] = useState(null);
-  const [dangChay, setDangChay] = useState('');
   const [loiChung, setLoiChung] = useState('');
 
   const nhom = nhomViecQuanLy(tasks, hoSo?.id);
 
-  // Bếp trưởng bấm "Tự làm": nhận việc về mình.
-  const tuLam = async (viec) => {
-    setDangChay(viec.id); setLoiChung('');
-    try {
-      const { error } = await supabase.from('tasks')
-        .update({ assignee_id: hoSo?.id }).eq('id', viec.id);
-      if (error) throw error;
-      await onTaiLai?.();
-    } catch (e) {
-      setLoiChung(e?.message || 'Không nhận được việc này về mình.');
-    } finally { setDangChay(''); }
-  };
-
+  // Đo trên bản thật: KHÔNG có việc nào chưa giao ai (0/60), nên tab "Điều
+  // phối" của mockup luôn rỗng và vô nghĩa. Thay bằng "Chưa nhận" — việc đã
+  // giao nhưng thợ chưa bấm xác nhận. Đó mới là thứ quản lý cần can thiệp.
   const cacTab = [
-    { key: 'dieuPhoi', nhan: `Điều phối (${nhom.choDieuPhoi.length})` },
+    { key: 'chuaNhan', nhan: `Chưa nhận (${nhom.chuaNhan.length})` },
     { key: 'daGiao', nhan: `Đã giao (${nhom.daGiao.length})` },
     { key: 'choDuyet', nhan: `Chờ duyệt (${nhom.choDuyet.length})` },
     { key: 'cuaToi', nhan: `Của tôi (${nhom.duocGiao.length})` },
@@ -147,16 +109,12 @@ export default function ViecQuanLy({
 
       {dangTai && <div className="cv-empty">Đang tải công việc…</div>}
 
-      {!dangTai && tab === 'dieuPhoi' && (
-        nhom.choDieuPhoi.length ? (
+      {!dangTai && tab === 'chuaNhan' && (
+        nhom.chuaNhan.length ? (
           <div className="cv-list">
-            {nhom.choDieuPhoi.map((v) => (
-              <TheDieuPhoi key={v.id} viec={v} hoSo={hoSo} tenTheoId={tenTheoId}
-                dangChay={dangChay} onTuLam={tuLam}
-                onGiao={() => onMoGiaoViec(v)} />
-            ))}
+            {nhom.chuaNhan.map((v) => <TheTheoDoi key={v.id} viec={v} {...chungTheoDoi} />)}
           </div>
-        ) : <div className="cv-empty"><div className="cv-empty-icon">✨</div>Không có việc nào đang chờ điều phối.</div>
+        ) : <div className="cv-empty"><div className="cv-empty-icon">✨</div>Thợ đã nhận hết việc rồi.</div>
       )}
 
       {!dangTai && tab === 'daGiao' && (
