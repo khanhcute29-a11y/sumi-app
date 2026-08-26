@@ -107,6 +107,32 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
  const [items,setItems]=useState([]); const [photos,setPhotos]=useState([]); const [saving,setSaving]=useState(false); const [error,setError]=useState('');
  const [showLibraryPicker,setShowLibraryPicker]=useState(false); const [libraryPhotos,setLibraryPhotos]=useState([]); const [libraryLoading,setLibraryLoading]=useState(false); const [selectedLibraryPhotos,setSelectedLibraryPhotos]=useState([]); const [libraryUploading,setLibraryUploading]=useState(false);
  const [isReadyStock, setIsReadyStock] = useState(false);
+ const [tonKho,setTonKho]=useState(null);
+ // Bánh có sẵn: soi kho NGAY khi tick, để nhân viên thấy còn mấy cái trước khi
+ // bấm tạo — thay vì chọn xong mới bị chặn. Cách khớp size ở đây phải GIỐNG HỆT
+ // hàm check_finished_goods_stock dưới database: không chọn size thì cộng tất
+ // cả các size của sản phẩm đó.
+ useEffect(()=>{
+  if(!isReadyStock){setTonKho(null);return;}
+  const ds=items.filter(it=>it.product_id&&(Number(it.quantity)||0)>0);
+  if(!ds.length){setTonKho([]);return;}
+  let huy=false;
+  (async()=>{
+   try{
+    const ids=[...new Set(ds.map(it=>it.product_id))];
+    const {data,error:err}=await supabase.from('finished_goods_stock').select('product_id,size,qty').in('product_id',ids);
+    if(err)throw err;
+    if(huy)return;
+    setTonKho(ds.map(it=>{
+     const sz=it.specification?.size||null;
+     const con=(data||[]).filter(r=>r.product_id===it.product_id&&(!sz||(r.size||null)===sz))
+                         .reduce((tong,r)=>tong+Number(r.qty||0),0);
+     return {ten:it.name||'Sản phẩm',size:sz,can:Number(it.quantity)||0,con};
+    }));
+   }catch(e){if(!huy)setTonKho('loi');}
+  })();
+  return()=>{huy=true;};
+ },[isReadyStock,items]);
  const [catalogSearch,setCatalogSearch]=useState(''); const [guestCount,setGuestCount]=useState('');
  const [schoolSearch,setSchoolSearch]=useState(''); const [selectedSchool,setSelectedSchool]=useState(null);
  const [entryMode,setEntryMode]=useState('manual'); const [cakeLine,setCakeLine]=useState('decorated_cake');
@@ -438,6 +464,23 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
        <span style={{fontSize:13,color:'var(--text-secondary)'}}>Bỏ qua khâu làm bánh của Bếp, đưa thẳng vào Kho Thành Phẩm và kích hoạt Shipper nhận đơn.</span>
      </div>
    </label>}
+   {isReadyStock&&tonKho!==null&&(
+     <div style={{marginTop:8,padding:'10px 14px',borderRadius:14,background:'#fff',border:'1px solid #cfe8db'}}>
+       <div style={{fontSize:12,fontWeight:800,color:'#087f5b',marginBottom:6}}>📦 KHO THÀNH PHẨM ĐANG CÒN</div>
+       {tonKho==='loi'&&<div style={{fontSize:13,color:'#b42318'}}>Chưa đọc được tồn kho. Vẫn tạo đơn được — hệ thống sẽ kiểm tra lại lúc bấm tạo.</div>}
+       {Array.isArray(tonKho)&&tonKho.length===0&&<div style={{fontSize:13,color:'var(--text-secondary)'}}>Chọn bánh vào đơn để xem kho còn bao nhiêu.</div>}
+       {Array.isArray(tonKho)&&tonKho.map((d,i)=>{
+         const du=d.con>=d.can;
+         return <div key={i} style={{display:'flex',justifyContent:'space-between',gap:10,fontSize:13,padding:'4px 0',borderTop:i?'1px dashed #ece4da':'none'}}>
+           <span style={{color:'var(--text-primary)'}}>{d.ten}{d.size?` (${d.size})`:''}</span>
+           <b style={{color:du?'#087f5b':'#b42318',whiteSpace:'nowrap'}}>{du?'✓':'⚠'} cần {d.can} · kho còn {d.con}</b>
+         </div>;
+       })}
+       {Array.isArray(tonKho)&&tonKho.some(d=>d.con<d.can)&&(
+         <div style={{marginTop:8,fontSize:12.5,color:'#b42318',lineHeight:1.45}}>Không đủ hàng. Hãy <b>giảm số lượng</b>, <b>nhập thêm vào Kho Hàng</b>, hoặc <b>bỏ tick</b> để Bếp làm.</div>
+       )}
+     </div>
+   )}
    <div style={{padding:14,marginTop:14,borderRadius:14,background:'#f5f1eb',border:'2px solid #e0d5c7'}}>
      <div style={{fontSize:12,color:'#725f50',fontWeight:700,marginBottom:8}}>💰 TỔNG ĐƠN HÀNG</div>
      <div style={{fontSize:28,fontWeight:900,color:'#d96b43',marginBottom:10}}>{grandTotal.toLocaleString('vi-VN')}đ</div>
