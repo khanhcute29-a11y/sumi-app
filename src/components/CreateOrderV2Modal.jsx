@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useDraftAutosave, DraftSaveIndicator } from '../lib/useDraftAutosave';
+import { useOrderDraftAutosave, DraftSaveIndicator, listOrderDrafts, deleteOrderDraft } from '../lib/useDraftAutosave';
 import { supabase } from '../lib/supabaseClient';
 import { createOrderV2 } from '../lib/featureFlags';
 import { useAuth } from '../lib/AuthContext';
@@ -96,7 +96,7 @@ function OrderPreviewV2({type,customerName,customerPhone,selectedSchool,items,gu
  </div>;
 }
 
-export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
+export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,resumeDraftId=null}){
  const {profile}=useAuth();
  const isOwnerAdmin=['owner','admin'].includes(profile?.role)||(profile?.extra_roles||[]).some(r=>['owner','admin'].includes(r));
  const isDirector=isOwnerAdmin||['deputy_director_x42'].includes(profile?.role)||(profile?.extra_roles||[]).some(r=>['deputy_director_x42'].includes(r));
@@ -145,11 +145,16 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
  // Tự động lưu nháp: chỉ các field kiểu văn bản/số/mảng dữ liệu (KHÔNG đưa
  // `photos` — mảng File — vào đây, ảnh không khôi phục được sau khi tải lại
  // trang). Khôi phục xong người dùng vẫn cần chọn/chụp lại ảnh nếu có.
+ // Nháp: mỗi đơn đang soạn có 1 draftId riêng (sinh mới khi chọn loại đơn,
+ // hoặc truyền vào từ danh sách "Nháp đã lưu" để tiếp tục đúng đơn đó) — nhiều
+ // đơn bỏ dở cùng lúc không ghi đè lên nhau.
+ const [activeDraftId,setActiveDraftId]=useState(resumeDraftId);
  const draftValues={type,requiredAt,customerName,customerPhone,fulfillment,address,note,items,isReadyStock,guestCount,selectedSchool,entryMode,cakeLine,hasShipFee,shipFee,paymentMethod,deposit,selectedLibraryPhotos};
  const draftSetters={type:setType,requiredAt:setRequiredAt,customerName:setCustomerName,customerPhone:setCustomerPhone,fulfillment:setFulfillment,address:setAddress,note:setNote,items:setItems,isReadyStock:setIsReadyStock,guestCount:setGuestCount,selectedSchool:setSelectedSchool,entryMode:setEntryMode,cakeLine:setCakeLine,hasShipFee:setHasShipFee,shipFee:setShipFee,paymentMethod:setPaymentMethod,deposit:setDeposit,selectedLibraryPhotos:setSelectedLibraryPhotos};
- const {saveStatus:draftSaveStatus,clearDraft}=useDraftAutosave('sumi_order_draft_v2',draftValues,draftSetters);
+ const {saveStatus:draftSaveStatus,clearDraft}=useOrderDraftAutosave(activeDraftId,draftValues,draftSetters);
  const resetDraftForm=()=>{
   clearDraft();
+  setActiveDraftId(null);
   setType(null);setRequiredAt('');setCustomerName('');setCustomerPhone('');setFulfillment('delivery');setAddress('');setNote('');
   setItems([]);setPhotos([]);setIsReadyStock(false);setGuestCount('');setSchoolSearch('');setSelectedSchool(null);setEntryMode('manual');
   setCakeLine('decorated_cake');setHasShipFee('no');setShipFee('');setPaymentMethod('cod');setDeposit('');setSelectedLibraryPhotos([]);
@@ -166,7 +171,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false}){
  const grandTotal=getTotalPrice()+effectiveShipFee;
  const remaining=grandTotal-(Number(deposit)||0);
  const blankItem=(key)=>({id:crypto.randomUUID(),flow_type:key,name:'',quantity:1,unit:'cái',specification:{product_flow:key,...(key==='cake'?{cake_line:cakeLine}:{})}});
- const selectFlow=(key)=>{if(key==='school'&&!isDirector)return;if(key==='macaron'&&!isMacaronCreator)return;setType(key);setItems(key==='teabreak'?[]:[blankItem(key)]);};
+ const selectFlow=(key)=>{if(key==='school'&&!isDirector)return;if(key==='macaron'&&!isMacaronCreator)return;setActiveDraftId(crypto.randomUUID());setType(key);setItems(key==='teabreak'?[]:[blankItem(key)]);};
  const addFlow=(key)=>{if(type==='school'||key==='school'){setError('Đơn trường học cần tạo riêng để bảo vệ thông tin.');return}if(key==='macaron'&&!isMacaronCreator){setError('Chỉ Trợ lý Giám đốc mới được thêm sản phẩm Macaron.');return}setError('');setItems(x=>[...x,blankItem(key)]);setTimeout(()=>document.querySelector('.sumi-mixed-summary')?.scrollIntoView({behavior:'smooth',block:'start'}),0)};
  const changeCakeLine=(key)=>{setCakeLine(key);setItems(current=>current.map(item=>(item.flow_type||type)==='cake'?{...item,specification:{...item.specification,cake_line:key}}:item));};
  const addCatalogItem=(product)=>{setItems(current=>{

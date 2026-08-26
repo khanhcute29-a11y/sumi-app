@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { listOrdersV2 } from '../lib/featureFlags';
 import { loadFeatureFlags } from '../lib/featureFlags';
 import CreateOrderV2Modal from '../components/CreateOrderV2Modal';
+import { listOrderDrafts, deleteOrderDraft } from '../lib/useDraftAutosave';
 import OrderV2DetailModal from '../components/OrderV2DetailModal';
 import { useAuth } from '../lib/AuthContext';
 import { supabase } from '../lib/supabaseClient';
@@ -47,6 +48,11 @@ export default function OrdersV2Screen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [canCreate, setCanCreate] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [resumeDraftId, setResumeDraftId] = useState(null);
+  const [showDrafts, setShowDrafts] = useState(false);
+  const [drafts, setDrafts] = useState([]);
+  const refreshDrafts = () => setDrafts(listOrderDrafts());
+  useEffect(() => { refreshDrafts(); }, [showCreate]);
   const [selectedId, setSelectedId] = useState(null);
   const [error, setError] = useState('');
 
@@ -139,7 +145,7 @@ export default function OrdersV2Screen() {
 
   const stage = (s) => s === 'completed' ? 5 : s === 'in_delivery' ? 4 : s === 'ready_for_fulfillment' ? 3 : s === 'in_production' ? 2 : 1;
 
-  if (showCreate) return <CreateOrderV2Modal embedded onClose={() => setShowCreate(false)} onCreated={load} />;
+  if (showCreate) return <CreateOrderV2Modal embedded resumeDraftId={resumeDraftId} onClose={() => { setShowCreate(false); setResumeDraftId(null); }} onCreated={load} />;
 
   const currentFilterLabel = FILTERS.find(x => x.key === filter)?.label || 'Đơn hàng';
   const currentFlowMeta = FLOW_GROUPS.find(x => x.key === flowGroup);
@@ -153,10 +159,47 @@ export default function OrdersV2Screen() {
           <h1>Đơn hàng</h1>
           <p>{orders.length} đơn đang hiển thị</p>
         </div>
-        {(canCreate || roleCanCreate) && (
-          <button onClick={() => setShowCreate(true)}>＋ TẠO ĐƠN</button>
-        )}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {drafts.length > 0 && (
+            <button onClick={() => setShowDrafts(true)} style={{ background: '#fff', border: '1.5px solid #eadcca', color: '#8c5a3c', fontWeight: 800 }}>
+              📝 Nháp ({drafts.length})
+            </button>
+          )}
+          {(canCreate || roleCanCreate) && (
+            <button onClick={() => setShowCreate(true)}>＋ TẠO ĐƠN</button>
+          )}
+        </div>
       </div>
+
+      {/* Danh sách nháp đơn hàng đã lưu tạm */}
+      {showDrafts && (
+        <div className="mock-order-overlay" onClick={() => setShowDrafts(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#faf6f0', width: '100%', maxWidth: 480, maxHeight: '75vh', overflowY: 'auto', borderRadius: '20px 20px 0 0', padding: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: '#2d1c10' }}>📝 Đơn nháp đã lưu ({drafts.length})</h3>
+              <button onClick={() => setShowDrafts(false)} style={{ border: 'none', background: 'none', fontSize: 18, cursor: 'pointer' }}>✕</button>
+            </div>
+            {drafts.length === 0 && <div style={{ color: '#725f50', textAlign: 'center', padding: 20 }}>Không có nháp nào.</div>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {drafts.map(d => {
+                const savedAgo = d.savedAt ? new Date(d.savedAt).toLocaleString('vi-VN') : '';
+                const typeLabel = ({ cake: '🎂 Bánh kem & Bánh lạnh', bakery: '🍞 Bánh mặn & Bánh ngọt', macaron: '🧁 Macaron', school: '🏫 Trường học', teabreak: '☕ Teabreak' })[d.type] || d.type || 'Chưa chọn loại';
+                return (
+                  <div key={d.id} style={{ background: '#fff', border: '1.5px solid #eadcca', borderRadius: 14, padding: 12 }}>
+                    <div style={{ fontWeight: 800, color: '#2d1c10' }}>{typeLabel}</div>
+                    <div style={{ fontSize: 13, color: '#725f50', margin: '4px 0' }}>{d.customerName || 'Khách chưa đặt tên'}{d.customerPhone ? ` · ${d.customerPhone}` : ''}</div>
+                    <div style={{ fontSize: 11.5, color: '#a08060' }}>Lưu lúc {savedAgo}</div>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                      <button onClick={() => { setResumeDraftId(d.id); setShowDrafts(false); setShowCreate(true); }} style={{ flex: 1, background: '#d96b43', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 800, cursor: 'pointer' }}>Tiếp tục</button>
+                      <button onClick={() => { if (window.confirm('Xoá nháp này?')) { deleteOrderDraft(d.id); refreshDrafts(); } }} style={{ background: '#fff', border: '1.5px solid #e0d5c7', color: '#b42318', borderRadius: 8, padding: '8px 12px', fontWeight: 700, cursor: 'pointer' }}>Xoá</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Màn hình 1: Tổng quan 6 trạng thái */}
       {!filter && (
