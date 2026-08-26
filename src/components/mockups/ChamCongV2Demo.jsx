@@ -24,14 +24,27 @@ const CA_GIA = chuanHoaCa([
 ]);
 
 const NGUOI = [
-  { id: 'u1', full_name: 'Hoàng Diễm', station: 'lanh', role: 'bakery' },
-  { id: 'u2', full_name: 'Kim Tiến', station: 'lanh', role: 'bakery' },
-  { id: 'u3', full_name: 'Nguyễn An', station: 'lanh', role: 'bakery' },
-  { id: 'u4', full_name: 'Trần Mai', station: 'lanh', role: 'bakery' },
-  { id: 'u5', full_name: 'Lê Quang', station: 'xuong42', role: 'kho_xuong42' },
+  { id: 'u1', full_name: 'Hoàng Diễm', station: 'lanh', role: 'baker_cold' },
+  { id: 'u2', full_name: 'Kim Tiến', station: 'lanh', role: 'baker_cold' },
+  { id: 'u3', full_name: 'Nguyễn An', station: 'lanh', role: 'kitchen_lead_cold' },
+  { id: 'u4', full_name: 'Trần Mai', station: 'nong', role: 'baker_hot' },
+  { id: 'u5', full_name: 'Phạm Hùng', station: 'nong', role: 'kitchen_lead_hot' },
+  { id: 'u6', full_name: 'Võ Thu Hà', station: null, role: 'cashier' },
+  { id: 'u7', full_name: 'Đỗ Bích Ngọc', station: null, role: 'sale' },
+  { id: 'u8', full_name: 'Lý Minh Khoa', station: 'xuong41', role: 'baker_macaron' },
+  { id: 'u9', full_name: 'Lê Quang', station: 'xuong42', role: 'kho_xuong42' },
+  { id: 'u10', full_name: 'Bùi Văn Tài', station: null, role: 'shipper' },
+  { id: 'u11', full_name: 'Ngô Kim Chi', station: null, role: 'shipper_school' },
+  { id: 'u12', full_name: 'Lê Thị Nga', station: null, role: 'accountant' },
 ];
 
-const BO_PHAN = { u1: 'bakery', u2: 'bakery', u3: 'bakery', u4: 'bakery', u5: 'xuong42' };
+const BO_PHAN = {
+  u1: 'bakery', u2: 'bakery', u3: 'bakery', u4: 'bakery', u5: 'bakery',
+  u6: 'bakery', u7: 'bakery',
+  u8: 'xuong41', u9: 'xuong42',
+  u10: 'van_tai', u11: 'van_tai',
+  u12: null,          // kế toán: không theo ca cố định
+};
 
 // `expected_start` + `late_minutes` giả lập ĐÚNG như trigger database sẽ ghi.
 function log(id, ten, loai, gio, extra = {}) {
@@ -45,16 +58,53 @@ function log(id, ten, loai, gio, extra = {}) {
 }
 
 const LOGS = [
-  // Đến sớm 10 phút so với mốc 05:05
+  // Bếp lạnh
   log('u1', 'Hoàng Diễm', 'checkin', '04:55', { late_minutes: 0, gps_lat: 10.9121, gps_lng: 106.7354, gps_accuracy_m: 6 }),
-  // Đúng mốc
   log('u2', 'Kim Tiến', 'checkin', '05:03', { late_minutes: 0, gps_lat: 10.9122, gps_lng: 106.7351, gps_accuracy_m: 9 }),
-  // Đi muộn 28 phút — số này do database tính, màn hình chỉ đọc
   log('u3', 'Nguyễn An', 'checkin', '05:33', { late_minutes: 28, reason: 'Kẹt xe cầu Vĩnh Phú', gps_lat: 10.9119, gps_lng: 106.7362, gps_accuracy_m: 14 }),
-  // u4 chưa chấm gì cả
-  // Xưởng 42 vào đúng giờ rồi ra ca
-  log('u5', 'Lê Quang', 'checkin', '05:48', { late_minutes: 0, expected_start: '06:00:00' }),
-  log('u5', 'Lê Quang', 'checkout', '15:05', { expected_start: '06:00:00' }),
+  // Bếp nóng — u4 chưa chấm gì cả
+  log('u5', 'Phạm Hùng', 'checkin', '05:01', { late_minutes: 0 }),
+  // Thu ngân đi muộn 9 phút
+  log('u6', 'Võ Thu Hà', 'checkin', '05:14', { late_minutes: 9 }),
+  // Bán hàng — đã làm xong ca
+  log('u7', 'Đỗ Bích Ngọc', 'checkin', '05:00', { late_minutes: 0 }),
+  log('u7', 'Đỗ Bích Ngọc', 'checkout', '14:20', {}),
+  // Xưởng 41 (mốc 05:50)
+  log('u8', 'Lý Minh Khoa', 'checkin', '05:45', { late_minutes: 0, expected_start: '06:00:00' }),
+  // Xưởng 42 — vào rồi ra
+  log('u9', 'Lê Quang', 'checkin', '05:48', { late_minutes: 0, expected_start: '06:00:00' }),
+  log('u9', 'Lê Quang', 'checkout', '15:05', { expected_start: '06:00:00' }),
+  // Vận tải — u10 muộn, u11 xin nghỉ
+  log('u10', 'Bùi Văn Tài', 'checkin', '06:12', { late_minutes: 22, expected_start: '06:00:00' }),
+  log('u11', 'Ngô Kim Chi', 'leave_request', '05:30', { reason: 'Con ốm, xin nghỉ cả ngày' }),
+];
+
+// Đề xuất giả — trang xem thử không đăng nhập nên không đọc được database thật.
+const DE_XUAT_GIA = [
+  {
+    id: 'dx1', type: 'leave_request', status: 'pending',
+    requester_name: 'Ngô Kim Chi', requester_role: 'Shipper trường học',
+    leave_date: HOM_NAY, reason: 'Con ốm phải đưa đi khám, xin nghỉ cả ngày.',
+    created_at: new Date(Date.now() - 42 * 60000).toISOString(),
+  },
+  {
+    id: 'dx2', type: 'shift_recheck', status: 'pending',
+    requester_name: 'Nguyễn An', requester_role: 'Bếp trưởng bếp lạnh',
+    reason: 'Kẹt xe cầu Vĩnh Phú, xin xem lại 28 phút đi muộn sáng nay.',
+    created_at: new Date(Date.now() - 3 * 3600000).toISOString(),
+  },
+  {
+    id: 'dx3', type: 'order_edit', status: 'pending',
+    requester_name: 'Võ Thu Hà', requester_role: 'Thu ngân',
+    order_code: 'SUMI-20260826-014', reason: 'Khách đổi từ size 18 sang size 22.',
+    created_at: new Date(Date.now() - 26 * 3600000).toISOString(),
+  },
+  {
+    id: 'dx4', type: 'task_exemption', status: 'pending',
+    requester_name: 'Kim Tiến', requester_role: 'Thợ bếp lạnh',
+    reason: 'Máy đánh kem hỏng, xin miễn việc chuẩn bị cốt bánh chiều nay.',
+    created_at: new Date(Date.now() - 50 * 3600000).toISOString(),
+  },
 ];
 
 const THU = [
@@ -118,6 +168,7 @@ export default function ChamCongV2Demo() {
           onCheckin={() => alert('Bản xem thử: nút này không ghi dữ liệu.')}
           onCheckout={() => alert('Bản xem thử: nút này không ghi dữ liệu.')}
           onXinNghi={() => alert('Bản xem thử: nút này không ghi dữ liệu.')}
+          deXuatGia={DE_XUAT_GIA}
           onTaiLai={async () => {}}
         />
       </div>

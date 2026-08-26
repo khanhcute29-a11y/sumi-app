@@ -410,3 +410,117 @@
     transition: none !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BẤM SÂU BA TẦNG (màn hình Giám đốc)
+   Ô đếm -> luồng nhân sự -> từng người -> lịch sử chấm công
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Ô đếm bấm được. Là <button> chứ không phải <div> để bàn phím và trình đọc
+   màn hình dùng được — người dùng máy tính bảng ở xưởng hay cắm bàn phím. */
+.cc2-summary.bam {
+  position: relative;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition: transform .12s, box-shadow .12s;
+}
+.cc2-summary.bam:active { transform: scale(.98); }
+.cc2-summary.bam.dang-mo {
+  border-color: var(--cc2-caramel);
+  box-shadow: 0 0 0 2px rgba(217, 107, 67, .22);
+}
+.cc2-mui-ten {
+  position: absolute; right: 12px; top: 12px;
+  font-size: 13px; font-style: normal; color: var(--cc2-muted); opacity: .75;
+}
+
+/* Khung chứa tầng bấm sâu */
+.cc2-drill {
+  margin-top: 10px; padding: 10px;
+  border: 1px solid var(--cc2-line); border-radius: 16px;
+  background: var(--cc2-paper);
+  animation: cc2-rise .18s ease-out;
+}
+.cc2-drill-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin-bottom: 8px; padding: 0 2px;
+  font-size: 14px;
+}
+.cc2-drill-close {
+  width: 44px; height: 44px; flex-shrink: 0;
+  border: 1px solid var(--cc2-line); border-radius: 12px;
+  background: #fff; font-size: 20px; cursor: pointer;
+}
+
+/* Một dòng luồng nhân sự */
+.cc2-drill-row {
+  display: grid; grid-template-columns: 38px 1fr auto 18px;
+  align-items: center; gap: 10px;
+  width: 100%; min-height: 56px; padding: 9px 11px;
+  margin-top: 6px; text-align: left;
+  border: 1px solid var(--cc2-line); border-radius: 13px;
+  background: #fff; cursor: pointer;
+}
+.cc2-drill-row:first-child { margin-top: 0; }
+.cc2-drill-row.dang-mo {
+  border-color: var(--cc2-caramel);
+  background: #fff8f4;
+}
+.cc2-drill-icon {
+  width: 38px; height: 38px; display: grid; place-items: center;
+  border-radius: 12px; background: #f1e3d3; font-size: 19px;
+}
+.cc2-drill-ten { min-width: 0; font-weight: 850; font-size: 14.5px; }
+.cc2-drill-so {
+  min-width: 30px; padding: 4px 9px; border-radius: 9px;
+  background: var(--cc2-navy-soft); color: var(--cc2-navy);
+  font-size: 13px; font-weight: 950; text-align: center;
+}
+.cc2-drill-row .cc2-mui-ten { position: static; }
+
+/* Khối bộ phận bấm được */
+.cc2-unit.bam {
+  width: 100%; cursor: pointer; font: inherit; color: inherit;
+  transition: transform .12s;
+}
+.cc2-unit.bam:active { transform: scale(.99); }
+.cc2-unit.bam.dang-mo { border-color: var(--cc2-caramel); background: #fff8f4; }
+
+/* ── Đề xuất đợi duyệt ─────────────────────────────────────────────────── */
+.cc2-dexuat {
+  padding: 13px;
+  border: 1px solid var(--cc2-line); border-left: 5px solid var(--cc2-amber);
+  border-radius: 16px; background: #fff; box-shadow: var(--cc2-soft-shadow);
+}
+.cc2-dexuat-top { display: grid; grid-template-columns: 42px 1fr; gap: 10px; align-items: center; }
+.cc2-dexuat-top b { display: block; font-size: 14.5px; }
+.cc2-dexuat-top small { display: block; margin-top: 3px; color: var(--cc2-muted); font-size: 12px; }
+.cc2-dexuat-than {
+  margin-top: 9px; padding: 9px 11px; border-radius: 12px;
+  background: var(--cc2-paper);
+  font-size: 13px; line-height: 1.55; color: #5f4b3d; font-weight: 700;
+}
+.cc2-dexuat-nut { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.cc2-dexuat-nut button {
+  min-height: 48px; border-radius: 13px; font-weight: 950; font-size: 14.5px; cursor: pointer;
+}
+.cc2-dexuat-nut .tuchoi {
+  border: 2px solid #f1beb8; background: var(--cc2-red-soft); color: #a52c22;
+}
+.cc2-dexuat-nut .dongy {
+  border: 0; background: var(--cc2-green); color: #fff;
+}
+.cc2-dexuat-nut button:disabled { opacity: .55; cursor: not-allowed; }
+.cc2-dexuat-cho {
+  margin-top: 10px; padding: 10px; border-radius: 12px;
+  background: var(--cc2-navy-soft); color: var(--cc2-navy);
+  font-size: 12.5px; font-weight: 850; text-align: center;
+}
+
+/* Trên máy tính bảng, đề xuất xếp hai cột như phần lịch sử */
+@media (min-width: 760px) {
+  .cc2-drill-row { min-height: 60px; }
+}

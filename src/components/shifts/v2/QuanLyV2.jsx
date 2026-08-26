@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import ChiTietNhanSuModal from './ChiTietNhanSuModal';
 import { chuCaiDau, doDaiPhut } from './dungChung';
 
 // Màn hình Chấm Công của QUẢN LÝ (bếp trưởng / bếp phó / trợ lý GĐ xưởng).
@@ -26,10 +25,8 @@ function moTaNhanSu(cham) {
 
 export default function QuanLyV2({
   hoSo, danhSach, toi, laGiamDoc, danhSachCa, boPhanTheoNguoi,
-  logsHomNay, thuongTheoNguoi = {}, gioHienTai,
-  onCheckin, onCheckout, onTaiLai,
+  gioHienTai, onCheckin, onCheckout, onXemNhanSu,
 }) {
-  const [dangXem, setDangXem] = useState(null);
   const [loc, setLoc] = useState('all');
 
   const cuaToi = toi?.cham || null;
@@ -136,7 +133,7 @@ export default function QuanLyV2({
           </div>
 
           <div className="cc2-lead-own-action">
-            <button onClick={() => setDangXem({ hoSo, cham: cuaToi })}>🕘 XEM LỊCH SỬ</button>
+            <button onClick={() => onXemNhanSu?.({ hoSo, cham: cuaToi })}>🕘 XEM LỊCH SỬ</button>
             {!cuaToi?.vaoISO && (
               <button className="primary-small" onClick={onCheckin}>▶ BẮT ĐẦU CA</button>
             )}
@@ -165,7 +162,7 @@ export default function QuanLyV2({
                 </div>
                 <button onClick={() => {
                   const item = nguoiKhac.find((x) => x.hoSo.id === c.id);
-                  if (item) setDangXem(item);
+                  if (item) onXemNhanSu?.(item);
                 }}>XEM</button>
               </div>
             ))}
@@ -187,7 +184,7 @@ export default function QuanLyV2({
             {daLoc.map(({ hoSo: h, cham }) => {
               const tt = trangThaiNhanSu(cham);
               return (
-                <button className="cc2-staff" key={h.id} onClick={() => setDangXem({ hoSo: h, cham })}>
+                <button className="cc2-staff" key={h.id} onClick={() => onXemNhanSu?.({ hoSo: h, cham })}>
                   <div className="cc2-staff-face">{chuCaiDau(h.full_name)}</div>
                   <div style={{ minWidth: 0 }}>
                     <b>{h.full_name}</b>
@@ -201,20 +198,6 @@ export default function QuanLyV2({
         )}
       </main>
 
-      {dangXem && (
-        <ChiTietNhanSuModal
-          nhanSu={dangXem.hoSo}
-          cham={dangXem.cham}
-          logs={(logsHomNay || []).filter((l) => l.staff_id === dangXem.hoSo.id)}
-          danhSachCa={danhSachCa}
-          boPhan={boPhanTheoNguoi?.[dangXem.hoSo.id] || null}
-          thuong={thuongTheoNguoi?.[dangXem.hoSo.id] || []}
-          coTheTangSao
-          laChinhToi={dangXem.hoSo.id === hoSo?.id}
-          onClose={() => setDangXem(null)}
-          onXong={onTaiLai}
-        />
-      )}
     </div>
   );
 }

@@ -3,10 +3,16 @@ import { supabase } from '../../../lib/supabaseClient';
 import NhanVienV2 from './NhanVienV2';
 import QuanLyV2 from './QuanLyV2';
 import TongQuanGiamDoc from './TongQuanGiamDoc';
+import DeXuatChoDuyet from './DeXuatChoDuyet';
+import ChiTietNhanSuModal from './ChiTietNhanSuModal';
 import '../../../styles/cham-cong-v2.css';
 
-// Cửa ngõ của giao diện Chấm Công V2: chọn góc nhìn theo vai trò và nạp thêm
-// dữ liệu thưởng sao.
+// Cửa ngõ của giao diện Chấm Công V2: chọn góc nhìn theo vai trò, nạp dữ liệu
+// thưởng sao, và GIỮ hộp chi tiết nhân sự.
+//
+// Hộp chi tiết nằm ở đây chứ không nằm trong từng màn hình con, vì có tới ba
+// đường dẫn tới nó: danh sách đội của Quản lý, ô tổng quan của Giám đốc, và
+// mục "Theo bộ phận". Ba nơi cùng mở một hộp thì chỉ nên có MỘT hộp.
 //
 // ⚠️ THÀNH PHẦN NÀY KHÔNG TỰ GỌI API CHẤM CÔNG.
 // Việc vào ca / tan ca / xin nghỉ vẫn do `ShiftsScreen` giữ nguyên như cũ
@@ -21,8 +27,10 @@ export default function ChamCongV2({
   danhSachCa, boPhanTheoNguoi, boPhanCuaToi,
   logsHomNay, tomTat, gioHienTai,
   onCheckin, onCheckout, onXinNghi, onTaiLai,
+  deXuatGia = null,   // chỉ trang xem thử truyền vào; app thật luôn null
 }) {
   const [thuongTheoNguoi, setThuongTheoNguoi] = useState({});
+  const [dangXem, setDangXem] = useState(null);
 
   // Thưởng sao. Bảng `staff_rewards` do đồng đội tạo (migration 202608260150) —
   // có thể chưa được chạy trên máy chủ này. Trường hợp đó coi như chưa ai có
@@ -79,14 +87,15 @@ export default function ChamCongV2({
     <div className="cc2">
       {/* Giám đốc nhìn bức tranh toàn tiệm TRƯỚC, rồi mới xuống từng người —
           đúng thứ tự của mockup. Quản lý khâu thì ngược lại: ca của mình và
-          đội mình trước, vì họ phải tự chấm công như mọi người. */}
+          đội mình trước, vì họ cũng phải tự chấm công như mọi người. */}
       {laGiamDoc && (
         <main style={{ padding: '0 2px', marginBottom: 6 }}>
           <TongQuanGiamDoc
             danhSach={danhSachQuanLy}
-            boPhanTheoNguoi={boPhanTheoNguoi}
             gioHienTai={gioHienTai}
+            onXemNhanSu={setDangXem}
           />
+          <DeXuatChoDuyet hoSo={hoSo} coQuyenDuyet={laGiamDoc} duLieuGia={deXuatGia} />
         </main>
       )}
 
@@ -95,15 +104,26 @@ export default function ChamCongV2({
         danhSach={danhSachQuanLy}
         toi={toiTrongDanhSach}
         laGiamDoc={laGiamDoc}
-        danhSachCa={danhSachCa}
-        boPhanTheoNguoi={boPhanTheoNguoi}
-        logsHomNay={logsHomNay}
-        thuongTheoNguoi={thuongTheoNguoi}
         gioHienTai={gioHienTai}
         onCheckin={onCheckin}
         onCheckout={onCheckout}
-        onTaiLai={taiLai}
+        onXemNhanSu={setDangXem}
       />
+
+      {dangXem && (
+        <ChiTietNhanSuModal
+          nhanSu={dangXem.hoSo}
+          cham={dangXem.cham}
+          logs={(logsHomNay || []).filter((l) => l.staff_id === dangXem.hoSo.id)}
+          danhSachCa={danhSachCa}
+          boPhan={boPhanTheoNguoi?.[dangXem.hoSo.id] || null}
+          thuong={thuongTheoNguoi?.[dangXem.hoSo.id] || []}
+          coTheTangSao
+          laChinhToi={dangXem.hoSo.id === hoSo?.id}
+          onClose={() => setDangXem(null)}
+          onXong={taiLai}
+        />
+      )}
     </div>
   );
 }
