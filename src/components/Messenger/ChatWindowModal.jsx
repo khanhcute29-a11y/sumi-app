@@ -65,6 +65,7 @@ export default function ChatWindowModal({ onClose, profile, initialRoomId = null
     if (!currentRoomId) return;
     let cancelled = false;
     setLoadingMessages(true);
+    setMessages([]); // tránh chớp tin nhắn của phòng cũ trong lúc tải phòng mới
     fetchRoomMessages(currentRoomId)
       .then((data) => { if (!cancelled) setMessages(data); })
       .catch((e) => setError(e.message))
