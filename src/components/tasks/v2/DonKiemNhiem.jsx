@@ -35,6 +35,17 @@ export default function DonKiemNhiem({ hoSo, onDaNhan }) {
 
   useEffect(() => { tai(); }, [tai]);
 
+  // Nhiều người có thể cùng mở tab Chờ nhận một lúc. Ngay khi ai đó bấm nhận
+  // (đơn đổi status_v2 -> 'in_delivery'), đơn phải BIẾN NGAY khỏi màn hình
+  // của người khác — không đợi họ tự tải lại — để giảm cảnh hai người cùng
+  // nhắm một đơn. Kênh riêng, không đụng các kênh 'orders-*' của màn Đơn hàng.
+  useEffect(() => {
+    const kenh = supabase.channel('viec-don-kiem-nhiem')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => tai())
+      .subscribe();
+    return () => { supabase.removeChannel(kenh); };
+  }, [tai]);
+
   if (dangTai || ds.length === 0) return null;
 
   return (
