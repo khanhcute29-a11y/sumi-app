@@ -197,7 +197,7 @@ export default function EditOrderModal({ orderId, onClose, onSaved }) {
     }}>
       <div onClick={(e) => e.stopPropagation()} style={{
         width: '100%', maxWidth: 640, background: 'var(--surface-app, #FDFBF7)',
-        borderRadius: '20px 20px 0 0', padding: 20, maxHeight: '90vh', overflowY: 'auto',
+        borderRadius: '20px 20px 0 0', padding: 20, paddingBottom: 'calc(20px + env(safe-area-inset-bottom))', maxHeight: '90dvh', overflowY: 'auto',
       }}>
         {noiDung}
       </div>

@@ -58,7 +58,7 @@ export default function DuyetViecModal({ viec, tenTho, chiXem, onClose, onXong }
     }}>
       <div onClick={(e) => e.stopPropagation()} style={{
         width: '100%', maxWidth: 620, background: '#FAF6F0',
-        borderRadius: '20px 20px 0 0', padding: 20, maxHeight: '92vh', overflowY: 'auto',
+        borderRadius: '20px 20px 0 0', padding: 20, paddingBottom: 'calc(20px + env(safe-area-inset-bottom))', maxHeight: '92dvh', overflowY: 'auto',
       }}>
         <h3 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 900 }}>
           {chiXem ? '📋 Báo cáo của thợ' : '✅ Duyệt nghiệm thu'}

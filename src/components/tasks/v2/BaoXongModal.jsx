@@ -75,7 +75,7 @@ export default function BaoXongModal({ viec, chiBaoCao, hoSo, onClose, onXong })
     }}>
       <div onClick={(e) => e.stopPropagation()} style={{
         width: '100%', maxWidth: 560, background: '#FAF6F0',
-        borderRadius: '20px 20px 0 0', padding: 20, maxHeight: '90vh', overflowY: 'auto',
+        borderRadius: '20px 20px 0 0', padding: 20, paddingBottom: 'calc(20px + env(safe-area-inset-bottom))', maxHeight: '90dvh', overflowY: 'auto',
       }}>
         <h3 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 900 }}>
           {chiBaoCao ? '📷 Thêm tiến trình' : '✅ Báo xong việc'}

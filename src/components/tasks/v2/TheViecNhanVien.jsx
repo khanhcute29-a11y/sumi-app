@@ -54,6 +54,25 @@ export default function TheViecNhanVien({ viec, hoSo, tenTheoId = {}, onDoi, onB
     return () => { huy = true; };
   }, [mo, viec.id, viec.version]);
 
+  // Quản lý trả lời thì tin nảy lên NGAY, không phải đóng mở lại thẻ.
+  //
+  // ⚠️ Kênh riêng, đặt tên theo mã việc (`bao-cao-<id>`) nên độc lập hoàn toàn
+  // với cổng truyền nhận của phân hệ Chat. Không đụng gì tới kênh chat.
+  useEffect(() => {
+    if (!mo) return;
+    const kenh = supabase.channel(`bao-cao-${viec.id}`)
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'task_progress_reports',
+          filter: `task_id=eq.${viec.id}` },
+        (tin) => {
+          const moi = tin?.new;
+          if (!moi?.id) return;
+          setBaoCao((ds) => (ds.some((x) => x.id === moi.id) ? ds : [...ds, moi]));
+        })
+      .subscribe();
+    return () => { supabase.removeChannel(kenh); };
+  }, [mo, viec.id]);
+
   const laCuaToi = viec.assignee_id === hoSo?.id;
   const tt = TRANG_THAI[quaHan(viec) ? 'qua_han' : viec.status] || TRANG_THAI.open;
   const daNhan = !!viec.accepted_at;

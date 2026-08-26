@@ -129,7 +129,7 @@ function CheckinModal({ staffName, staffId, defaultBranch, danhSachCa = [], boPh
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 16 }} onClick={onClose}>
-      <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: '100%', maxWidth: 380, maxHeight: '90vh', overflowY: 'auto', padding: 20, boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 14 }} onClick={(e) => e.stopPropagation()}>
+      <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: '100%', maxWidth: 380, maxHeight: '90dvh', overflowY: 'auto', padding: 20, paddingBottom: 'calc(20px + env(safe-area-inset-bottom))', boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 14 }} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div style={{ textAlign: 'center', borderBottom: '1px solid var(--border-default)', paddingBottom: 14 }}>
           <div style={{ font: 'var(--text-display-sm)', color: 'var(--text-primary)', marginBottom: 4 }}>{staffName}</div>
@@ -383,7 +383,7 @@ function CheckoutModal({ staffName, staffId, activeCheckins, defaultBranch, onCl
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 16 }} onClick={onClose}>
-      <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: '100%', maxWidth: 380, maxHeight: '90vh', overflowY: 'auto', padding: 20, boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 14 }} onClick={(e) => e.stopPropagation()}>
+      <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: '100%', maxWidth: 380, maxHeight: '90dvh', overflowY: 'auto', padding: 20, paddingBottom: 'calc(20px + env(safe-area-inset-bottom))', boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 14 }} onClick={(e) => e.stopPropagation()}>
         {/* Header - Staff Info */}
         <div style={{ textAlign: 'center', borderBottom: '1px solid var(--border-default)', paddingBottom: 14 }}>
           <div style={{ font: 'var(--text-display-sm)', color: 'var(--text-primary)', marginBottom: 4 }}>{staffName}</div>
@@ -505,7 +505,7 @@ function AddManualShiftModal({ staffName, staffId, defaultBranch, onClose, onDon
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 16 }} onClick={onClose}>
-      <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: 440, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto', padding: 20, boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 14 }} onClick={(e) => e.stopPropagation()}>
+      <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: 440, maxWidth: '100%', maxHeight: '90dvh', overflowY: 'auto', padding: 20, paddingBottom: 'calc(20px + env(safe-area-inset-bottom))', boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 14 }} onClick={(e) => e.stopPropagation()}>
         <div><div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>＋ Thêm ca / Bổ sung giờ làm</div></div>
         <Input label="Ngày làm việc" type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -560,7 +560,7 @@ function LeaveModal({ staffName, staffId, staffRole, defaultBranch, onClose, onD
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 16 }} onClick={onClose}>
-      <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: 400, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto', padding: 20, boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 12 }} onClick={(e) => e.stopPropagation()}>
+      <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: 400, maxWidth: '100%', maxHeight: '90dvh', overflowY: 'auto', padding: 20, paddingBottom: 'calc(20px + env(safe-area-inset-bottom))', boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 12 }} onClick={(e) => e.stopPropagation()}>
         <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>Xin nghỉ đột xuất</div>
         <Input label="Nghỉ từ ngày, giờ" type="datetime-local" value={leaveFrom} onChange={(e) => setLeaveFrom(e.target.value)} />
         <Input label="Đến ngày, giờ" type="datetime-local" value={leaveTo} onChange={(e) => setLeaveTo(e.target.value)} />
