@@ -590,14 +590,20 @@
   color: #FFFFFF;
 }
 
-/* Photo Attachment in mobile */
+/* Photo Attachment in mobile.
+   Cố định width bằng px thay vì width:100% — bong bóng tin nhắn (.m-msg-bubble)
+   không có width riêng, tự co theo nội dung bên trong .m-msg-body (flex-column,
+   align-items mặc định là stretch). width:100% trên ảnh tạo vòng lặp phụ thuộc
+   kích thước (ảnh chờ bubble, bubble chờ ảnh) mà mỗi trình duyệt xử lý một
+   kiểu — Safari trên iPhone thật co ảnh lại thành 1 dải dọc rất hẹp. */
 .m-chat-img-thumb {
-  width: 100%;
-  max-width: 190px;
+  display: block;
+  width: 190px;
   height: 120px;
   object-fit: cover;
   border-radius: 10px;
   margin-top: 4px;
+  flex-shrink: 0;
 }
 
 /* Typing Indicator */
