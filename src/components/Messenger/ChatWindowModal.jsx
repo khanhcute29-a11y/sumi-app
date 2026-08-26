@@ -2,20 +2,28 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   fetchMyChatRooms,
   fetchChatDirectory,
+  fetchDirectConversations,
   getOrCreateDmRoom,
   fetchRoomMessages,
   sendChatMessage,
   subscribeToRoomMessages,
+  markRoomRead,
   extractOrderCode,
 } from '../../lib/chat';
 import { uploadFile } from '../../lib/queries';
+import { toWebSafeImage } from '../../lib/imageConvert';
 
-export default function ChatWindowModal({ onClose, profile }) {
+export default function ChatWindowModal({ onClose, profile, initialRoomId = null, unreadCounts = {}, onRoomRead }) {
   const [navTab, setNavTab] = useState('group'); // 'group' | 'direct'
   const [rooms, setRooms] = useState([]);
   const [directory, setDirectory] = useState([]);
   const [loadingLists, setLoadingLists] = useState(true);
   const [error, setError] = useState('');
+
+  const [directConversations, setDirectConversations] = useState([]);
+  const [directListLoading, setDirectListLoading] = useState(true);
+  const [directListRefreshTick, setDirectListRefreshTick] = useState(0);
+  const initialRoomHandledRef = useRef(false);
 
   const [currentRoomId, setCurrentRoomId] = useState(null);
   const [currentDirectUserId, setCurrentDirectUserId] = useState(null); // for highlighting the pill while DM room resolves
@@ -62,13 +70,62 @@ export default function ChatWindowModal({ onClose, profile }) {
       .catch((e) => setError(e.message))
       .finally(() => { if (!cancelled) setLoadingMessages(false); });
 
+    // Đang mở phòng này tức là đã đọc -> đánh dấu đã đọc + báo ChatLauncher
+    // cập nhật lại huy hiệu chưa đọc trên nút chat nổi.
+    if (profile?.id) {
+      markRoomRead(currentRoomId, profile.id).then(() => onRoomRead?.()).catch(() => {});
+    }
+
     const unsubscribe = subscribeToRoomMessages(currentRoomId, (msg) => {
       setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
+      if (msg.sender_id !== profile?.id && profile?.id) {
+        markRoomRead(currentRoomId, profile.id).then(() => onRoomRead?.()).catch(() => {});
+      }
     });
     return () => { cancelled = true; unsubscribe(); };
   }, [currentRoomId]);
 
   useEffect(() => { scrollToBottom(); }, [messages]);
+
+  // Danh sách hội thoại "Chat riêng" kiểu Messenger: mọi đồng nghiệp, ai đã
+  // từng nhắn thì lên đầu kèm tin nhắn gần nhất, chưa từng nhắn thì xếp theo
+  // tên A-Z ở dưới.
+  useEffect(() => {
+    if (loadingLists || !profile?.id) return;
+    let cancelled = false;
+    setDirectListLoading(true);
+    fetchDirectConversations(profile.id)
+      .then((convos) => {
+        if (cancelled) return;
+        const byPeer = new Map();
+        for (const c of convos) byPeer.set(c.peer.id, c);
+        for (const u of directory) {
+          if (!byPeer.has(u.id)) byPeer.set(u.id, { roomId: null, peer: u, lastMessage: null, lastAt: null });
+        }
+        const list = Array.from(byPeer.values()).sort((a, b) => {
+          if (a.lastAt && b.lastAt) return new Date(b.lastAt) - new Date(a.lastAt);
+          if (a.lastAt) return -1;
+          if (b.lastAt) return 1;
+          return (a.peer.full_name || '').localeCompare(b.peer.full_name || '');
+        });
+        setDirectConversations(list);
+      })
+      .catch((e) => setError(e.message))
+      .finally(() => { if (!cancelled) setDirectListLoading(false); });
+    return () => { cancelled = true; };
+  }, [profile?.id, directory, loadingLists, directListRefreshTick]);
+
+  // Mở thẳng 1 phòng cụ thể khi bấm từ toast thông báo tin nhắn mới (chỉ chạy
+  // 1 lần khi đủ dữ liệu để biết đó là phòng nhóm hay phòng chat riêng).
+  useEffect(() => {
+    if (!initialRoomId || initialRoomHandledRef.current) return;
+    if (loadingLists || directListLoading) return;
+    initialRoomHandledRef.current = true;
+    const groupMatch = rooms.find((r) => r.id === initialRoomId && r.room_type === 'group');
+    if (groupMatch) { openGroupRoom(groupMatch.id); return; }
+    const dmMatch = directConversations.find((c) => c.roomId === initialRoomId);
+    if (dmMatch) openDirectUser(dmMatch.peer.id, dmMatch.roomId);
+  }, [initialRoomId, loadingLists, directListLoading, rooms, directConversations]);
 
   const nameFor = (senderId) => {
     if (senderId === profile?.id) return profile?.full_name || 'Tôi';
@@ -89,15 +146,21 @@ export default function ChatWindowModal({ onClose, profile }) {
     setCurrentRoomId(roomId);
   };
 
-  const openDirectUser = async (userId) => {
+  const openDirectUser = async (userId, knownRoomId) => {
     setNavTab('direct');
     setCurrentDirectUserId(userId);
     try {
-      const roomId = await getOrCreateDmRoom(userId);
+      const roomId = knownRoomId || await getOrCreateDmRoom(userId);
       setCurrentRoomId(roomId);
     } catch (e) {
       setError(e.message);
     }
+  };
+
+  // Quay lại danh sách hội thoại kiểu Messenger (không đóng cả cửa sổ chat).
+  const handleBackToDirectList = () => {
+    setCurrentDirectUserId(null);
+    setDirectListRefreshTick((t) => t + 1);
   };
 
   const handleInputChange = (e) => {
@@ -148,10 +211,18 @@ export default function ChatWindowModal({ onClose, profile }) {
     inputRef.current?.focus();
   };
 
-  const handlePickPhoto = (e) => {
+  const handlePickPhoto = async (e) => {
     const f = e.target.files?.[0];
-    if (f) setPendingPhoto(f);
     e.target.value = '';
+    if (!f) return;
+    try {
+      // Ảnh HEIC (mặc định iPhone) không hiển thị được trên trình duyệt —
+      // convert sang JPEG trước khi lưu, tránh gửi ảnh "chết" vào chat.
+      const safe = await toWebSafeImage(f);
+      setPendingPhoto(safe);
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
   const handleSendMessage = async () => {
@@ -177,6 +248,7 @@ export default function ChatWindowModal({ onClose, profile }) {
       setPendingPhoto(null);
       setShowMentionPopup(false);
       setSelectedMentionIds([]);
+      if (navTab === 'direct') setDirectListRefreshTick((t) => t + 1);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -188,15 +260,20 @@ export default function ChatWindowModal({ onClose, profile }) {
     directory.filter((u) => (u.full_name || '').toLowerCase().includes(mentionFilter) || (u.role || '').toLowerCase().includes(mentionFilter))
   ), [directory, mentionFilter]);
 
+  const inDirectList = navTab === 'direct' && !currentDirectUserId;
+
   return (
     <div className="mobile-chat-fullscreen-modal">
       {/* 1. MOBILE CHAT HEADER */}
       <div className="m-chat-header">
         <div className="m-chat-header-info">
+          {navTab === 'direct' && currentDirectUserId && (
+            <button className="m-back-btn" title="Quay lại danh sách" onClick={handleBackToDirectList}>←</button>
+          )}
           <div className="m-room-avatar">{roomAvatar}</div>
           <div className="m-room-text">
-            <h4>{roomTitle}</h4>
-            <p>{navTab === 'group' && activeRoom ? activeRoom.topic || `👥 Nhóm chat` : '💬 Chat riêng'}</p>
+            <h4>{inDirectList ? 'Chat riêng' : roomTitle}</h4>
+            <p>{navTab === 'group' && activeRoom ? activeRoom.topic || `👥 Nhóm chat` : (inDirectList ? `${directConversations.length} đồng nghiệp` : '💬 Chat riêng')}</p>
           </div>
         </div>
         <button className="m-close-chat-btn" title="Đóng chat" onClick={onClose}>✕</button>
@@ -207,32 +284,51 @@ export default function ChatWindowModal({ onClose, profile }) {
         <button className={`m-cat-tab-btn ${navTab === 'group' ? 'active' : ''}`} onClick={() => setNavTab('group')}>
           🥐 Nhóm Chat ({groupRooms.length})
         </button>
-        <button className={`m-cat-tab-btn ${navTab === 'direct' ? 'active' : ''}`} onClick={() => setNavTab('direct')}>
-          👤 Chat Riêng 1-1 ({directory.length})
+        <button className={`m-cat-tab-btn ${navTab === 'direct' ? 'active' : ''}`} onClick={() => { setNavTab('direct'); setCurrentDirectUserId(null); }}>
+          👤 Chat Riêng 1-1 ({directConversations.length || directory.length})
         </button>
       </div>
 
-      {/* 3. PILLS */}
-      <div className="m-channel-pills-bar">
-        {loadingLists ? (
-          <span style={{ fontSize: 12, color: '#8C7A6B', padding: '4px 8px' }}>Đang tải...</span>
-        ) : navTab === 'group' ? (
-          groupRooms.map((r) => (
-            <button key={r.id} className={`m-pill-btn ${currentRoomId === r.id ? 'active' : ''}`} onClick={() => openGroupRoom(r.id)}>
-              <span>{r.avatar_emoji || '💬'}</span>
-              <span>{(r.name || '').replace(/^\S+\s/, '')}</span>
-            </button>
-          ))
-        ) : (
-          directory.map((u) => (
-            <button key={u.id} className={`m-pill-btn ${currentDirectUserId === u.id ? 'active' : ''}`} onClick={() => openDirectUser(u.id)}>
-              <span>👤</span>
-              <span>{(u.full_name || '').split(' ').slice(-1)[0]}</span>
-            </button>
-          ))
-        )}
-      </div>
+      {/* 3. PILLS (chỉ hiện ở tab Nhóm Chat — Chat Riêng dùng danh sách kiểu Messenger bên dưới) */}
+      {navTab === 'group' && (
+        <div className="m-channel-pills-bar">
+          {loadingLists ? (
+            <span style={{ fontSize: 12, color: '#8C7A6B', padding: '4px 8px' }}>Đang tải...</span>
+          ) : (
+            groupRooms.map((r) => (
+              <button key={r.id} className={`m-pill-btn ${currentRoomId === r.id ? 'active' : ''}`} onClick={() => openGroupRoom(r.id)}>
+                <span>{r.avatar_emoji || '💬'}</span>
+                <span>{(r.name || '').replace(/^\S+\s/, '')}</span>
+                {unreadCounts[r.id] > 0 && <span className="m-pill-unread-dot">{unreadCounts[r.id]}</span>}
+              </button>
+            ))
+          )}
+        </div>
+      )}
 
+      {inDirectList ? (
+        /* 3b. DANH SÁCH HỘI THOẠI KIỂU MESSENGER */
+        <div className="m-dm-list">
+          {(loadingLists || directListLoading) && <div className="m-dm-list-empty">Đang tải...</div>}
+          {!loadingLists && !directListLoading && directConversations.length === 0 && (
+            <div className="m-dm-list-empty">Chưa có đồng nghiệp nào để chat riêng</div>
+          )}
+          {!loadingLists && !directListLoading && directConversations.map((c) => (
+            <button key={c.peer.id} className="m-dm-list-item" onClick={() => openDirectUser(c.peer.id, c.roomId)}>
+              <div className="m-dm-avatar">👤</div>
+              <div className="m-dm-info">
+                <div className="m-dm-row-top">
+                  <strong>{c.peer.full_name}</strong>
+                  {c.lastAt && <span className="m-dm-time">{formatDmTime(c.lastAt)}</span>}
+                </div>
+                <div className="m-dm-preview">{c.lastMessage || c.peer.role || 'Bấm để bắt đầu trò chuyện'}</div>
+              </div>
+              {c.roomId && unreadCounts[c.roomId] > 0 && <span className="m-dm-unread-dot">{unreadCounts[c.roomId]}</span>}
+            </button>
+          ))}
+        </div>
+      ) : (
+      <>
       {/* 4. FEED */}
       <div className="m-chat-feed">
         {loadingMessages && <div style={{ textAlign: 'center', color: '#8C7A6B', fontSize: 12, padding: 12 }}>Đang tải tin nhắn...</div>}
@@ -342,8 +438,18 @@ export default function ChatWindowModal({ onClose, profile }) {
 
         {error && <div style={{ fontSize: 11.5, color: '#B42318', padding: '4px 8px' }}>⚠️ {error}</div>}
       </div>
+      </>
+      )}
     </div>
   );
+}
+
+function formatDmTime(iso) {
+  const d = new Date(iso);
+  const now = new Date();
+  return d.toDateString() === now.toDateString()
+    ? d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+    : d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
 }
 
 function renderFormattedMessage(text) {
