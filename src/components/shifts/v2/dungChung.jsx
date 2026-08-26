@@ -15,13 +15,23 @@ export function chuCaiDau(ten) {
   return (t[t.length - 2][0] + t[t.length - 1][0]).toUpperCase();
 }
 
-/** "5 phút" · "1h 20" — cho gọn trên màn hình điện thoại. */
+/** "5p" · "1h20" — viết tắt, dùng ở nơi chật (chip nhỏ, mini-stat). */
 export function doDaiPhut(phut) {
   const p = Math.abs(Math.round(phut || 0));
   if (p < 60) return `${p}p`;
   const g = Math.floor(p / 60);
   const du = p % 60;
   return du ? `${g}h${String(du).padStart(2, '0')}` : `${g}h`;
+}
+
+/** "5 phút" · "1 giờ 20 phút" — ghi đầy đủ, dùng cho dòng lịch sử để đọc
+ *  cực rõ ràng, đúng yêu cầu không viết tắt trong nhãn muộn/sớm. */
+export function doDaiPhutDay(phut) {
+  const p = Math.abs(Math.round(phut || 0));
+  if (p < 60) return `${p} phút`;
+  const g = Math.floor(p / 60);
+  const du = p % 60;
+  return du ? `${g} giờ ${du} phút` : `${g} giờ`;
 }
 
 /** Giờ làm thực -> "7h 45" */
@@ -52,9 +62,12 @@ export function nhanChenhLech(log, ca) {
       if (tinh < -720) tinh += 1440;
       lech = muonDB === 0 && tinh > 0 ? 0 : tinh;
     }
-    if (lech > 0) return { chu: `Trễ ${doDaiPhut(lech)}`, loai: 'bad' };
-    if (lech < 0) return { chu: `Sớm ${doDaiPhut(lech)}`, loai: 'good' };
-    return { chu: 'Đúng mốc', loai: 'good' };
+    // Từ ngữ khớp đúng yêu cầu: "Muộn X phút" (đỏ) · "Đúng giờ" (xanh) ·
+    // "Sớm X phút" (xanh). Giờ cụ thể đã hiện ngay cạnh nhãn này rồi (thẻ
+    // <time>), nên không lặp lại số giờ trong chữ.
+    if (lech > 0) return { chu: `Muộn ${doDaiPhutDay(lech)}`, loai: 'bad' };
+    if (lech < 0) return { chu: `Sớm ${doDaiPhutDay(lech)}`, loai: 'good' };
+    return { chu: 'Đúng giờ', loai: 'good' };
   }
 
   if (log.type === 'checkout') {
@@ -64,9 +77,9 @@ export function nhanChenhLech(log, ca) {
     let that = phutTrongNgay(gio);
     if (that < batDau) that += 1440;
     const lech = that - chuan;
-    if (lech > 0) return { chu: `Tăng ca +${doDaiPhut(lech)}`, loai: 'warn' };
-    if (lech < 0) return { chu: `Về sớm ${doDaiPhut(lech)}`, loai: 'bad' };
-    return { chu: 'Đúng giờ tan', loai: 'good' };
+    if (lech > 0) return { chu: `Tăng ca +${doDaiPhutDay(lech)}`, loai: 'warn' };
+    if (lech < 0) return { chu: `Về sớm ${doDaiPhutDay(lech)}`, loai: 'bad' };
+    return { chu: 'Đúng giờ tan ca', loai: 'good' };
   }
 
   return null;

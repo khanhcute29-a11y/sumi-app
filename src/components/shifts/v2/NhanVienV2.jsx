@@ -106,10 +106,10 @@ export default function NhanVienV2({
               {daVao && dev && (
                 <TheChenhLech
                   nhan={dev.loaiVao === 'late'
-                    ? { chu: `Trễ ${doDaiPhut(dev.lechVao)}`, loai: 'bad' }
+                    ? { chu: `Muộn ${doDaiPhut(dev.lechVao)}`, loai: 'bad' }
                     : dev.loaiVao === 'early'
                       ? { chu: `Sớm ${doDaiPhut(dev.lechVao)}`, loai: 'good' }
-                      : { chu: 'Đúng mốc', loai: 'good' }}
+                      : { chu: 'Đúng giờ', loai: 'good' }}
                 />
               )}
             </div>

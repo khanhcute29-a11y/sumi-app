@@ -34,7 +34,16 @@
 }
 
 .cc2 *, .cc2 *::before, .cc2 *::after { box-sizing: border-box; }
-.cc2 button { font: inherit; color: inherit; -webkit-tap-highlight-color: transparent; }
+/* ⚠️ `:where()` CHỦ Ý ở đây — nó đóng vai trò "màu mặc định" với độ ưu tiên
+   CSS BẰNG 0, để bất kỳ nút nào tự đặt màu riêng (.cc2-primary, .cc2-fab,
+   .cc2-star-send…) đều thắng mà không cần viết lại chọn lọc phức tạp hơn.
+   BÀI HỌC: trước đây viết `.cc2 button { color: inherit }` — độ ưu tiên
+   (0,1,1) LỚN HƠN một class đơn như `.cc2-primary { color:#fff }` (0,1,0).
+   Kết quả: nút "KẾT THÚC CA" nhận màu chữ TRÙNG HỆT màu nền tối — chữ vẫn ở
+   đó, chỉ là vô hình. Nút "BẮT ĐẦU CA" tình cờ còn đọc được vì nền cam đủ
+   sáng, nên lỗi không bị phát hiện ngay. Đừng đổi `:where(button)` lại
+   thành `button` — lỗi y hệt sẽ quay lại cho nút tiếp theo. */
+.cc2 :where(button) { font: inherit; color: inherit; -webkit-tap-highlight-color: transparent; }
 .cc2 button:focus-visible { outline: 3px solid #2b7fff; outline-offset: 2px; }
 
 /* ── Đầu trang ────────────────────────────────────────────────────────── */
@@ -625,3 +634,30 @@
 @media (min-width: 760px) {
   .cc2-lichsu-nhom .cc2-history { grid-template-columns: 1fr 1fr; }
 }
+
+/* ── Nút tóm tắt "Đơn Từ" trên màn hình chính ─────────────────────────────
+   Thay cho việc bày cả danh sách + tab lọc tràn màn hình. Bấm vào mới mở
+   modal đầy đủ (xem DonTuCuaToi.jsx). */
+.cc2-dontu-btn {
+  display: grid; grid-template-columns: 46px 1fr auto 18px;
+  align-items: center; gap: 12px;
+  width: 100%; min-height: 66px; padding: 11px 14px;
+  border: 1px solid var(--cc2-line); border-radius: 16px;
+  background: #fff; box-shadow: var(--cc2-soft-shadow);
+  text-align: left; cursor: pointer;
+}
+.cc2-dontu-btn:active { transform: scale(.99); }
+.cc2-dontu-icon {
+  width: 46px; height: 46px; display: grid; place-items: center;
+  border-radius: 14px; background: var(--cc2-paper); font-size: 23px;
+}
+.cc2-dontu-chu { min-width: 0; }
+.cc2-dontu-chu b { display: block; font-size: 15px; }
+.cc2-dontu-chu small { display: block; margin-top: 2px; color: var(--cc2-muted); font-size: 12.5px; font-weight: 700; }
+.cc2-dontu-badge {
+  min-width: 24px; height: 24px; padding: 0 7px;
+  display: grid; place-items: center;
+  border-radius: 12px; background: var(--cc2-red); color: #fff;
+  font-size: 12px; font-weight: 950;
+}
+.cc2-dontu-mui { color: var(--cc2-muted); font-size: 20px; font-weight: 900; }
