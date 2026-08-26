@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { TEN_BO_PHAN } from '../../../lib/chamCong';
-import { LichSuCham, gioThanhChu, TheChenhLech, doDaiPhut } from './dungChung';
+import React, { useMemo, useState } from 'react';
+import { TEN_BO_PHAN, caChuanCuaLog, gioLamThuc, gioPhut } from '../../../lib/chamCong';
+import { LichSuCham, gioThanhChu, TheChenhLech, gomPhien, nhanChenhLech } from './dungChung';
 import DonTuCuaToi from './DonTuCuaToi';
 import { fetchShiftLogsRange } from '../../../lib/queries';
 
@@ -10,14 +10,14 @@ import { fetchShiftLogsRange } from '../../../lib/queries';
 // dưới database. KHÔNG gõ cứng "05:30 - 13:30" vào đây. Khi tiệm đổi giờ ca thì
 // sửa dữ liệu trong bảng là màn hình đổi theo, không phải sửa mã nguồn.
 
-function nhanTrangThai(cham) {
-  if (cham?.xinNghi) return { chu: '● Xin nghỉ', lop: 'cc2-status warn' };
-  if (cham?.raISO) return { chu: '● Đã tan ca', lop: 'cc2-status' };
-  if (cham?.vaoISO) {
-    return cham?.chenhLech?.loaiVao === 'late'
+function nhanTrangThai({ xinNghi, phienHienTai, dangTrongCa, devVao }) {
+  if (xinNghi && !phienHienTai) return { chu: '● Xin nghỉ', lop: 'cc2-status warn' };
+  if (dangTrongCa) {
+    return devVao?.loai === 'bad'
       ? { chu: '● Đang làm · vào muộn', lop: 'cc2-status warn' }
       : { chu: '● Đang trong ca', lop: 'cc2-status' };
   }
+  if (phienHienTai) return { chu: '● Đã tan ca', lop: 'cc2-status' };
   return { chu: '● Chưa vào ca', lop: 'cc2-status red' };
 }
 
@@ -25,15 +25,40 @@ export default function NhanVienV2({
   hoSo, cham, danhSachCa, boPhan, logsHomNay, tomTat, thuong = [],
   gioHienTai, onCheckin, onCheckout, onXemThang, deXuatGia = null,
 }) {
-  const ca = cham?.ca || null;
-  const daVao = !!cham?.vaoISO;
-  const daRa = !!cham?.raISO;
-  const dev = cham?.chenhLech || null;
-  const tt = nhanTrangThai(cham);
+  // ── Chấm ca nhiều lần trong ngày ────────────────────────────────────
+  //
+  // `cham` (tham số cha truyền vào) chỉ gộp lần VÀO ĐẦU TIÊN và lần RA CUỐI
+  // CÙNG trong ngày — đúng cho một ca duy nhất, nhưng sai nếu nhân sự chấm
+  // lại nhiều lần (ví dụ: làm ca sáng, tan ca, rồi quay lại làm thêm buổi
+  // chiều). Ở ĐÂY dùng `gomPhien` ghép trực tiếp từ nhật ký hôm nay để luôn
+  // biết đúng PHIÊN GẦN NHẤT, cho phép "chấm ca mới" sau khi đã ra ca.
+  const phien = useMemo(() => gomPhien(logsHomNay), [logsHomNay]);
+  const phienHienTai = phien[phien.length - 1] || null;
+  const dangTrongCa = !!(phienHienTai && !phienHienTai.ra);
+  const soCaXong = phien.filter((p) => p.ra).length;
 
-  // Ca chuẩn của bộ phận mình, kể cả khi hôm nay chưa chấm — để nhân viên luôn
-  // nhìn thấy mình phải có mặt lúc mấy giờ.
-  const caHienThi = ca || (danhSachCa || []).find((c) => c.boPhan === boPhan) || null;
+  // Ca chuẩn CỦA PHIÊN GẦN NHẤT — lấy từ dòng VÀO CA (nơi trigger database có
+  // điền `expected_start`). Dòng RA CA không bao giờ có trường đó, nên phải
+  // lấy ca của lần vào tương ứng, không tự đọc thẳng dòng ra ca.
+  const caHienThi = (phienHienTai ? caChuanCuaLog(phienHienTai.vao, danhSachCa, boPhan) : null)
+    || (danhSachCa || []).find((c) => c.boPhan === boPhan) || null;
+
+  const devVao = phienHienTai ? nhanChenhLech(phienHienTai.vao, caHienThi) : null;
+  const devRa = (phienHienTai && phienHienTai.ra) ? nhanChenhLech(phienHienTai.ra, caHienThi) : null;
+
+  const gioVaoChu = phienHienTai ? gioPhut(phienHienTai.vao.checkin_time || phienHienTai.vao.created_at) : null;
+  const gioRaChu = (phienHienTai && phienHienTai.ra)
+    ? gioPhut(phienHienTai.ra.checkin_time || phienHienTai.ra.created_at) : null;
+
+  // Tổng giờ làm hôm nay = cộng dồn TỪNG PHIÊN đã đóng — không phải khoảng
+  // cách từ lần vào đầu tiên tới lần ra cuối cùng (sẽ tính oan cả quãng nghỉ
+  // giữa hai ca thành giờ làm việc).
+  const tongGioHomNay = phien.reduce((tong, p) => {
+    if (!p.ra) return tong;
+    return tong + (gioLamThuc(p.vao.checkin_time || p.vao.created_at, p.ra.checkin_time || p.ra.created_at) || 0);
+  }, 0);
+
+  const tt = nhanTrangThai({ xinNghi: cham?.xinNghi, phienHienTai, dangTrongCa, devVao });
 
   const tenBoPhan = TEN_BO_PHAN[boPhan] || 'Không theo ca cố định';
   const thuongHomNay = (thuong || []).filter((t) => {
@@ -71,7 +96,7 @@ export default function NhanVienV2({
           <span className={tt.lop}>{tt.chu}</span>
         </div>
 
-        <section className={`cc2-shift-card${daVao ? (dev?.loaiVao === 'late' ? ' late' : '') : ' pending'}`}>
+        <section className={`cc2-shift-card${phienHienTai ? (devVao?.loai === 'bad' ? ' late' : '') : ' pending'}`}>
           <div className="cc2-shift-head">
             <div style={{ minWidth: 0 }}>
               <small className="cc2-eyebrow" style={{ color: 'var(--cc2-caramel)' }}>
@@ -99,48 +124,44 @@ export default function NhanVienV2({
           )}
 
           <div className="cc2-timeline">
-            <div className={`cc2-time-point${daVao ? '' : ' pending'}`}>
+            <div className={`cc2-time-point${phienHienTai ? '' : ' pending'}`}>
               <div className="cc2-time-dot">▶</div>
-              <small>Giờ vào</small>
-              <strong>{cham?.vao || '--:--'}</strong>
-              {daVao && dev && (
-                <TheChenhLech
-                  nhan={dev.loaiVao === 'late'
-                    ? { chu: `Muộn ${doDaiPhut(dev.lechVao)}`, loai: 'bad' }
-                    : dev.loaiVao === 'early'
-                      ? { chu: `Sớm ${doDaiPhut(dev.lechVao)}`, loai: 'good' }
-                      : { chu: 'Đúng giờ', loai: 'good' }}
-                />
-              )}
+              <small>Giờ vào{soCaXong > 0 ? ' (gần nhất)' : ''}</small>
+              <strong>{gioVaoChu || '--:--'}</strong>
+              {devVao && <TheChenhLech nhan={devVao} />}
             </div>
-            <div className={`cc2-time-point${daRa ? '' : ' pending'}`}>
+            <div className={`cc2-time-point${gioRaChu ? '' : ' pending'}`}>
               <div className="cc2-time-dot">■</div>
-              <small>Giờ ra</small>
-              <strong>{cham?.ra || '--:--'}</strong>
-              {daRa && dev && dev.loaiRa !== 'on_time' && (
-                <TheChenhLech
-                  nhan={dev.loaiRa === 'ot'
-                    ? { chu: `Tăng ca +${doDaiPhut(dev.lechRa)}`, loai: 'warn' }
-                    : { chu: `Về sớm ${doDaiPhut(dev.lechRa)}`, loai: 'bad' }}
-                />
-              )}
+              <small>Giờ ra{soCaXong > 0 ? ' (gần nhất)' : ''}</small>
+              <strong>{gioRaChu || '--:--'}</strong>
+              {devRa && devRa.chu !== 'Đúng giờ tan ca' && <TheChenhLech nhan={devRa} />}
             </div>
           </div>
 
-          {!daVao && (
+          {!phienHienTai && (
             <button className="cc2-primary" onClick={onCheckin}>BẮT ĐẦU CA</button>
           )}
-          {daVao && !daRa && (
+          {dangTrongCa && (
             <button className="cc2-primary checkout" onClick={onCheckout}>KẾT THÚC CA</button>
           )}
-          {daRa && (
-            <button className="cc2-primary" disabled>ĐÃ HOÀN THÀNH CA HÔM NAY</button>
+          {phienHienTai && !dangTrongCa && (
+            <>
+              {/* Đã ra ca, nhưng KHÔNG khoá lại — nhân sự có thể chấm ca mới
+                  ngay trong hôm nay (ví dụ: làm ca sáng, rồi quay lại làm
+                  thêm buổi chiều). Mỗi lần vào đều được database tính đi
+                  muộn/đúng giờ độc lập theo đúng ca của lần đó. */}
+              <div className="cc2-ok">
+                ✓ Đã hoàn thành {soCaXong > 1 ? `${soCaXong} ca` : 'ca'} hôm nay
+                {soCaXong > 1 ? ` · lần gần nhất ${gioVaoChu}–${gioRaChu}` : ''}
+              </div>
+              <button className="cc2-primary" onClick={onCheckin}>➕ CHẤM CA MỚI</button>
+            </>
           )}
 
           <div className="cc2-mini-stats">
             <div className="cc2-mini">
-              <strong>{gioThanhChu(cham?.soGio)}</strong>
-              <span>Đã làm</span>
+              <strong>{gioThanhChu(tongGioHomNay)}</strong>
+              <span>Đã làm{soCaXong > 1 ? ` (${soCaXong} ca)` : ''}</span>
             </div>
             <div className="cc2-mini">
               <strong>{caHienThi?.soGio ?? 9}h</strong>
@@ -148,11 +169,11 @@ export default function NhanVienV2({
             </div>
             <div className="cc2-mini">
               <strong style={{
-                color: dev?.loaiVao === 'late' ? 'var(--cc2-red)'
-                  : daVao ? 'var(--cc2-green)' : 'var(--cc2-muted)',
+                color: devVao?.loai === 'bad' ? 'var(--cc2-red)'
+                  : phienHienTai ? 'var(--cc2-green)' : 'var(--cc2-muted)',
                 fontSize: 15,
               }}>
-                {!daVao ? 'Chưa chấm' : dev?.loaiVao === 'late' ? 'Đi muộn' : 'Đúng giờ'}
+                {!phienHienTai ? 'Chưa chấm' : devVao?.loai === 'bad' ? 'Đi muộn' : 'Đúng giờ'}
               </strong>
               <span>Tình trạng</span>
             </div>
