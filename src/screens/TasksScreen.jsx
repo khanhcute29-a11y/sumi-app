@@ -7,8 +7,6 @@ import { Input } from '../components/forms/Input';
 import { Select } from '../components/forms/Select';
 import { DailyChecklistTab } from '../components/tasks/DailyChecklistTab';
 import CongViecV2 from '../components/tasks/v2/CongViecV2';
-import { ProductionLogModal } from '../components/ProductionLogModal';
-import { ProductionLogList } from '../components/ProductionLogList';
 import '../styles/cong-viec.css';
 
 function StaffPicker({ label, value, onChange, options }) {
@@ -98,9 +96,6 @@ export default function TasksScreen() {
   const [selectedStaffId, setSelectedStaffId] = useState('');
   const [stationFilter, setStationFilter] = useState('');
   const [orderCodeFilter, setOrderCodeFilter] = useState('');
-  const [showProductionLog, setShowProductionLog] = useState(false);
-  const [showProductionLogList, setShowProductionLogList] = useState(false);
-  const [productionLogRefreshKey, setProductionLogRefreshKey] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
   const [metrics, setMetrics] = useState({ dangLam: 0, choDuyet: 0, xongHomNay: 0 });
 
@@ -225,31 +220,20 @@ export default function TasksScreen() {
       </div>
 
       {/* Hàng thao tác nhanh */}
-      <div className="cv-quick-actions">
-        <button className="cv-btn outline" onClick={() => setShowProductionLog(true)}>Ghi Sản Xuất</button>
-        <button className="cv-btn outline" onClick={() => setShowProductionLogList((v) => !v)}>
-          Đã ghi sản xuất {showProductionLogList ? '▲' : '▼'}
-        </button>
-        {isOwner && (
-          <button
-            className="cv-btn outline"
-            onClick={() => window.dispatchEvent(new CustomEvent('sumi-navigate', { detail: { tab: 'staff' } }))}
-          >
-            👥 Danh sách nhân viên
-          </button>
-        )}
-        {isOwner && hasActiveFilter && (
-          <button className="cv-btn primary" onClick={handleResetToOverview}>🔄 Quay lại Tổng quan</button>
-        )}
-      </div>
-
-      {showProductionLogList && <ProductionLogList refreshKey={productionLogRefreshKey} />}
-
-      {showProductionLog && (
-        <ProductionLogModal
-          onClose={() => setShowProductionLog(false)}
-          onSaved={() => { setShowProductionLog(false); setProductionLogRefreshKey((k) => k + 1); }}
-        />
+      {(isOwner || hasActiveFilter) && (
+        <div className="cv-quick-actions">
+          {isOwner && (
+            <button
+              className="cv-btn outline"
+              onClick={() => window.dispatchEvent(new CustomEvent('sumi-navigate', { detail: { tab: 'staff' } }))}
+            >
+              👥 Danh sách nhân viên
+            </button>
+          )}
+          {isOwner && hasActiveFilter && (
+            <button className="cv-btn primary" onClick={handleResetToOverview}>🔄 Quay lại Tổng quan</button>
+          )}
+        </div>
       )}
 
       {/* Tabs dạng viên thuốc */}
