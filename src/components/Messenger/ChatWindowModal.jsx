@@ -164,6 +164,18 @@ export default function ChatWindowModal({ onClose, profile, initialRoomId = null
     setDirectListRefreshTick((t) => t + 1);
   };
 
+  // Bấm tab "Nhóm Chat" trong lúc đang xem 1 luồng Chat riêng: `rooms` chứa
+  // CẢ phòng nhóm lẫn phòng riêng, nên nếu chỉ đổi navTab mà không đổi lại
+  // currentRoomId thì activeRoom vẫn trỏ tới phòng riêng cũ (name/topic đều
+  // rỗng) -> header hiện chữ rác "Hộp thoại" / "👥 Nhóm chat" và không pill
+  // nào được bôi đậm. Luôn đưa currentRoomId về đúng 1 phòng nhóm hợp lệ.
+  const switchToGroupTab = () => {
+    if (navTab === 'group') return;
+    const fallback = groupRooms.find((r) => r.id === currentRoomId) || groupRooms[0];
+    if (fallback) openGroupRoom(fallback.id);
+    else { setNavTab('group'); setCurrentDirectUserId(null); }
+  };
+
   const handleInputChange = (e) => {
     const val = e.target.value;
     setInputText(val);
@@ -282,7 +294,7 @@ export default function ChatWindowModal({ onClose, profile, initialRoomId = null
 
       {/* 2. TABS */}
       <div className="m-chat-category-tabs">
-        <button className={`m-cat-tab-btn ${navTab === 'group' ? 'active' : ''}`} onClick={() => setNavTab('group')}>
+        <button className={`m-cat-tab-btn ${navTab === 'group' ? 'active' : ''}`} onClick={switchToGroupTab}>
           🥐 Nhóm Chat ({groupRooms.length})
         </button>
         <button className={`m-cat-tab-btn ${navTab === 'direct' ? 'active' : ''}`} onClick={() => { setNavTab('direct'); setCurrentDirectUserId(null); }}>
