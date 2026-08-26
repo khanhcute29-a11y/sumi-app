@@ -13,7 +13,7 @@ import {
 import { uploadFile } from '../../lib/queries';
 import { toWebSafeImage } from '../../lib/imageConvert';
 
-export default function ChatWindowModal({ onClose, profile, initialRoomId = null, unreadCounts = {}, onRoomRead }) {
+export default function ChatWindowModal({ onClose, profile, initialRoomId = null, unreadCounts = {}, onRoomRead, onActiveRoomChange }) {
   const [navTab, setNavTab] = useState('group'); // 'group' | 'direct'
   const [rooms, setRooms] = useState([]);
   const [directory, setDirectory] = useState([]);
@@ -72,15 +72,16 @@ export default function ChatWindowModal({ onClose, profile, initialRoomId = null
       .finally(() => { if (!cancelled) setLoadingMessages(false); });
 
     // Đang mở phòng này tức là đã đọc -> đánh dấu đã đọc + báo ChatLauncher
-    // cập nhật lại huy hiệu chưa đọc trên nút chat nổi.
+    // xoá tại chỗ huy hiệu chưa đọc của đúng phòng này (không quét lại DB).
+    onActiveRoomChange?.(currentRoomId);
     if (profile?.id) {
-      markRoomRead(currentRoomId, profile.id).then(() => onRoomRead?.()).catch(() => {});
+      markRoomRead(currentRoomId, profile.id).then(() => onRoomRead?.(currentRoomId)).catch(() => {});
     }
 
     const unsubscribe = subscribeToRoomMessages(currentRoomId, (msg) => {
       setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
       if (msg.sender_id !== profile?.id && profile?.id) {
-        markRoomRead(currentRoomId, profile.id).then(() => onRoomRead?.()).catch(() => {});
+        markRoomRead(currentRoomId, profile.id).then(() => onRoomRead?.(currentRoomId)).catch(() => {});
       }
     });
     return () => { cancelled = true; unsubscribe(); };
