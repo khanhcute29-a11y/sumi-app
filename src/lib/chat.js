@@ -2,9 +2,11 @@ import { supabase } from './supabaseClient';
 
 // Danh sách phòng chat nhóm mà mình là thành viên + phòng chat riêng đang có.
 export async function fetchMyChatRooms() {
+  const { data: userData } = await supabase.auth.getUser();
   const { data, error } = await supabase
     .from('chat_participants')
     .select('room_id, chat_rooms(id,name,room_type,topic,avatar_emoji)')
+    .eq('profile_id', userData.user.id)
     .order('room_id');
   if (error) throw error;
   return (data || []).map((r) => r.chat_rooms).filter(Boolean);
