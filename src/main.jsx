@@ -55,6 +55,46 @@ async function mountApp() {
     const mod = await import('./components/mockups/BossDashboard/BossDashboard.jsx');
     RootComponent = mod.default;
     wrapWithErrorBoundary = false;
+  } else if (_mkParam === 'employee' || _mkParam === 'staff') {
+    const mod = await import('./components/mockups/EmployeeDashboard/EmployeeDashboard.jsx');
+    RootComponent = mod.default;
+    wrapWithErrorBoundary = false;
+  } else if (_mkParam === 'multi-role' || _mkParam === 'roles') {
+    const mod = await import('./components/mockups/MultiRoleWorkspace/MultiRoleWorkspace.jsx');
+    RootComponent = mod.default;
+    wrapWithErrorBoundary = false;
+  } else if (_mkParam === 'work-management' || _mkParam === 'tasks') {
+    const mod = await import('./components/mockups/WorkManagement/WorkManagement.jsx');
+    RootComponent = mod.default;
+    wrapWithErrorBoundary = false;
+  } else if (_mkParam === 'enterprise-workflow' || _mkParam === 'enterprise') {
+    const mod = await import('./components/mockups/EnterpriseWorkflow/EnterpriseWorkflow.jsx');
+    RootComponent = mod.default;
+    wrapWithErrorBoundary = false;
+  } else if (_mkParam === 'work-studio' || _mkParam === 'new') {
+    const mod = await import('./components/mockups/WorkStudio/WorkStudio.jsx');
+    RootComponent = mod.default;
+    wrapWithErrorBoundary = false;
+  } else if (_mkParam === 'mobile-workspace' || _mkParam === 'mobile') {
+    const mod = await import('./components/mockups/MobileMultiRoleWorkspace/MobileMultiRoleWorkspace.jsx');
+    RootComponent = mod.default;
+    wrapWithErrorBoundary = false;
+  } else if (_mkParam === 'workflow-simulator' || _mkParam === 'simulator') {
+    const mod = await import('./components/mockups/WorkFlowSimulator/WorkFlowSimulator.jsx');
+    RootComponent = mod.default;
+    wrapWithErrorBoundary = false;
+  } else if (_mkParam === 'task-flow-v3' || _mkParam === 'tasks-v3') {
+    const mod = await import('./components/mockups/WorkFlowSystem/TaskFlowV3.tsx');
+    RootComponent = mod.default;
+    wrapWithErrorBoundary = false;
+  } else if (_mkParam === 'executive-finance-ops' || _mkParam === 'finance-ops' || _mkParam === 'finance') {
+    const mod = await import('./components/mockups/ExecutiveFinanceOps/ExecutiveFinanceOps.jsx');
+    RootComponent = mod.default;
+    wrapWithErrorBoundary = false;
+  } else if (_mkParam === 'messenger-chat' || _mkParam === 'chat-box' || _mkParam === 'chat') {
+    const mod = await import('./components/mockups/MessengerChatBox/MessengerChatBox.jsx');
+    RootComponent = mod.default;
+    wrapWithErrorBoundary = false;
   }
 
   ReactDOM.createRoot(document.getElementById('root')).render(
