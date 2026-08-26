@@ -698,6 +698,11 @@ export default function ShiftsScreen() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Bản V2 tự vẽ đầu trang riêng (cc2-hero) và không dùng khung giờ nghỉ
+          trưa cố định kiểu banner này — mockup đã bỏ hẳn khối này. Ẩn khi
+          DUNG_GIAO_DIEN_V2 để không hiện chồng lên header của bản mới. */}
+      {!DUNG_GIAO_DIEN_V2 && (
+      <>
       <div className="cc-header" style={{ borderRadius: 18 }}>
         <div className="cc-header-top">
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -732,7 +737,11 @@ export default function ShiftsScreen() {
           <span style={{ fontSize: 13, color: '#725f50' }}>Mặc định toàn tiệm để mọi người sắp xếp nghỉ ngơi (Hệ thống tự động trừ 1 giờ vào tổng giờ làm việc thực tế).</span>
         </div>
       </div>
-      <Tabs tabs={[{ key: 'checkin', label: 'Chấm công realtime' }, { key: 'schedule', label: 'Lịch tuần' }]} active={viewMode} onChange={setViewMode} />
+      </>
+      )}
+      {!DUNG_GIAO_DIEN_V2 && (
+        <Tabs tabs={[{ key: 'checkin', label: 'Chấm công realtime' }, { key: 'schedule', label: 'Lịch tuần' }]} active={viewMode} onChange={setViewMode} />
+      )}
 
       {viewMode === 'checkin' && (
         <div className="cc-wrap">

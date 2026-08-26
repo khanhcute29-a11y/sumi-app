@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { TEN_BO_PHAN } from '../../../lib/chamCong';
 import { LichSuCham, gioThanhChu, TheChenhLech, doDaiPhut } from './dungChung';
 import DonTuCuaToi from './DonTuCuaToi';
+import { fetchShiftLogsRange } from '../../../lib/queries';
 
 // Màn hình Chấm Công của NHÂN VIÊN — dựng theo mockup time-attendance-v2.html.
 //
@@ -211,15 +212,90 @@ export default function NhanVienV2({
         {/* ── Đơn từ của tôi — gửi mới bằng nút ➕ ở góc phải dưới ── */}
         <DonTuCuaToi hoSo={hoSo} duLieuGia={deXuatGia} />
 
-        {/* ── Lịch sử ── */}
+        {/* ── Lịch sử — tra theo khoảng ngày ── */}
         <div className="cc2-section-title"><span>LỊCH SỬ CHẤM CÔNG</span></div>
-        <LichSuCham
-          logs={logsHomNay}
-          danhSachCa={danhSachCa}
-          boPhanTheoNguoi={{ [hoSo?.id]: boPhan }}
-          rong="Hôm nay bạn chưa chấm công lần nào."
-        />
+        <TraLichSuTheoNgay hoSo={hoSo} boPhan={boPhan} danhSachCa={danhSachCa} logsHomNay={logsHomNay} />
       </main>
     </div>
+  );
+}
+
+/**
+ * Ô tìm lịch sử theo khoảng ngày: "Từ ngày ... → Đến ngày ...".
+ *
+ * Mặc định (chưa chọn khoảng) hiện đúng nhật ký hôm nay, giống trước đây.
+ * Chọn khoảng thì gọi `fetchShiftLogsRange` — hàm CÓ SẴN, đang dùng cho lịch
+ * cả tháng — chứ không viết truy vấn mới. Lọc lại đúng nhân viên đang xem, vì
+ * hàm đó trả về của cả tiệm.
+ */
+function TraLichSuTheoNgay({ hoSo, boPhan, danhSachCa, logsHomNay }) {
+  const [tuNgay, setTuNgay] = useState('');
+  const [denNgay, setDenNgay] = useState('');
+  const [dsTuyChinh, setDsTuyChinh] = useState(null);   // null = đang xem hôm nay
+  const [dangTai, setDangTai] = useState(false);
+  const [loi, setLoi] = useState('');
+
+  const dangLoc = dsTuyChinh !== null;
+
+  const tim = async () => {
+    if (!tuNgay || !denNgay) { setLoi('Chọn đủ cả hai ngày giúp tôi.'); return; }
+    if (tuNgay > denNgay) { setLoi('Ngày bắt đầu phải trước ngày kết thúc.'); return; }
+    setDangTai(true); setLoi('');
+    try {
+      const data = await fetchShiftLogsRange(tuNgay, denNgay);
+      setDsTuyChinh((data || []).filter((l) => l.staff_id === hoSo?.id));
+    } catch (e) {
+      setLoi(e?.message || 'Không tra được lịch sử. Thử lại giúp tôi.');
+    } finally {
+      setDangTai(false);
+    }
+  };
+
+  const boLoc = () => { setTuNgay(''); setDenNgay(''); setDsTuyChinh(null); setLoi(''); };
+
+  const oNgay = {
+    flex: 1, minWidth: 0, minHeight: 46, padding: '0 10px', borderRadius: 12,
+    border: '1px solid var(--cc2-line)', background: '#fff',
+    color: 'var(--cc2-cocoa)', font: 'inherit', fontSize: 14, boxSizing: 'border-box',
+  };
+
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+        <input type="date" style={oNgay} value={tuNgay} onChange={(e) => setTuNgay(e.target.value)}
+          aria-label="Từ ngày" />
+        <span style={{ color: 'var(--cc2-muted)', fontWeight: 900 }}>→</span>
+        <input type="date" style={oNgay} value={denNgay} onChange={(e) => setDenNgay(e.target.value)}
+          aria-label="Đến ngày" />
+        <button className="cc2-drill-close" style={{ width: 46, height: 46 }} onClick={tim}
+          disabled={dangTai} aria-label="Tìm">
+          {dangTai ? '…' : '🔍'}
+        </button>
+      </div>
+
+      {dangLoc && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+          marginBottom: 10, padding: '8px 12px', borderRadius: 12,
+          background: 'var(--cc2-navy-soft)', color: 'var(--cc2-navy)',
+          fontSize: 12.5, fontWeight: 800,
+        }}>
+          <span>📅 Đang xem {tuNgay.split('-').reverse().join('/')} → {denNgay.split('-').reverse().join('/')}</span>
+          <button onClick={boLoc} style={{
+            minHeight: 32, padding: '0 10px', border: 0, borderRadius: 9,
+            background: '#fff', color: 'var(--cc2-navy)', fontWeight: 900, fontSize: 12, cursor: 'pointer',
+          }}>✕ Về hôm nay</button>
+        </div>
+      )}
+
+      {loi && <div className="cc2-error">⚠️ {loi}</div>}
+
+      <LichSuCham
+        logs={dangLoc ? dsTuyChinh : logsHomNay}
+        danhSachCa={danhSachCa}
+        boPhanTheoNguoi={{ [hoSo?.id]: boPhan }}
+        rong={dangLoc ? 'Không có lần chấm công nào trong khoảng ngày này.' : 'Hôm nay bạn chưa chấm công lần nào.'}
+      />
+    </>
   );
 }
