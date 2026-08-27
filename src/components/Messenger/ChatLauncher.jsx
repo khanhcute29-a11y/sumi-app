@@ -1,8 +1,34 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import './messenger-chat.css';
 import ChatWindowModal from './ChatWindowModal';
 import { fetchMyRoomIds, fetchUnreadCounts, subscribeToMyRooms } from '../../lib/chat';
 import { notify } from '../../lib/toast';
+
+// Cửa sổ chat nổi chỉ kéo thả được ở desktop (>= breakpoint này trong
+// messenger-chat.css) — trên mobile nó là modal toàn màn hình, kéo không
+// có ý nghĩa và sẽ đụng độ với thao tác vuốt/cuộn tin nhắn bình thường.
+const DESKTOP_BREAKPOINT = 860;
+const CHAT_WIDTH = 400;
+const CHAT_HEIGHT = 620;
+const POSITION_STORAGE_KEY = 'sumi_chat_position';
+
+function clampPosition(x, y) {
+  const maxX = Math.max(0, window.innerWidth - CHAT_WIDTH);
+  const maxY = Math.max(0, window.innerHeight - CHAT_HEIGHT);
+  return { x: Math.min(Math.max(0, x), maxX), y: Math.min(Math.max(0, y), maxY) };
+}
+
+function loadSavedPosition() {
+  try {
+    const raw = localStorage.getItem(POSITION_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed?.x !== 'number' || typeof parsed?.y !== 'number') return null;
+    return clampPosition(parsed.x, parsed.y);
+  } catch {
+    return null;
+  }
+}
 
 // Nút chat nổi (góc dưới phải) hiện xuyên suốt toàn app khi đã đăng nhập —
 // bấm vào mở cửa sổ Messenger toàn màn hình (trên mobile) / dạng cửa sổ nổi
@@ -13,6 +39,12 @@ export function ChatLauncher({ profile }) {
   const [unreadCounts, setUnreadCounts] = useState({}); // room_id -> số tin chưa đọc
   const [activeRoomId, setActiveRoomId] = useState(null); // phòng đang xem trong cửa sổ chat (nếu đang mở)
   const [pendingRoomId, setPendingRoomId] = useState(null); // mở thẳng phòng này khi bấm từ toast
+
+  // Vị trí cửa sổ chat khi đã kéo (desktop) — null nghĩa là chưa từng kéo,
+  // giữ nguyên vị trí mặc định neo góc dưới phải theo CSS.
+  const [dragPosition, setDragPosition] = useState(loadSavedPosition);
+  const [isDraggingWindow, setIsDraggingWindow] = useState(false);
+  const dragOffset = useRef({ x: 0, y: 0 });
 
   const unreadTotal = useMemo(() => Object.values(unreadCounts).reduce((s, n) => s + n, 0), [unreadCounts]);
 
@@ -93,6 +125,76 @@ export function ChatLauncher({ profile }) {
     setActiveRoomId(null);
   };
 
+  // Giữ cửa sổ luôn nằm trong màn hình khi resize (vd: thu nhỏ trình duyệt
+  // sau khi đã kéo cửa sổ ra gần mép).
+  useEffect(() => {
+    const onResize = () => {
+      setDragPosition((prev) => (prev ? clampPosition(prev.x, prev.y) : prev));
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  const startDrag = (clientX, clientY) => {
+    if (window.innerWidth < DESKTOP_BREAKPOINT) return; // mobile: fullscreen, không kéo
+    const base = dragPosition || clampPosition(window.innerWidth - CHAT_WIDTH - 24, window.innerHeight - CHAT_HEIGHT - 24);
+    dragOffset.current = { x: clientX - base.x, y: clientY - base.y };
+    setDragPosition(base);
+    setIsDraggingWindow(true);
+  };
+
+  const moveDrag = (clientX, clientY) => {
+    setDragPosition(clampPosition(clientX - dragOffset.current.x, clientY - dragOffset.current.y));
+  };
+
+  const endDrag = () => {
+    setIsDraggingWindow(false);
+    setDragPosition((prev) => {
+      if (prev) {
+        try { localStorage.setItem(POSITION_STORAGE_KEY, JSON.stringify(prev)); } catch { /* ignore */ }
+      }
+      return prev;
+    });
+  };
+
+  const handleHeaderMouseDown = (e) => {
+    if (e.target.closest('.drag-handle-exclude, button, input, textarea, a')) return;
+    if (!e.target.closest('.m-chat-header')) return;
+    e.preventDefault();
+    startDrag(e.clientX, e.clientY);
+    const onMouseMove = (ev) => moveDrag(ev.clientX, ev.clientY);
+    const onMouseUp = () => {
+      endDrag();
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
+  const handleHeaderTouchStart = (e) => {
+    if (e.target.closest('.drag-handle-exclude, button, input, textarea, a')) return;
+    if (!e.target.closest('.m-chat-header')) return;
+    const t = e.touches[0];
+    startDrag(t.clientX, t.clientY);
+  };
+  const handleHeaderTouchMove = (e) => {
+    if (!isDraggingWindow) return;
+    const t = e.touches[0];
+    moveDrag(t.clientX, t.clientY);
+  };
+  const handleHeaderTouchEnd = () => {
+    if (isDraggingWindow) endDrag();
+  };
+
+  const draggedWindowStyle = dragPosition
+    ? {
+        position: 'fixed', left: dragPosition.x, top: dragPosition.y, right: 'auto', bottom: 'auto',
+        transition: isDraggingWindow ? 'none' : 'left 0.15s ease, top 0.15s ease',
+        cursor: isDraggingWindow ? 'grabbing' : undefined,
+      }
+    : undefined;
+
   if (!profile) return null;
 
   return (
@@ -112,7 +214,14 @@ export function ChatLauncher({ profile }) {
 
       {open && (
         <div className="sumi-chat-launcher-overlay">
-          <div className="sumi-chat-launcher-window">
+          <div
+            className="sumi-chat-launcher-window"
+            style={draggedWindowStyle}
+            onMouseDown={handleHeaderMouseDown}
+            onTouchStart={handleHeaderTouchStart}
+            onTouchMove={handleHeaderTouchMove}
+            onTouchEnd={handleHeaderTouchEnd}
+          >
             <ChatWindowModal
               profile={profile}
               onClose={handleClose}
