@@ -3,7 +3,7 @@ import { supabase } from '../../../lib/supabaseClient';
 import DuyetViecModal from './DuyetViecModal';
 import SoKetToanKpi from './SoKetToanKpi';
 import {
-  TRANG_THAI, tomTatViec, sapXepQuaHan, khauCuaViec,
+  TRANG_THAI, tomTatViec, sapXepQuaHan, khauCuaViec, KHAU, nhanKhau,
   locTheoTuKhoa, ngayGio, doDaiThoiGian, treBaoNhieu, tienDoDuAn, quaHan,
 } from '../../../lib/congViec';
 
@@ -70,9 +70,50 @@ function TheQuaHan({ viec, tenTheoId, tenKhau, onNhacNho, onXem, dangNhac }) {
   );
 }
 
+// Trang riêng "Quá hạn" — phân theo khâu (Bakery Nóng/Lạnh, Macaron X41, Xưởng
+// 42…) giống hệt cách chia luồng khi tạo đơn hàng, dùng ĐÚNG danh sách khâu
+// thật KHAU đã có sẵn (không bịa thêm "Luồng Vận tải" — việc order_work do
+// bếp/vận tải tự có màn riêng ở Đơn hàng, không nằm trong hệ Việc này).
+function TrangQuaHanTheoLuong({ quaHanDs, tenTheoId, tenKhau, onNhacNho, onXem, dangNhac, onBack }) {
+  const [khauDangXem, setKhauDangXem] = useState('all');
+  const dsTheoKhau = khauDangXem === 'all' ? quaHanDs : quaHanDs.filter((t) => khauCuaViec(t) === khauDangXem);
+  const demTheoKhau = (key) => key === 'all' ? quaHanDs.length : quaHanDs.filter((t) => khauCuaViec(t) === key).length;
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+        <button className="cv-btn outline" onClick={onBack} style={{ flex: '0 0 auto', minWidth: 44 }}>‹</button>
+        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900 }}>⚠️ Quá hạn — phân luồng</h2>
+      </div>
+      <div className="cv-chips">
+        {KHAU.map((k) => (
+          <button key={k.key} className={`cv-chip${khauDangXem === k.key ? ' active' : ''}`}
+            onClick={() => setKhauDangXem(k.key)}>
+            {k.icon} {k.nhan} ({demTheoKhau(k.key)})
+          </button>
+        ))}
+      </div>
+      {dsTheoKhau.length ? (
+        <div className="cv-list" style={{ marginTop: 12 }}>
+          {dsTheoKhau.map((v) => (
+            <TheQuaHan key={v.id} viec={v} tenTheoId={tenTheoId} tenKhau={tenKhau}
+              onNhacNho={onNhacNho} onXem={onXem} dangNhac={dangNhac} />
+          ))}
+        </div>
+      ) : (
+        <div className="cv-empty">
+          <div className="cv-empty-icon">✅</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--cv-text)' }}>Không có việc quá hạn ở luồng này</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ViecGiamDoc({
-  tasks, duAn, tenTheoId, dangTai, loi, onTaiLai, onMoGiaoViec, onMoTaoDuAn, onNhacNho,
+  tasks, duAn, tenTheoId, dangTai, loi, onTaiLai, onMoGiaoViec, onMoTaoDuAn, onNhacNho, hoSo,
 }) {
+  const [moTrangQuaHan, setMoTrangQuaHan] = useState(false);
   const [tuKhoa, setTuKhoa] = useState('');
   const [khau, setKhau] = useState('all');
   const [danhSachKhau, setDanhSachKhau] = useState([]);
@@ -108,6 +149,21 @@ export default function ViecGiamDoc({
       setLoiChung(e?.message || 'Không gửi được lời nhắc.');
     } finally { setDangNhac(''); }
   };
+
+  if (moTrangQuaHan) {
+    return (
+      <div className="cv-wrap">
+        <TrangQuaHanTheoLuong quaHanDs={quaHanDs} tenTheoId={tenTheoId} tenKhau={tenKhau}
+          onNhacNho={nhac} onXem={setXem} dangNhac={dangNhac} onBack={() => setMoTrangQuaHan(false)} />
+        {xem && (
+          <DuyetViecModal viec={xem} tenTho={tenTheoId[xem.assignee_id]} hoSo={hoSo} vaiTro="giam_doc"
+            chiXem={xem.status !== 'pending_approval'}
+            onClose={() => setXem(null)}
+            onXong={async () => { setXem(null); await onTaiLai?.(); }} />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -188,21 +244,17 @@ export default function ViecGiamDoc({
         </>
       )}
 
-      {/* ── Quá hạn: đẩy lên đầu ── */}
-      <div className="cv-divider"><span>⚠️ Quá hạn (cần can thiệp)</span></div>
-      {quaHanDs.length ? (
-        <div className="cv-list">
-          {quaHanDs.map((v) => (
-            <TheQuaHan key={v.id} viec={v} tenTheoId={tenTheoId} tenKhau={tenKhau}
-              onNhacNho={nhac} onXem={setXem} dangNhac={dangNhac} />
-          ))}
-        </div>
-      ) : (
-        <div className="cv-empty">
-          <div className="cv-empty-icon">✅</div>
-          <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--cv-text)' }}>Không có việc nào quá hạn</div>
-        </div>
-      )}
+      {/* ── Quá hạn: chỉ hiện tóm tắt, bấm vào mới sang trang riêng phân luồng ── */}
+      <button onClick={() => setMoTrangQuaHan(true)} disabled={!quaHanDs.length} style={{
+        width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginTop: 14, padding: '14px 16px', borderRadius: 16, border: 0, textAlign: 'left', font: 'inherit',
+        cursor: quaHanDs.length ? 'pointer' : 'default',
+        background: quaHanDs.length ? '#fee2e2' : 'var(--cv-sunken)',
+        color: quaHanDs.length ? '#d03027' : 'var(--cv-muted)',
+      }}>
+        <span style={{ fontWeight: 900, fontSize: 15 }}>⚠️ Quá hạn: {quaHanDs.length} việc</span>
+        {quaHanDs.length > 0 && <span style={{ fontWeight: 800 }}>Xem chi tiết →</span>}
+      </button>
 
       {/* ── Chờ duyệt ── */}
       {!!choDuyetDs.length && (
@@ -230,7 +282,7 @@ export default function ViecGiamDoc({
       <SoKetToanKpi />
 
       {xem && (
-        <DuyetViecModal viec={xem} tenTho={tenTheoId[xem.assignee_id]}
+        <DuyetViecModal viec={xem} tenTho={tenTheoId[xem.assignee_id]} hoSo={hoSo} vaiTro="giam_doc"
           chiXem={xem.status !== 'pending_approval'}
           onClose={() => setXem(null)}
           onXong={async () => { setXem(null); await onTaiLai?.(); }} />

@@ -34,6 +34,8 @@ export default function TheViecNhanVien({ viec, hoSo, tenTheoId = {}, onDoi, onB
   const [baoCao, setBaoCao] = useState([]);
   const [dangTaiBaoCao, setDangTaiBaoCao] = useState(false);
   const [loiThe, setLoiThe] = useState('');
+  const [tinNhan, setTinNhan] = useState('');
+  const [dangGuiTin, setDangGuiTin] = useState(false);
 
   useEffect(() => { setBuoc(docBuocCon(viec)); }, [viec.id, viec.version]);
 
@@ -95,6 +97,21 @@ export default function TheViecNhanVien({ viec, hoSo, tenTheoId = {}, onDoi, onB
       setLoiThe(msg);
       onBaoLoi?.(msg);
     } finally { setDangChay(''); }
+  };
+
+  const guiTinNhan = async () => {
+    const noiDung = tinNhan.trim();
+    if (!noiDung || !hoSo?.id) return;
+    setDangGuiTin(true); setLoiThe('');
+    try {
+      const { error } = await supabase.from('task_progress_reports').insert({
+        task_id: viec.id, staff_id: hoSo.id, note: noiDung, percent: null, author_role: 'tho',
+      });
+      if (error) throw error;
+      setTinNhan('');
+    } catch (e) {
+      setLoiThe(e?.message || 'Không gửi được tin nhắn.');
+    } finally { setDangGuiTin(false); }
   };
 
   const luuBuoc = async (ds) => {
@@ -230,13 +247,15 @@ export default function TheViecNhanVien({ viec, hoSo, tenTheoId = {}, onDoi, onB
             <div style={{ fontSize: 13, color: 'var(--cv-muted)' }}>Chưa có báo cáo nào.</div>
           )}
           {baoCao.map((b) => {
+            const laGiamDoc = b.author_role === 'giam_doc';
             const laQuanLy = b.author_role === 'quan_ly';
+            const style = laGiamDoc ? { background: '#7d420c', color: '#fff' } : laQuanLy ? { background: '#2b5bc7', color: '#fff' } : undefined;
             return (
               <div className="cv-thread-item" key={b.id}>
-                <div className="cv-thread-avatar" style={laQuanLy ? { background: '#2b5bc7', color: '#fff' } : undefined}>
-                  {laQuanLy ? '💼' : '👨‍🍳'}
+                <div className="cv-thread-avatar" style={style}>
+                  {laGiamDoc ? '👑' : laQuanLy ? '💼' : '👨‍🍳'}
                 </div>
-                <div className={`cv-thread-body${laQuanLy ? ' quan-ly' : ''}`}>
+                <div className={`cv-thread-body${laGiamDoc || laQuanLy ? ' quan-ly' : ''}`}>
                   {b.note || (b.percent != null ? `Đã làm được ${b.percent}%` : '(không ghi chú)')}
                   {b.image_url && (
                     <a href={b.image_url} target="_blank" rel="noreferrer">
@@ -244,13 +263,26 @@ export default function TheViecNhanVien({ viec, hoSo, tenTheoId = {}, onDoi, onB
                     </a>
                   )}
                   <div className="cv-thread-meta">
-                    <span>{laQuanLy ? 'Quản lý' : (tenTheoId[b.staff_id] || 'Nhân viên')}</span>
+                    <span>{laGiamDoc ? 'Giám đốc' : laQuanLy ? 'Quản lý' : (tenTheoId[b.staff_id] || 'Nhân viên')}</span>
                     <span>{gioNgan(b.created_at)}</span>
                   </div>
                 </div>
               </div>
             );
           })}
+
+          {/* Khung chat — thợ gõ trực tiếp, không cần mở modal khác */}
+          {laCuaToi && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 8, marginBottom: 4 }}>
+              <input value={tinNhan} onChange={(e) => setTinNhan(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !dangGuiTin) { e.preventDefault(); guiTinNhan(); } }}
+                placeholder="Nhắn cho quản lý về việc này…"
+                style={{ flex: 1, minHeight: 44, padding: '0 12px', borderRadius: 12, border: '1px solid var(--cv-border)', fontSize: 14, fontFamily: 'inherit' }} />
+              <button className="cv-btn primary" disabled={dangGuiTin || !tinNhan.trim()} onClick={guiTinNhan} style={{ flex: '0 0 auto' }}>
+                {dangGuiTin ? '…' : 'Gửi'}
+              </button>
+            </div>
+          )}
 
           {laCuaToi && !daXong && !choDuyet && (
             <div className="cv-actions" style={{ marginTop: 14 }}>

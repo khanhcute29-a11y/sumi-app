@@ -57,6 +57,7 @@ export default function CongViecV2({ profile, staffList = [], onMetrics }) {
       //   Thợ       -> chỉ thấy việc của mình
       const q = supabase.from('tasks').select('*')
         .in('category', ['assigned', 'adhoc'])
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .limit(GIOI_HAN);
 
@@ -129,7 +130,7 @@ export default function CongViecV2({ profile, staffList = [], onMetrics }) {
   if (laGiamDoc) {
     return (
       <div className="cv-wrap">
-        <ViecGiamDoc {...chung} duAn={duAn}
+        <ViecGiamDoc {...chung} duAn={duAn} hoSo={profile}
           onMoGiaoViec={() => setMoGiaoViec(true)}
           onMoTaoDuAn={() => setMoGiaoViec(true)} onNhacNho={nhacNho} />
         {moGiaoViec && (

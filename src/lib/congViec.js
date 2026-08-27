@@ -115,6 +115,16 @@ export function treBaoNhieu(t) {
   return phutGiua(t.deadline, moc);
 }
 
+// Việc quá hạn từ 1 ngày trở lên VÀ chưa xong — ngưỡng để Giám đốc được phép
+// can thiệp trực tiếp (xoá/gia hạn). Khớp đúng điều kiện phía RPC
+// sumi_can_thiep_qua_han dưới database — sửa một bên mà quên bên kia thì nút
+// bấm sẽ hiện sai lúc (hiện ra nhưng RPC từ chối, hoặc ngược lại).
+export function duocCanThiepQuaHan(t) {
+  if (!quaHan(t)) return false;
+  const tre = treBaoNhieu(t);
+  return tre !== null && tre >= 1440;
+}
+
 // ── Nhãn KPI hiện trên thẻ ──────────────────────────────────────────────────
 // Nhận việc: so giờ nhận với giờ được giao. Chậm quá 15 phút thì bị trừ điểm.
 export function nhanKpiNhanViec(t) {

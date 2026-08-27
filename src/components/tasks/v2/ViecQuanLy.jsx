@@ -145,14 +145,14 @@ export default function ViecQuanLy({
       )}
 
       {duyet && (
-        <DuyetViecModal viec={duyet} tenTho={tenTheoId[duyet.assignee_id]}
+        <DuyetViecModal viec={duyet} tenTho={tenTheoId[duyet.assignee_id]} hoSo={hoSo} vaiTro="quan_ly"
           onClose={() => setDuyet(null)}
           onXong={async () => { setDuyet(null); await onTaiLai?.(); }} />
       )}
 
       {xemBaoCao && (
-        <DuyetViecModal viec={xemBaoCao} tenTho={tenTheoId[xemBaoCao.assignee_id]}
-          chiXem onClose={() => setXemBaoCao(null)} onXong={() => setXemBaoCao(null)} />
+        <DuyetViecModal viec={xemBaoCao} tenTho={tenTheoId[xemBaoCao.assignee_id]} hoSo={hoSo} vaiTro="quan_ly"
+          chiXem onClose={() => setXemBaoCao(null)} onXong={async () => { setXemBaoCao(null); await onTaiLai?.(); }} />
       )}
     </div>
   );
