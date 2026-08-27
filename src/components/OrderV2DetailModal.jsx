@@ -11,6 +11,7 @@ import { CAKE_FILLINGS } from '../lib/cakePricing';
 import { canViewSchoolOrder, canViewMacaronPrice } from '../lib/orderVisibility';
 import { broadcastEvent, BroadcastEvents } from '../lib/realtimeSync';
 import { getCurrentPositionSmart } from '../lib/geo';
+import { showToast } from '../lib/toast';
 
 const ORDER_TYPE_LABELS = {
   cake: '🎂 Bánh kem & Bánh lạnh',
@@ -335,62 +336,71 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
     }
   };
 
-  const acceptDeliveryAssignment = async () => {
-    setBusy(true);
+  // Lạc quan: đóng modal + chuyển sang tab "Đang vận chuyển" NGAY khi bấm xác
+  // nhận, không chờ upload ảnh + RPC (thường vài giây). accept_delivery_assignment_flexible
+  // không có version check nên an toàn cập nhật lạc quan như các luồng Nhận
+  // việc khác đã làm. Khác biệt duy nhất: hành động thành công vốn đã ĐÓNG hẳn
+  // modal này (hoanTatVaChuyenTrang gọi onClose), nên nếu upload/RPC thất bại
+  // SAU KHI đã điều hướng đi thì không còn chỗ hiện lỗi tại chỗ nữa — phải báo
+  // qua toast toàn cục thay vì setError cục bộ.
+  const acceptDeliveryAssignment = () => {
+    if (!gpsCoords) { setError('Chưa lấy được GPS'); return; }
+    if (!photoFile) { setError('Chưa chụp ảnh nhận giao'); return; }
     setError('');
-    try {
-      if (!gpsCoords) throw new Error('Chưa lấy được GPS');
-      if (!photoFile) throw new Error('Chưa chụp ảnh nhận giao');
 
-      // Upload photo
-      const cleanExt = (photoFile.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
-      const photoPath = `orders/${orderId}/delivery/${crypto.randomUUID()}.${cleanExt}`;
-      const { error: upErr } = await supabase.storage.from('uploads').upload(photoPath, photoFile, { contentType: photoFile.type || 'image/jpeg' });
-      if (upErr) throw upErr;
+    const file = photoFile;
+    const gps = gpsCoords;
+    const orderCodeForToast = data?.order?.order_code || '';
 
-      // Get signed URL for photo
-      // ⚠️ KHÔNG đặt tên biến destructure là `data` — component đã có state
-      // `data` (đơn hàng) ở phần trên; const `data` cục bộ trong CÙNG block
-      // sẽ che luôn biến ngoài CHO CẢ QUÃNG TRƯỚC NÓ (temporal dead zone),
-      // y hệt lỗi thật đã vá ở completeDelivery() bên dưới.
-      const { data: urlData } = supabase.storage.from('uploads').getPublicUrl(photoPath);
-      const publicUrl = urlData.publicUrl;
+    setShowDeliveryModal(false);
+    setGpsCoords(null);
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    // Về danh sách "Đang vận chuyển" để shipper theo dõi chuyến của mình
+    hoanTatVaChuyenTrang('delivery');
 
-      // Call RPC to accept delivery
-      const { data: rpcData, error } = await supabase.rpc('accept_delivery_assignment_flexible', {
-        p_order_id: orderId,
-        p_assigned_staff_id: profile.id,
-        p_assigned_staff_name: profile.full_name || profile.email,
-        p_gps_latitude: gpsCoords.lat,
-        p_gps_longitude: gpsCoords.lng,
-        p_photo_url: publicUrl
-      });
-
-      if (error) throw error;
-      // rpcData có thể là null nếu máy chủ trả về rỗng -> dùng ?. để không vỡ
-      if (!rpcData?.success) throw new Error(rpcData?.message || rpcData?.error || 'Không nhận giao được');
-
-      // Từ đây trở đi việc giao hàng ĐÃ THÀNH CÔNG. Không được để bất kỳ
-      // bước phụ nào biến nó thành lỗi trên màn hình.
+    (async () => {
       try {
-        const { playNotificationSound } = await import('../lib/notificationSound.js');
-        playNotificationSound('delivery_assigned');
-      } catch (err) {
-        console.error('[OrderV2] Chuông nhận giao lỗi (bỏ qua):', err);
+        // Upload photo
+        const cleanExt = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+        const photoPath = `orders/${orderId}/delivery/${crypto.randomUUID()}.${cleanExt}`;
+        const { error: upErr } = await supabase.storage.from('uploads').upload(photoPath, file, { contentType: file.type || 'image/jpeg' });
+        if (upErr) throw upErr;
+
+        // Get signed URL for photo
+        // ⚠️ KHÔNG đặt tên biến destructure là `data` — component đã có state
+        // `data` (đơn hàng) ở phần trên; const `data` cục bộ trong CÙNG block
+        // sẽ che luôn biến ngoài CHO CẢ QUÃNG TRƯỚC NÓ (temporal dead zone),
+        // y hệt lỗi thật đã vá ở completeDelivery() bên dưới.
+        const { data: urlData } = supabase.storage.from('uploads').getPublicUrl(photoPath);
+        const publicUrl = urlData.publicUrl;
+
+        // Call RPC to accept delivery
+        const { data: rpcData, error } = await supabase.rpc('accept_delivery_assignment_flexible', {
+          p_order_id: orderId,
+          p_assigned_staff_id: profile.id,
+          p_assigned_staff_name: profile.full_name || profile.email,
+          p_gps_latitude: gps.lat,
+          p_gps_longitude: gps.lng,
+          p_photo_url: publicUrl
+        });
+
+        if (error) throw error;
+        // rpcData có thể là null nếu máy chủ trả về rỗng -> dùng ?. để không vỡ
+        if (!rpcData?.success) throw new Error(rpcData?.message || rpcData?.error || 'Không nhận giao được');
+
+        // Từ đây trở đi việc giao hàng ĐÃ THÀNH CÔNG. Không được để bất kỳ
+        // bước phụ nào biến nó thành lỗi trên màn hình.
+        try {
+          const { playNotificationSound } = await import('../lib/notificationSound.js');
+          playNotificationSound('delivery_assigned');
+        } catch (err) {
+          console.error('[OrderV2] Chuông nhận giao lỗi (bỏ qua):', err);
+        }
+      } catch (e) {
+        showToast({ icon: '⚠️', title: 'Không nhận giao được', message: `${orderCodeForToast} — ${e.message}`, tone: 'warning' });
       }
-
-      setShowDeliveryModal(false);
-      setGpsCoords(null);
-      setPhotoFile(null);
-      setPhotoPreview(null);
-
-      // Về danh sách "Đang vận chuyển" để shipper theo dõi chuyến của mình
-      hoanTatVaChuyenTrang('delivery');
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setBusy(false);
-    }
+    })();
   };
 
   const completeWorkPackage = async (p) => {
