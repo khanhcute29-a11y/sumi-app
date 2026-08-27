@@ -210,3 +210,32 @@ export async function fetchMyOrders(fullName, { days = 30 } = {}) {
       quantity: o.total_quantity,
     }));
 }
+
+// ── Chấm công HÔM NAY — trạng thái trực tiếp cho widget trang chủ ───────────
+// Khác với `fetchMyAttendanceHistory` (14 ngày, chỉ để xem lại): hàm này lấy
+// đúng nhật ký của ngày hôm nay + bảng quy định ca đang bật, để widget trang
+// chủ biết ngay "chưa chấm / đang trong ca / đã xong" mà không cần đợi mở
+// riêng màn hình Chấm Công.
+//
+// ⚠️ Ngày "hôm nay" tính theo GIỜ VIỆT NAM (UTC+7), không phải giờ máy hay
+// giờ UTC — nhân viên chấm ca 05:30 sáng mà lấy theo UTC sẽ bị lùi một ngày
+// (05:30 giờ VN = 22:30 UTC hôm TRƯỚC). Dùng đúng cách `ShiftTodayCard.jsx`
+// đã làm, không tự chế cách tính ngày khác.
+function todayVN() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
+}
+
+export async function fetchMyTodayAttendance(staffId) {
+  if (!staffId) return { logs: [], caRows: [] };
+  const homNay = todayVN();
+  const [logsRes, caRes] = await Promise.all([
+    supabase.from('shift_logs')
+      .select('id,staff_id,type,checkin_time,late_minutes,expected_start,shift_label')
+      .eq('staff_id', staffId).eq('work_date', homNay)
+      .order('checkin_time', { ascending: true }),
+    supabase.from('sumi_quy_dinh_ca').select('*').eq('active', true),
+  ]);
+  if (logsRes.error) throw logsRes.error;
+  if (caRes.error) throw caRes.error;
+  return { logs: logsRes.data || [], caRows: caRes.data || [] };
+}

@@ -142,6 +142,34 @@ export function diemDuKien(t) {
   return diem;
 }
 
+// ── Vòng đời 6 bước (đúng mockup task-lifecycle-v2-approved) ────────────────
+//
+// Chỉ SUY RA từ các mốc thời gian đã có sẵn trên `viec` — không tự đặt trạng
+// thái, không gọi thêm CSDL. Bước "Lương" được đánh dấu xong ngay khi
+// `status === 'done'`, vì RPC duyệt việc ghi vào `task_kpi_logs` trong CÙNG
+// một giao dịch với việc chuyển status — không có độ trễ nào giữa hai mốc đó.
+export function buocVongDoi(viec) {
+  const daNhan = !!viec?.accepted_at;
+  const dangLam = viec?.status === 'accepted' || (viec?.status === 'open' && daNhan);
+  const daBaoXong = !!viec?.completed_at;
+  const choDuyet = viec?.status === 'pending_approval';
+  const daXong = viec?.status === 'done';
+  const treNhan = !daNhan && quaHan(viec);
+  const treLam = dangLam && quaHan(viec);
+
+  const b = (nhan, trang_thai, gio) => ({ nhan, trang_thai, gio });
+
+  return [
+    b('Giao', 'done', gioNgan(viec?.created_at)),
+    b('Nhận', daNhan ? 'done' : (treNhan ? 'bad' : 'now'), daNhan ? gioNgan(viec.accepted_at) : ''),
+    b('Làm', daBaoXong ? 'done' : (dangLam ? (treLam ? 'bad' : 'now') : 'cho'),
+      dangLam && !daBaoXong ? doDaiThoiGian(phutGiua(viec.accepted_at, new Date().toISOString())) : ''),
+    b('Báo xong', daBaoXong ? 'done' : 'cho', daBaoXong ? gioNgan(viec.completed_at) : ''),
+    b('Duyệt', daXong ? 'done' : (choDuyet ? 'now' : 'cho'), daXong && viec.approved_at ? gioNgan(viec.approved_at) : ''),
+    b('Lương', daXong ? 'done' : 'cho', ''),
+  ];
+}
+
 // ── Phân nhóm cho màn hình NHÂN VIÊN ────────────────────────────────────────
 export function nhomViecNhanVien(tasks) {
   const ds = (tasks || []).filter((t) => !t.exclusion_reason_code);

@@ -171,6 +171,7 @@ export default function DonTuCuaToi({ hoSo, duLieuGia = null }) {
   const [dangTai, setDangTai] = useState(true);
   const [loi, setLoi] = useState('');
   const [moForm, setMoForm] = useState(false);
+  const [moDanhSach, setMoDanhSach] = useState(false);   // ⬅ modal đơn từ
 
   // Chỉ đơn CỦA CHÍNH MÌNH. Hàng rào RLS dưới database đã giới hạn rồi, nhưng
   // lọc thêm ở đây cho chắc — quản lý và giám đốc cũng dùng màn hình này để
@@ -194,6 +195,8 @@ export default function DonTuCuaToi({ hoSo, duLieuGia = null }) {
     }
   }, [duLieuGia, cuaToi]);
 
+  // Nạp ngay khi màn hình mở, KHÔNG đợi bấm vào nút — để số "đang chờ" trên
+  // nút luôn đúng ngay từ đầu, không phải bấm vào mới biết có mấy đơn.
   useEffect(() => { tai(); }, [tai]);
 
   const dem = useMemo(() => {
@@ -206,40 +209,68 @@ export default function DonTuCuaToi({ hoSo, duLieuGia = null }) {
 
   return (
     <>
-      <div className="cc2-section-title"><span>ĐƠN TỪ CỦA TÔI</span></div>
+      {/* ── Trên màn hình chính: CHỈ MỘT NÚT, không bày cả danh sách ra ──
+          Bấm vào mới mở đơn từ dạng modal trượt lên, giống hộp chi tiết nhân
+          sự và form gửi đơn đã có sẵn — nhất quán một kiểu tương tác. */}
+      <div className="cc2-section-title"><span>ĐƠN TỪ</span></div>
+      <button className="cc2-dontu-btn" onClick={() => setMoDanhSach(true)}>
+        <span className="cc2-dontu-icon">📝</span>
+        <span className="cc2-dontu-chu">
+          <b>Đơn Từ / Xin Nghỉ</b>
+          <small>
+            {dangTai ? 'Đang tải…' : dem.pending
+              ? `${dem.pending} đơn đang chờ duyệt`
+              : 'Xem đơn đã gửi hoặc tạo đơn mới'}
+          </small>
+        </span>
+        {dem.pending > 0 && <span className="cc2-dontu-badge">{dem.pending}</span>}
+        <span className="cc2-dontu-mui" aria-hidden="true">›</span>
+      </button>
 
-      <div className="cc2-tab-loc" role="tablist">
-        {THE_LOC.map((t) => (
-          <button
-            key={t.ma}
-            role="tab"
-            aria-selected={the === t.ma}
-            className={`cc2-tab${the === t.ma ? ' active' : ''}`}
-            onClick={() => setThe(t.ma)}
-          >
-            {t.ten}{dem[t.ma] ? ` (${dem[t.ma]})` : ''}
-          </button>
-        ))}
-      </div>
+      {moDanhSach && (
+        <div className="cc2 cc2-sheet-backdrop" onClick={() => setMoDanhSach(false)}>
+          <div className="cc2-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="cc2-sheet-head">
+              <h2>Đơn từ của tôi</h2>
+              <button className="cc2-close" onClick={() => setMoDanhSach(false)} aria-label="Đóng">×</button>
+            </div>
 
-      {loi && <div className="cc2-error">⚠️ {loi}</div>}
+            <div className="cc2-tab-loc" role="tablist" style={{ marginTop: 14 }}>
+              {THE_LOC.map((t) => (
+                <button
+                  key={t.ma}
+                  role="tab"
+                  aria-selected={the === t.ma}
+                  className={`cc2-tab${the === t.ma ? ' active' : ''}`}
+                  onClick={() => setThe(t.ma)}
+                >
+                  {t.ten}{dem[t.ma] ? ` (${dem[t.ma]})` : ''}
+                </button>
+              ))}
+            </div>
 
-      {dangTai ? (
-        <div className="cc2-empty">Đang tải đơn từ…</div>
-      ) : hien.length === 0 ? (
-        <div className="cc2-empty">
-          {the === 'pending' ? 'Bạn không có đơn nào đang chờ duyệt.'
-            : the === 'approved' ? 'Chưa có đơn nào được duyệt.'
-              : 'Chưa có đơn nào bị từ chối.'}
-        </div>
-      ) : (
-        <div className="cc2-history">
-          {hien.map((r) => <TheDeXuat key={r.id} don={r} hienNguoiGui={false} />)}
+            {loi && <div className="cc2-error">⚠️ {loi}</div>}
+
+            {dangTai ? (
+              <div className="cc2-empty">Đang tải đơn từ…</div>
+            ) : hien.length === 0 ? (
+              <div className="cc2-empty">
+                {the === 'pending' ? 'Bạn không có đơn nào đang chờ duyệt.'
+                  : the === 'approved' ? 'Chưa có đơn nào được duyệt.'
+                    : 'Chưa có đơn nào bị từ chối.'}
+              </div>
+            ) : (
+              <div className="cc2-history">
+                {hien.map((r) => <TheDeXuat key={r.id} don={r} hienNguoiGui={false} />)}
+              </div>
+            )}
+
+            <button className="cc2-primary" style={{ marginTop: 16 }} onClick={() => setMoForm(true)}>
+              ＋ GỬI ĐƠN TỪ MỚI
+            </button>
+          </div>
         </div>
       )}
-
-      {/* Nút ➕ nổi — đúng vị trí góc phải dưới như ảnh mẫu */}
-      <button className="cc2-fab" onClick={() => setMoForm(true)} aria-label="Gửi đề xuất mới">＋</button>
 
       {moForm && (
         <FormGuiDon

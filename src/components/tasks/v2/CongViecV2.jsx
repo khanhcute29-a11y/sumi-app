@@ -15,7 +15,7 @@ import '../../../styles/cong-viec.css';
 
 const GIOI_HAN = 300;   // không kéo cả bảng về máy
 
-export default function CongViecV2({ profile, staffList = [] }) {
+export default function CongViecV2({ profile, staffList = [], onMetrics }) {
   const [tasks, setTasks] = useState([]);
   const [duAn, setDuAn] = useState([]);
   const [dangTai, setDangTai] = useState(true);
@@ -74,25 +74,46 @@ export default function CongViecV2({ profile, staffList = [] }) {
 
   useEffect(() => { if (profile?.id) tai(); }, [profile?.id, tai]);
 
+  // Số liệu nhỏ cho hero-metrics ở khung ngoài (TasksScreen.jsx) — dùng chung
+  // một lần tải `tasks` ở đây, không mở thêm truy vấn riêng chỉ để đếm.
+  useEffect(() => {
+    if (!onMetrics) return;
+    const homNay = new Date().toDateString();
+    onMetrics({
+      dangLam: tasks.filter((t) => t.status === 'accepted').length,
+      choDuyet: tasks.filter((t) => t.status === 'pending_approval').length,
+      xongHomNay: tasks.filter((t) => t.status === 'done' && t.completed_at && new Date(t.completed_at).toDateString() === homNay).length,
+    });
+  }, [tasks, onMetrics]);
+
   // Dự án chỉ cần cho Giám đốc. Bảng có thể chưa tạo (migration chưa chạy) —
   // trường hợp đó coi như không có dự án nào, KHÔNG làm hỏng cả màn hình.
-  useEffect(() => {
+  const taiDuAn = useCallback(() => {
     if (!laGiamDoc) return;
-    let huy = false;
     supabase.from('projects').select('*').eq('status', 'dang_chay').order('created_at', { ascending: false })
-      .then(({ data, error }) => { if (!huy) setDuAn(error ? [] : (data || [])); })
-      .catch(() => { if (!huy) setDuAn([]); });
-    return () => { huy = true; };
+      .then(({ data, error }) => setDuAn(error ? [] : (data || [])))
+      .catch(() => setDuAn([]));
   }, [laGiamDoc]);
 
-  // Có ai đổi việc là danh sách tự cập nhật. Kênh riêng để không đụng kênh
-  // 'tasks-live' mà màn hình cha đang dùng.
+  useEffect(() => { taiDuAn(); }, [taiDuAn]);
+
+  // Có ai đổi việc/dự án là danh sách tự cập nhật. Kênh riêng để không đụng
+  // kênh 'tasks-live' mà màn hình cha đang dùng.
+  //
+  // ⚠️ SỬA LỖI THẬT: kênh này đã tồn tại từ trước nhưng KHÔNG bao giờ nhận
+  // được sự kiện, vì bảng `tasks` chưa từng được thêm vào publication
+  // `supabase_realtime` dưới database (chỉ có chat_messages và
+  // task_progress_reports được bật đúng cách). Danh sách vẫn "tự cập nhật"
+  // trước giờ là nhờ mỗi màn hình tự gọi lại `tai()` NGAY SAU RPC của chính
+  // nó thành công — người khác đang mở sẵn tab thì không thấy gì cho tới
+  // khi tự tải lại. Xem migration 202608270060 để bật đúng ở phía database.
   useEffect(() => {
     const kenh = supabase.channel('cong-viec-v2')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => tai())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, () => taiDuAn())
       .subscribe();
     return () => { supabase.removeChannel(kenh); };
-  }, [tai]);
+  }, [tai, taiDuAn]);
 
   const nhacNho = async (viec) => {
     const { data, error } = await supabase.rpc('sumi_nhac_nho_viec', {

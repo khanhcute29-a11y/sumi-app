@@ -743,7 +743,10 @@ export async function addShiftCheckin({ staffId, staffName, workDate, shiftLabel
     late_minutes: lateMinutes || 0, wage_earned: wageEarned || 0, reason: reason || null, photo_url: photoUrl || null,
     gps_lat: lat, gps_lng: lng, gps_accuracy_m: Number.isFinite(gpsAccuracy) ? gpsAccuracy : null,
   });
-  if (error) throw error;
+  if (error) {
+    if (error.code === '23505') throw new Error('Bạn đã chấm công vào ca này rồi.');
+    throw error;
+  }
 }
 
 export async function addLeaveRequest({ staffId, staffName, workDate, shiftLabel, branch, reason, photoUrl, leaveFromAt, leaveToAt }) {
@@ -762,7 +765,12 @@ export async function addShiftCheckout({ staffId, staffName, workDate, shiftLabe
     type: 'checkout', checkin_time: new Date().toISOString(), photo_url: photoUrl || null,
     gps_lat: lat, gps_lng: lng, gps_accuracy_m: Number.isFinite(gpsAccuracy) ? gpsAccuracy : null,
   });
-  if (error) throw error;
+  if (error) {
+    // Ca này đã kết thúc rồi (bấm trùng, hoặc index cũ chưa gỡ dưới database) —
+    // hiện thông báo dễ hiểu thay vì để lộ nguyên câu lỗi Postgres ra màn hình.
+    if (error.code === '23505') throw new Error('Ca này đã được kết thúc rồi, không thể ghi thêm lần nữa.');
+    throw error;
+  }
 }
 
 export async function deleteShiftLog(id) {

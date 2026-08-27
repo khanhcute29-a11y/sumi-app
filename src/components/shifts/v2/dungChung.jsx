@@ -1,5 +1,5 @@
 import React from 'react';
-import { phutTrongNgay, gioPhut, caChuanCuaLog } from '../../../lib/chamCong';
+import { phutTrongNgay, gioPhut, caChuanCuaLog, gioLamThuc } from '../../../lib/chamCong';
 
 // Những mảnh dùng chung của giao diện Chấm Công V2.
 //
@@ -15,7 +15,7 @@ export function chuCaiDau(ten) {
   return (t[t.length - 2][0] + t[t.length - 1][0]).toUpperCase();
 }
 
-/** "5 phút" · "1h 20" — cho gọn trên màn hình điện thoại. */
+/** "5p" · "1h20" — viết tắt, dùng ở nơi chật (chip nhỏ, mini-stat). */
 export function doDaiPhut(phut) {
   const p = Math.abs(Math.round(phut || 0));
   if (p < 60) return `${p}p`;
@@ -24,11 +24,64 @@ export function doDaiPhut(phut) {
   return du ? `${g}h${String(du).padStart(2, '0')}` : `${g}h`;
 }
 
+/** "5 phút" · "1 giờ 20 phút" — ghi đầy đủ, dùng cho dòng lịch sử để đọc
+ *  cực rõ ràng, đúng yêu cầu không viết tắt trong nhãn muộn/sớm. */
+export function doDaiPhutDay(phut) {
+  const p = Math.abs(Math.round(phut || 0));
+  if (p < 60) return `${p} phút`;
+  const g = Math.floor(p / 60);
+  const du = p % 60;
+  return du ? `${g} giờ ${du} phút` : `${g} giờ`;
+}
+
 /** Giờ làm thực -> "7h 45" */
 export function gioThanhChu(soGio) {
   if (soGio == null) return '0h 00';
   const tong = Math.max(0, Math.round(soGio * 60));
   return `${Math.floor(tong / 60)}h ${String(tong % 60).padStart(2, '0')}`;
+}
+
+/**
+ * Ghép mỗi lần VÀO CA với đúng lần RA CA của nó theo thứ tự thời gian, cho
+ * TỪNG nhân sự riêng. Một ngày có thể có NHIỀU phiên (nhân sự chấm ca lại
+ * nhiều lần) — mảng trả về liệt kê từng phiên, phiên cuối có thể chưa đóng
+ * (`ra: null`) nếu đang trong ca.
+ *
+ * ⚠️ VÌ SAO CẦN HÀM NÀY, KHÔNG CHỈ ĐỌC TỪNG DÒNG RIÊNG LẺ:
+ * Trigger `sumi_tu_tinh_di_muon` dưới database CHỈ điền `expected_start` cho
+ * dòng loại checkin — dòng checkout LUÔN để trống trường đó. Nếu tính chênh
+ * lệch giờ ra ca bằng cách đọc thẳng `expected_start` của chính dòng checkout
+ * (như trước đây), `caChuanCuaLog` sẽ luôn trả về null trên DỮ LIỆU THẬT, và
+ * nhãn "Tăng ca"/"Về sớm" không bao giờ hiện được — lỗi ẩn vì trên dữ liệu
+ * thử tự bịa `expected_start` cho checkout nên trông như vẫn chạy đúng.
+ * Ghép đúng cặp vào–ra thì dùng CA CỦA LẦN VÀO (dòng có expected_start thật)
+ * để tính cho cả hai đầu của cùng một phiên.
+ */
+export function gomPhien(logs) {
+  const theoNguoi = new Map();
+  [...(logs || [])]
+    .filter((l) => l.type === 'checkin' || l.type === 'checkout')
+    .sort((a, b) => new Date(a.checkin_time || a.created_at) - new Date(b.checkin_time || b.created_at))
+    .forEach((l) => {
+      const id = l.staff_id || '_';
+      if (!theoNguoi.has(id)) theoNguoi.set(id, { dangMo: null, phien: [] });
+      const n = theoNguoi.get(id);
+      if (l.type === 'checkin') {
+        if (n.dangMo) n.phien.push({ vao: n.dangMo, ra: null });   // hiếm: 2 lần vào liên tiếp
+        n.dangMo = l;
+      } else if (l.type === 'checkout' && n.dangMo) {
+        n.phien.push({ vao: n.dangMo, ra: l });
+        n.dangMo = null;
+      }
+      // checkout "mồ côi" (không có checkin trước nó) bị bỏ qua — dữ liệu lạ,
+      // không có phiên nào để ghép.
+    });
+  const tatCa = [];
+  theoNguoi.forEach((n) => {
+    if (n.dangMo) n.phien.push({ vao: n.dangMo, ra: null });
+    tatCa.push(...n.phien);
+  });
+  return tatCa;
 }
 
 /**
@@ -52,9 +105,12 @@ export function nhanChenhLech(log, ca) {
       if (tinh < -720) tinh += 1440;
       lech = muonDB === 0 && tinh > 0 ? 0 : tinh;
     }
-    if (lech > 0) return { chu: `Trễ ${doDaiPhut(lech)}`, loai: 'bad' };
-    if (lech < 0) return { chu: `Sớm ${doDaiPhut(lech)}`, loai: 'good' };
-    return { chu: 'Đúng mốc', loai: 'good' };
+    // Từ ngữ khớp đúng yêu cầu: "Muộn X phút" (đỏ) · "Đúng giờ" (xanh) ·
+    // "Sớm X phút" (xanh). Giờ cụ thể đã hiện ngay cạnh nhãn này rồi (thẻ
+    // <time>), nên không lặp lại số giờ trong chữ.
+    if (lech > 0) return { chu: `Muộn ${doDaiPhutDay(lech)}`, loai: 'bad' };
+    if (lech < 0) return { chu: `Sớm ${doDaiPhutDay(lech)}`, loai: 'good' };
+    return { chu: 'Đúng giờ', loai: 'good' };
   }
 
   if (log.type === 'checkout') {
@@ -64,9 +120,9 @@ export function nhanChenhLech(log, ca) {
     let that = phutTrongNgay(gio);
     if (that < batDau) that += 1440;
     const lech = that - chuan;
-    if (lech > 0) return { chu: `Tăng ca +${doDaiPhut(lech)}`, loai: 'warn' };
-    if (lech < 0) return { chu: `Về sớm ${doDaiPhut(lech)}`, loai: 'bad' };
-    return { chu: 'Đúng giờ tan', loai: 'good' };
+    if (lech > 0) return { chu: `Tăng ca +${doDaiPhutDay(lech)}`, loai: 'warn' };
+    if (lech < 0) return { chu: `Về sớm ${doDaiPhutDay(lech)}`, loai: 'bad' };
+    return { chu: 'Đúng giờ tan ca', loai: 'good' };
   }
 
   return null;
@@ -152,14 +208,22 @@ export function LichSuCham({
   );
   if (!ds.length) return <div className="cc2-empty">{rong}</div>;
 
-  const dong = (l) => (
-    <DongLichSu
-      key={l.id}
-      log={l}
-      ca={caChuanCuaLog(l, danhSachCa, boPhanTheoNguoi[l.staff_id] || null)}
-      tenNguoi={hienTen ? (tenTheoId[l.staff_id] || l.staff_name) : null}
-    />
-  );
+  // Ghép cặp vào–ra để lần RA CA dùng đúng ca của lần VÀO tương ứng — xem lý
+  // do đầy đủ ở chú thích trên `gomPhien`.
+  const phien = gomPhien(ds);
+  const vaoTheoRaId = new Map(phien.filter((p) => p.ra).map((p) => [p.ra.id, p.vao]));
+
+  const dong = (l) => {
+    const logChuan = l.type === 'checkout' ? (vaoTheoRaId.get(l.id) || l) : l;
+    return (
+      <DongLichSu
+        key={l.id}
+        log={l}
+        ca={caChuanCuaLog(logChuan, danhSachCa, boPhanTheoNguoi[l.staff_id] || null)}
+        tenNguoi={hienTen ? (tenTheoId[l.staff_id] || l.staff_name) : null}
+      />
+    );
+  };
 
   if (!gomTheoNgay) return <div className="cc2-history">{ds.map(dong)}</div>;
 

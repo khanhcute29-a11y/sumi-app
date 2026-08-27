@@ -18,20 +18,20 @@ import { localDateStr } from '../lib/date';
 import { IconClipboard, IconCheck, IconClock, IconQuestion } from '../components/icons/FrogIcons';
 import { WeeklyScheduleSection } from '../components/WeeklyScheduleSection';
 import { supabase } from '../lib/supabaseClient';
-import { chuanHoaCa, gomChamCongNgay, tomTatThang, tinhChenhLech, boPhanCuaHoSo, caCuaBoPhan, TEN_BO_PHAN } from '../lib/chamCong';
+import { chuanHoaCa, gomChamCongNgay, tomTatThang, boPhanCuaHoSo, TEN_BO_PHAN } from '../lib/chamCong';
 import ChamCongNhanVien from '../components/shifts/ChamCongNhanVien';
 import ChamCongQuanLy from '../components/shifts/ChamCongQuanLy';
 import ChamCongV2 from '../components/shifts/v2/ChamCongV2';
 import '../styles/cham-cong.css';
 
 // Giao diện Chấm Công V2 (dựng theo mockup time-attendance-v2.html).
-// CHƯA BẬT MẶC ĐỊNH: chỉ hiện khi mở kèm `?ccv2=1`.
-// Nhân viên đang dùng bản cũ không bị ảnh hưởng gì cho tới khi thử xong trên
-// máy thật của từng bộ phận. Bật thật = đổi giá trị mặc định ở dòng dưới.
+// ĐÃ BẬT MẶC ĐỊNH cho mọi người — anh Nghĩa duyệt và chốt bật ngày 27/08/2026.
+// Thêm `?ccv2=0` vào địa chỉ để tạm quay lại bản cũ nếu cần xem lại gấp
+// (chỉ ảnh hưởng máy đang mở, không tắt cho người khác).
 const DUNG_GIAO_DIEN_V2 = (() => {
   try {
-    return new URLSearchParams(window.location.search).get('ccv2') === '1';
-  } catch { return false; }
+    return new URLSearchParams(window.location.search).get('ccv2') !== '0';
+  } catch { return true; }
 })();
 
 const BRANCHES = ['Vĩnh Phú 42', 'Quốc lộ 13'];
@@ -41,15 +41,8 @@ const SHIFT_PRESETS = [
   '🧁 Xưởng Macaron (X41)',
   '🏫 Xưởng 42 (Trường học)',
 ];
-const SHIFT_PRESETS_EXTENDED = [
-  '☕ Teabreak',
-  '🏬 Bán Hàng',
-  '🛵 Giao Hàng',
-  '⚡ Ca Tăng Ca',
-  '☀️ Ca Sáng',
-  '🌤️ Ca Chiều',
-  '🌙 Ca Tối'
-];
+// SHIFT_PRESETS_EXTENDED đã bị bỏ cùng lúc với ô "Chọn ca khác..." trong
+// CheckinModal (không còn nơi nào dùng) — xoá luôn, không để rác trong file.
 
 function calculateNetWorkHours(inTimeStr, outTimeStr) {
   if (!inTimeStr || !outTimeStr) return null;
@@ -79,38 +72,49 @@ function CheckinModal({ staffName, staffId, defaultBranch, danhSachCa = [], boPh
   const now = new Date();
   const [workDate, setWorkDate] = useState(localDateStr(now));
   const [checkinTime, setCheckinTime] = useState(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
-  const [shiftLabel, setShiftLabel] = useState(SHIFT_PRESETS[0]);
+  // Tên ca lấy THẲNG từ bộ phận thật của nhân viên (database đã biết), không
+  // còn bắt tự chọn tay từ danh sách chung chung nữa — tránh chọn nhầm bộ
+  // phận, và đây cũng chỉ là chữ hiển thị (xem ShiftTodayCard.jsx), không ảnh
+  // hưởng gì tới cách tính đi muộn — chuyện đó database tự quyết qua trigger.
+  const [shiftLabel] = useState(() => TEN_BO_PHAN[boPhan] || 'Ca làm việc');
   const [branch, setBranch] = useState(defaultBranch || BRANCHES[0]);
   const [photoUrl, setPhotoUrl] = useState('');
-  const [useGps, setUseGps] = useState(false);
   const [gpsCoords, setGpsCoords] = useState(null);
   const [gpsAccuracy, setGpsAccuracy] = useState(null);
+  const [gpsStatus, setGpsStatus] = useState('dang_lay'); // dang_lay | ok | loi
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  // Get GPS location
-  const captureGps = async () => {
+  // Bắt buộc định vị khi vào ca — tự lấy ngay lúc mở popup (giống Kết thúc ca).
+  const captureGps = () => {
     if (!navigator.geolocation) {
-      setError('Trình duyệt không hỗ trợ GPS');
+      setGpsStatus('loi');
+      setError('Thiết bị/trình duyệt không hỗ trợ định vị GPS.');
       return;
     }
-    try {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude, accuracy } = position.coords;
-          setGpsCoords(`${latitude},${longitude}`);
-          setGpsAccuracy(Number.isFinite(accuracy) ? Math.round(accuracy) : null);
-        },
-        (err) => setError(`GPS lỗi: ${err.message}`)
-      );
-    } catch (e) {
-      setError('Không thể lấy GPS');
-    }
+    setGpsStatus('dang_lay');
+    setError('');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude, accuracy } = position.coords;
+        setGpsCoords(`${latitude},${longitude}`);
+        setGpsAccuracy(Number.isFinite(accuracy) ? Math.round(accuracy) : null);
+        setGpsStatus('ok');
+      },
+      (err) => {
+        setGpsStatus('loi');
+        setError(`Không lấy được vị trí GPS: ${err.message}. Bấm "Thử lấy vị trí lại" hoặc kiểm tra quyền định vị của trình duyệt.`);
+      },
+      { enableHighAccuracy: true, timeout: 15000 }
+    );
   };
+
+  useEffect(() => { captureGps(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = async () => {
     if (!shiftLabel.trim()) { setError('Vui lòng chọn hoặc nhập tên ca làm việc.'); return; }
     if (!photoUrl) { setError('Vui lòng chụp ảnh để xác nhận.'); return; }
+    if (!gpsCoords) { setError('Bắt buộc phải có vị trí GPS mới được vào ca. Bấm "Thử lấy vị trí lại".'); return; }
     setSaving(true);
     setError('');
 
@@ -172,101 +176,15 @@ function CheckinModal({ staffName, staffId, defaultBranch, danhSachCa = [], boPh
           </div>
         </div>
 
-        {/* Ca chuẩn của bộ phận — CHỈ ĐỌC. Nhân viên không tự chọn được mốc
-            tính muộn của chính mình; database mới là nơi quyết. */}
-        {(() => {
-          const cua = caCuaBoPhan(danhSachCa, boPhan);
-          if (!boPhan || !cua.length) {
-            return (
-              <div style={{ padding: '10px 12px', borderRadius: 12, background: '#f9fafb', border: '1px solid #e5e7eb', fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
-                Bộ phận của bạn <b>không theo ca cố định</b> nên lần chấm này không tính đi muộn.
-              </div>
-            );
-          }
-          // Chọn ca GIỐNG HỆT cách database chọn (M-202608260080):
-          // lần chấm thuộc ca nào có khung [mốc − 2 tiếng, giờ tan ca);
-          // rơi vào nhiều ca thì lấy ca có mốc gần nhất.
-          const phut = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
-          const t = phut(checkinTime);
-          let ca = null; let min = Infinity;
-          cua.forEach((c) => {
-            const dau = phut(c.moc) - 120;
-            const dai = (((phut(c.ketThuc) - dau) % 1440) + 1440) % 1440 || 1440;
-            const viTri = (((t - dau) % 1440) + 1440) % 1440;
-            if (viTri >= dai) return;                 // ngoài khung ca này
-            let d = Math.abs(t - phut(c.moc));
-            if (d > 720) d = 1440 - d;
-            if (d < min) { min = d; ca = c; }
-          });
-          const ngoai = !ca;
-          const lech = ngoai ? null : tinhChenhLech(ca, checkinTime, null);
-          return (
-            <div style={{ padding: '12px 14px', borderRadius: 14, background: ngoai ? '#f9fafb' : lech?.loaiVao === 'late' ? '#fffbeb' : '#f0fdf4', border: `1.5px solid ${ngoai ? '#e5e7eb' : lech?.loaiVao === 'late' ? '#fcd34d' : '#86efac'}` }}>
-              <div style={{ fontSize: 11.5, fontWeight: 900, letterSpacing: '.06em', color: '#a08060', textTransform: 'uppercase', marginBottom: 4 }}>
-                Ca chuẩn của bạn · {TEN_BO_PHAN[boPhan] || boPhan}
-              </div>
-              {ngoai ? (
-                <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
-                  Giờ bạn chấm nằm <b>ngoài khung ca</b> của bộ phận nên không tính đi muộn.
-                </div>
-              ) : (
-                <>
-                  <div style={{ fontSize: 15, fontWeight: 900, color: 'var(--text-primary)' }}>
-                    {ca.icon} {ca.ten} · {ca.batDau}–{ca.ketThuc}
-                  </div>
-                  <div style={{ fontSize: 12.5, color: '#725f50', marginTop: 2 }}>
-                    Phải có mặt trước <b>{ca.moc}</b> ({ca.phutSom} phút trước giờ vào ca) · {ca.soGio} tiếng có mặt
-                  </div>
-                  <div style={{ marginTop: 6, fontSize: 14, fontWeight: 900, color: lech.loaiVao === 'late' ? '#b45309' : '#15803d' }}>
-                    {lech.loaiVao === 'late' ? '⏰ ' : lech.loaiVao === 'early' ? '🟢 ' : '✓ '}{lech.nhanVao}
-                    {lech.viPhamDiTre && <span style={{ marginLeft: 6, fontSize: 12, color: '#b42318' }}>· quá 15 phút, sẽ bị ghi nhận vi phạm</span>}
-                  </div>
-                </>
-              )}
-            </div>
-          );
-        })()}
-
-        {/* Shift Selection - Main Shifts Only */}
+        {/* Chi nhánh. Trước đây phần này còn có thêm ô "Chọn tên ca / khâu"
+            (bắt tự chọn tay từ danh sách chung chung) và một ô xem trước
+            "Ca chuẩn của bạn" — cả hai bị bỏ vì THỪA: màn hình Chấm Công đã
+            hiện đúng ca thật của nhân viên (đọc từ database) ngay trước khi
+            mở popup này rồi, không cần lặp lại. Tự chọn tay còn có rủi ro
+            chọn NHẦM bộ phận. Việc tính đi muộn/đúng giờ luôn do database
+            quyết qua trigger — không phụ thuộc gì vào ô đã bỏ này. */}
         <div>
-          <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8 }}>Chọn tên ca / khâu</label>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
-            {SHIFT_PRESETS.map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setShiftLabel(p)}
-                style={{
-                  padding: '8px 10px',
-                  borderRadius: 8,
-                  border: '1px solid var(--border-default)',
-                  background: shiftLabel === p ? 'var(--brand-primary)' : 'var(--surface-sunken)',
-                  color: shiftLabel === p ? '#fff' : 'var(--text-primary)',
-                  fontSize: 12,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  textAlign: 'center',
-                  minHeight: 36
-                }}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-
-          {/* Extended Shifts - Optional */}
-          {!SHIFT_PRESETS.some(p => p === shiftLabel) && (
-            <Select
-              value={shiftLabel}
-              onChange={(e) => setShiftLabel(e.target.value)}
-              options={[
-                { value: '', label: 'Chọn ca khác...' },
-                ...SHIFT_PRESETS_EXTENDED.map(s => ({ value: s, label: s }))
-              ]}
-              style={{ fontSize: 13, marginBottom: 8 }}
-            />
-          )}
-
+          <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8 }}>Chi nhánh</label>
           <Select value={branch} onChange={(e) => setBranch(e.target.value)} options={BRANCHES.map(b => ({ value: b, label: b }))} style={{ fontSize: 13 }} />
         </div>
 
@@ -276,35 +194,33 @@ function CheckinModal({ staffName, staffId, defaultBranch, danhSachCa = [], boPh
           <CameraPhotoField url={photoUrl} onChange={setPhotoUrl} label="" prefix="shift" facingMode="user" />
         </div>
 
-        {/* GPS Toggle */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 12, borderRadius: 12, background: 'var(--surface-sunken)', cursor: 'pointer' }} onClick={() => setUseGps(!useGps)}>
-          <input type="checkbox" checked={useGps} readOnly style={{ cursor: 'pointer', width: 18, height: 18 }} />
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>📍 Bật vị trí GPS</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Ghi lại tọa độ khi vào ca</div>
-          </div>
+        {/* Vị trí GPS — bắt buộc, tự lấy khi mở popup */}
+        <div style={{
+          padding: 12, borderRadius: 12,
+          background: gpsStatus === 'ok' ? '#e6f6ed' : gpsStatus === 'loi' ? '#ffebee' : 'var(--surface-sunken)',
+          border: gpsStatus === 'ok' ? '1px solid #138a53' : gpsStatus === 'loi' ? '1px solid #d32f2f' : '1px solid var(--border-default)',
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>📍 Vị trí GPS (bắt buộc) *</div>
+          {gpsStatus === 'dang_lay' && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Đang lấy vị trí...</div>}
+          {gpsStatus === 'ok' && (
+            <div style={{ fontSize: 12, color: '#09663d', marginTop: 4 }}>
+              ✓ Đã lấy: {gpsCoords}{gpsAccuracy ? ` · sai số ${gpsAccuracy}m` : ''}
+            </div>
+          )}
+          {gpsStatus === 'loi' && (
+            <button
+              onClick={captureGps}
+              disabled={saving}
+              style={{
+                marginTop: 6, width: '100%', padding: '9px 14px', borderRadius: 10,
+                border: '1px solid #d32f2f', background: '#fff', color: '#d32f2f',
+                fontSize: 13, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer',
+              }}
+            >
+              🔄 Thử lấy vị trí lại
+            </button>
+          )}
         </div>
-
-        {useGps && (
-          <button
-            onClick={captureGps}
-            disabled={saving}
-            style={{
-              width: '100%',
-              padding: '10px 14px',
-              borderRadius: 12,
-              border: '1px solid var(--border-default)',
-              background: gpsCoords ? '#e6f6ed' : 'var(--surface-sunken)',
-              color: gpsCoords ? '#09663d' : 'var(--text-primary)',
-              fontSize: 13,
-              fontWeight: 700,
-              cursor: saving ? 'not-allowed' : 'pointer',
-              opacity: saving ? 0.6 : 1
-            }}
-          >
-            {gpsCoords ? `✓ GPS Đã lấy: ${gpsCoords}` : '▶ Lấy vị trí hiện tại'}
-          </button>
-        )}
 
         {/* Error */}
         {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)', padding: 10, borderRadius: 8, background: '#ffebee' }}>{error}</div>}
@@ -316,8 +232,8 @@ function CheckinModal({ staffName, staffId, defaultBranch, danhSachCa = [], boPh
             variant="primary"
             size="sm"
             onClick={submit}
-            disabled={saving || !shiftLabel.trim() || !photoUrl}
-            style={{ flex: 1, opacity: !photoUrl || !shiftLabel.trim() ? 0.5 : 1 }}
+            disabled={saving || !shiftLabel.trim() || !photoUrl || !gpsCoords}
+            style={{ flex: 1, opacity: (!photoUrl || !shiftLabel.trim() || !gpsCoords) ? 0.5 : 1 }}
           >
             {saving ? 'Đang lưu...' : '✓ Bắt đầu ca'}
           </Button>
@@ -333,9 +249,9 @@ function CheckoutModal({ staffName, staffId, activeCheckins, defaultBranch, onCl
   const [workDate, setWorkDate] = useState(localDateStr(now));
   const [checkoutTime, setCheckoutTime] = useState(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
   const [photoUrl, setPhotoUrl] = useState('');
-  const [useGps, setUseGps] = useState(false);
   const [gpsCoords, setGpsCoords] = useState(null);
   const [gpsAccuracy, setGpsAccuracy] = useState(null);
+  const [gpsStatus, setGpsStatus] = useState('dang_lay'); // dang_lay | ok | loi
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -345,29 +261,40 @@ function CheckoutModal({ staffName, staffId, activeCheckins, defaultBranch, onCl
   const outTimeStr = `${workDate}T${checkoutTime}:00`;
   const timeCalc = inTimeStr ? calculateNetWorkHours(inTimeStr, outTimeStr) : null;
 
-  // Get GPS location
-  const captureGps = async () => {
+  // Bắt buộc định vị khi kết thúc ca — tự lấy ngay lúc mở popup, không cần
+  // nhân viên tự bật (trước đây GPS chỉ là tuỳ chọn, dễ bỏ qua).
+  const captureGps = () => {
     if (!navigator.geolocation) {
-      setError('Trình duyệt không hỗ trợ GPS');
+      setGpsStatus('loi');
+      setError('Thiết bị/trình duyệt không hỗ trợ định vị GPS.');
       return;
     }
-    try {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude, accuracy } = position.coords;
-          setGpsCoords(`${latitude},${longitude}`);
-          setGpsAccuracy(Number.isFinite(accuracy) ? Math.round(accuracy) : null);
-        },
-        (err) => setError(`GPS lỗi: ${err.message}`)
-      );
-    } catch (e) {
-      setError('Không thể lấy GPS');
-    }
+    setGpsStatus('dang_lay');
+    setError('');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude, accuracy } = position.coords;
+        setGpsCoords(`${latitude},${longitude}`);
+        setGpsAccuracy(Number.isFinite(accuracy) ? Math.round(accuracy) : null);
+        setGpsStatus('ok');
+      },
+      (err) => {
+        setGpsStatus('loi');
+        setError(`Không lấy được vị trí GPS: ${err.message}. Bấm "Thử lấy vị trí lại" hoặc kiểm tra quyền định vị của trình duyệt.`);
+      },
+      { enableHighAccuracy: true, timeout: 15000 }
+    );
   };
+
+  useEffect(() => { captureGps(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = async () => {
     if (!photoUrl) {
       setError('Vui lòng chụp ảnh để xác nhận');
+      return;
+    }
+    if (!gpsCoords) {
+      setError('Bắt buộc phải có vị trí GPS mới được kết thúc ca. Bấm "Thử lấy vị trí lại".');
       return;
     }
     setSaving(true);
@@ -438,35 +365,33 @@ function CheckoutModal({ staffName, staffId, activeCheckins, defaultBranch, onCl
           <CameraPhotoField url={photoUrl} onChange={setPhotoUrl} label="" prefix="shift" facingMode="user" />
         </div>
 
-        {/* GPS Toggle */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 12, borderRadius: 12, background: 'var(--surface-sunken)', cursor: 'pointer' }} onClick={() => setUseGps(!useGps)}>
-          <input type="checkbox" checked={useGps} readOnly style={{ cursor: 'pointer', width: 18, height: 18 }} />
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>📍 Bật vị trí GPS</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Ghi lại tọa độ khi kết thúc ca</div>
-          </div>
+        {/* Vị trí GPS — bắt buộc, tự lấy khi mở popup */}
+        <div style={{
+          padding: 12, borderRadius: 12,
+          background: gpsStatus === 'ok' ? '#e6f6ed' : gpsStatus === 'loi' ? '#ffebee' : 'var(--surface-sunken)',
+          border: gpsStatus === 'ok' ? '1px solid #138a53' : gpsStatus === 'loi' ? '1px solid #d32f2f' : '1px solid var(--border-default)',
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>📍 Vị trí GPS (bắt buộc) *</div>
+          {gpsStatus === 'dang_lay' && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Đang lấy vị trí...</div>}
+          {gpsStatus === 'ok' && (
+            <div style={{ fontSize: 12, color: '#09663d', marginTop: 4 }}>
+              ✓ Đã lấy: {gpsCoords}{gpsAccuracy ? ` · sai số ${gpsAccuracy}m` : ''}
+            </div>
+          )}
+          {gpsStatus === 'loi' && (
+            <button
+              onClick={captureGps}
+              disabled={saving}
+              style={{
+                marginTop: 6, width: '100%', padding: '9px 14px', borderRadius: 10,
+                border: '1px solid #d32f2f', background: '#fff', color: '#d32f2f',
+                fontSize: 13, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer',
+              }}
+            >
+              🔄 Thử lấy vị trí lại
+            </button>
+          )}
         </div>
-
-        {useGps && (
-          <button
-            onClick={captureGps}
-            disabled={saving}
-            style={{
-              width: '100%',
-              padding: '10px 14px',
-              borderRadius: 12,
-              border: '1px solid var(--border-default)',
-              background: gpsCoords ? '#e6f6ed' : 'var(--surface-sunken)',
-              color: gpsCoords ? '#09663d' : 'var(--text-primary)',
-              fontSize: 13,
-              fontWeight: 700,
-              cursor: saving ? 'not-allowed' : 'pointer',
-              opacity: saving ? 0.6 : 1
-            }}
-          >
-            {gpsCoords ? `✓ GPS Đã lấy: ${gpsCoords}` : '▶ Lấy vị trí hiện tại'}
-          </button>
-        )}
 
         {/* Error */}
         {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)', padding: 10, borderRadius: 8, background: '#ffebee' }}>{error}</div>}
@@ -478,8 +403,8 @@ function CheckoutModal({ staffName, staffId, activeCheckins, defaultBranch, onCl
             variant="primary"
             size="sm"
             onClick={submit}
-            disabled={saving || !photoUrl}
-            style={{ flex: 1, opacity: !photoUrl ? 0.5 : 1 }}
+            disabled={saving || !photoUrl || !gpsCoords}
+            style={{ flex: 1, opacity: (!photoUrl || !gpsCoords) ? 0.5 : 1 }}
           >
             {saving ? 'Đang lưu...' : '✓ Kết thúc ca'}
           </Button>
@@ -532,12 +457,12 @@ function AddManualShiftModal({ staffName, staffId, defaultBranch, onClose, onDon
         <div>
           <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Chọn ca / Bộ phận</label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-            {SHIFT_PRESETS.map((p) => (<button key={p} type="button" onClick={() => setShiftLabel(p)} style={{ padding: '5px 10px', borderRadius: 999, border: '1px solid var(--border-default)', background: shiftLabel === p ? 'var(--brand-primary)' : 'var(--surface-sunken)', color: shiftLabel === p ? '#fff' : 'var(--text-primary)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{p}</button>))}
+            {SHIFT_PRESETS.map((p) => (<button key={p} type="button" onClick={() => setShiftLabel(p)} style={{ padding: '5px 10px', borderRadius: 999, border: '1px solid var(--border-default)', background: shiftLabel === p ? 'var(--action-primary)' : 'var(--surface-sunken)', color: shiftLabel === p ? 'var(--text-on-primary)' : 'var(--text-primary)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{p}</button>))}
           </div>
           <Input placeholder="Hoặc tự gõ tên ca..." value={shiftLabel} onChange={(e) => setShiftLabel(e.target.value)} />
         </div>
         <Select label="Chi nhánh" value={branch} onChange={(e) => setBranch(e.target.value)} options={BRANCHES.map(b => ({ value: b, label: b }))} />
-        {timeCalc && (<div style={{ padding: '10px 12px', borderRadius: 10, background: 'var(--surface-sunken)', fontSize: 13 }}><span>Thời lượng: <b>{timeCalc.grossHours}h</b></span>{timeCalc.lunchDeduction > 0 && <span style={{ color: '#b93e13' }}> (Đã trừ {timeCalc.lunchDeduction}h ăn trưa 11:30–12:30)</span>}<span style={{ display: 'block', marginTop: 4, fontWeight: 800, color: 'var(--brand-primary)' }}>→ Giờ làm thực tế: {timeCalc.netHours} giờ</span></div>)}
+        {timeCalc && (<div style={{ padding: '10px 12px', borderRadius: 10, background: 'var(--surface-sunken)', fontSize: 13 }}><span>Thời lượng: <b>{timeCalc.grossHours}h</b></span>{timeCalc.lunchDeduction > 0 && <span style={{ color: '#b93e13' }}> (Đã trừ {timeCalc.lunchDeduction}h ăn trưa 11:30–12:30)</span>}<span style={{ display: 'block', marginTop: 4, fontWeight: 800, color: 'var(--action-primary)' }}>→ Giờ làm thực tế: {timeCalc.netHours} giờ</span></div>)}
         <Input label="Lý do bổ sung" placeholder="VD: Bổ sung ca làm phụ bánh ngày 23/8..." value={reason} onChange={(e) => setReason(e.target.value)} />
         {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}><Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>Huỷ</Button><Button variant="primary" size="sm" onClick={submit} disabled={saving || !shiftLabel.trim()}>{saving ? 'Đang lưu...' : '✓ Lưu ca làm'}</Button></div>
@@ -698,6 +623,11 @@ export default function ShiftsScreen() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Bản V2 tự vẽ đầu trang riêng (cc2-hero) và không dùng khung giờ nghỉ
+          trưa cố định kiểu banner này — mockup đã bỏ hẳn khối này. Ẩn khi
+          DUNG_GIAO_DIEN_V2 để không hiện chồng lên header của bản mới. */}
+      {!DUNG_GIAO_DIEN_V2 && (
+      <>
       <div className="cc-header" style={{ borderRadius: 18 }}>
         <div className="cc-header-top">
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -732,7 +662,11 @@ export default function ShiftsScreen() {
           <span style={{ fontSize: 13, color: '#725f50' }}>Mặc định toàn tiệm để mọi người sắp xếp nghỉ ngơi (Hệ thống tự động trừ 1 giờ vào tổng giờ làm việc thực tế).</span>
         </div>
       </div>
-      <Tabs tabs={[{ key: 'checkin', label: 'Chấm công realtime' }, { key: 'schedule', label: 'Lịch tuần' }]} active={viewMode} onChange={setViewMode} />
+      </>
+      )}
+      {!DUNG_GIAO_DIEN_V2 && (
+        <Tabs tabs={[{ key: 'checkin', label: 'Chấm công realtime' }, { key: 'schedule', label: 'Lịch tuần' }]} active={viewMode} onChange={setViewMode} />
+      )}
 
       {viewMode === 'checkin' && (
         <div className="cc-wrap">

@@ -26,6 +26,7 @@ import {
   fetchMyHoursThisMonth,
   fetchMyRevenueThisMonth,
   fetchMyAttendanceHistory,
+  fetchMyTodayAttendance,
   fetchMySchedule,
   fetchMyPayroll,
   fetchMyAdvanceRequests,
@@ -39,6 +40,8 @@ import {
   fetchMyOrders,
   fetchCompanyFeed,
 } from '../../../lib/employeeOverviewV4';
+import { chuanHoaCa, boPhanCuaHoSo, caChuanCuaLog } from '../../../lib/chamCong';
+import { gomPhien, nhanChenhLech } from '../../shifts/v2/dungChung';
 
 // ============================================================
 // EMPLOYEE OVERVIEW V4 — nối dữ liệu THẬT (Supabase) cho nhân viên
@@ -72,6 +75,11 @@ const TILES = [
 
 const formatVND = (n) => new Intl.NumberFormat('vi-VN').format(Math.round(n || 0)) + 'đ';
 const tomorrowStr = () => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); };
+// Giờ hiển thị luôn theo múi giờ Việt Nam — chỉ định rõ timeZone, không dựa
+// vào giờ hệ điều hành của thiết bị (an toàn cả khi máy cấu hình sai múi giờ).
+const gioVN = (iso) => iso
+  ? new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' })
+  : '--:--';
 
 function BottomSheet({ title, onClose, children }) {
   return (
@@ -92,7 +100,7 @@ function BottomSheet({ title, onClose, children }) {
 
 // Dùng trực tiếp bên trong app thật (đã có AuthProvider ở gốc cây component
 // trong App.jsx) — tránh lồng 2 lớp AuthProvider không cần thiết.
-export function EmployeeOverviewV4Inner() {
+export function EmployeeOverviewV4Inner({ onNavigate } = {}) {
   const { profile, loading: authLoading } = useAuth();
 
   const [activeSheet, setActiveSheet] = useState(null);
@@ -112,6 +120,7 @@ export function EmployeeOverviewV4Inner() {
   const [rewardsTotal, setRewardsTotal] = useState(null);
   const [orders, setOrders] = useState(null);
   const [feed, setFeed] = useState(null);
+  const [todayAtt, setTodayAtt] = useState(null);   // null = đang tải
 
   const [advanceAmount, setAdvanceAmount] = useState(500000);
   const [advanceReason, setAdvanceReason] = useState('');
@@ -138,6 +147,44 @@ export function EmployeeOverviewV4Inner() {
     fetchMyRewardsTotalThisMonth(profile.id).then(setRewardsTotal).catch(() => {});
     fetchMyOrders(profile.full_name).then(setOrders).catch((e) => setError(e.message));
     fetchCompanyFeed().then(setFeed).catch(() => {});
+  }, [profile?.id]);
+
+  // ── Chấm công HÔM NAY — widget trạng thái trực tiếp trên trang chủ ──────
+  //
+  // Dùng LẠI đúng logic đã kiểm chứng ở phân hệ Chấm Công V2 (`gomPhien` +
+  // `nhanChenhLech`), không viết lại cách tính đi muộn/đúng giờ lần hai —
+  // viết lại là kiểu chắc chắn sẽ lệch nhau giữa hai nơi theo thời gian.
+  //
+  // Nghe thêm sự kiện `sumi-shift-changed` (ShiftsScreen bắn ra sau khi
+  // chấm công thành công) để tự cập nhật ngay — không chỉ lúc màn hình này
+  // được mở lại. Đây là đồng bộ CÙNG THIẾT BỊ/CÙNG TRÌNH DUYỆT qua sự kiện
+  // nội bộ, không phải Supabase Realtime xuyên thiết bị — bảng `shift_logs`
+  // hiện chưa được bật Realtime publication.
+  useEffect(() => {
+    if (!profile?.id) return;
+    let huy = false;
+    const tai = () => {
+      fetchMyTodayAttendance(profile.id)
+        .then(({ logs, caRows }) => {
+          if (huy) return;
+          const danhSachCa = chuanHoaCa(caRows);
+          const boPhan = boPhanCuaHoSo(profile);
+          const phien = gomPhien(logs);
+          const phienHienTai = phien[phien.length - 1] || null;
+          const dangTrongCa = !!(phienHienTai && !phienHienTai.ra);
+          const caPhien = phienHienTai ? caChuanCuaLog(phienHienTai.vao, danhSachCa, boPhan) : null;
+          const devVao = phienHienTai ? nhanChenhLech(phienHienTai.vao, caPhien) : null;
+          const ca = caPhien || danhSachCa.find((c) => c.boPhan === boPhan) || null;
+          setTodayAtt({
+            boPhan, ca, phienHienTai, dangTrongCa, devVao,
+            soCaXong: phien.filter((p) => p.ra).length,
+          });
+        })
+        .catch(() => { if (!huy) setTodayAtt({ loi: true }); });
+    };
+    tai();
+    window.addEventListener('sumi-shift-changed', tai);
+    return () => { huy = true; window.removeEventListener('sumi-shift-changed', tai); };
   }, [profile?.id]);
 
   const loadSheetData = (sheet) => {
@@ -247,6 +294,49 @@ export function EmployeeOverviewV4Inner() {
           <ChevronRight size={18} className="eov4-banner-arrow" />
         </button>
       )}
+
+      {/* 1.5 CHẤM CÔNG HÔM NAY — trạng thái thời gian thực, bấm vào mở
+          thẳng phân hệ Chấm Công chi tiết (tab "Ca Làm Việc"). */}
+      <button
+        className={`eov4-attendance${
+          todayAtt?.dangTrongCa ? (todayAtt.devVao?.loai === 'bad' ? ' is-late' : ' is-working')
+            : todayAtt?.phienHienTai ? ' is-done'
+              : ' is-waiting'
+        }`}
+        onClick={() => onNavigate?.('shifts')}
+      >
+        <div className="eov4-attendance-top">
+          <span className="eov4-attendance-dot">
+            {todayAtt?.dangTrongCa ? '●' : todayAtt?.phienHienTai ? '✓' : '◷'}
+          </span>
+          <div className="eov4-attendance-txt">
+            <small>CHẤM CÔNG HÔM NAY</small>
+            <strong>
+              {!todayAtt ? 'Đang tải…'
+                : todayAtt.loi ? 'Không tải được — bấm để mở'
+                  : todayAtt.dangTrongCa ? 'Đang trong ca'
+                    : todayAtt.phienHienTai
+                      ? `Đã hoàn thành ${todayAtt.soCaXong > 1 ? `${todayAtt.soCaXong} ca` : 'ca'}`
+                      : todayAtt.ca ? 'Chưa bắt đầu ca' : 'Không theo ca cố định'}
+            </strong>
+          </div>
+          <ChevronRight size={18} className="eov4-attendance-arrow" />
+        </div>
+
+        {todayAtt?.phienHienTai && (
+          <div className="eov4-attendance-detail">
+            Vào lúc <b>{gioVN(todayAtt.phienHienTai.vao?.checkin_time)}</b>
+            {todayAtt.devVao && (
+              <span className={`eov4-attendance-tag ${todayAtt.devVao.loai}`}>{todayAtt.devVao.chu}</span>
+            )}
+          </div>
+        )}
+        {!todayAtt?.phienHienTai && todayAtt?.ca && (
+          <div className="eov4-attendance-detail">
+            Ca {todayAtt.ca.ten} · {todayAtt.ca.batDau}–{todayAtt.ca.ketThuc} · có mặt trước <b>{todayAtt.ca.moc}</b>
+          </div>
+        )}
+      </button>
 
       {/* 2. VAI TRÒ & PHÂN CẤP */}
       {roleLabel && (

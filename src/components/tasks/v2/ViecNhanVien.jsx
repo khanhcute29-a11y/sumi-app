@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import TheViecNhanVien from './TheViecNhanVien';
 import BaoXongModal from './BaoXongModal';
+import DonKiemNhiem from './DonKiemNhiem';
 import { nhomViecNhanVien } from '../../../lib/congViec';
+import { AdhocReportModal } from '../AdhocReportModal';
 
 // Màn hình Công việc của THỢ — dựng theo mockup "Quản Lý Công Việc (Thợ Bếp)".
 // Ba khối: Chờ xác nhận → Đang làm → Đã hoàn thành.
@@ -21,6 +23,7 @@ function Khoi({ tieuDe, danhSach, ...props }) {
 export default function ViecNhanVien({ tasks, hoSo, tenTheoId, dangTai, loi, onTaiLai }) {
   const [baoXong, setBaoXong] = useState(null);
   const [loiChung, setLoiChung] = useState('');
+  const [moBaoCao, setMoBaoCao] = useState(false);
 
   const nhom = nhomViecNhanVien(tasks);
   const trong = !nhom.choNhan.length && !nhom.dangLam.length
@@ -36,6 +39,12 @@ export default function ViecNhanVien({ tasks, hoSo, tenTheoId, dangTai, loi, onT
 
   return (
     <div>
+      <div className="cv-quick-actions">
+        <button className="cv-btn full" style={{ background: 'var(--cv-text)', color: '#fff' }} onClick={() => setMoBaoCao(true)}>
+          📝 Tạo việc phát sinh
+        </button>
+      </div>
+
       {loi && <div className="cv-error">⚠️ Không tải được danh sách việc: {loi}</div>}
       {loiChung && <div className="cv-error">⚠️ {loiChung}</div>}
 
@@ -53,6 +62,7 @@ export default function ViecNhanVien({ tasks, hoSo, tenTheoId, dangTai, loi, onT
 
       {!dangTai && (
         <>
+          <DonKiemNhiem hoSo={hoSo} onDaNhan={onTaiLai} />
           <Khoi tieuDe="Chờ xác nhận" danhSach={nhom.choNhan} {...chung} />
           <Khoi tieuDe="Đang làm" danhSach={nhom.dangLam} {...chung} />
           <Khoi tieuDe="Chờ quản lý duyệt" danhSach={nhom.choDuyet} {...chung} />
@@ -68,6 +78,14 @@ export default function ViecNhanVien({ tasks, hoSo, tenTheoId, dangTai, loi, onT
           hoSo={hoSo}
           onClose={() => setBaoXong(null)}
           onXong={async () => { setBaoXong(null); await onTaiLai?.(); }}
+        />
+      )}
+
+      {moBaoCao && (
+        <AdhocReportModal
+          profile={hoSo}
+          onClose={() => setMoBaoCao(false)}
+          onSaved={onTaiLai}
         />
       )}
     </div>

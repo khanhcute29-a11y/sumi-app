@@ -55,7 +55,7 @@ export default function EditOrderModal({ orderId, onClose, onSaved }) {
       const [q, o, m] = await Promise.all([
         supabase.rpc('sumi_quyen_sua_don', { p_order_id: orderId }),
         supabase.from('orders')
-          .select('id,order_code,address,note,required_at,ship_fee,deposit,payment_method,total,version,created_at,status_v2')
+          .select('id,order_code,address,note,required_at,ship_fee,deposit,payment_method,total,version,created_at,status_v2,customer_id,customers(name,phone)')
           .eq('id', orderId).single(),
         supabase.from('order_items')
           .select('id,product_id,name,name_snapshot,quantity,unit,unit_price,specification,display_order')
@@ -70,6 +70,8 @@ export default function EditOrderModal({ orderId, onClose, onSaved }) {
       setDon({
         ...o.data,
         required_at_may: sangGioMay(o.data.required_at),
+        ten_khach: o.data.customers?.name || '',
+        sdt_khach: o.data.customers?.phone || '',
       });
       setMon((m.data || []).map((x, i) => ({
         khoa: x.id || `moi-${i}`,
@@ -146,6 +148,10 @@ export default function EditOrderModal({ orderId, onClose, onSaved }) {
           payment_method: don.payment_method || 'cod',
           total: String(tongDon),
         },
+        // Tên/SĐT nằm ở bảng customers, không phải cột của orders — orders bị
+        // khoá update trực tiếp (RLS orders_update_disabled), nên phải đi qua
+        // RPC. RPC tự tạo customer mới nếu đơn chưa có customer_id.
+        p_customer_patch: (don.ten_khach || don.sdt_khach) ? { name: don.ten_khach || '', phone: don.sdt_khach || '' } : null,
         p_items: mon.map((x, i) => ({
           product_id: x.product_id,
           name: x.name,
@@ -313,6 +319,14 @@ export default function EditOrderModal({ orderId, onClose, onSaved }) {
       <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 8, lineHeight: 1.5 }}>
         Đơn "Bánh có sẵn" đã trừ kho: bớt món sẽ <b>trả lại kho</b>, thêm món sẽ <b>trừ tiếp</b>. Kho không đủ thì hệ thống chặn và giữ nguyên đơn cũ.
       </div>
+    </div>
+
+    {/* ----- Khách hàng ----- */}
+    <div style={oNen}>
+      <label style={oNhan}>👤 Tên khách hàng</label>
+      <input type="text" value={don.ten_khach || ''} onChange={(e) => setDon({ ...don, ten_khach: e.target.value })} style={{ ...oO, minHeight: 44, marginBottom: 12 }} />
+      <label style={oNhan}>📞 Số điện thoại</label>
+      <input type="tel" value={don.sdt_khach || ''} onChange={(e) => setDon({ ...don, sdt_khach: e.target.value })} style={{ ...oO, minHeight: 44 }} />
     </div>
 
     {/* ----- Giao hàng ----- */}

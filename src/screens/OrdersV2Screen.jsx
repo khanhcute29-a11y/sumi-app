@@ -8,6 +8,8 @@ import { useAuth } from '../lib/AuthContext';
 import { supabase } from '../lib/supabaseClient';
 import { canUserViewOrder, getUserWorkflows } from '../lib/orderVisibility';
 import { subscribeToBroadcast, BroadcastEvents } from '../lib/realtimeSync';
+import FinishedGoodsPanel from '../components/warehouse/FinishedGoodsPanel';
+import { ProductionLogModal } from '../components/ProductionLogModal';
 
 const LABELS = {
   awaiting_assignment: 'Đơn chờ làm', awaiting_acceptance: 'Đơn chờ làm', in_production: 'Bếp đang làm',
@@ -55,6 +57,9 @@ export default function OrdersV2Screen() {
   useEffect(() => { refreshDrafts(); }, [showCreate]);
   const [selectedId, setSelectedId] = useState(null);
   const [error, setError] = useState('');
+  const [showKho, setShowKho] = useState(false);
+  const [showProductionLog, setShowProductionLog] = useState(false);
+  const [khoRefreshKey, setKhoRefreshKey] = useState(0);
 
   const load = async () => {
     setLoading(true);
@@ -166,7 +171,14 @@ export default function OrdersV2Screen() {
             </button>
           )}
           {(canCreate || roleCanCreate) && (
-            <button onClick={() => setShowCreate(true)}>＋ TẠO ĐƠN</button>
+            // Style inline vì nút này không còn là con trực tiếp của .mock-page-head
+            // từ khi thêm nút "Nháp" bên cạnh (bọc thêm 1 div) — CSS .mock-page-head>button
+            // trong App.css dùng selector con trực tiếp nên không còn khớp nữa.
+            <button onClick={() => setShowCreate(true)} style={{
+              minHeight: 58, padding: '0 17px', border: 0, borderRadius: 18,
+              background: '#ef642b', color: '#fff', fontSize: 16, fontWeight: 950,
+              boxShadow: '0 6px 0 #b93e13', whiteSpace: 'nowrap', cursor: 'pointer',
+            }}>＋ TẠO ĐƠN</button>
           )}
         </div>
       </div>
@@ -215,7 +227,48 @@ export default function OrdersV2Screen() {
               <b>{orders.filter(item.match).length}</b>
             </button>
           ))}
+
+          {/* Kho Thành Phẩm — nhập kho khi bếp làm xong, xuất kho tự động khi đơn hoàn thành,
+              shipper lấy hàng từ đây. Trước ở màn "Việc" (Ghi Sản Xuất) — sai chỗ, dời về đây
+              vì đây mới là nơi liên kết trực tiếp với luồng đơn hàng. */}
+          <button className="mock-order-overview-kho" onClick={() => setShowKho(true)}
+            style={{
+              gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '14px 16px', borderRadius: 16, border: '1.5px solid #eadcca', background: '#fffaf3',
+              cursor: 'pointer', font: 'inherit', textAlign: 'left',
+            }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 20 }}>🏬</span>
+              <span>
+                <strong style={{ display: 'block', color: '#2d1c10', fontSize: 15 }}>Kho Thành Phẩm</strong>
+                <small style={{ color: '#8c5a3c' }}>Bakery · Macaron · Xưởng 42 (Trường học/Teabreak) — tồn kho &amp; ghi sản xuất</small>
+              </span>
+            </span>
+            <span style={{ color: '#b93e13', fontWeight: 800 }}>Xem →</span>
+          </button>
         </div>
+      )}
+
+      {showKho && (
+        <div onClick={() => setShowKho(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: '#faf6f0', width: '100%', maxWidth: 560, maxHeight: '85vh', overflowY: 'auto', borderRadius: '20px 20px 0 0', padding: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: '#2d1c10' }}>🏬 Kho Thành Phẩm</h3>
+              <button onClick={() => setShowKho(false)} style={{ border: 'none', background: 'none', fontSize: 18, cursor: 'pointer' }}>✕</button>
+            </div>
+            <button onClick={() => setShowProductionLog(true)} style={{ width: '100%', marginBottom: 14, background: '#d96b43', color: '#fff', border: 'none', borderRadius: 12, padding: '10px 0', fontWeight: 800, cursor: 'pointer' }}>
+              📝 Ghi Sản Xuất (nhập kho)
+            </button>
+            <FinishedGoodsPanel key={khoRefreshKey} />
+          </div>
+        </div>
+      )}
+
+      {showProductionLog && (
+        <ProductionLogModal
+          onClose={() => setShowProductionLog(false)}
+          onSaved={() => { setShowProductionLog(false); setKhoRefreshKey((k) => k + 1); }}
+        />
       )}
 
       {/* Màn hình 2: Phân loại 5 luồng trong 1 trạng thái */}

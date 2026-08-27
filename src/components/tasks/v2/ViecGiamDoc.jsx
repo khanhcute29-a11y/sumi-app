@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
 import DuyetViecModal from './DuyetViecModal';
+import SoKetToanKpi from './SoKetToanKpi';
 import {
   TRANG_THAI, tomTatViec, sapXepQuaHan, khauCuaViec,
   locTheoTuKhoa, ngayGio, doDaiThoiGian, treBaoNhieu, tienDoDuAn, quaHan,
@@ -225,6 +226,8 @@ export default function ViecGiamDoc({
           </div>
         </>
       )}
+
+      <SoKetToanKpi />
 
       {xem && (
         <DuyetViecModal viec={xem} tenTho={tenTheoId[xem.assignee_id]}
