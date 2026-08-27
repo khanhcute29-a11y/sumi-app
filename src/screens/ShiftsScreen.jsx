@@ -244,9 +244,9 @@ function CheckoutModal({ staffName, staffId, activeCheckins, defaultBranch, onCl
   const [workDate, setWorkDate] = useState(localDateStr(now));
   const [checkoutTime, setCheckoutTime] = useState(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
   const [photoUrl, setPhotoUrl] = useState('');
-  const [useGps, setUseGps] = useState(false);
   const [gpsCoords, setGpsCoords] = useState(null);
   const [gpsAccuracy, setGpsAccuracy] = useState(null);
+  const [gpsStatus, setGpsStatus] = useState('dang_lay'); // dang_lay | ok | loi
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -256,29 +256,40 @@ function CheckoutModal({ staffName, staffId, activeCheckins, defaultBranch, onCl
   const outTimeStr = `${workDate}T${checkoutTime}:00`;
   const timeCalc = inTimeStr ? calculateNetWorkHours(inTimeStr, outTimeStr) : null;
 
-  // Get GPS location
-  const captureGps = async () => {
+  // Bắt buộc định vị khi kết thúc ca — tự lấy ngay lúc mở popup, không cần
+  // nhân viên tự bật (trước đây GPS chỉ là tuỳ chọn, dễ bỏ qua).
+  const captureGps = () => {
     if (!navigator.geolocation) {
-      setError('Trình duyệt không hỗ trợ GPS');
+      setGpsStatus('loi');
+      setError('Thiết bị/trình duyệt không hỗ trợ định vị GPS.');
       return;
     }
-    try {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude, accuracy } = position.coords;
-          setGpsCoords(`${latitude},${longitude}`);
-          setGpsAccuracy(Number.isFinite(accuracy) ? Math.round(accuracy) : null);
-        },
-        (err) => setError(`GPS lỗi: ${err.message}`)
-      );
-    } catch (e) {
-      setError('Không thể lấy GPS');
-    }
+    setGpsStatus('dang_lay');
+    setError('');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude, accuracy } = position.coords;
+        setGpsCoords(`${latitude},${longitude}`);
+        setGpsAccuracy(Number.isFinite(accuracy) ? Math.round(accuracy) : null);
+        setGpsStatus('ok');
+      },
+      (err) => {
+        setGpsStatus('loi');
+        setError(`Không lấy được vị trí GPS: ${err.message}. Bấm "Thử lấy vị trí lại" hoặc kiểm tra quyền định vị của trình duyệt.`);
+      },
+      { enableHighAccuracy: true, timeout: 15000 }
+    );
   };
+
+  useEffect(() => { captureGps(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = async () => {
     if (!photoUrl) {
       setError('Vui lòng chụp ảnh để xác nhận');
+      return;
+    }
+    if (!gpsCoords) {
+      setError('Bắt buộc phải có vị trí GPS mới được kết thúc ca. Bấm "Thử lấy vị trí lại".');
       return;
     }
     setSaving(true);
@@ -349,35 +360,33 @@ function CheckoutModal({ staffName, staffId, activeCheckins, defaultBranch, onCl
           <CameraPhotoField url={photoUrl} onChange={setPhotoUrl} label="" prefix="shift" facingMode="user" />
         </div>
 
-        {/* GPS Toggle */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 12, borderRadius: 12, background: 'var(--surface-sunken)', cursor: 'pointer' }} onClick={() => setUseGps(!useGps)}>
-          <input type="checkbox" checked={useGps} readOnly style={{ cursor: 'pointer', width: 18, height: 18 }} />
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>📍 Bật vị trí GPS</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Ghi lại tọa độ khi kết thúc ca</div>
-          </div>
+        {/* Vị trí GPS — bắt buộc, tự lấy khi mở popup */}
+        <div style={{
+          padding: 12, borderRadius: 12,
+          background: gpsStatus === 'ok' ? '#e6f6ed' : gpsStatus === 'loi' ? '#ffebee' : 'var(--surface-sunken)',
+          border: gpsStatus === 'ok' ? '1px solid #138a53' : gpsStatus === 'loi' ? '1px solid #d32f2f' : '1px solid var(--border-default)',
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>📍 Vị trí GPS (bắt buộc) *</div>
+          {gpsStatus === 'dang_lay' && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Đang lấy vị trí...</div>}
+          {gpsStatus === 'ok' && (
+            <div style={{ fontSize: 12, color: '#09663d', marginTop: 4 }}>
+              ✓ Đã lấy: {gpsCoords}{gpsAccuracy ? ` · sai số ${gpsAccuracy}m` : ''}
+            </div>
+          )}
+          {gpsStatus === 'loi' && (
+            <button
+              onClick={captureGps}
+              disabled={saving}
+              style={{
+                marginTop: 6, width: '100%', padding: '9px 14px', borderRadius: 10,
+                border: '1px solid #d32f2f', background: '#fff', color: '#d32f2f',
+                fontSize: 13, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer',
+              }}
+            >
+              🔄 Thử lấy vị trí lại
+            </button>
+          )}
         </div>
-
-        {useGps && (
-          <button
-            onClick={captureGps}
-            disabled={saving}
-            style={{
-              width: '100%',
-              padding: '10px 14px',
-              borderRadius: 12,
-              border: '1px solid var(--border-default)',
-              background: gpsCoords ? '#e6f6ed' : 'var(--surface-sunken)',
-              color: gpsCoords ? '#09663d' : 'var(--text-primary)',
-              fontSize: 13,
-              fontWeight: 700,
-              cursor: saving ? 'not-allowed' : 'pointer',
-              opacity: saving ? 0.6 : 1
-            }}
-          >
-            {gpsCoords ? `✓ GPS Đã lấy: ${gpsCoords}` : '▶ Lấy vị trí hiện tại'}
-          </button>
-        )}
 
         {/* Error */}
         {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)', padding: 10, borderRadius: 8, background: '#ffebee' }}>{error}</div>}
@@ -389,8 +398,8 @@ function CheckoutModal({ staffName, staffId, activeCheckins, defaultBranch, onCl
             variant="primary"
             size="sm"
             onClick={submit}
-            disabled={saving || !photoUrl}
-            style={{ flex: 1, opacity: !photoUrl ? 0.5 : 1 }}
+            disabled={saving || !photoUrl || !gpsCoords}
+            style={{ flex: 1, opacity: (!photoUrl || !gpsCoords) ? 0.5 : 1 }}
           >
             {saving ? 'Đang lưu...' : '✓ Kết thúc ca'}
           </Button>
