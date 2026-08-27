@@ -10,6 +10,7 @@ import { MapPin, Camera } from 'lucide-react';
 import { CAKE_FILLINGS } from '../lib/cakePricing';
 import { canViewSchoolOrder, canViewMacaronPrice } from '../lib/orderVisibility';
 import { broadcastEvent, BroadcastEvents } from '../lib/realtimeSync';
+import { getCurrentPositionSmart } from '../lib/geo';
 
 const ORDER_TYPE_LABELS = {
   cake: '🎂 Bánh kem & Bánh lạnh',
@@ -275,27 +276,18 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       setError('Thiết bị không hỗ trợ định vị GPS');
       return;
     }
-    try {
-      setError(''); // Clear previous errors
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setGpsCoords({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-            accuracy: position.coords.accuracy
-          });
-          setError('');
-        },
-        (err) => {
-          const errMsg = err.code === 1 ? 'Vui lòng cấp quyền định vị' :
-                         err.code === 2 ? 'Không lấy được vị trí (thử lại)' :
-                         'Lỗi GPS: ' + err.message;
-          setError(errMsg);
-        },
-        { timeout: 10000, enableHighAccuracy: true }
-      );
-    } catch (e) {
-      setError('Lỗi GPS: ' + e.message);
+    setError('');
+    // Thử GPS độ chính xác cao trước (tối đa 6s, dùng lại vị trí cache trong
+    // 3s để phản hồi tức thì) — quá giờ thì tự hạ xuống định vị mạng, không
+    // chặn nhân viên chờ vô thời hạn.
+    const pos = await getCurrentPositionSmart({
+      onDegraded: () => setError('GPS chính xác cao chậm, đang dùng định vị mạng thay thế...'),
+    });
+    if (pos) {
+      setGpsCoords(pos);
+      setError('');
+    } else {
+      setError('Không lấy được vị trí. Vui lòng cấp quyền định vị và thử lại.');
     }
   };
 

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
 import { CameraPhotoField } from '../../CameraPhotoField';
+import { getCurrentPositionSmart } from '../../../lib/geo';
 
 // "Nhận giao kiêm nhiệm" — mockup task-lifecycle-v2-approved, thẻ xanh
 // "Ai rảnh nhận" trong tab Chờ nhận của nhân viên.
@@ -17,14 +18,17 @@ export default function NhanGiaoKiemNhiemModal({ don, hoSo, onClose, onXong }) {
   const [dangGui, setDangGui] = useState(false);
   const [loi, setLoi] = useState('');
 
-  const layGps = () => {
+  const layGps = async () => {
     if (!navigator.geolocation) { setLoi('Trình duyệt không hỗ trợ GPS.'); return; }
     setDangLayGps(true); setLoi('');
-    navigator.geolocation.getCurrentPosition(
-      (vt) => { setGpsCoords({ lat: vt.coords.latitude, lng: vt.coords.longitude }); setDangLayGps(false); },
-      (err) => { setLoi(`Không lấy được GPS: ${err.message}`); setDangLayGps(false); },
-    );
+    const pos = await getCurrentPositionSmart();
+    if (pos) { setGpsCoords(pos); setDangLayGps(false); }
+    else { setLoi('Không lấy được GPS. Bấm để thử lại.'); setDangLayGps(false); }
   };
+
+  // Tải trước GPS ngay khi mở modal "Nhận giao" — nhân viên không cần tự bấm
+  // lấy vị trí, lúc bấm "Nhận" đã sẵn toạ độ.
+  useEffect(() => { layGps(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const nhan = async () => {
     if (!gpsCoords) { setLoi('Lấy vị trí GPS trước đã.'); return; }

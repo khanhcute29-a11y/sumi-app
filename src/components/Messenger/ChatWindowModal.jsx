@@ -245,25 +245,42 @@ export default function ChatWindowModal({ onClose, profile, initialRoomId = null
     if (!currentRoomId || !profile?.id) return;
     setSending(true);
     setError('');
+    // Cập nhật lạc quan: hiện tin nhắn ngay trên màn hình của người gửi
+    // trước khi chờ round-trip DB + realtime echo. Nếu gửi thất bại thì gỡ
+    // lại dòng tạm và trả input về để nhập lại. Ảnh đính kèm vẫn phải chờ
+    // upload xong thật (không có ảnh giả để hiện lạc quan).
+    const tempId = `temp-${Date.now()}`;
+    const roomIdAtSend = currentRoomId;
+    let attachmentUrl = null;
     try {
-      let attachmentUrl = null;
       if (pendingPhoto) {
-        const uploaded = await uploadFile(pendingPhoto, `chat-attachments/${profile.id}`);
-        attachmentUrl = uploaded.url;
+        attachmentUrl = (await uploadFile(pendingPhoto, `chat-attachments/${profile.id}`)).url;
       }
-      await sendChatMessage({
-        roomId: currentRoomId,
+      const optimisticMsg = {
+        id: tempId, room_id: roomIdAtSend, sender_id: profile.id,
+        content: text || null, attachment_url: attachmentUrl, order_code: extractOrderCode(text),
+        created_at: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, optimisticMsg]);
+      setInputText('');
+      setPendingPhoto(null);
+      setShowMentionPopup(false);
+      setSelectedMentionIds([]);
+
+      const saved = await sendChatMessage({
+        roomId: roomIdAtSend,
         senderId: profile.id,
         content: text || null,
         attachmentUrl,
         orderCode: extractOrderCode(text),
       });
-      setInputText('');
-      setPendingPhoto(null);
-      setShowMentionPopup(false);
-      setSelectedMentionIds([]);
+      // Thay id tạm bằng id thật — để lúc realtime echo cùng dòng này về,
+      // dedup theo id nhận ra đã có sẵn, không hiện trùng 2 lần.
+      setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...saved } : m)));
       if (navTab === 'direct') setDirectListRefreshTick((t) => t + 1);
     } catch (e) {
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      setInputText(text);
       setError(e.message);
     } finally {
       setSending(false);

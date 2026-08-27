@@ -13,6 +13,7 @@ import {
 } from '../lib/queries';
 import { useAuth } from '../lib/AuthContext';
 import { hasAnyRole } from '../lib/roles';
+import { getCurrentPositionSmart } from '../lib/geo';
 import { enqueue } from '../lib/offlineQueue';
 import { localDateStr } from '../lib/date';
 import { IconClipboard, IconCheck, IconClock, IconQuestion } from '../components/icons/FrogIcons';
@@ -86,7 +87,7 @@ function CheckinModal({ staffName, staffId, defaultBranch, danhSachCa = [], boPh
   const [error, setError] = useState('');
 
   // Bắt buộc định vị khi vào ca — tự lấy ngay lúc mở popup (giống Kết thúc ca).
-  const captureGps = () => {
+  const captureGps = async () => {
     if (!navigator.geolocation) {
       setGpsStatus('loi');
       setError('Thiết bị/trình duyệt không hỗ trợ định vị GPS.');
@@ -94,19 +95,20 @@ function CheckinModal({ staffName, staffId, defaultBranch, danhSachCa = [], boPh
     }
     setGpsStatus('dang_lay');
     setError('');
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude, accuracy } = position.coords;
-        setGpsCoords(`${latitude},${longitude}`);
-        setGpsAccuracy(Number.isFinite(accuracy) ? Math.round(accuracy) : null);
-        setGpsStatus('ok');
-      },
-      (err) => {
-        setGpsStatus('loi');
-        setError(`Không lấy được vị trí GPS: ${err.message}. Bấm "Thử lấy vị trí lại" hoặc kiểm tra quyền định vị của trình duyệt.`);
-      },
-      { enableHighAccuracy: true, timeout: 15000 }
-    );
+    // GPS chính xác cao trước (6s, cache 3s) — quá giờ tự hạ xuống định vị
+    // mạng, không treo màn hình chờ nhân viên.
+    const pos = await getCurrentPositionSmart({
+      onDegraded: () => setError('GPS chính xác cao chậm, đang dùng định vị mạng thay thế...'),
+    });
+    if (pos) {
+      setGpsCoords(`${pos.lat},${pos.lng}`);
+      setGpsAccuracy(pos.accuracy);
+      setGpsStatus('ok');
+      setError('');
+    } else {
+      setGpsStatus('loi');
+      setError('Không lấy được vị trí GPS. Bấm "Thử lấy vị trí lại" hoặc kiểm tra quyền định vị của trình duyệt.');
+    }
   };
 
   useEffect(() => { captureGps(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -263,7 +265,7 @@ function CheckoutModal({ staffName, staffId, activeCheckins, defaultBranch, onCl
 
   // Bắt buộc định vị khi kết thúc ca — tự lấy ngay lúc mở popup, không cần
   // nhân viên tự bật (trước đây GPS chỉ là tuỳ chọn, dễ bỏ qua).
-  const captureGps = () => {
+  const captureGps = async () => {
     if (!navigator.geolocation) {
       setGpsStatus('loi');
       setError('Thiết bị/trình duyệt không hỗ trợ định vị GPS.');
@@ -271,19 +273,20 @@ function CheckoutModal({ staffName, staffId, activeCheckins, defaultBranch, onCl
     }
     setGpsStatus('dang_lay');
     setError('');
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude, accuracy } = position.coords;
-        setGpsCoords(`${latitude},${longitude}`);
-        setGpsAccuracy(Number.isFinite(accuracy) ? Math.round(accuracy) : null);
-        setGpsStatus('ok');
-      },
-      (err) => {
-        setGpsStatus('loi');
-        setError(`Không lấy được vị trí GPS: ${err.message}. Bấm "Thử lấy vị trí lại" hoặc kiểm tra quyền định vị của trình duyệt.`);
-      },
-      { enableHighAccuracy: true, timeout: 15000 }
-    );
+    // GPS chính xác cao trước (6s, cache 3s) — quá giờ tự hạ xuống định vị
+    // mạng, không treo màn hình chờ nhân viên.
+    const pos = await getCurrentPositionSmart({
+      onDegraded: () => setError('GPS chính xác cao chậm, đang dùng định vị mạng thay thế...'),
+    });
+    if (pos) {
+      setGpsCoords(`${pos.lat},${pos.lng}`);
+      setGpsAccuracy(pos.accuracy);
+      setGpsStatus('ok');
+      setError('');
+    } else {
+      setGpsStatus('loi');
+      setError('Không lấy được vị trí GPS. Bấm "Thử lấy vị trí lại" hoặc kiểm tra quyền định vị của trình duyệt.');
+    }
   };
 
   useEffect(() => { captureGps(); }, []); // eslint-disable-line react-hooks/exhaustive-deps

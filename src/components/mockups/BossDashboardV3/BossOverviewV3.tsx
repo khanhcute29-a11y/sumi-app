@@ -393,6 +393,13 @@ export function BossOverviewV3Inner() {
   // ── Duyệt/Từ chối khoản chi hoặc tạm ứng lương từ Sổ Cái — ghi thật vào
   // expense_claims hoặc salary_advance_requests tuỳ nguồn của dòng đó ──
   const handleReviewExpense = async (id: string, approve: boolean, source: 'expense' | 'advance' = 'expense') => {
+    // Cập nhật lạc quan: đổi trạng thái dòng này trên màn hình NGAY khi bấm,
+    // không chờ round-trip RPC — bấm Duyệt/Từ chối cảm giác tức thì. Nếu RPC
+    // lỗi thì phục hồi lại đúng danh sách trước đó (snapshot) và báo lỗi.
+    const snapshot = expenseStreams;
+    setExpenseStreams((prev: any[]) => prev.map((e) => (
+      e.id === id ? { ...e, status: approve ? 'pending_accounting' : 'rejected', category: approve ? '✓ Đã duyệt · chờ ghi sổ' : '✕ Đã từ chối' } : e
+    )));
     try {
       if (source === 'advance') await reviewSalaryAdvance(id, approve);
       else await reviewExpenseClaim(id, approve);
@@ -402,6 +409,7 @@ export function BossOverviewV3Inner() {
       setTotalExpense(claims.reduce((s: number, c: any) => s + (Number(c.amount) || 0), 0));
       if (source === 'advance') setPendingAdvances(await fetchPendingSalaryAdvances());
     } catch (e: any) {
+      setExpenseStreams(snapshot);
       showToast(`⚠️ ${e.message || 'Không thao tác được'}`);
     }
   };

@@ -5,6 +5,7 @@ import { VoiceMicButton } from '../components/VoiceMicButton';
 import OrderV2DetailModal from '../components/OrderV2DetailModal';
 import { playShipperCompleteSound } from '../lib/sound';
 import { broadcastEvent, BroadcastEvents } from '../lib/realtimeSync';
+import { getCurrentPositionSmart } from '../lib/geo';
 
 const button = {
   minHeight: 48,
@@ -16,18 +17,17 @@ const button = {
   cursor: 'pointer'
 };
 
-const gps = () =>
-  new Promise((resolve, reject) => {
-    if (!navigator.geolocation) {
-      reject(new Error('Thiết bị không hỗ trợ định vị GPS'));
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      p => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
-      err => reject(new Error('Vui lòng bật GPS trên điện thoại để xác thực vị trí giao hàng')),
-      { enableHighAccuracy: true, timeout: 15000 }
-    );
-  });
+// Không pre-fetch-một-lần ở đây: tài xế di chuyển qua nhiều điểm giao trong
+// 1 phiên màn hình này, vị trí lúc mở màn hình sẽ sai cho các điểm giao sau
+// — lấy tại đúng lúc bấm Bắt đầu/Hoàn thành là đúng, chỉ tối ưu tốc độ +
+// fallback qua getCurrentPositionSmart (cache 3s để bấm liên tiếp không phải
+// chờ lại, tự hạ độ chính xác nếu GPS chậm thay vì treo màn hình).
+const gps = async () => {
+  if (!navigator.geolocation) throw new Error('Thiết bị không hỗ trợ định vị GPS');
+  const pos = await getCurrentPositionSmart();
+  if (!pos) throw new Error('Vui lòng bật GPS trên điện thoại để xác thực vị trí giao hàng');
+  return pos;
+};
 
 export default function ShippingV2Screen() {
   const { profile } = useAuth();
