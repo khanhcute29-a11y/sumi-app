@@ -11,7 +11,7 @@ import { getCurrentPositionSmart } from '../../../lib/geo';
 // cho toàn bộ luồng giao hàng kiêm nhiệm (từ trước khi có bản Việc V2 này).
 // Nếu tạo thêm bảng/RPC riêng ở đây, tiệm sẽ có HAI nơi ghi nhận giao hàng
 // khác nhau — đúng rủi ro anh Nghĩa đã chọn tránh khi duyệt hướng đi.
-export default function NhanGiaoKiemNhiemModal({ don, hoSo, onClose, onXong }) {
+export default function NhanGiaoKiemNhiemModal({ don, hoSo, onClose, onXong, onOptimisticAccept, onAcceptFailed }) {
   const [photoUrl, setPhotoUrl] = useState('');
   const [gpsCoords, setGpsCoords] = useState(null);
   const [dangLayGps, setDangLayGps] = useState(false);
@@ -34,6 +34,11 @@ export default function NhanGiaoKiemNhiemModal({ don, hoSo, onClose, onXong }) {
     if (!gpsCoords) { setLoi('Lấy vị trí GPS trước đã.'); return; }
     if (!photoUrl) { setLoi('Chụp ảnh nhận bánh tại kho trước đã.'); return; }
     setDangGui(true); setLoi('');
+    // Lạc quan: đóng modal + gỡ đơn khỏi danh sách "Chờ nhận" NGAY khi bấm,
+    // không chờ round-trip RPC — người bấm thấy phản hồi tức thì, người khác
+    // đang mở cùng tab cũng đỡ nhắm trúng đơn vừa bị nhận. Nếu RPC lỗi, parent
+    // (DonKiemNhiem) tự đưa đơn trở lại danh sách qua onAcceptFailed.
+    onOptimisticAccept?.();
     try {
       const { data, error } = await supabase.rpc('accept_delivery_assignment_flexible', {
         p_order_id: don.id,
@@ -50,7 +55,7 @@ export default function NhanGiaoKiemNhiemModal({ don, hoSo, onClose, onXong }) {
       if (data && data.success === false) throw new Error(data.error || 'Không nhận được đơn.');
       await onXong?.();
     } catch (e) {
-      setLoi(e?.message || 'Không nhận được đơn. Thử lại giúp tôi.');
+      onAcceptFailed?.(don, e?.message || 'Không nhận được đơn. Thử lại giúp tôi.');
     } finally {
       setDangGui(false);
     }

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
 import NhanGiaoKiemNhiemModal from './NhanGiaoKiemNhiemModal';
+import { showToast } from '../../../lib/toast';
 
 // Thẻ "Đơn Bakery cần giao ngay — Ai rảnh nhận" — mockup task-lifecycle-v2.
 //
@@ -82,7 +83,15 @@ export default function DonKiemNhiem({ hoSo, onDaNhan }) {
           don={dangXem}
           hoSo={hoSo}
           onClose={() => setDangXem(null)}
-          onXong={async () => { setDangXem(null); await tai(); await onDaNhan?.(); }}
+          onOptimisticAccept={() => {
+            setDs((prev) => prev.filter((x) => x.id !== dangXem.id));
+            setDangXem(null);
+          }}
+          onAcceptFailed={(don, msg) => {
+            setDs((prev) => (prev.some((x) => x.id === don.id) ? prev : [don, ...prev]));
+            showToast({ icon: '⚠️', title: 'Không nhận được đơn', message: `${don.order_code} — ${msg}`, tone: 'warning' });
+          }}
+          onXong={async () => { await tai(); await onDaNhan?.(); }}
         />
       )}
     </>
