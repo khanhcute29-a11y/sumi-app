@@ -545,6 +545,48 @@ async function upsertFinishedGoodsStock({ productId, size, branch }, delta) {
   return delta;
 }
 
+// Nhập kho thành phẩm V2 (mockup finished-goods-inventory-v2) — có hạn dùng,
+// ảnh, ngày sản xuất, cửa hàng (Vĩnh Phú 42/Quốc Lộ 13), quy cách, màu
+// (Macaron). Ghi đè metadata lô lên dòng tồn gộp sẵn có — xem giới hạn "1 lô
+// đại diện, không FIFO nhiều lô" ghi trong migration 202608270080.
+export async function addFinishedGoodsEntryV2({
+  productId, productName, size, branch, storeLocation, qty,
+  productionDate, expiryDate, photoUrl, color, packing, staffName,
+}) {
+  const normalizedSize = size || null;
+  const normalizedStore = storeLocation || null;
+  let q = supabase.from('finished_goods_stock').select('*')
+    .eq('product_id', productId).eq('branch', branch);
+  q = normalizedSize === null ? q.is('size', null) : q.eq('size', normalizedSize);
+  q = normalizedStore === null ? q.is('store_location', null) : q.eq('store_location', normalizedStore);
+  const { data: row, error: findErr } = await q.maybeSingle();
+  if (findErr) throw findErr;
+
+  const meta = {
+    production_date: productionDate || null, expiry_date: expiryDate || null,
+    photo_url: photoUrl || null, color: color || null, packing: packing || null,
+  };
+  const delta = Number(qty) || 0;
+
+  if (row) {
+    const newQty = Number(row.qty || 0) + delta;
+    const { error } = await supabase.from('finished_goods_stock')
+      .update({ qty: newQty, updated_at: new Date().toISOString(), ...meta }).eq('id', row.id);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase.from('finished_goods_stock').insert({
+      product_id: productId, size: normalizedSize, branch, store_location: normalizedStore, qty: delta, ...meta,
+    });
+    if (error) throw error;
+  }
+
+  await supabase.from('finished_goods_stock_in_log').insert({
+    product_id: productId, product_name: productName, size: normalizedSize, branch,
+    store_location: normalizedStore, qty: delta, source: 'nhap_kho_v2', staff_name: staffName || null,
+    ...meta,
+  });
+}
+
 export async function fetchFinishedGoodsStock() {
   const { data, error } = await supabase.from('finished_goods_stock').select('*').order('updated_at', { ascending: false });
   if (error) throw error;

@@ -8,8 +8,7 @@ import { useAuth } from '../lib/AuthContext';
 import { supabase } from '../lib/supabaseClient';
 import { canUserViewOrder, getUserWorkflows } from '../lib/orderVisibility';
 import { subscribeToBroadcast, BroadcastEvents } from '../lib/realtimeSync';
-import FinishedGoodsPanel from '../components/warehouse/FinishedGoodsPanel';
-import { ProductionLogModal } from '../components/ProductionLogModal';
+import FinishedGoodsInventoryV2 from '../components/warehouse/FinishedGoodsInventoryV2';
 
 const LABELS = {
   awaiting_assignment: 'Đơn chờ làm', awaiting_acceptance: 'Đơn chờ làm', in_production: 'Bếp đang làm',
@@ -58,8 +57,6 @@ export default function OrdersV2Screen() {
   const [selectedId, setSelectedId] = useState(null);
   const [error, setError] = useState('');
   const [showKho, setShowKho] = useState(false);
-  const [showProductionLog, setShowProductionLog] = useState(false);
-  const [khoRefreshKey, setKhoRefreshKey] = useState(0);
 
   const load = async () => {
     setLoading(true);
@@ -256,19 +253,9 @@ export default function OrdersV2Screen() {
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: '#2d1c10' }}>🏬 Kho Thành Phẩm</h3>
               <button onClick={() => setShowKho(false)} style={{ border: 'none', background: 'none', fontSize: 18, cursor: 'pointer' }}>✕</button>
             </div>
-            <button onClick={() => setShowProductionLog(true)} style={{ width: '100%', marginBottom: 14, background: '#d96b43', color: '#fff', border: 'none', borderRadius: 12, padding: '10px 0', fontWeight: 800, cursor: 'pointer' }}>
-              📝 Ghi Sản Xuất (nhập kho)
-            </button>
-            <FinishedGoodsPanel key={khoRefreshKey} />
+            <FinishedGoodsInventoryV2 />
           </div>
         </div>
-      )}
-
-      {showProductionLog && (
-        <ProductionLogModal
-          onClose={() => setShowProductionLog(false)}
-          onSaved={() => { setShowProductionLog(false); setKhoRefreshKey((k) => k + 1); }}
-        />
       )}
 
       {/* Màn hình 2: Phân loại 5 luồng trong 1 trạng thái */}
