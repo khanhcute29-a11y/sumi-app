@@ -1,6 +1,6 @@
 import { supabase } from './supabaseClient';
 import { ORDER_FLOWS } from '../data/orderCatalogs';
-import { createAdhocTask, fetchApprovalRequests, resolveApprovalRequest, fetchShiftSchedule, fetchShiftConfigs } from './queries';
+import { createAssignedTasks, fetchApprovalRequests, resolveApprovalRequest, fetchShiftSchedule, fetchShiftConfigs } from './queries';
 import { localDateStr, mondayOf, weekDates } from './date';
 
 const STATIONS = [
@@ -150,8 +150,8 @@ export async function fetchAssignableStaff() {
   return data || [];
 }
 
-export async function assignTaskToStaff({ assigneeId, title, description, createdBy }) {
-  await createAdhocTask({ assigneeId, title, description, createdBy });
+export async function assignTaskToStaff({ assigneeId, title, description }) {
+  await createAssignedTasks([{ assignee_id: assigneeId, title, description }]);
 }
 
 // ---- 5. Bảng tin công ty (company_feed_posts) ----
