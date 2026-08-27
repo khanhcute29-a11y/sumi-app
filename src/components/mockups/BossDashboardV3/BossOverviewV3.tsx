@@ -13,9 +13,6 @@ import {
   AlertTriangle,
   X,
   ChevronRight,
-  Signal,
-  Wifi,
-  Battery,
   ClipboardList,
   Calendar,
   DollarSign,
@@ -350,74 +347,26 @@ export function BossOverviewV3Inner() {
   }
 
   return (
-    <div style={{ background: '#dcd3c7', minHeight: '100vh', padding: '16px 8px', boxSizing: 'border-box' }}>
+    <div style={{
+      maxWidth: 480,
+      margin: '0 auto',
+      minHeight: '100vh',
+      backgroundColor: '#faf6f0',
+      position: 'relative',
+      overflowX: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
+      boxSizing: 'border-box',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      color: '#2d1c10'
+    }}>
       {loadError && (
-        <div style={{ maxWidth: 420, margin: '0 auto 8px', background: '#fee2e2', color: '#dc2626', fontSize: 12, fontWeight: 700, padding: '8px 12px', borderRadius: 10, cursor: 'pointer' }} onClick={loadAll}>
+        <div style={{ margin: '8px 8px 0', background: '#fee2e2', color: '#dc2626', fontSize: 12, fontWeight: 700, padding: '8px 12px', borderRadius: 10, cursor: 'pointer' }} onClick={loadAll}>
           ⚠️ {loadError} — bấm để tải lại
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* ── SMARTPHONE FRAME CONTAINER (CHUẨN DI ĐỘNG 420PX) ── */}
-      {/* ========================================================================= */}
-      <div style={{
-        maxWidth: 420,
-        minHeight: 880,
-        maxHeight: '94vh',
-        margin: '8px auto',
-        backgroundColor: '#faf6f0',
-        boxShadow: '0 25px 60px -15px rgba(45, 28, 16, 0.45), 0 0 0 1px rgba(0, 0, 0, 0.1)',
-        borderRadius: 44,
-        border: '12px solid #1c1917',
-        position: 'relative',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        boxSizing: 'border-box',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        color: '#2d1c10'
-      }}>
-
-        {/* Dynamic Island Notch */}
-        <div style={{
-          width: 120,
-          height: 24,
-          background: '#1c1917',
-          borderRadius: '0 0 16px 16px',
-          position: 'absolute',
-          top: 0,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 1001,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}>
-          <div style={{ width: 10, height: 10, background: '#09090b', borderRadius: '50%', border: '1.5px solid #27272a' }} />
-        </div>
-
-        {/* Status Bar */}
-        <div style={{
-          height: 38,
-          padding: '8px 20px 0',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          fontSize: 13,
-          fontWeight: 800,
-          color: '#2d1c10',
-          zIndex: 1000
-        }}>
-          <span>09:41</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Signal size={12} />
-            <Wifi size={13} />
-            <span style={{ fontSize: 11 }}>5G</span>
-            <Battery size={15} />
-          </div>
-        </div>
-
-        {/* Top Header Tag */}
+      {/* Top Header Tag */}
         <div style={{
           padding: '6px 14px 10px',
           display: 'flex',
@@ -1745,8 +1694,6 @@ export function BossOverviewV3Inner() {
             <style>{`@keyframes sumi-boss-spin { to { transform: rotate(360deg); } }`}</style>
           </div>
         )}
-
-      </div>
 
     </div>
   );
