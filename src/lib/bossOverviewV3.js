@@ -1,6 +1,16 @@
 import { supabase } from './supabaseClient';
 import { ORDER_FLOWS } from '../data/orderCatalogs';
-import { createAdhocTask, fetchApprovalRequests, resolveApprovalRequest } from './queries';
+import { createAdhocTask, fetchApprovalRequests, resolveApprovalRequest, fetchShiftSchedule, fetchShiftConfigs } from './queries';
+import { localDateStr, mondayOf, weekDates } from './date';
+
+const STATIONS = [
+  { key: 'bakery', label: 'Bakery' },
+  { key: 'nong', label: 'Bếp Nóng' },
+  { key: 'lanh', label: 'Bếp Lạnh' },
+  { key: 'xuong41', label: 'Xưởng 41' },
+  { key: 'xuong42', label: 'Xưởng 42' },
+];
+const DOW_LABELS = ['Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy', 'Chủ Nhật'];
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const monthStart = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`; };
@@ -208,6 +218,50 @@ export async function fetchTodayShiftReports() {
   const stationById = {};
   (profilesRes.data || []).forEach((p) => { stationById[p.id] = p.station; });
   return (reportsRes.data || []).map((r) => ({ ...r, station: stationById[r.staff_id] || null }));
+}
+
+// ---- 8. Lịch phân ca tuần — toàn công ty (5 khu vực gộp lại) ----
+export async function fetchWeeklyScheduleAllStations() {
+  const days = weekDates(mondayOf(new Date()));
+  const from = localDateStr(days[0]);
+  const to = localDateStr(days[6]);
+
+  const [configs, ...perStation] = await Promise.all([
+    fetchShiftConfigs(),
+    ...STATIONS.map((s) => fetchShiftSchedule({ station: s.key, from, to })),
+  ]);
+
+  const configById = {};
+  configs.forEach((c) => { configById[c.id] = c; });
+
+  const stationLabelByKey = {};
+  STATIONS.forEach((s) => { stationLabelByKey[s.key] = s.label; });
+
+  const rows = [];
+  perStation.forEach((entries, i) => {
+    entries.forEach((e) => {
+      const cfg = configById[e.shift_config_id];
+      const startHour = cfg?.start_time ? Number(String(cfg.start_time).slice(0, 2)) : null;
+      const period = startHour == null ? 'Khác' : startHour < 13 ? 'Sáng' : 'Chiều';
+      rows.push({
+        ...e,
+        stationLabel: stationLabelByKey[STATIONS[i].key],
+        shiftLabel: cfg?.label || 'Ca',
+        period,
+      });
+    });
+  });
+
+  const byDate = {};
+  days.forEach((d) => {
+    const dateStr = localDateStr(d);
+    byDate[dateStr] = { date: dateStr, dow: DOW_LABELS[d.getDay() === 0 ? 6 : d.getDay() - 1], Sáng: [], Chiều: [], Khác: [] };
+  });
+  rows.forEach((r) => {
+    if (byDate[r.work_date]) byDate[r.work_date][r.period].push(r);
+  });
+
+  return { from, to, days: Object.values(byDate), totalAssignments: rows.length };
 }
 
 export { monthStart, todayStr };

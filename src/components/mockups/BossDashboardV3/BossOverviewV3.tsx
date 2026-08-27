@@ -52,6 +52,7 @@ import {
   fetchPendingLeaveRequests,
   reviewLeaveRequest,
   fetchTodayShiftReports,
+  fetchWeeklyScheduleAllStations,
 } from '../../../lib/bossOverviewV3';
 
 const formatVND = (amount: number) => {
@@ -91,11 +92,14 @@ export function BossOverviewV3Inner() {
   // ── Dữ liệu thật: báo cáo cuối ca hôm nay (staff_shift_reports) ──
   const [shiftReports, setShiftReports] = useState<any[]>([]);
 
+  // ── Dữ liệu thật: lịch phân ca tuần toàn công ty (shift_schedule, 5 khu vực) ──
+  const [weeklySchedule, setWeeklySchedule] = useState<{ from: string; to: string; days: any[]; totalAssignments: number }>({ from: '', to: '', days: [], totalAssignments: 0 });
+
   const loadAll = async () => {
     setLoading(true);
     setLoadError('');
     try {
-      const [rev, claims, status, staffOptions, orders, posts, advances, leaves, reports] = await Promise.all([
+      const [rev, claims, status, staffOptions, orders, posts, advances, leaves, reports, schedule] = await Promise.all([
         fetchRevenueByChannel(),
         fetchExpenseClaimsToday(),
         fetchTodayStaffStatus(),
@@ -105,6 +109,7 @@ export function BossOverviewV3Inner() {
         fetchPendingSalaryAdvances(),
         fetchPendingLeaveRequests(),
         fetchTodayShiftReports(),
+        fetchWeeklyScheduleAllStations(),
       ]);
 
       setRevenueStreams(rev.channels.map((c) => ({ id: c.key, channel: c.title, amount: c.amount, percentage: c.percentage, icon: c.icon, note: `${c.count} đơn hoàn thành` })));
@@ -136,6 +141,7 @@ export function BossOverviewV3Inner() {
       setPendingAdvances(advances);
       setPendingLeaves(leaves);
       setShiftReports(reports);
+      setWeeklySchedule(schedule);
     } catch (e: any) {
       setLoadError(e.message || 'Không tải được dữ liệu thật, thử lại sau.');
     } finally {
@@ -766,7 +772,7 @@ export function BossOverviewV3Inner() {
               </div>
               <div style={{ marginTop: 6 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>6. Lịch làm</div>
-                <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>Phân ca tuần này</div>
+                <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>{weeklySchedule.totalAssignments} lượt phân ca tuần này</div>
               </div>
             </div>
           </div>
@@ -1339,21 +1345,38 @@ export function BossOverviewV3Inner() {
               <div style={{ width: 38, height: 4, background: '#cbd5e1', borderRadius: 99, margin: '0 auto 12px' }} />
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, paddingBottom: 8, borderBottom: '1.5px solid #eadcca' }}>
                 <div>
-                  <div style={{ fontSize: 15, fontWeight: 900, color: '#9333ea' }}>📅 Lịch Phân Ca Tuần (30+ Nhân Sự)</div>
-                  <div style={{ fontSize: 11, color: '#725f50' }}>Xưởng 42 · Xưởng 41 · Bakery</div>
+                  <div style={{ fontSize: 15, fontWeight: 900, color: '#9333ea' }}>📅 Lịch Phân Ca Tuần — 5 Khu Vực</div>
+                  <div style={{ fontSize: 11, color: '#725f50' }}>
+                    {weeklySchedule.from && new Date(weeklySchedule.from).toLocaleDateString('vi-VN')} - {weeklySchedule.to && new Date(weeklySchedule.to).toLocaleDateString('vi-VN')} · {weeklySchedule.totalAssignments} lượt phân ca · Bakery · Bếp Nóng · Bếp Lạnh · Xưởng 41 · Xưởng 42
+                  </div>
                 </div>
                 <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <div style={{ background: '#faf6f0', border: '1px solid #eadcca', borderRadius: 10, padding: 8 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 900 }}>Ca Sáng (06:00 - 14:00): 25 Nhân sự</div>
-                  <div style={{ fontSize: 11, color: '#725f50' }}>Võ Đăng Khánh, Lê Hoàng Khoa, Trần Thị Mai, Vũ Thị Yến...</div>
-                </div>
-                <div style={{ background: '#faf6f0', border: '1px solid #eadcca', borderRadius: 10, padding: 8 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 900 }}>Ca Chiều (14:00 - 22:00): 20 Nhân sự</div>
-                  <div style={{ fontSize: 11, color: '#725f50' }}>Đăng Khánh 2, Hồ Hoàng Diễm, Bùi Quốc Bảo, Đoàn Thu Thảo...</div>
-                </div>
+              {weeklySchedule.totalAssignments === 0 && (
+                <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Chưa có ca nào được phân trong tuần này.</div>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {weeklySchedule.days.map((day: any) => {
+                  const sang = day['Sáng'] as any[];
+                  const chieu = day['Chiều'] as any[];
+                  if (sang.length === 0 && chieu.length === 0) return null;
+                  return (
+                    <div key={day.date} style={{ background: '#faf6f0', border: '1px solid #eadcca', borderRadius: 10, padding: 8 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 900, color: '#2d1c10' }}>{day.dow} · {new Date(day.date).toLocaleDateString('vi-VN')}</div>
+                      {sang.length > 0 && (
+                        <div style={{ fontSize: 11, color: '#725f50', marginTop: 3 }}>
+                          <strong>Ca Sáng ({sang.length}):</strong> {sang.map((s: any) => `${s.staff_name} (${s.stationLabel})`).join(', ')}
+                        </div>
+                      )}
+                      {chieu.length > 0 && (
+                        <div style={{ fontSize: 11, color: '#725f50', marginTop: 3 }}>
+                          <strong>Ca Chiều ({chieu.length}):</strong> {chieu.map((s: any) => `${s.staff_name} (${s.stationLabel})`).join(', ')}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
