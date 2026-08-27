@@ -394,11 +394,12 @@ export function AccountantOverviewV1Inner() {
                   let dateStr = '';
                   try { dateStr = r?.occurred_at ? new Date(r.occurred_at).toLocaleString('vi-VN') : ''; } catch { dateStr = ''; }
                   return (
-                    <div key={r?.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', border: '1px solid #eadcca', borderRadius: 12, padding: '10px 12px' }}>
+                    <div key={r?.id} onClick={() => r?.receiptUrl && window.open(r.receiptUrl, '_blank', 'noopener')}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', border: '1px solid #eadcca', borderRadius: 12, padding: '10px 12px', cursor: r?.receiptUrl ? 'pointer' : 'default' }}>
                       <span style={{ fontSize: 18 }}>{r?.type === 'chi' ? '➖' : '➕'}</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 12.5, fontWeight: 800, color: '#2d1c10', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r?.label || 'Giao dịch'}</div>
-                        <div style={{ fontSize: 10.5, color: '#8c7664' }}>{dateStr}</div>
+                        <div style={{ fontSize: 10.5, color: '#8c7664' }}>{dateStr}{r?.receiptUrl && ' · 📎 Có ảnh chứng từ'}</div>
                       </div>
                       <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12.5, fontWeight: 900, color: r?.type === 'chi' ? '#4A2610' : '#3F6C51', whiteSpace: 'nowrap' }}>
                         {r?.type === 'chi' ? '-' : '+'}{formatVND(r?.amount)}
@@ -490,8 +491,8 @@ export function AccountantOverviewV1Inner() {
 
                 <div style={{ fontSize: 12, fontWeight: 900, color: '#2d1b10', marginBottom: 6 }}>📷 Ảnh chứng từ chi tiền (bắt buộc)</div>
                 <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 48, border: '2px dashed #eadcca', borderRadius: 12, cursor: 'pointer', marginBottom: 16, fontSize: 13, fontWeight: 700, color: '#725f50' }}>
-                  {disburseReceipt ? `📎 ${disburseReceipt.name}` : '📷 Chụp / chọn ảnh chứng từ'}
-                  <input hidden type="file" accept="image/*" capture="environment" onChange={(e) => setDisburseReceipt(e.target.files?.[0] || null)} />
+                  {disburseReceipt ? `📎 ${disburseReceipt.name}` : '📷 Chụp ảnh hoặc chọn ảnh chuyển khoản có sẵn'}
+                  <input hidden type="file" accept="image/*" onChange={(e) => setDisburseReceipt(e.target.files?.[0] || null)} />
                 </label>
 
                 <button onClick={() => handleMarkPaid(selectedExpense?.id)} disabled={!disburseMethod || !disburseReceipt || disbursing}
@@ -531,8 +532,8 @@ export function AccountantOverviewV1Inner() {
 
                 <div style={{ fontSize: 12, fontWeight: 900, color: '#2d1b10', marginBottom: 6 }}>📷 Ảnh chứng từ chi tiền (bắt buộc)</div>
                 <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 48, border: '2px dashed #eadcca', borderRadius: 12, cursor: 'pointer', marginBottom: 16, fontSize: 13, fontWeight: 700, color: '#725f50' }}>
-                  {disburseReceipt ? `📎 ${disburseReceipt.name}` : '📷 Chụp / chọn ảnh chứng từ'}
-                  <input hidden type="file" accept="image/*" capture="environment" onChange={(e) => setDisburseReceipt(e.target.files?.[0] || null)} />
+                  {disburseReceipt ? `📎 ${disburseReceipt.name}` : '📷 Chụp ảnh hoặc chọn ảnh chuyển khoản có sẵn'}
+                  <input hidden type="file" accept="image/*" onChange={(e) => setDisburseReceipt(e.target.files?.[0] || null)} />
                 </label>
 
                 <button onClick={() => handlePayAdvance(selectedAdvance?.id)} disabled={!disburseMethod || !disburseReceipt || disbursing}

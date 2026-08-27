@@ -65,14 +65,29 @@ export async function fetchPendingDirectorTotals() {
 }
 
 // ---- 4. Sổ chi (cashbook_entries thật) — lọc theo kỳ tháng ----
+// cashbook_entries không lưu ảnh chứng từ (ảnh nằm ở expense_claims /
+// salary_advance_requests.disbursed_receipt_url) — join ngược qua
+// cashbook_entry_id để dòng sổ chi bấm vào xem lại được ảnh đã chi.
 export async function fetchLedgerForMonth(monthKey = monthKeyOf()) {
   const from = monthStartOf(monthKey);
   const to = monthEndOf(monthKey);
   const rows = await fetchCashbookEntries({ since: `${from}T00:00:00` });
-  return (rows || []).filter((r) => {
+  const filtered = (rows || []).filter((r) => {
     const d = String(r?.occurred_at || '').slice(0, 10);
     return d >= from && d <= to;
   });
+  const entryIds = filtered.map((r) => r.id).filter(Boolean);
+  if (entryIds.length === 0) return filtered;
+
+  const [claimsRes, advancesRes] = await Promise.all([
+    supabase.from('expense_claims').select('cashbook_entry_id, disbursed_receipt_url, disbursed_payment_method').in('cashbook_entry_id', entryIds),
+    supabase.from('salary_advance_requests').select('cashbook_entry_id, disbursed_receipt_url, disbursed_payment_method').in('cashbook_entry_id', entryIds),
+  ]);
+  const receiptByEntry = {};
+  [...(claimsRes.data || []), ...(advancesRes.data || [])].forEach((row) => {
+    if (row.disbursed_receipt_url) receiptByEntry[row.cashbook_entry_id] = row;
+  });
+  return filtered.map((r) => ({ ...r, receiptUrl: receiptByEntry[r.id]?.disbursed_receipt_url || null, paymentMethod: receiptByEntry[r.id]?.disbursed_payment_method || null }));
 }
 
 // ---- 5. Lương/KPI: tổng hợp tạm ứng đã trả + chi hộ đã ghi sổ trong tháng, theo nhân sự ----

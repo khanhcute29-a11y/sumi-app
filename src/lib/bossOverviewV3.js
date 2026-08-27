@@ -60,6 +60,33 @@ export async function reviewExpenseClaim(id, approve, note) {
   return data;
 }
 
+// ---- 2b. Sổ cái hợp nhất: expense_claims + salary_advance_requests hôm nay ----
+// Trước đây widget "Sổ Cái Khoản Chi Tiêu Hôm Nay" chỉ đọc expense_claims nên
+// tạm ứng lương đã chi (salary_advance_requests) "biến mất" khỏi mắt Giám đốc
+// dù đã ghi sổ đúng trong database (có cashbook_entry_id, đã trừ lương).
+export async function fetchExpenseAndAdvanceLedgerToday() {
+  const since = `${todayStr()}T00:00:00`;
+  const [claimsRes, advancesRes] = await Promise.all([
+    supabase.from('expense_claims').select('*').gte('created_at', since).order('created_at', { ascending: false }),
+    supabase.from('salary_advance_requests').select('*').gte('created_at', since).order('created_at', { ascending: false }),
+  ]);
+  if (claimsRes.error) throw claimsRes.error;
+  if (advancesRes.error) throw advancesRes.error;
+  const claims = (claimsRes.data || []).map((c) => ({ ...c, source: 'expense' }));
+  const advances = (advancesRes.data || []).map((a) => ({
+    ...a,
+    source: 'advance',
+    description: `Tạm ứng lương — ${a.reason || ''}`.trim(),
+    claimant_name: a.employee_name,
+    occurred_at: a.paid_at || a.created_at,
+    // 'paid' của tạm ứng tương đương 'recorded' của khoản chi (đã ghi sổ xong) — gộp nhãn hiển thị.
+    status: a.status === 'paid' ? 'recorded' : a.status,
+  }));
+  return [...claims, ...advances].sort(
+    (x, y) => new Date(y.occurred_at || y.created_at).getTime() - new Date(x.occurred_at || x.created_at).getTime()
+  );
+}
+
 // ---- 3. Trạng thái chấm công toàn công ty hôm nay ----
 export async function fetchTodayStaffStatus() {
   const today = todayStr();

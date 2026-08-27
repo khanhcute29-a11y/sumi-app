@@ -41,7 +41,7 @@ import { supabase } from '../../../lib/supabaseClient';
 import { fetchShiftLogsRange } from '../../../lib/queries';
 import {
   fetchRevenueByChannel,
-  fetchExpenseClaimsToday,
+  fetchExpenseAndAdvanceLedgerToday,
   reviewExpenseClaim,
   fetchTodayStaffStatus,
   remindStaff,
@@ -254,7 +254,7 @@ export function BossOverviewV3Inner() {
     try {
       const [rev, claims, status, staffOptions, orders, posts, advances, leaves, reports, schedule] = await Promise.all([
         fetchRevenueByChannel(),
-        fetchExpenseClaimsToday(),
+        fetchExpenseAndAdvanceLedgerToday(),
         fetchTodayStaffStatus(),
         fetchAssignableStaff(),
         listOrdersV2(),
@@ -274,9 +274,10 @@ export function BossOverviewV3Inner() {
         amount: Number(c.amount) || 0,
         category: c.status === 'pending_director' ? '⏳ Chờ Sếp duyệt' : c.status === 'pending_accounting' ? '✓ Đã duyệt · chờ ghi sổ' : c.status === 'recorded' ? '✓ Đã ghi sổ' : '✕ Đã từ chối',
         time: new Date(c.occurred_at || c.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-        icon: '💸',
+        icon: c.source === 'advance' ? '🏦' : '💸',
         status: c.status,
         claimantName: c.claimant_name,
+        source: c.source,
       })));
       setTotalExpense(claims.reduce((s: number, c: any) => s + (Number(c.amount) || 0), 0));
 
@@ -358,18 +359,21 @@ export function BossOverviewV3Inner() {
     setActiveSheet('order_drawer');
   };
 
-  // ── Duyệt/Từ chối khoản chi — ghi thật vào expense_claims ──
-  const handleReviewExpense = async (id: string, approve: boolean) => {
+  // ── Duyệt/Từ chối khoản chi hoặc tạm ứng lương từ Sổ Cái — ghi thật vào
+  // expense_claims hoặc salary_advance_requests tuỳ nguồn của dòng đó ──
+  const handleReviewExpense = async (id: string, approve: boolean, source: 'expense' | 'advance' = 'expense') => {
     try {
-      await reviewExpenseClaim(id, approve);
+      if (source === 'advance') await reviewSalaryAdvance(id, approve);
+      else await reviewExpenseClaim(id, approve);
       showToast(approve ? '✓ Sếp đã DUYỆT khoản chi' : '✕ Sếp đã từ chối khoản chi');
-      const claims = await fetchExpenseClaimsToday();
+      const claims = await fetchExpenseAndAdvanceLedgerToday();
       setExpenseStreams(claims.map((c: any) => ({
         id: c.id, title: c.description || c.note || 'Khoản chi', amount: Number(c.amount) || 0,
         category: c.status === 'pending_director' ? '⏳ Chờ Sếp duyệt' : c.status === 'pending_accounting' ? '✓ Đã duyệt · chờ ghi sổ' : c.status === 'recorded' ? '✓ Đã ghi sổ' : '✕ Đã từ chối',
-        time: new Date(c.occurred_at || c.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }), icon: '💸', status: c.status, claimantName: c.claimant_name,
+        time: new Date(c.occurred_at || c.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }), icon: c.source === 'advance' ? '🏦' : '💸', status: c.status, claimantName: c.claimant_name, source: c.source,
       })));
       setTotalExpense(claims.reduce((s: number, c: any) => s + (Number(c.amount) || 0), 0));
+      if (source === 'advance') setPendingAdvances(await fetchPendingSalaryAdvances());
     } catch (e: any) {
       showToast(`⚠️ ${e.message || 'Không thao tác được'}`);
     }
@@ -1178,10 +1182,10 @@ export function BossOverviewV3Inner() {
                       </div>
                       {exp.status === 'pending_director' && (
                         <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                          <button onClick={() => handleReviewExpense(exp.id, true)} style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 8, padding: '7px 0', fontWeight: 900, fontSize: 11.5, cursor: 'pointer' }}>
+                          <button onClick={() => handleReviewExpense(exp.id, true, exp.source)} style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 8, padding: '7px 0', fontWeight: 900, fontSize: 11.5, cursor: 'pointer' }}>
                             ✓ Duyệt Chi
                           </button>
-                          <button onClick={() => handleReviewExpense(exp.id, false)} style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, padding: '7px 0', fontWeight: 900, fontSize: 11.5, cursor: 'pointer' }}>
+                          <button onClick={() => handleReviewExpense(exp.id, false, exp.source)} style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, padding: '7px 0', fontWeight: 900, fontSize: 11.5, cursor: 'pointer' }}>
                             ✕ Từ Chối
                           </button>
                         </div>
