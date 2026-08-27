@@ -9,7 +9,7 @@ import {
   countNewOrders, countKitchenActiveOrders, countPendingApprovals, countOpenIncidents,
   fetchOrderById, deductFinishedGoodsStockForOrder,
 } from './lib/queries';
-import { navBadgeVisibility } from './lib/roles';
+import { navBadgeVisibility, hasAnyRole } from './lib/roles';
 import { initAudioUnlock } from './lib/sound';
 import { useOrderNotifications } from './lib/useOrderNotifications';
 import { requestNotificationPermission, playAlertSound, preloadAlertAudio } from './lib/alarmSound';
@@ -52,11 +52,16 @@ import MobileHomeScreen from './screens/MobileHomeScreen';
 import MobileProfileScreen from './screens/MobileProfileScreen';
 import CompensationScreen from './screens/CompensationScreen';
 import FinanceRequestsScreen from './screens/FinanceRequestsScreen';
+import { AccountantOverviewV1Inner } from './components/mockups/AccountantDashboard/AccountantOverviewV1';
 import CompanyFeedScreen from './screens/CompanyFeedScreen';
 import VisualGuidesScreen from './screens/VisualGuidesScreen';
 import { applyUiScale, getUiScale } from './lib/uiScale';
 import { NavBadge } from './components/navigation/NavBadge';
-import { IconDashboard, IconShipping, IconProducts, IconShifts, IconReports, IconCustomers, IconStaff, IconSettings, IconCheck, IconWarning, IconClipboard, IconMoney } from './components/icons/FrogIcons';
+import { IconDashboard, IconShipping, IconProducts, IconShifts, IconReports, IconCustomers, IconStaff, IconSettings, IconCheck, IconWarning, IconClipboard, IconMoney, IconReceipt } from './components/icons/FrogIcons';
+
+// Vai trò được xử lý thu-chi thật (khớp is_finance_operator() phía database) —
+// chỉ nhóm này mới thấy mục "Kế Toán Tổng Quan" trong menu.
+const FINANCE_ROLES = ['owner', 'admin', 'accountant', 'cashier'];
 import { loadFeatureFlags } from './lib/featureFlags';
 
 const MORE_ITEMS = [
@@ -80,12 +85,12 @@ const MORE_ITEMS = [
   { key: 'visualGuides', label: 'Hướng Dẫn Bằng Ảnh', Icon: IconClipboard },
 ];
 
-function MoreSheet({ onClose, onSelect, badges = {} }) {
+function MoreSheet({ onClose, onSelect, badges = {}, items = MORE_ITEMS }) {
   return (
     <div className="sb-more-sheet" style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', zIndex: 60, display: 'flex', alignItems: 'flex-end' }} onClick={onClose}>
       <div style={{ background: 'var(--surface-card)', width: '100%', borderRadius: '20px 20px 0 0', padding: '20px', display: 'flex', flexDirection: 'column', gap: 4 }} onClick={(e) => e.stopPropagation()}>
         <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)', marginBottom: 8 }}>Thêm</div>
-        {MORE_ITEMS.map((it) => (
+        {items.map((it) => (
           <button key={it.key} onClick={() => { onSelect(it.key); onClose(); }} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 6px', border: 'none', background: 'none', textAlign: 'left', font: 'var(--text-body-lg)', color: 'var(--text-primary)', cursor: 'pointer' }}>
             <it.Icon size={20} style={{ color: 'var(--text-primary)' }} /><span style={{ flex: 1 }}>{it.label}</span><NavBadge count={badges[it.key]} />
           </button>
@@ -314,9 +319,15 @@ function OpsApp({ onSignOut }) {
   const screens = {
     home: <MobileHomeScreen onNavigate={setTab} />, feed: <CompanyFeedScreen />,
     dashboard: <DashboardScreen />, orders: <OrdersV2Screen />, kds: <KdsScreen initialStation={kdsStation} />, warehouse: <WarehouseScreen branch={warehouseBranch} onBranchChange={setWarehouseBranch} />, cashbook: <CashbookScreen />,
-    shipping: featureFlags.delivery_v2 ? <ShippingV2Screen /> : <ShippingScreen />, products: <ProductsScreen />, shifts: <ShiftsScreen />, compensation: <CompensationScreen />, financeRequests: <FinanceRequestsScreen />, approvals: <ApprovalRequestsScreen />, tasks: <TasksScreen />, incidents: <IncidentsScreen />, reports: <ReportsScreen />, kpi: featureFlags.kpi_v2 ? <KpiV2Screen /> : <KpiScreen />, inbox: <InboxV2Screen />, crm: <CustomersScreen />, staff: <StaffScreen />, settings: <SettingsScreen onSignOut={onSignOut} />, visualGuides: <VisualGuidesScreen />, staffTasks: <StaffTasksAssignedScreen />, kpiDashboard: <KpiDashboardScreen />, schoolRevenue: <SchoolRevenueScreen />, profile: <MobileProfileScreen onSignOut={onSignOut} onNavigate={setTab} />,
+    shipping: featureFlags.delivery_v2 ? <ShippingV2Screen /> : <ShippingScreen />, products: <ProductsScreen />, shifts: <ShiftsScreen />, compensation: <CompensationScreen />, financeRequests: <FinanceRequestsScreen />, accountantOverview: <AccountantOverviewV1Inner />, approvals: <ApprovalRequestsScreen />, tasks: <TasksScreen />, incidents: <IncidentsScreen />, reports: <ReportsScreen />, kpi: featureFlags.kpi_v2 ? <KpiV2Screen /> : <KpiScreen />, inbox: <InboxV2Screen />, crm: <CustomersScreen />, staff: <StaffScreen />, settings: <SettingsScreen onSignOut={onSignOut} />, visualGuides: <VisualGuidesScreen />, staffTasks: <StaffTasksAssignedScreen />, kpiDashboard: <KpiDashboardScreen />, schoolRevenue: <SchoolRevenueScreen />, profile: <MobileProfileScreen onSignOut={onSignOut} onNavigate={setTab} />,
   };
   const isBottomKey = (k) => ['home', 'feed', 'orders', 'tasks', 'profile'].includes(k);
+  // Chỉ Kế toán/Thu ngân/Quản lý/Giám đốc thấy mục "Kế Toán Tổng Quan" — khớp
+  // is_finance_operator() chặn ở RPC phía database.
+  const isFinanceRole = hasAnyRole(profile, FINANCE_ROLES);
+  const moreItems = isFinanceRole
+    ? [...MORE_ITEMS, { key: 'accountantOverview', label: 'Kế Toán Tổng Quan', Icon: IconReceipt }]
+    : MORE_ITEMS;
   return (
     <div className="sb-shell">
       <ToastHost />
@@ -324,7 +335,7 @@ function OpsApp({ onSignOut }) {
       <UpdateRequiredModal />
       <ConnectivityBanner />
       <div className="sb-body">
-        <div className="sb-sidebar"><Sidebar active={tab} activeStation={kdsStation} onSelectStation={setKdsStation} activeBranch={warehouseBranch} onSelectBranch={setWarehouseBranch} onSelect={setTab} badges={badgeCounts} /></div>
+        <div className="sb-sidebar"><Sidebar active={tab} activeStation={kdsStation} onSelectStation={setKdsStation} activeBranch={warehouseBranch} onSelectBranch={setWarehouseBranch} onSelect={setTab} badges={badgeCounts} extraItems={isFinanceRole ? [{ key: 'accountantOverview', label: 'Kế Toán Tổng Quan', Icon: IconReceipt }] : []} /></div>
         <div className="sb-content">
           {screens[tab]}
         </div>
@@ -333,7 +344,7 @@ function OpsApp({ onSignOut }) {
         <BottomNav active={isBottomKey(tab) ? tab : ''} onSelect={setTab} onMore={() => setShowMore(true)} badges={badgeCounts}
           style={{ position: 'static', left: 'auto', right: 'auto', bottom: 'auto', width: '100%', flexShrink: 0 }} />
       </div>
-      {showMore && <MoreSheet onClose={() => setShowMore(false)} onSelect={setTab} badges={badgeCounts} />}
+      {showMore && <MoreSheet onClose={() => setShowMore(false)} onSelect={setTab} badges={badgeCounts} items={moreItems} />}
       <ChatLauncher profile={profile} />
     </div>
   );

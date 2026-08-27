@@ -47,9 +47,10 @@ function useSubmenus({ activeStation, onSelectStation, activeBranch, onSelectBra
   };
 }
 
-export function Sidebar({ active = 'orders', activeStation, onSelectStation, activeBranch, onSelectBranch, onSelect, brand = 'Sumi Bakery', style, badges = {} }) {
+export function Sidebar({ active = 'orders', activeStation, onSelectStation, activeBranch, onSelectBranch, onSelect, brand = 'Sumi Bakery', style, badges = {}, extraItems = [] }) {
   const [openKeys, setOpenKeys] = useState({ [active]: true });
   const submenus = useSubmenus({ activeStation, onSelectStation, activeBranch, onSelectBranch });
+  const allItems = [...items, ...extraItems];
 
   return (
     <nav style={{
@@ -58,7 +59,7 @@ export function Sidebar({ active = 'orders', activeStation, onSelectStation, act
     }}>
       <div style={{ padding: '20px 20px 16px', font: 'var(--text-title)', color: 'var(--brand-brown)' }}>{brand}</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '0 10px', flex: 1, overflowY: 'auto' }}>
-        {items.map((it) => {
+        {allItems.map((it) => {
           const isActive = it.key === active;
           const iconColor = isActive ? 'var(--primary-700)' : 'var(--text-primary)';
           const submenu = submenus[it.key];
