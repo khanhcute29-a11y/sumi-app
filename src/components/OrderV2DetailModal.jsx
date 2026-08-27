@@ -357,10 +357,15 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       if (upErr) throw upErr;
 
       // Get signed URL for photo
-      const { data: { publicUrl } } = supabase.storage.from('uploads').getPublicUrl(photoPath);
+      // ⚠️ KHÔNG đặt tên biến destructure là `data` — component đã có state
+      // `data` (đơn hàng) ở phần trên; const `data` cục bộ trong CÙNG block
+      // sẽ che luôn biến ngoài CHO CẢ QUÃNG TRƯỚC NÓ (temporal dead zone),
+      // y hệt lỗi thật đã vá ở completeDelivery() bên dưới.
+      const { data: urlData } = supabase.storage.from('uploads').getPublicUrl(photoPath);
+      const publicUrl = urlData.publicUrl;
 
       // Call RPC to accept delivery
-      const { data, error } = await supabase.rpc('accept_delivery_assignment_flexible', {
+      const { data: rpcData, error } = await supabase.rpc('accept_delivery_assignment_flexible', {
         p_order_id: orderId,
         p_assigned_staff_id: profile.id,
         p_assigned_staff_name: profile.full_name || profile.email,
@@ -370,8 +375,8 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       });
 
       if (error) throw error;
-      // data có thể là null nếu máy chủ trả về rỗng -> dùng ?. để không vỡ
-      if (!data?.success) throw new Error(data?.message || data?.error || 'Không nhận giao được');
+      // rpcData có thể là null nếu máy chủ trả về rỗng -> dùng ?. để không vỡ
+      if (!rpcData?.success) throw new Error(rpcData?.message || rpcData?.error || 'Không nhận giao được');
 
       // Từ đây trở đi việc giao hàng ĐÃ THÀNH CÔNG. Không được để bất kỳ
       // bước phụ nào biến nó thành lỗi trên màn hình.
@@ -572,10 +577,19 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       if (upErr) throw upErr;
 
       // Get signed URL for completion photo
-      const { data: { publicUrl } } = supabase.storage.from('uploads').getPublicUrl(photoPath);
+      // ⚠️ LỖI THẬT tìm thấy ở đây: đặt tên `data` trùng với state `data` (đơn
+      // hàng) khai báo ở đầu component. Vì đây là `const` trong CÙNG block với
+      // dòng `const ord = data.order;` phía trên (dòng ~560), toàn bộ block bị
+      // coi là dùng biến `data` CỤC BỘ ngay từ đầu (temporal dead zone) — nên
+      // dòng `data.order` phía trên ném "Cannot access 'data' before
+      // initialization". Lỗi này có từ trước, chỉ chưa ai chạm tới vì nút
+      // "Hoàn Thành Giao" luôn bị khoá do thiếu tên/SĐT/GPS cho tới khi các lỗi
+      // đó được vá ở các lần sửa trước.
+      const { data: urlData } = supabase.storage.from('uploads').getPublicUrl(photoPath);
+      const publicUrl = urlData.publicUrl;
 
       // Call RPC to complete delivery
-      const { data, error } = await supabase.rpc('complete_delivery_assignment', {
+      const { data: rpcData, error } = await supabase.rpc('complete_delivery_assignment', {
         p_order_id: orderId,
         p_staff_id: profile.id,
         p_staff_name: profile.full_name || profile.email,
@@ -585,7 +599,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       });
 
       if (error) throw error;
-      if (!data?.success) throw new Error(data?.message || data?.error || 'Không hoàn thành giao được');
+      if (!rpcData?.success) throw new Error(rpcData?.message || rpcData?.error || 'Không hoàn thành giao được');
 
       // Từ đây trở đi đơn ĐÃ GIAO XONG. Bước phụ vấp thì bỏ qua, không báo đỏ.
       try {
