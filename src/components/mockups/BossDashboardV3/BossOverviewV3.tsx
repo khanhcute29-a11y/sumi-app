@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Crown,
   TrendingUp,
@@ -94,10 +95,11 @@ export function BossOverviewV3Inner() {
   };
   const sheetDragHandlers = { onTouchStart: handleSheetTouchStart, onTouchMove: handleSheetTouchMove, onTouchEnd: handleSheetTouchEnd };
   const sheetPanelStyle = (extra: React.CSSProperties = {}): React.CSSProperties => ({
-    width: '100%', maxHeight: '85vh', background: '#fff', borderRadius: '28px 28px 0 0',
+    width: '100%', maxWidth: 480, margin: '0 auto', maxHeight: '85vh', background: '#fff', borderRadius: '28px 28px 0 0',
     boxSizing: 'border-box', display: 'flex', flexDirection: 'column', overflow: 'hidden',
     transform: `translateY(${dragY}px)`,
     transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)',
+    willChange: 'transform',
     ...extra,
   });
   const SHEET_HANDLE = <div style={{ width: 38, height: 4, background: '#cbd5e1', borderRadius: 99, margin: '8px auto 2px', flexShrink: 0 }} />;
@@ -385,6 +387,7 @@ export function BossOverviewV3Inner() {
   }
 
   return (
+    <>
     <div style={{
       maxWidth: 480,
       margin: '0 auto',
@@ -942,12 +945,20 @@ export function BossOverviewV3Inner() {
           </div>
 
         </div>
+    </div>
 
+    {/* Toàn bộ Bottom Sheet / Side Drawer / toast / loading skeleton được render
+        qua Portal thẳng vào document.body — tránh bị kẹt trong containing block
+        của div cha (position:relative, minHeight:100vh không giới hạn chiều cao),
+        nguyên nhân khiến sheet "position:absolute" trôi xuống tận đáy trang thay
+        vì ghim theo viewport thật của điện thoại. */}
+    {createPortal(
+      <>
         {/* ========================================================================= */}
         {/* ── BOTTOM SHEET: 1. CHI TIẾT DOANH THU & NGUỒN THU ── */}
         {/* ========================================================================= */}
         {activeSheet === 'revenue_detail' && (
-          <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
+          <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
             <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
               <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
                 {SHEET_HANDLE}
@@ -989,7 +1000,7 @@ export function BossOverviewV3Inner() {
         {/* ── BOTTOM SHEET: 2. SỔ CÁI KHOẢN CHI THỰC TẾ ── */}
         {/* ========================================================================= */}
         {activeSheet === 'expense_detail' && (
-          <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
+          <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
             <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
               <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
                 {SHEET_HANDLE}
@@ -1043,7 +1054,7 @@ export function BossOverviewV3Inner() {
         {/* ── BOTTOM SHEET: 3. GIAO VIỆC NHANH (TASK DELEGATION) ── */}
         {/* ========================================================================= */}
         {activeSheet === 'task_sheet' && (
-          <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1300, display: 'flex', alignItems: 'flex-end' }}>
+          <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1300, display: 'flex', alignItems: 'flex-end' }}>
             <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
               <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
                 {SHEET_HANDLE}
@@ -1146,7 +1157,7 @@ export function BossOverviewV3Inner() {
         {/* ── BOTTOM SHEET: 4. BẢNG TIN CHỈ ĐẠO CÔNG KHAI & TAG TÊN ── */}
         {/* ========================================================================= */}
         {activeSheet === 'feed_sheet' && (
-          <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1300, display: 'flex', alignItems: 'flex-end' }}>
+          <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1300, display: 'flex', alignItems: 'flex-end' }}>
             <div onClick={e => e.stopPropagation()} style={sheetPanelStyle({ height: '85vh' })}>
               <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
                 {SHEET_HANDLE}
@@ -1221,7 +1232,7 @@ export function BossOverviewV3Inner() {
         {/* ── BOTTOM SHEET: 5. DUYỆT TẠM ỨNG LƯƠNG ── */}
         {/* ========================================================================= */}
         {activeSheet === 'advance_sheet' && (
-          <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
+          <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
             <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
               <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
                 {SHEET_HANDLE}
@@ -1268,7 +1279,7 @@ export function BossOverviewV3Inner() {
         {/* ── BOTTOM SHEET: 6. DUYỆT NGHỈ PHÉP ── */}
         {/* ========================================================================= */}
         {activeSheet === 'leave_sheet' && (
-          <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
+          <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
             <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
               <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
                 {SHEET_HANDLE}
@@ -1314,7 +1325,7 @@ export function BossOverviewV3Inner() {
         {/* ── BOTTOM SHEET: 7. BÁO CÁO CA NGÀY ── */}
         {/* ========================================================================= */}
         {activeSheet === 'report_sheet' && (
-          <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
+          <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
             <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
               <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
                 {SHEET_HANDLE}
@@ -1355,7 +1366,7 @@ export function BossOverviewV3Inner() {
         {/* ── BOTTOM SHEET: 8. LỊCH PHÂN CA LÀM VIỆC ── */}
         {/* ========================================================================= */}
         {activeSheet === 'schedule_sheet' && (
-          <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
+          <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
             <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
               <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
                 {SHEET_HANDLE}
@@ -1405,7 +1416,7 @@ export function BossOverviewV3Inner() {
         {/* ── SIDE DRAWER: DANH SÁCH ĐƠN HÀNG ƯU TIÊN THỜI GIAN THEO TỪNG BỘ LỌC ── */}
         {/* ========================================================================= */}
         {activeSheet === 'order_drawer' && (
-          <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1300, display: 'flex', alignItems: 'flex-end' }}>
+          <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1300, display: 'flex', alignItems: 'flex-end' }}>
             <div onClick={e => e.stopPropagation()} style={sheetPanelStyle({ height: '86vh' })}>
               <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
                 {SHEET_HANDLE}
@@ -1546,7 +1557,7 @@ export function BossOverviewV3Inner() {
         {/* ── BOTTOM SHEET: TRẠNG THÁI NHÂN SỰ (3 LUỒNG: ĐANG LÀM, ĐI TRỄ, NGHỈ CA) ── */}
         {/* ========================================================================= */}
         {activeSheet === 'staff_detail' && (
-          <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
+          <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
             <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
               <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
                 {SHEET_HANDLE}
@@ -1761,14 +1772,16 @@ export function BossOverviewV3Inner() {
 
         {/* Loading skeleton — chỉ hiện lần tải đầu, tránh giật màn hình mỗi lần refresh */}
         {loading && staffCounts.total === 0 && (
-          <div style={{ position: 'absolute', inset: 0, background: '#faf6f0', zIndex: 1500, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 8 }}>
+          <div style={{ position: 'fixed', inset: 0, background: '#faf6f0', zIndex: 1500, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 8 }}>
             <div style={{ width: 32, height: 32, border: '3px solid #eadcca', borderTopColor: '#c28c4e', borderRadius: '50%', animation: 'sumi-boss-spin 0.8s linear infinite' }} />
             <div style={{ fontSize: 12, fontWeight: 700, color: '#8a7a66' }}>Đang tải dữ liệu thật...</div>
             <style>{`@keyframes sumi-boss-spin { to { transform: rotate(360deg); } }`}</style>
           </div>
         )}
-
-    </div>
+      </>,
+      document.body
+    )}
+    </>
   );
 }
 
