@@ -44,6 +44,18 @@ export async function payAdvance(id) {
   return data;
 }
 
+export async function rejectExpense(id, note) {
+  const { data, error } = await supabase.rpc('reject_expense_claim_by_accountant', { p_id: id, p_note: note || null });
+  if (error) throw error;
+  return data;
+}
+
+export async function rejectAdvance(id, note) {
+  const { data, error } = await supabase.rpc('reject_salary_advance_by_accountant', { p_id: id, p_note: note || null });
+  if (error) throw error;
+  return data;
+}
+
 // ---- 3. Đơn đang chờ Giám đốc (chưa tới lượt Kế toán) — dùng cho ô "Cần duyệt" ----
 export async function fetchPendingDirectorTotals() {
   const [claimsRes, advancesRes] = await Promise.all([

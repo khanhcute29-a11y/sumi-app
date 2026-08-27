@@ -51,7 +51,7 @@ import KpiDashboardScreen from './screens/KpiDashboardScreen';
 import MobileHomeScreen from './screens/MobileHomeScreen';
 import MobileProfileScreen from './screens/MobileProfileScreen';
 import CompensationScreen from './screens/CompensationScreen';
-import FinanceRequestsScreen from './screens/FinanceRequestsScreen';
+import AccountantOverviewV1 from './components/mockups/AccountantDashboard/AccountantOverviewV1';
 import CompanyFeedScreen from './screens/CompanyFeedScreen';
 import VisualGuidesScreen from './screens/VisualGuidesScreen';
 import { applyUiScale, getUiScale } from './lib/uiScale';
@@ -314,7 +314,7 @@ function OpsApp({ onSignOut }) {
   const screens = {
     home: <MobileHomeScreen onNavigate={setTab} />, feed: <CompanyFeedScreen />,
     dashboard: <DashboardScreen />, orders: <OrdersV2Screen />, kds: <KdsScreen initialStation={kdsStation} />, warehouse: <WarehouseScreen branch={warehouseBranch} onBranchChange={setWarehouseBranch} />, cashbook: <CashbookScreen />,
-    shipping: featureFlags.delivery_v2 ? <ShippingV2Screen /> : <ShippingScreen />, products: <ProductsScreen />, shifts: <ShiftsScreen />, compensation: <CompensationScreen />, financeRequests: <FinanceRequestsScreen />, approvals: <ApprovalRequestsScreen />, tasks: <TasksScreen />, incidents: <IncidentsScreen />, reports: <ReportsScreen />, kpi: featureFlags.kpi_v2 ? <KpiV2Screen /> : <KpiScreen />, inbox: <InboxV2Screen />, crm: <CustomersScreen />, staff: <StaffScreen />, settings: <SettingsScreen onSignOut={onSignOut} />, visualGuides: <VisualGuidesScreen />, staffTasks: <StaffTasksAssignedScreen />, kpiDashboard: <KpiDashboardScreen />, schoolRevenue: <SchoolRevenueScreen />, profile: <MobileProfileScreen onSignOut={onSignOut} onNavigate={setTab} />,
+    shipping: featureFlags.delivery_v2 ? <ShippingV2Screen /> : <ShippingScreen />, products: <ProductsScreen />, shifts: <ShiftsScreen />, compensation: <CompensationScreen />, financeRequests: <AccountantOverviewV1 embedded />, approvals: <ApprovalRequestsScreen />, tasks: <TasksScreen />, incidents: <IncidentsScreen />, reports: <ReportsScreen />, kpi: featureFlags.kpi_v2 ? <KpiV2Screen /> : <KpiScreen />, inbox: <InboxV2Screen />, crm: <CustomersScreen />, staff: <StaffScreen />, settings: <SettingsScreen onSignOut={onSignOut} />, visualGuides: <VisualGuidesScreen />, staffTasks: <StaffTasksAssignedScreen />, kpiDashboard: <KpiDashboardScreen />, schoolRevenue: <SchoolRevenueScreen />, profile: <MobileProfileScreen onSignOut={onSignOut} onNavigate={setTab} />,
   };
   const isBottomKey = (k) => ['home', 'feed', 'orders', 'tasks', 'profile'].includes(k);
   return (
