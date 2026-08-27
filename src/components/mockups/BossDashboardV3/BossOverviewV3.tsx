@@ -37,6 +37,7 @@ import { ORDER_FLOWS } from '../../../data/orderCatalogs';
 // KHÔNG động tới bất kỳ file nào khác của anh Khánh ngoài file này.
 import OrderV2DetailModal from '../../OrderV2DetailModal';
 import FinishedGoodsInventoryV2 from '../../warehouse/FinishedGoodsInventoryV2';
+import UserAvatar from '../../UserAvatar';
 import { supabase } from '../../../lib/supabaseClient';
 import { fetchShiftLogsRange } from '../../../lib/queries';
 import {
@@ -63,6 +64,41 @@ import {
 const formatVND = (amount: number) => {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
 };
+
+const PAYMENT_METHOD_LABEL: Record<string, string> = {
+  cash: '💵 Tiền mặt (quầy thu ngân)',
+  bank_vcb: '🏦 Chuyển khoản VCB (Kế toán)',
+  bank_tcb: '🏦 Chuyển khoản TCB (Kế toán)',
+  momo: '📱 MoMo (Kế toán)',
+};
+
+const formatDateTimeVN = (iso: string | null | undefined) => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  return `${d.toLocaleDateString('vi-VN')} ${d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
+};
+
+// Gộp 1 dòng expense_claims/salary_advance_requests (đã merge ở
+// fetchExpenseAndAdvanceLedgerToday) thành object hiển thị dùng chung cho cả
+// danh sách Sổ Cái và trang chi tiết khoan sâu — giữ đủ dữ liệu thật (ảnh đại
+// diện, nguồn tiền, ảnh chứng từ) để không phải query lại khi bấm vào 1 dòng.
+const mapLedgerRow = (c: any) => ({
+  id: c.id,
+  title: c.description || c.note || 'Khoản chi',
+  amount: Number(c.amount) || 0,
+  category: c.status === 'pending_director' ? '⏳ Chờ Sếp duyệt' : c.status === 'pending_accounting' ? '✓ Đã duyệt · chờ ghi sổ' : c.status === 'recorded' ? '✓ Đã ghi sổ' : '✕ Đã từ chối',
+  time: new Date(c.occurred_at || c.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+  icon: c.source === 'advance' ? '🏦' : '💸',
+  status: c.status,
+  claimantName: c.claimant_name,
+  source: c.source,
+  occurredAt: c.occurred_at || c.created_at,
+  claimantProfile: c.claimantProfile || null,
+  paymentMethod: c.disbursed_payment_method || null,
+  receiptUrl: c.disbursed_receipt_url || c.receipt_attachments?.[0]?.url || null,
+  reasonText: c.source === 'advance' ? (c.reason || '—') : (c.note || c.description || '—'),
+});
 
 // Hồ sơ 1 nhân viên — lớp "thông tin cuối" khi bấm vào 1 người trong Chi Tiết
 // Trạng Thái Nhân Sự. Không có sẵn component nào để dùng lại (khác với Đơn
@@ -183,6 +219,11 @@ export function BossOverviewV3Inner() {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [selectedLeaveTab, setSelectedLeaveTab] = useState<string>('all');
   const [selectedStaff, setSelectedStaff] = useState<any>(null);
+  // Khoan sâu Sổ Cái: 2 luồng Tạm ứng / Chi hoạt động, bấm 1 dòng mở "thông
+  // tin cuối" của khoản chi đó (lớp trên cùng, không đụng activeSheet — đóng
+  // lại quay đúng về danh sách, không mất tab/trạng thái cuộn).
+  const [ledgerTab, setLedgerTab] = useState<'expense' | 'advance'>('expense');
+  const [selectedLedgerItem, setSelectedLedgerItem] = useState<any>(null);
 
   // ── Khoá cuộn nền + vuốt kéo xuống để đóng Bottom Sheet (dùng chung cho mọi sheet) ──
   const [dragY, setDragY] = useState(0);
@@ -268,17 +309,7 @@ export function BossOverviewV3Inner() {
       setRevenueStreams(rev.channels.map((c) => ({ id: c.key, channel: c.title, amount: c.amount, percentage: c.percentage, icon: c.icon, note: `${c.count} đơn hoàn thành` })));
       setTotalRevenue(rev.total);
 
-      setExpenseStreams(claims.map((c: any) => ({
-        id: c.id,
-        title: c.description || c.note || 'Khoản chi',
-        amount: Number(c.amount) || 0,
-        category: c.status === 'pending_director' ? '⏳ Chờ Sếp duyệt' : c.status === 'pending_accounting' ? '✓ Đã duyệt · chờ ghi sổ' : c.status === 'recorded' ? '✓ Đã ghi sổ' : '✕ Đã từ chối',
-        time: new Date(c.occurred_at || c.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-        icon: c.source === 'advance' ? '🏦' : '💸',
-        status: c.status,
-        claimantName: c.claimant_name,
-        source: c.source,
-      })));
+      setExpenseStreams(claims.map(mapLedgerRow));
       setTotalExpense(claims.reduce((s: number, c: any) => s + (Number(c.amount) || 0), 0));
 
       const mapCommon = (p: any) => ({ id: p.id, name: p.full_name, role: p.role || 'Nhân viên', zone: p.station || 'Chưa gán khu vực', avatar: '👤' });
@@ -367,11 +398,7 @@ export function BossOverviewV3Inner() {
       else await reviewExpenseClaim(id, approve);
       showToast(approve ? '✓ Sếp đã DUYỆT khoản chi' : '✕ Sếp đã từ chối khoản chi');
       const claims = await fetchExpenseAndAdvanceLedgerToday();
-      setExpenseStreams(claims.map((c: any) => ({
-        id: c.id, title: c.description || c.note || 'Khoản chi', amount: Number(c.amount) || 0,
-        category: c.status === 'pending_director' ? '⏳ Chờ Sếp duyệt' : c.status === 'pending_accounting' ? '✓ Đã duyệt · chờ ghi sổ' : c.status === 'recorded' ? '✓ Đã ghi sổ' : '✕ Đã từ chối',
-        time: new Date(c.occurred_at || c.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }), icon: c.source === 'advance' ? '🏦' : '💸', status: c.status, claimantName: c.claimant_name, source: c.source,
-      })));
+      setExpenseStreams(claims.map(mapLedgerRow));
       setTotalExpense(claims.reduce((s: number, c: any) => s + (Number(c.amount) || 0), 0));
       if (source === 'advance') setPendingAdvances(await fetchPendingSalaryAdvances());
     } catch (e: any) {
@@ -1148,7 +1175,7 @@ export function BossOverviewV3Inner() {
         {/* ── BOTTOM SHEET: 2. SỔ CÁI KHOẢN CHI THỰC TẾ ── */}
         {/* ========================================================================= */}
         {activeSheet === 'expense_detail' && (
-          <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
+          <div className="sheet-overlay" onClick={() => { setActiveSheet(null); setSelectedLedgerItem(null); }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
             <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
               <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
                 {SHEET_HANDLE}
@@ -1157,31 +1184,52 @@ export function BossOverviewV3Inner() {
                     <div style={{ fontSize: 15, fontWeight: 900, color: '#dc2626' }}>📑 Sổ Cái Khoản Chi Tiêu Hôm Nay</div>
                     <div style={{ fontSize: 11, color: '#725f50' }}>Tổng chi: {formatVND(totalExpense)}</div>
                   </div>
-                  <button onClick={() => setActiveSheet(null)} aria-label="Quay lại" style={{ order: -1, flexShrink: 0, width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer' }}>‹</button>
+                  <button onClick={() => { setActiveSheet(null); setSelectedLedgerItem(null); }} aria-label="Quay lại" style={{ order: -1, flexShrink: 0, width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer' }}>‹</button>
+                </div>
+
+                {/* 2 luồng: Chi hoạt động kinh doanh / Tạm ứng lương */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, padding: '10px 14px 0' }}>
+                  <button onClick={() => setLedgerTab('expense')} style={{
+                    padding: '8px 4px', borderRadius: 12, border: ledgerTab === 'expense' ? '2px solid #dc2626' : '1px solid #eadcca',
+                    background: ledgerTab === 'expense' ? '#fef2f2' : '#fff', color: ledgerTab === 'expense' ? '#dc2626' : '#725f50',
+                    fontSize: 11.5, fontWeight: 900, cursor: 'pointer',
+                  }}>
+                    💸 Chi hoạt động ({expenseStreams.filter((e: any) => e.source !== 'advance').length})
+                  </button>
+                  <button onClick={() => setLedgerTab('advance')} style={{
+                    padding: '8px 4px', borderRadius: 12, border: ledgerTab === 'advance' ? '2px solid #b45309' : '1px solid #eadcca',
+                    background: ledgerTab === 'advance' ? '#fff7ed' : '#fff', color: ledgerTab === 'advance' ? '#b45309' : '#725f50',
+                    fontSize: 11.5, fontWeight: 900, cursor: 'pointer',
+                  }}>
+                    🏦 Tạm ứng ({expenseStreams.filter((e: any) => e.source === 'advance').length})
+                  </button>
                 </div>
               </div>
 
               <div style={sheetBodyStyle({ paddingTop: 12 })}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {expenseStreams.length === 0 && (
-                    <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Chưa có khoản chi nào hôm nay.</div>
+                  {expenseStreams.filter((e: any) => (ledgerTab === 'advance' ? e.source === 'advance' : e.source !== 'advance')).length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>
+                      {ledgerTab === 'advance' ? 'Chưa có tạm ứng nào hôm nay.' : 'Chưa có khoản chi hoạt động nào hôm nay.'}
+                    </div>
                   )}
-                  {expenseStreams.map((exp: any) => (
-                    <div key={exp.id} style={{ background: '#fff', border: '1.5px solid #fecaca', borderRadius: 14, padding: 12 }}>
+                  {expenseStreams.filter((e: any) => (ledgerTab === 'advance' ? e.source === 'advance' : e.source !== 'advance')).map((exp: any) => (
+                    <div key={exp.id} onClick={() => setSelectedLedgerItem(exp)} style={{ background: '#fff', border: '1.5px solid #fecaca', borderRadius: 14, padding: 12, cursor: 'pointer' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontSize: 20 }}>{exp.icon}</span>
+                          <UserAvatar profile={exp.claimantProfile} size={34} />
                           <div>
                             <div style={{ fontSize: 12.5, fontWeight: 900, color: '#2d1c10' }}>{exp.title}</div>
                             <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>{exp.claimantName} · <strong>{exp.category}</strong> · {exp.time}</div>
                           </div>
                         </div>
-                        <div style={{ fontSize: 13.5, fontWeight: 900, color: '#dc2626' }}>
-                          -{formatVND(exp.amount)}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <div style={{ fontSize: 13.5, fontWeight: 900, color: '#dc2626' }}>-{formatVND(exp.amount)}</div>
+                          <ChevronRight size={16} color="#a08060" />
                         </div>
                       </div>
                       {exp.status === 'pending_director' && (
-                        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                        <div style={{ display: 'flex', gap: 6, marginTop: 8 }} onClick={(e) => e.stopPropagation()}>
                           <button onClick={() => handleReviewExpense(exp.id, true, exp.source)} style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 8, padding: '7px 0', fontWeight: 900, fontSize: 11.5, cursor: 'pointer' }}>
                             ✓ Duyệt Chi
                           </button>
@@ -1194,6 +1242,67 @@ export function BossOverviewV3Inner() {
                   ))}
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Lớp "thông tin cuối" của 1 khoản chi/tạm ứng — bấm 1 dòng trong Sổ
+            Cái mở ra đây, nằm TRÊN sheet Sổ Cái (z-index cao hơn 1200). Đóng
+            lại quay đúng về danh sách, không mất tab/trạng thái cuộn. */}
+        {selectedLedgerItem && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 2000, background: '#fdf9f2', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 14, borderBottom: '1.5px solid #eadcca', position: 'sticky', top: 0, background: '#fdf9f2', zIndex: 1 }}>
+              <button onClick={() => setSelectedLedgerItem(null)} aria-label="Quay lại" style={{ width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer', flexShrink: 0 }}>‹</button>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 1, color: '#b8692f', textTransform: 'uppercase' }}>
+                  {selectedLedgerItem.source === 'advance' ? 'Chi tiết tạm ứng' : 'Chi tiết khoản chi'}
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 900, color: '#2d1b10' }}>{selectedLedgerItem.title}</div>
+              </div>
+            </div>
+            <div style={{ padding: '16px 14px 30px', boxSizing: 'border-box' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+                <UserAvatar profile={selectedLedgerItem.claimantProfile} size={48} />
+                <div>
+                  <div style={{ fontSize: 10.5, fontWeight: 800, color: '#725f50' }}>Ai chi</div>
+                  <div style={{ fontSize: 14, fontWeight: 900, color: '#2d1c10' }}>{selectedLedgerItem.claimantName || 'Không rõ'}</div>
+                </div>
+              </div>
+
+              <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace', fontSize: 30, fontWeight: 900, color: '#dc2626', marginBottom: 4 }}>
+                -{formatVND(selectedLedgerItem.amount)}
+              </div>
+              <span style={{ display: 'inline-block', marginBottom: 16, padding: '3px 9px', borderRadius: 99, fontSize: 10.5, fontWeight: 900, background: '#fef2f2', color: '#dc2626' }}>
+                {selectedLedgerItem.category}
+              </span>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, background: '#fff', border: '1px solid #eadcca', borderRadius: 14, padding: 14, marginBottom: 16 }}>
+                <div>
+                  <div style={{ fontSize: 10.5, fontWeight: 800, color: '#725f50' }}>Chi việc gì</div>
+                  <div style={{ fontSize: 13, color: '#2d1c10', marginTop: 2 }}>{selectedLedgerItem.reasonText}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10.5, fontWeight: 800, color: '#725f50' }}>Ngày giờ chi</div>
+                  <div style={{ fontSize: 13, color: '#2d1c10', marginTop: 2 }}>{formatDateTimeVN(selectedLedgerItem.occurredAt)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10.5, fontWeight: 800, color: '#725f50' }}>Nguồn tiền chi ra</div>
+                  <div style={{ fontSize: 13, color: '#2d1c10', marginTop: 2 }}>
+                    {selectedLedgerItem.paymentMethod ? PAYMENT_METHOD_LABEL[selectedLedgerItem.paymentMethod] || selectedLedgerItem.paymentMethod : 'Chưa chi — đang chờ ghi sổ'}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ fontSize: 10.5, fontWeight: 800, color: '#725f50', textTransform: 'uppercase', marginBottom: 8 }}>Chứng từ / Hoá đơn</div>
+              {selectedLedgerItem.receiptUrl ? (
+                <a href={selectedLedgerItem.receiptUrl} target="_blank" rel="noreferrer">
+                  <img src={selectedLedgerItem.receiptUrl} alt="Chứng từ chi tiền" style={{ width: '100%', borderRadius: 14, border: '1px solid #eadcca', display: 'block' }} />
+                </a>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '20px 0', color: '#a08060', fontSize: 12.5, background: '#fff', border: '1px dashed #eadcca', borderRadius: 14 }}>
+                  Chưa có ảnh chứng từ.
+                </div>
+              )}
             </div>
           </div>
         )}

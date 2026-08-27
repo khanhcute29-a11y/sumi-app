@@ -72,19 +72,31 @@ export async function fetchExpenseAndAdvanceLedgerToday() {
   ]);
   if (claimsRes.error) throw claimsRes.error;
   if (advancesRes.error) throw advancesRes.error;
-  const claims = (claimsRes.data || []).map((c) => ({ ...c, source: 'expense' }));
+  const claims = (claimsRes.data || []).map((c) => ({ ...c, source: 'expense', person_id: c.claimant_id }));
   const advances = (advancesRes.data || []).map((a) => ({
     ...a,
     source: 'advance',
     description: `Tạm ứng lương — ${a.reason || ''}`.trim(),
     claimant_name: a.employee_name,
     occurred_at: a.paid_at || a.created_at,
+    person_id: a.employee_id,
     // 'paid' của tạm ứng tương đương 'recorded' của khoản chi (đã ghi sổ xong) — gộp nhãn hiển thị.
     status: a.status === 'paid' ? 'recorded' : a.status,
   }));
-  return [...claims, ...advances].sort(
-    (x, y) => new Date(y.occurred_at || y.created_at).getTime() - new Date(x.occurred_at || x.created_at).getTime()
-  );
+  const merged = [...claims, ...advances];
+
+  // Ảnh đại diện người chi — lấy thật từ profiles (avatar_path), không dùng
+  // ảnh mockup tĩnh. Chỉ query 1 lần cho toàn bộ danh sách, không N+1.
+  const personIds = [...new Set(merged.map((r) => r.person_id).filter(Boolean))];
+  let profileById = {};
+  if (personIds.length > 0) {
+    const { data: profs } = await supabase.from('profiles').select('id, full_name, avatar_path').in('id', personIds);
+    (profs || []).forEach((p) => { profileById[p.id] = p; });
+  }
+
+  return merged
+    .map((r) => ({ ...r, claimantProfile: profileById[r.person_id] || null }))
+    .sort((x, y) => new Date(y.occurred_at || y.created_at).getTime() - new Date(x.occurred_at || x.created_at).getTime());
 }
 
 // ---- 3. Trạng thái chấm công toàn công ty hôm nay ----
