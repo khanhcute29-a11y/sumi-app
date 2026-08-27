@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
-import { gioNgan, ngayGio, nhanKpiHoanThanh, nhanKpiNhanViec, diemDuKien, docBuocCon, duocCanThiepQuaHan } from '../../../lib/congViec';
+import { gioNgan, ngayGio, nhanKpiHoanThanh, nhanKpiNhanViec, diemDuKien, docBuocCon, duocCanThiepQuaHan, quaHan, treBaoNhieu, doDaiThoiGian } from '../../../lib/congViec';
 
 // Hộp thoại duyệt nghiệm thu của quản lý.
 //   • chiXem = true  -> chỉ xem báo cáo của thợ, không có nút duyệt
@@ -190,6 +190,11 @@ export default function DuyetViecModal({ viec, tenTho, chiXem, hoSo, vaiTro, onC
 
         {vaiTro === 'giam_doc' && duocCanThiepQuaHan(viec) && (
           <CanThiepQuaHanPanel viec={viec} onXong={async () => { await onXong?.(); onClose?.(); }} />
+        )}
+        {vaiTro === 'giam_doc' && quaHan(viec) && !duocCanThiepQuaHan(viec) && (
+          <div style={{ margin: '14px 0', padding: '10px 12px', borderRadius: 12, background: '#fff8e6', border: '1px solid #f2dfae', color: '#8b5900', fontWeight: 700, fontSize: 12.5 }}>
+            ⏳ Việc này mới trễ {doDaiThoiGian(treBaoNhieu(viec))} — chưa đủ 1 ngày nên chưa hiện nút Xoá/Gia hạn (đúng quy định).
+          </div>
         )}
 
         {viec.photo_url && (
