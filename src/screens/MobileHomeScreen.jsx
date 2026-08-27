@@ -6,6 +6,7 @@ import UserAvatar from '../components/UserAvatar';
 import ShiftTodayCard from '../components/ShiftTodayCard';
 import EditApprovalPanel from '../components/EditApprovalPanel';
 import { EmployeeOverviewV4Inner } from '../components/mockups/EmployeeDashboard/EmployeeOverviewV4';
+import { BossOverviewV3Inner } from '../components/mockups/BossDashboardV3/BossOverviewV3';
 
 import { ROLE_META, KITCHEN_LEAD_ROLES, getRoleMeta, formatStationLabel } from '../lib/roles';
 import { ORDER_FLOWS } from '../data/orderCatalogs';
@@ -41,6 +42,11 @@ export default function MobileHomeScreen({onNavigate}){
  // nên trả về thẳng, không lồng vào khung header+main dùng chung bên dưới
  // (khung đó chỉ dành cho DirectorHome/LeadHome).
  if (!isDirector(profile) && !isLead(profile)) return <EmployeeOverviewV4Inner onNavigate={onNavigate} />;
+ // Giám đốc/Chủ sở hữu thật (owner/admin, đúng điều kiện RPC is_business_director()
+ // ở backend) dùng thẳng Boss Overview V3 — màn hình đã nối Supabase thật, tự vẽ
+ // header riêng. Phó GĐ xưởng không có quyền owner/admin thật vẫn ở lại DirectorHome
+ // cũ để tránh bấm vào các nút duyệt tiền/nhắc nhở mà RPC sẽ từ chối.
+ if (isDirector(profile) && canViewRevenue(profile)) return <BossOverviewV3Inner />;
  return <div className="sumi-mobile-page"><header className="sumi-topbar"><div className="sumi-brand"><div className="sumi-brand-mark"><img src="/sumi-bakery-logo.png" alt="Sumi Bakery" /></div><div><div className="sumi-brand-name">SUMI BAKERY</div><div className="sumi-hello">Chào {profile?.full_name||'nhân viên'}</div></div></div><div className="sumi-top-actions"><button className="sumi-bell" onClick={()=>onNavigate('inbox')} aria-label="Thông báo">🔔{unread>0&&<b>{unread}</b>}</button><button className="sumi-avatar-button" onClick={()=>onNavigate('profile')} aria-label="Mở hồ sơ cá nhân"><UserAvatar profile={profile} size={44}/></button></div></header><main className="sumi-main"><PinnedAnnouncement onOpen={()=>onNavigate('feed')}/>{isDirector(profile)?<DirectorHome counts={counts} staff={staff} onNavigate={onNavigate} canViewRevenue={canViewRevenue(profile)}/>:<LeadHome counts={counts} tasks={tasks} onNavigate={onNavigate}/>}</main></div>;
 }
 function PinnedAnnouncement({onOpen}){const[row,setRow]=useState(null);useEffect(()=>{supabase.from('company_feed_posts').select('id,title,body,severity').eq('post_type','announcement').is('deleted_at',null).in('severity',['important','urgent']).order('created_at',{ascending:false}).limit(1).maybeSingle().then(r=>{if(!r.error)setRow(r.data)})},[]);return row?<button className={`sumi-pinned-announcement ${row.severity}`} onClick={onOpen}><span>📢</span><span><strong>{row.title}</strong><small>{row.body}</small></span><em>›</em></button>:null}
