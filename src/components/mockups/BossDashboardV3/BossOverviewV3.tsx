@@ -1000,12 +1000,12 @@ export function BossOverviewV3Inner() {
             <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
               <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
                 {SHEET_HANDLE}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 900, color: '#166534' }}>📊 Chi Tiết Nguồn Thu Hôm Nay</div>
                     <div style={{ fontSize: 11, color: '#725f50' }}>Tổng cộng: {formatVND(totalRevenue)}</div>
                   </div>
-                  <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
+                  <button onClick={() => setActiveSheet(null)} aria-label="Quay lại" style={{ order: -1, flexShrink: 0, width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer' }}>‹</button>
                 </div>
               </div>
 
@@ -1042,12 +1042,12 @@ export function BossOverviewV3Inner() {
             <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
               <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
                 {SHEET_HANDLE}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 900, color: '#dc2626' }}>📑 Sổ Cái Khoản Chi Tiêu Hôm Nay</div>
                     <div style={{ fontSize: 11, color: '#725f50' }}>Tổng chi: {formatVND(totalExpense)}</div>
                   </div>
-                  <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
+                  <button onClick={() => setActiveSheet(null)} aria-label="Quay lại" style={{ order: -1, flexShrink: 0, width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer' }}>‹</button>
                 </div>
               </div>
 
@@ -1096,12 +1096,12 @@ export function BossOverviewV3Inner() {
             <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
               <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
                 {SHEET_HANDLE}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 900, color: '#8b5900' }}>⚡ Giao Việc Nhanh Cho Nhân Viên</div>
                     <div style={{ fontSize: 11, color: '#725f50' }}>Tự động đồng bộ sang màn hình Nhân viên</div>
                   </div>
-                  <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
+                  <button onClick={() => setActiveSheet(null)} aria-label="Quay lại" style={{ order: -1, flexShrink: 0, width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer' }}>‹</button>
                 </div>
               </div>
 
@@ -1199,12 +1199,12 @@ export function BossOverviewV3Inner() {
             <div onClick={e => e.stopPropagation()} style={sheetPanelStyle({ height: '85vh' })}>
               <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
                 {SHEET_HANDLE}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 900, color: '#166534' }}>📢 Bảng Tin & Chỉ Đạo Công Khai</div>
                     <div style={{ fontSize: 11, color: '#725f50' }}>Toàn thể {staffCounts.total} nhân viên đều nhìn thấy</div>
                   </div>
-                  <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
+                  <button onClick={() => setActiveSheet(null)} aria-label="Quay lại" style={{ order: -1, flexShrink: 0, width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer' }}>‹</button>
                 </div>
               </div>
 
@@ -1274,12 +1274,12 @@ export function BossOverviewV3Inner() {
             <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
               <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
                 {SHEET_HANDLE}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 900, color: '#ca8a04' }}>💵 Phê Duyệt Tạm Ứng Lương</div>
                     <div style={{ fontSize: 11, color: '#725f50' }}>{pendingAdvances.length} đơn yêu cầu đang chờ Sếp duyệt</div>
                   </div>
-                  <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
+                  <button onClick={() => setActiveSheet(null)} aria-label="Quay lại" style={{ order: -1, flexShrink: 0, width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer' }}>‹</button>
                 </div>
               </div>
 
@@ -1321,12 +1321,12 @@ export function BossOverviewV3Inner() {
             <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
               <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
                 {SHEET_HANDLE}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 900, color: '#2563eb' }}>📝 Phê Duyệt Đơn Nghỉ Phép</div>
                     <div style={{ fontSize: 11, color: '#725f50' }}>{pendingLeaves.length} đơn đang chờ duyệt</div>
                   </div>
-                  <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
+                  <button onClick={() => setActiveSheet(null)} aria-label="Quay lại" style={{ order: -1, flexShrink: 0, width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer' }}>‹</button>
                 </div>
               </div>
 
@@ -1393,12 +1393,12 @@ export function BossOverviewV3Inner() {
             <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
               <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
                 {SHEET_HANDLE}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 900, color: '#db2777' }}>📋 Tổng Hợp Báo Cáo Ca Ngày</div>
                     <div style={{ fontSize: 11, color: '#725f50' }}>{shiftReports.length} báo cáo cuối ca đã nộp hôm nay</div>
                   </div>
-                  <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
+                  <button onClick={() => setActiveSheet(null)} aria-label="Quay lại" style={{ order: -1, flexShrink: 0, width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer' }}>‹</button>
                 </div>
               </div>
 
@@ -1434,14 +1434,14 @@ export function BossOverviewV3Inner() {
             <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
               <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
                 {SHEET_HANDLE}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 900, color: '#9333ea' }}>📅 Lịch Phân Ca Tuần — 5 Khu Vực</div>
                     <div style={{ fontSize: 11, color: '#725f50' }}>
                       {weeklySchedule.from && new Date(weeklySchedule.from).toLocaleDateString('vi-VN')} - {weeklySchedule.to && new Date(weeklySchedule.to).toLocaleDateString('vi-VN')} · {weeklySchedule.totalAssignments} lượt phân ca · Bakery · Bếp Nóng · Bếp Lạnh · Xưởng 41 · Xưởng 42
                     </div>
                   </div>
-                  <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
+                  <button onClick={() => setActiveSheet(null)} aria-label="Quay lại" style={{ order: -1, flexShrink: 0, width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer' }}>‹</button>
                 </div>
               </div>
 
@@ -1484,7 +1484,7 @@ export function BossOverviewV3Inner() {
             <div onClick={e => e.stopPropagation()} style={sheetPanelStyle({ height: '86vh' })}>
               <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
                 {SHEET_HANDLE}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 900, color: '#2d1c10' }}>
                       🧾 Danh Sách Đơn Hàng ({filteredOrders.length} đơn)
@@ -1493,7 +1493,7 @@ export function BossOverviewV3Inner() {
                       ⬇️ Sắp xếp ưu tiên giảm dần từ trên xuống dưới
                     </div>
                   </div>
-                  <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
+                  <button onClick={() => setActiveSheet(null)} aria-label="Quay lại" style={{ order: -1, flexShrink: 0, width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer' }}>‹</button>
                 </div>
 
                 {/* Thanh lọc trạng thái con bên trong Drawer */}
@@ -1650,7 +1650,7 @@ export function BossOverviewV3Inner() {
             <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
               <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
                 {SHEET_HANDLE}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 900, color: '#2d1c10' }}>
                       👥 Chi Tiết Trạng Thái Nhân Sự ({staffCounts.total} NV)
@@ -1659,7 +1659,7 @@ export function BossOverviewV3Inner() {
                       Theo dõi chấm công & hiện diện 3 phân xưởng hôm nay
                     </div>
                   </div>
-                  <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
+                  <button onClick={() => setActiveSheet(null)} aria-label="Quay lại" style={{ order: -1, flexShrink: 0, width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer' }}>‹</button>
                 </div>
 
                 {/* 3 Tab chuyển đổi luồng nhân sự */}
