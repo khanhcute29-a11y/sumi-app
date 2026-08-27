@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Plus } from 'lucide-react';
 import { AuthProvider, useAuth } from '../../../lib/AuthContext';
+import { ErrorBoundary } from '../../ErrorBoundary';
 import {
   fetchReadyToPayExpenses,
   markExpensePaid,
@@ -148,7 +149,13 @@ export function AccountantOverviewV1Inner() {
   const ledgerTotalChi = ledgerRows.filter((r) => r.type === 'chi').reduce((s, r) => s + (Number(r.amount) || 0), 0);
   const ledgerTotalThu = ledgerRows.filter((r) => r.type === 'thu').reduce((s, r) => s + (Number(r.amount) || 0), 0);
 
-  if (!profile) return null;
+  if (!profile) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8a7a66', fontSize: 13, background: '#faf6f0' }}>
+        Đang tải phiên đăng nhập...
+      </div>
+    );
+  }
 
   return (
     <>
@@ -410,8 +417,10 @@ export function AccountantOverviewV1Inner() {
 
 export default function AccountantOverviewV1() {
   return (
-    <AuthProvider>
-      <AccountantOverviewV1Inner />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <AccountantOverviewV1Inner />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
