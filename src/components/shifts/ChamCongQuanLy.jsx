@@ -278,8 +278,11 @@ export default function ChamCongQuanLy({ danhSach, toi, laGiamDoc, tieuDeTongHop
     <>
       <BangTongHop danhSach={laGiamDoc ? theoKhau : nhomKhac} tieuDe={tieuDeTongHop} />
 
-      {/* Thẻ bản thân — dành cho bếp trưởng / quản lý khâu */}
-      {!laGiamDoc && toi && (
+      {/* Thẻ bản thân — trước đây chỉ hiện cho bếp trưởng/quản lý khâu, ẩn
+          với Giám đốc nên Giám đốc/Kế toán không có đường vào chấm công của
+          chính mình (bấm không thấy nút). Theo yêu cầu: MỌI vai trò đều phải
+          chấm công được, nên bỏ điều kiện loại trừ laGiamDoc. */}
+      {toi && (
         <div className="cc-section" style={{ marginTop: 10 }}>
           <div className="cc-section-head"><span className="cc-section-title">👤 Chấm công của tôi</span></div>
           <div className="cc-staff-card is-me" onClick={onXemChamCongCuaToi} role="button" tabIndex={0}
