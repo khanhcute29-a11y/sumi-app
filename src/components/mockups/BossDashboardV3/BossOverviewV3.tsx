@@ -32,6 +32,10 @@ import {
 import { AuthProvider, useAuth } from '../../../lib/AuthContext';
 import { listOrdersV2 } from '../../../lib/featureFlags';
 import { ORDER_FLOWS } from '../../../data/orderCatalogs';
+// Khoan sâu đơn hàng — dùng lại ĐÚNG component chi tiết đơn hàng thật (đã có
+// nhận giao/hoàn thành/sửa đơn/GPS/chat) thay vì tự dựng lại một bản rút gọn.
+// KHÔNG động tới bất kỳ file nào khác của anh Khánh ngoài file này.
+import OrderV2DetailModal from '../../OrderV2DetailModal';
 import {
   fetchRevenueByChannel,
   fetchExpenseClaimsToday,
@@ -67,6 +71,11 @@ export function BossOverviewV3Inner() {
   const [selectedOrderFilter, setSelectedOrderFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  // Khoan sâu: bấm 1 đơn trong Danh Sách Đơn Hàng -> mở chi tiết đơn đó (lớp
+  // trên cùng, không đụng activeSheet — đóng lớp này quay lại đúng danh sách,
+  // không mất trạng thái lọc/cuộn của sheet bên dưới).
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [selectedLeaveTab, setSelectedLeaveTab] = useState<string>('all');
 
   // ── Khoá cuộn nền + vuốt kéo xuống để đóng Bottom Sheet (dùng chung cho mọi sheet) ──
   const [dragY, setDragY] = useState(0);
@@ -1292,12 +1301,38 @@ export function BossOverviewV3Inner() {
                 </div>
               </div>
 
+              {/* Phân luồng theo vai trò người xin nghỉ (dữ liệu thật requester_role
+                  trên chính đơn — không đoán/gán cứng Bakery/Macaron/Trường học vì
+                  approval_requests không có cột khâu, ép vào sẽ sai dữ liệu). */}
+              {(() => {
+                const leaveTabs = [
+                  { key: 'all', ten: 'Tất cả' },
+                  ...Array.from(new Set(pendingLeaves.map((l: any) => l.requester_role || '_khac')))
+                    .map((r) => ({ key: r as string, ten: r === '_khac' ? 'Chưa rõ vai trò' : r as string })),
+                ];
+                return leaveTabs.length > 2 ? (
+                  <div style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '0 14px 8px' }}>
+                    {leaveTabs.map((t) => (
+                      <button key={t.key} onClick={() => setSelectedLeaveTab(t.key)} style={{
+                        flex: '0 0 auto', padding: '5px 10px', borderRadius: 99, border: '1px solid #eadcca',
+                        background: selectedLeaveTab === t.key ? '#2563eb' : '#fff',
+                        color: selectedLeaveTab === t.key ? '#fff' : '#725f50',
+                        fontSize: 11, fontWeight: 800, whiteSpace: 'nowrap', cursor: 'pointer',
+                      }}>{t.ten} ({t.key === 'all' ? pendingLeaves.length : pendingLeaves.filter((l: any) => (l.requester_role || '_khac') === t.key).length})</button>
+                    ))}
+                  </div>
+                ) : null;
+              })()}
+
               <div style={sheetBodyStyle({ paddingTop: 12 })}>
-                {pendingLeaves.length === 0 && (
-                  <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Không có đơn nghỉ phép nào đang chờ.</div>
-                )}
+                {(() => {
+                  const dsHienThi = selectedLeaveTab === 'all' ? pendingLeaves : pendingLeaves.filter((l: any) => (l.requester_role || '_khac') === selectedLeaveTab);
+                  return dsHienThi.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Không có đơn nghỉ phép nào ở luồng này.</div>
+                  ) : null;
+                })()}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {pendingLeaves.map((l: any) => (
+                  {(selectedLeaveTab === 'all' ? pendingLeaves : pendingLeaves.filter((l: any) => (l.requester_role || '_khac') === selectedLeaveTab)).map((l: any) => (
                     <div key={l.id} style={{ background: '#eff6ff', border: '1.5px solid #93c5fd', borderRadius: 14, padding: 12 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div>
@@ -1514,11 +1549,15 @@ export function BossOverviewV3Inner() {
                   return (
                     <div
                       key={ord.id}
+                      onClick={() => setSelectedOrderId(ord.id)}
+                      role="button"
+                      tabIndex={0}
                       style={{
                         background: ord.is_overdue ? '#fff9f0' : '#fff',
                         border: ord.is_overdue ? '2px solid #f59e0b' : '1.5px solid #eadcca',
                         borderRadius: 14,
-                        padding: 10
+                        padding: 10,
+                        cursor: 'pointer'
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
@@ -1537,6 +1576,7 @@ export function BossOverviewV3Inner() {
                         <span style={{ fontSize: 11, fontWeight: 800, color: ord.status_v2 === 'completed' ? '#16a34a' : ord.is_overdue ? '#dc2626' : '#138a53' }}>
                           {ord.is_overdue ? 'Chưa thực hiện ⚠️' : (statusLabelMap[ord.status_v2] || ord.status_v2)}
                         </span>
+                        <ChevronRight size={16} color="#a08a76" />
                       </div>
                     </div>
                   );
@@ -1550,6 +1590,17 @@ export function BossOverviewV3Inner() {
               </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Lớp "thông tin cuối" của Đơn Hàng — bấm 1 đơn trong Danh Sách Đơn Hàng
+            mở ra đây, nằm TRÊN mọi sheet (z-index cao hơn hẳn 1300) vì
+            OrderV2DetailModal tự vẽ z-index thấp (110), không tính trước việc bị
+            xếp trong 1 sheet khác. Đóng lại quay đúng về danh sách, không mất
+            trạng thái lọc/cuộn của Danh Sách Đơn Hàng bên dưới. */}
+        {selectedOrderId && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 2000 }}>
+            <OrderV2DetailModal orderId={selectedOrderId} onClose={() => setSelectedOrderId(null)} onChanged={() => {}} />
           </div>
         )}
 
