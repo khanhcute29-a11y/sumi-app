@@ -55,7 +55,7 @@ export default function EditOrderModal({ orderId, onClose, onSaved }) {
       const [q, o, m] = await Promise.all([
         supabase.rpc('sumi_quyen_sua_don', { p_order_id: orderId }),
         supabase.from('orders')
-          .select('id,order_code,address,note,required_at,ship_fee,deposit,payment_method,total,version,created_at,status_v2')
+          .select('id,order_code,address,note,required_at,ship_fee,deposit,payment_method,total,version,created_at,status_v2,customer_id,customers(name,phone)')
           .eq('id', orderId).single(),
         supabase.from('order_items')
           .select('id,product_id,name,name_snapshot,quantity,unit,unit_price,specification,display_order')
@@ -70,6 +70,8 @@ export default function EditOrderModal({ orderId, onClose, onSaved }) {
       setDon({
         ...o.data,
         required_at_may: sangGioMay(o.data.required_at),
+        ten_khach: o.data.customers?.name || '',
+        sdt_khach: o.data.customers?.phone || '',
       });
       setMon((m.data || []).map((x, i) => ({
         khoa: x.id || `moi-${i}`,
@@ -134,6 +136,15 @@ export default function EditOrderModal({ orderId, onClose, onSaved }) {
     if (mon.some((x) => !(Number(x.quantity) > 0))) { setLoi('Số lượng của mỗi món phải lớn hơn 0.'); return; }
     setDangLuu(true); setLoi(''); setXong('');
     try {
+      // Tên/SĐT nằm ở bảng customers (qua customer_id), không phải cột của
+      // orders — lưu riêng trước, giống cách updateOrderFull() ở màn Đơn hàng
+      // cũ đã làm. Không chặn lưu phần còn lại nếu bước này lỗi.
+      if (don.customer_id && (don.ten_khach || don.sdt_khach)) {
+        const { error: custErr } = await supabase.from('customers')
+          .update({ name: don.ten_khach || null, phone: don.sdt_khach || null })
+          .eq('id', don.customer_id);
+        if (custErr) throw new Error(`Không lưu được tên/SĐT khách: ${custErr.message}`);
+      }
       const { data, error } = await supabase.rpc('update_order_v2', {
         p_order_id: orderId,
         p_expected_version: don.version,
@@ -314,6 +325,16 @@ export default function EditOrderModal({ orderId, onClose, onSaved }) {
         Đơn "Bánh có sẵn" đã trừ kho: bớt món sẽ <b>trả lại kho</b>, thêm món sẽ <b>trừ tiếp</b>. Kho không đủ thì hệ thống chặn và giữ nguyên đơn cũ.
       </div>
     </div>
+
+    {/* ----- Khách hàng ----- */}
+    {don.customer_id && (
+      <div style={oNen}>
+        <label style={oNhan}>👤 Tên khách hàng</label>
+        <input type="text" value={don.ten_khach || ''} onChange={(e) => setDon({ ...don, ten_khach: e.target.value })} style={{ ...oO, minHeight: 44, marginBottom: 12 }} />
+        <label style={oNhan}>📞 Số điện thoại</label>
+        <input type="tel" value={don.sdt_khach || ''} onChange={(e) => setDon({ ...don, sdt_khach: e.target.value })} style={{ ...oO, minHeight: 44 }} />
+      </div>
+    )}
 
     {/* ----- Giao hàng ----- */}
     <div style={oNen}>
