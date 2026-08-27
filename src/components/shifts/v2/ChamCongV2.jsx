@@ -6,6 +6,7 @@ import TongQuanGiamDoc from './TongQuanGiamDoc';
 import DeXuatChoDuyet from './DeXuatChoDuyet';
 import ChiTietNhanSuModal from './ChiTietNhanSuModal';
 import { theoCaCoDinh } from './luongNhanSu';
+import { doDaiPhut } from './dungChung';
 import '../../../styles/cham-cong-v2.css';
 
 // Cửa ngõ của giao diện Chấm Công V2: chọn góc nhìn theo vai trò, nạp dữ liệu
@@ -119,6 +120,16 @@ export default function ChamCongV2({
   // đúng những người vừa xem — thừa một màn hình cuộn dài trên điện thoại.
   if (laGiamDoc) {
     const ngay = `${String(gioHienTai.getDate()).padStart(2, '0')}/${String(gioHienTai.getMonth() + 1).padStart(2, '0')}/${gioHienTai.getFullYear()}`;
+    // Trước đây Giám đốc/Kế toán bị coi là "không phải chấm công" nên nhánh
+    // này CHƯA BAO GIỜ có ô tự chấm công của chính mình — chỉ có màn tổng
+    // quan toàn hệ thống (xem người khác). Theo yêu cầu mới: mọi vai trò đều
+    // phải chấm công được. Thêm đúng khối "CHẤM CÔNG CỦA TÔI" — dùng lại
+    // nguyên cấu trúc/class đã có ở QuanLyV2.jsx (bếp trưởng/quản lý khâu) để
+    // đồng bộ giao diện, gọi thẳng onCheckin/onCheckout có sẵn — không thêm
+    // đường ghi dữ liệu nào mới.
+    const cuaToi = chamCuaToi;
+    const caToi = cuaToi?.ca || null;
+    const devToi = cuaToi?.chenhLech || null;
     return (
       <div className="cc2">
         <header className="cc2-hero navy">
@@ -142,6 +153,54 @@ export default function ChamCongV2({
         </header>
 
         <main style={{ padding: '0 2px' }}>
+          <div className="cc2-section-title"><span>CHẤM CÔNG CỦA TÔI</span></div>
+          <section className="cc2-lead-own">
+            <div className="cc2-lead-own-top">
+              <div style={{ minWidth: 0 }}>
+                <small className="cc2-eyebrow" style={{ color: 'var(--cc2-navy)' }}>
+                  {(caToi?.ten || 'KHÔNG THEO CA CỐ ĐỊNH').toUpperCase()}
+                </small>
+                <br />
+                <b>{caToi ? `${caToi.ten} · ${caToi.batDau}–${caToi.ketThuc}` : 'Giờ linh hoạt'}</b>
+              </div>
+              <span className="cc2-status">
+                {cuaToi?.raISO ? '● Đã tan ca' : cuaToi?.vaoISO ? '● Đang trong ca' : '● Chưa vào ca'}
+              </span>
+            </div>
+
+            <div className="cc2-lead-own-times">
+              <div className="cc2-lead-own-time">
+                <small>Giờ vào</small>
+                <strong>
+                  {cuaToi?.vao || '--:--'}
+                  {devToi && cuaToi?.vaoISO && (
+                    <span className={`cc2-kpi-tag ${devToi.loaiVao === 'late' ? 'cc2-kpi-bad' : 'cc2-kpi-good'}`}
+                      style={{ fontSize: 9 }}>
+                      {devToi.loaiVao === 'late' ? `TRỄ ${doDaiPhut(devToi.lechVao)}` : devToi.loaiVao === 'early' ? `SỚM ${doDaiPhut(devToi.lechVao)}` : 'ĐÚNG MỐC'}
+                    </span>
+                  )}
+                </strong>
+              </div>
+              <div className="cc2-lead-own-time">
+                <small>Giờ ra</small>
+                <strong>{cuaToi?.ra || '--:--'}</strong>
+              </div>
+            </div>
+
+            <div className="cc2-lead-own-action">
+              <button onClick={() => setDangXem({ hoSo, cham: cuaToi })}>🕘 XEM LỊCH SỬ</button>
+              {!cuaToi?.vaoISO && (
+                <button className="primary-small" onClick={onCheckin}>▶ BẮT ĐẦU CA</button>
+              )}
+              {cuaToi?.vaoISO && !cuaToi?.raISO && (
+                <button className="primary-small" onClick={onCheckout}>🏁 KẾT THÚC CA</button>
+              )}
+              {cuaToi?.raISO && (
+                <button className="primary-small" disabled style={{ opacity: .55 }}>✓ ĐÃ XONG CA</button>
+              )}
+            </div>
+          </section>
+
           <TongQuanGiamDoc
             danhSach={danhSachQuanLy}
             gioHienTai={gioHienTai}
