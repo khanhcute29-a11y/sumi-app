@@ -30,6 +30,32 @@ function loadSavedPosition() {
   }
 }
 
+// Nút bong bóng chat tròn kéo được ở CẢ desktop lẫn mobile (khác cửa sổ chat
+// ở trên, vì nút này luôn hiện — kể cả trên mobile không có cửa sổ nổi).
+const BUBBLE_SIZE = 52; // khớp .m-chat-avatar-btn trong messenger-chat.css
+const BUBBLE_EDGE_PADDING = 16;
+const BUBBLE_BOTTOM_SAFE = 84; // tránh đè thanh điều hướng dưới, khớp vị trí mặc định hiện có
+const BUBBLE_POSITION_KEY = 'sumi_chat_bubble_pos';
+const DRAG_MOVE_THRESHOLD = 8; // px — dưới ngưỡng này tính là chạm (mở chat), trên là kéo
+
+function clampBubblePosition(x, y) {
+  const maxX = Math.max(BUBBLE_EDGE_PADDING, window.innerWidth - BUBBLE_SIZE - BUBBLE_EDGE_PADDING);
+  const maxY = Math.max(BUBBLE_EDGE_PADDING, window.innerHeight - BUBBLE_SIZE - BUBBLE_EDGE_PADDING);
+  return { x: Math.min(Math.max(BUBBLE_EDGE_PADDING, x), maxX), y: Math.min(Math.max(BUBBLE_EDGE_PADDING, y), maxY) };
+}
+
+function loadSavedBubblePosition() {
+  try {
+    const raw = localStorage.getItem(BUBBLE_POSITION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed?.x !== 'number' || typeof parsed?.y !== 'number') return null;
+    return clampBubblePosition(parsed.x, parsed.y);
+  } catch {
+    return null;
+  }
+}
+
 // Nút chat nổi (góc dưới phải) hiện xuyên suốt toàn app khi đã đăng nhập —
 // bấm vào mở cửa sổ Messenger toàn màn hình (trên mobile) / dạng cửa sổ nổi
 // (trên desktop, qua CSS max-width trong messenger-chat.css).
@@ -50,6 +76,16 @@ export function ChatLauncher({ profile }) {
   // gắn thủ công (xem useEffect bên dưới) để tránh đọc closure cũ, vì effect đó
   // chỉ chạy 1 lần lúc mount chứ không re-run theo mỗi lần đổi isDraggingWindow.
   const isDraggingRef = useRef(false);
+
+  // Vị trí nút bong bóng chat tròn khi đã kéo — null nghĩa là chưa từng kéo,
+  // giữ nguyên vị trí mặc định theo CSS .sumi-chat-launcher-stack.
+  const [bubblePosition, setBubblePosition] = useState(loadSavedBubblePosition);
+  const [isDraggingBubble, setIsDraggingBubble] = useState(false);
+  const bubbleDragOffset = useRef({ x: 0, y: 0 });
+  const bubbleStartClient = useRef({ x: 0, y: 0 });
+  const bubbleHasMoved = useRef(false); // phân biệt kéo (drag) và chạm (tap mở chat)
+  const bubbleIsDraggingRef = useRef(false);
+  const bubbleStackRef = useRef(null);
 
   const unreadTotal = useMemo(() => Object.values(unreadCounts).reduce((s, n) => s + n, 0), [unreadCounts]);
 
@@ -219,12 +255,108 @@ export function ChatLauncher({ profile }) {
       }
     : undefined;
 
+  // ── Kéo thả nút bong bóng chat tròn (mobile + desktop) ──
+  useEffect(() => {
+    const onResize = () => {
+      setBubblePosition((prev) => (prev ? clampBubblePosition(prev.x, prev.y) : prev));
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  const startBubbleDrag = (clientX, clientY) => {
+    const base = bubblePosition || clampBubblePosition(
+      window.innerWidth - BUBBLE_SIZE - BUBBLE_EDGE_PADDING,
+      window.innerHeight - BUBBLE_SIZE - BUBBLE_BOTTOM_SAFE,
+    );
+    bubbleDragOffset.current = { x: clientX - base.x, y: clientY - base.y };
+    bubbleStartClient.current = { x: clientX, y: clientY };
+    bubbleHasMoved.current = false;
+    bubbleIsDraggingRef.current = true;
+    setBubblePosition(base);
+    setIsDraggingBubble(true);
+  };
+
+  const moveBubbleDrag = (clientX, clientY) => {
+    const dist = Math.hypot(clientX - bubbleStartClient.current.x, clientY - bubbleStartClient.current.y);
+    if (dist > DRAG_MOVE_THRESHOLD) bubbleHasMoved.current = true;
+    setBubblePosition(clampBubblePosition(clientX - bubbleDragOffset.current.x, clientY - bubbleDragOffset.current.y));
+  };
+
+  const endBubbleDrag = () => {
+    bubbleIsDraggingRef.current = false;
+    setIsDraggingBubble(false);
+    const moved = bubbleHasMoved.current;
+    setBubblePosition((prev) => {
+      if (prev) {
+        try { localStorage.setItem(BUBBLE_POSITION_KEY, JSON.stringify(prev)); } catch { /* ignore */ }
+      }
+      return prev;
+    });
+    // Không dịch chuyển đáng kể -> đây là một cú chạm/click thật, mở chat.
+    // Có dịch chuyển -> chỉ lưu vị trí mới, không mở.
+    if (!moved) setOpen(true);
+  };
+
+  const handleBubbleMouseDown = (e) => {
+    e.preventDefault();
+    startBubbleDrag(e.clientX, e.clientY);
+    const onMouseMove = (ev) => moveBubbleDrag(ev.clientX, ev.clientY);
+    const onMouseUp = () => {
+      endBubbleDrag();
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
+  const handleBubbleTouchStart = (e) => {
+    const t = e.touches[0];
+    startBubbleDrag(t.clientX, t.clientY);
+  };
+  const handleBubbleTouchEnd = () => {
+    if (bubbleIsDraggingRef.current) endBubbleDrag();
+  };
+
+  // Cùng lý do như cửa sổ chat ở trên: touchmove gắn qua JSX prop bị React 18
+  // đăng ký passive, preventDefault() không chặn được cuộn trang thật — phải
+  // gắn thủ công qua ref với { passive: false }.
+  useEffect(() => {
+    const el = bubbleStackRef.current;
+    if (!el) return;
+    const onTouchMove = (e) => {
+      if (!bubbleIsDraggingRef.current) return;
+      if (e.cancelable) e.preventDefault();
+      const t = e.touches[0];
+      moveBubbleDrag(t.clientX, t.clientY);
+    };
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    return () => el.removeEventListener('touchmove', onTouchMove);
+  }, []);
+
+  const draggedBubbleStyle = bubblePosition
+    ? {
+        position: 'fixed', left: 0, top: 0, right: 'auto', bottom: 'auto',
+        transform: `translate3d(${bubblePosition.x}px, ${bubblePosition.y}px, 0)`,
+        willChange: 'transform',
+        transition: isDraggingBubble ? 'none' : 'transform 0.15s ease',
+      }
+    : undefined;
+
   if (!profile) return null;
 
   return (
     <>
       {!open && (
-        <div className="sumi-chat-launcher-stack">
+        <div
+          ref={bubbleStackRef}
+          className="sumi-chat-launcher-stack"
+          style={draggedBubbleStyle}
+          onMouseDown={handleBubbleMouseDown}
+          onTouchStart={handleBubbleTouchStart}
+          onTouchEnd={handleBubbleTouchEnd}
+        >
           <button className="m-chat-avatar-btn" title="Mở tin nhắn nội bộ" onClick={() => setOpen(true)}>
             <div className="m-chat-avatar-img" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5EBE1', fontSize: 22 }}>💬</div>
             {unreadTotal > 0 ? (
