@@ -180,12 +180,26 @@ export default function ViecGiamDoc({
     } finally { setDangNhac(''); }
   };
 
-  const moTrang = (tieuDe, dsViec) => setTrangDanhSach({ tieuDe, dsViec });
+  // ⚠️ LỖI THẬT đã vá: trước đây `moTrang` chụp CỨNG mảng dsViec vào state
+  // ngay lúc bấm — sau khi Xoá/Gia hạn thành công, `tasks` (từ CongViecV2) tự
+  // tải lại đúng, nhưng mảng đã chụp trong `trangDanhSach` KHÔNG tự cập nhật
+  // theo, nên việc vừa xoá vẫn "lù lù" trên trang danh sách cho tới khi F5.
+  // Giờ chỉ lưu LOẠI lọc (moTrang lưu `loc`), danh sách hiển thị luôn tính lại
+  // từ `daLoc` MỚI NHẤT ở mỗi lần render — xoá xong tự biến mất ngay, không
+  // cần tải lại trang.
+  const dsTheoLoc = (loc) => {
+    if (loc === 'dangLam') return daLoc.filter((t) => !daDong(t) && !quaHan(t));
+    if (loc === 'quaHan') return quaHanDs;
+    if (loc === 'choDuyet') return choDuyetDs;
+    if (loc === 'hoanThanh') return daLoc.filter((t) => t.status === 'done');
+    return daLoc; // 'all' — Việc đã giao
+  };
+  const moTrang = (tieuDe, loc) => setTrangDanhSach({ tieuDe, loc });
 
   if (trangDanhSach) {
     return (
       <div className="cv-wrap">
-        <TrangDanhSachViec tieuDe={trangDanhSach.tieuDe} dsViec={trangDanhSach.dsViec}
+        <TrangDanhSachViec tieuDe={trangDanhSach.tieuDe} dsViec={dsTheoLoc(trangDanhSach.loc)}
           tenTheoId={tenTheoId} tenKhau={tenKhau} danhSachKhau={danhSachKhau}
           onXem={setXem} onBack={() => setTrangDanhSach(null)}
           onNhacNho={nhac} dangNhac={dangNhac} />
@@ -230,25 +244,25 @@ export default function ViecGiamDoc({
 
       <div className="cv-metrics">
         <button className="cv-metric" style={{ cursor: 'pointer', border: 0, font: 'inherit', textAlign: 'left' }}
-          onClick={() => moTrang('🔵 Đang làm', daLoc.filter((t) => !daDong(t) && !quaHan(t)))}>
+          onClick={() => moTrang('🔵 Đang làm', 'dangLam')}>
           <span>Đang làm</span><strong style={{ color: 'var(--cv-primary)' }}>{tomTat.dangLam}</strong>
         </button>
         <button className={`cv-metric${tomTat.quaHan ? ' danger' : ''}`} style={{ cursor: 'pointer', border: 0, font: 'inherit', textAlign: 'left' }}
-          onClick={() => moTrang('⚠️ Quá hạn', quaHanDs)}>
+          onClick={() => moTrang('⚠️ Quá hạn', 'quaHan')}>
           <span>Quá hạn</span><strong>{tomTat.quaHan}</strong>
         </button>
         <button className="cv-metric" style={{ cursor: 'pointer', border: 0, font: 'inherit', textAlign: 'left' }}
-          onClick={() => moTrang('📤 Chờ duyệt', choDuyetDs)}>
+          onClick={() => moTrang('📤 Chờ duyệt', 'choDuyet')}>
           <span>Chờ duyệt</span><strong style={{ color: '#1e7e4c' }}>{tomTat.choDuyet}</strong>
         </button>
         <button className="cv-metric" style={{ cursor: 'pointer', border: 0, font: 'inherit', textAlign: 'left' }}
-          onClick={() => moTrang('✅ Hoàn thành', daLoc.filter((t) => t.status === 'done'))}>
+          onClick={() => moTrang('✅ Hoàn thành', 'hoanThanh')}>
           <span>Hoàn thành</span><strong style={{ color: '#1e7e4c' }}>{tomTat.hoanThanh}</strong>
         </button>
       </div>
 
       {/* ── Việc đã giao: toàn bộ, không lọc trạng thái ── */}
-      <button onClick={() => moTrang('📋 Việc đã giao', daLoc)} style={{
+      <button onClick={() => moTrang('📋 Việc đã giao', 'all')} style={{
         width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         marginTop: 10, padding: '12px 16px', borderRadius: 16, border: '1px solid var(--cv-border)',
         textAlign: 'left', font: 'inherit', cursor: 'pointer', background: 'var(--cv-surface)', color: 'var(--cv-text)',
