@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Crown,
   TrendingUp,
@@ -66,6 +66,44 @@ export function BossOverviewV3Inner() {
   const [selectedOrderFilter, setSelectedOrderFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+
+  // ── Khoá cuộn nền + vuốt kéo xuống để đóng Bottom Sheet (dùng chung cho mọi sheet) ──
+  const [dragY, setDragY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartY = useRef(0);
+
+  useEffect(() => {
+    document.body.style.overflow = activeSheet ? 'hidden' : 'unset';
+    setDragY(0);
+    setIsDragging(false);
+    return () => { document.body.style.overflow = 'unset'; };
+  }, [activeSheet]);
+
+  const handleSheetTouchStart = (e: React.TouchEvent) => {
+    dragStartY.current = e.touches[0].clientY;
+    setIsDragging(true);
+  };
+  const handleSheetTouchMove = (e: React.TouchEvent) => {
+    const delta = e.touches[0].clientY - dragStartY.current;
+    if (delta > 0) setDragY(delta);
+  };
+  const handleSheetTouchEnd = () => {
+    setIsDragging(false);
+    if (dragY > 120) setActiveSheet(null);
+    setDragY(0);
+  };
+  const sheetDragHandlers = { onTouchStart: handleSheetTouchStart, onTouchMove: handleSheetTouchMove, onTouchEnd: handleSheetTouchEnd };
+  const sheetPanelStyle = (extra: React.CSSProperties = {}): React.CSSProperties => ({
+    width: '100%', maxHeight: '85vh', background: '#fff', borderRadius: '28px 28px 0 0',
+    boxSizing: 'border-box', display: 'flex', flexDirection: 'column', overflow: 'hidden',
+    transform: `translateY(${dragY}px)`,
+    transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)',
+    ...extra,
+  });
+  const SHEET_HANDLE = <div style={{ width: 38, height: 4, background: '#cbd5e1', borderRadius: 99, margin: '8px auto 2px', flexShrink: 0 }} />;
+  const sheetBodyStyle = (extra: React.CSSProperties = {}): React.CSSProperties => ({
+    flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '0 14px 30px', boxSizing: 'border-box', ...extra,
+  });
 
   // ── Dữ liệu thật: doanh thu 5 kênh ──
   const [revenueStreams, setRevenueStreams] = useState<any[]>([]);
@@ -910,34 +948,38 @@ export function BossOverviewV3Inner() {
         {/* ========================================================================= */}
         {activeSheet === 'revenue_detail' && (
           <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
-            <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxHeight: '82%', background: '#fff', borderRadius: '28px 28px 0 0', padding: '16px 14px 30px', boxSizing: 'border-box', overflowY: 'auto' }}>
-              <div style={{ width: 38, height: 4, background: '#cbd5e1', borderRadius: 99, margin: '0 auto 12px' }} />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, paddingBottom: 8, borderBottom: '1.5px solid #eadcca' }}>
-                <div>
-                  <div style={{ fontSize: 15, fontWeight: 900, color: '#166534' }}>📊 Chi Tiết Nguồn Thu Hôm Nay</div>
-                  <div style={{ fontSize: 11, color: '#725f50' }}>Tổng cộng: {formatVND(totalRevenue)}</div>
+            <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
+              <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
+                {SHEET_HANDLE}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 900, color: '#166534' }}>📊 Chi Tiết Nguồn Thu Hôm Nay</div>
+                    <div style={{ fontSize: 11, color: '#725f50' }}>Tổng cộng: {formatVND(totalRevenue)}</div>
+                  </div>
+                  <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
                 </div>
-                <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {revenueStreams.map(rev => (
-                  <div key={rev.id} style={{ background: '#faf6f0', border: '1.5px solid #eadcca', borderRadius: 14, padding: 12 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 22 }}>{rev.icon}</span>
-                        <div>
-                          <div style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>{rev.channel}</div>
-                          <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>{rev.note}</div>
+              <div style={sheetBodyStyle({ paddingTop: 12 })}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {revenueStreams.map(rev => (
+                    <div key={rev.id} style={{ background: '#faf6f0', border: '1.5px solid #eadcca', borderRadius: 14, padding: 12 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 22 }}>{rev.icon}</span>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>{rev.channel}</div>
+                            <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>{rev.note}</div>
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: 14, fontWeight: 900, color: '#15803d' }}>{formatVND(rev.amount)}</div>
+                          <div style={{ fontSize: 10.5, fontWeight: 800, color: '#a08060' }}>{rev.percentage} tổng thu</div>
                         </div>
                       </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: 14, fontWeight: 900, color: '#15803d' }}>{formatVND(rev.amount)}</div>
-                        <div style={{ fontSize: 10.5, fontWeight: 800, color: '#a08060' }}>{rev.percentage} tổng thu</div>
-                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -948,46 +990,50 @@ export function BossOverviewV3Inner() {
         {/* ========================================================================= */}
         {activeSheet === 'expense_detail' && (
           <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
-            <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxHeight: '82%', background: '#fff', borderRadius: '28px 28px 0 0', padding: '16px 14px 30px', boxSizing: 'border-box', overflowY: 'auto' }}>
-              <div style={{ width: 38, height: 4, background: '#cbd5e1', borderRadius: 99, margin: '0 auto 12px' }} />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, paddingBottom: 8, borderBottom: '1.5px solid #eadcca' }}>
-                <div>
-                  <div style={{ fontSize: 15, fontWeight: 900, color: '#dc2626' }}>📑 Sổ Cái Khoản Chi Tiêu Hôm Nay</div>
-                  <div style={{ fontSize: 11, color: '#725f50' }}>Tổng chi: {formatVND(totalExpense)}</div>
+            <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
+              <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
+                {SHEET_HANDLE}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 900, color: '#dc2626' }}>📑 Sổ Cái Khoản Chi Tiêu Hôm Nay</div>
+                    <div style={{ fontSize: 11, color: '#725f50' }}>Tổng chi: {formatVND(totalExpense)}</div>
+                  </div>
+                  <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
                 </div>
-                <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {expenseStreams.length === 0 && (
-                  <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Chưa có khoản chi nào hôm nay.</div>
-                )}
-                {expenseStreams.map((exp: any) => (
-                  <div key={exp.id} style={{ background: '#fff', border: '1.5px solid #fecaca', borderRadius: 14, padding: 12 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 20 }}>{exp.icon}</span>
-                        <div>
-                          <div style={{ fontSize: 12.5, fontWeight: 900, color: '#2d1c10' }}>{exp.title}</div>
-                          <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>{exp.claimantName} · <strong>{exp.category}</strong> · {exp.time}</div>
+              <div style={sheetBodyStyle({ paddingTop: 12 })}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {expenseStreams.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Chưa có khoản chi nào hôm nay.</div>
+                  )}
+                  {expenseStreams.map((exp: any) => (
+                    <div key={exp.id} style={{ background: '#fff', border: '1.5px solid #fecaca', borderRadius: 14, padding: 12 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 20 }}>{exp.icon}</span>
+                          <div>
+                            <div style={{ fontSize: 12.5, fontWeight: 900, color: '#2d1c10' }}>{exp.title}</div>
+                            <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>{exp.claimantName} · <strong>{exp.category}</strong> · {exp.time}</div>
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 13.5, fontWeight: 900, color: '#dc2626' }}>
+                          -{formatVND(exp.amount)}
                         </div>
                       </div>
-                      <div style={{ fontSize: 13.5, fontWeight: 900, color: '#dc2626' }}>
-                        -{formatVND(exp.amount)}
-                      </div>
+                      {exp.status === 'pending_director' && (
+                        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                          <button onClick={() => handleReviewExpense(exp.id, true)} style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 8, padding: '7px 0', fontWeight: 900, fontSize: 11.5, cursor: 'pointer' }}>
+                            ✓ Duyệt Chi
+                          </button>
+                          <button onClick={() => handleReviewExpense(exp.id, false)} style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, padding: '7px 0', fontWeight: 900, fontSize: 11.5, cursor: 'pointer' }}>
+                            ✕ Từ Chối
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    {exp.status === 'pending_director' && (
-                      <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                        <button onClick={() => handleReviewExpense(exp.id, true)} style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 8, padding: '7px 0', fontWeight: 900, fontSize: 11.5, cursor: 'pointer' }}>
-                          ✓ Duyệt Chi
-                        </button>
-                        <button onClick={() => handleReviewExpense(exp.id, false)} style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, padding: '7px 0', fontWeight: 900, fontSize: 11.5, cursor: 'pointer' }}>
-                          ✕ Từ Chối
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -998,16 +1044,19 @@ export function BossOverviewV3Inner() {
         {/* ========================================================================= */}
         {activeSheet === 'task_sheet' && (
           <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1300, display: 'flex', alignItems: 'flex-end' }}>
-            <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxHeight: '85%', background: '#fff', borderRadius: '28px 28px 0 0', padding: '16px 14px 30px', boxSizing: 'border-box', overflowY: 'auto' }}>
-              <div style={{ width: 38, height: 4, background: '#cbd5e1', borderRadius: 99, margin: '0 auto 12px' }} />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, paddingBottom: 8, borderBottom: '1.5px solid #eadcca' }}>
-                <div>
-                  <div style={{ fontSize: 15, fontWeight: 900, color: '#8b5900' }}>⚡ Giao Việc Nhanh Cho Nhân Viên</div>
-                  <div style={{ fontSize: 11, color: '#725f50' }}>Tự động đồng bộ sang màn hình Nhân viên</div>
+            <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
+              <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
+                {SHEET_HANDLE}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 900, color: '#8b5900' }}>⚡ Giao Việc Nhanh Cho Nhân Viên</div>
+                    <div style={{ fontSize: 11, color: '#725f50' }}>Tự động đồng bộ sang màn hình Nhân viên</div>
+                  </div>
+                  <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
                 </div>
-                <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
               </div>
 
+              <div style={sheetBodyStyle({ paddingTop: 12 })}>
               <form onSubmit={handleCreateTask} style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
                 <div>
                   <div style={{ fontSize: 11, fontWeight: 800, color: '#725f50', marginBottom: 2 }}>Tên công việc *</div>
@@ -1088,6 +1137,7 @@ export function BossOverviewV3Inner() {
                   </div>
                 </>
               )}
+              </div>
             </div>
           </div>
         )}
@@ -1097,68 +1147,72 @@ export function BossOverviewV3Inner() {
         {/* ========================================================================= */}
         {activeSheet === 'feed_sheet' && (
           <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1300, display: 'flex', alignItems: 'flex-end' }}>
-            <div onClick={e => e.stopPropagation()} style={{ width: '100%', height: '85%', background: '#fff', borderRadius: '28px 28px 0 0', padding: '16px 14px 30px', boxSizing: 'border-box', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ width: 38, height: 4, background: '#cbd5e1', borderRadius: 99, margin: '0 auto 12px' }} />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingBottom: 8, borderBottom: '1.5px solid #eadcca' }}>
-                <div>
-                  <div style={{ fontSize: 15, fontWeight: 900, color: '#166534' }}>📢 Bảng Tin & Chỉ Đạo Công Khai</div>
-                  <div style={{ fontSize: 11, color: '#725f50' }}>Toàn thể {staffCounts.total} nhân viên đều nhìn thấy</div>
-                </div>
-                <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
-              </div>
-
-              {/* Danh sách tin nhắn */}
-              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
-                {comments.map(cm => (
-                  <div key={cm.id} style={{ background: '#faf6f0', border: '1px solid #eadcca', borderRadius: 14, padding: '10px 12px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
-                      <span style={{ fontSize: 12.5, fontWeight: 900, color: '#2d1c10' }}>{cm.author}</span>
-                      <span style={{ fontSize: 10.5, color: '#8c7664' }}>{cm.time}</span>
-                    </div>
-                    <div style={{ fontSize: 12.5, color: '#493526', lineHeight: 1.45 }}>
-                      {renderFormattedText(cm.text)}
-                    </div>
+            <div onClick={e => e.stopPropagation()} style={sheetPanelStyle({ height: '85vh' })}>
+              <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
+                {SHEET_HANDLE}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 900, color: '#166534' }}>📢 Bảng Tin & Chỉ Đạo Công Khai</div>
+                    <div style={{ fontSize: 11, color: '#725f50' }}>Toàn thể {staffCounts.total} nhân viên đều nhìn thấy</div>
                   </div>
-                ))}
+                  <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
+                </div>
               </div>
 
-              {/* Form gửi tin nhắn */}
-              <form onSubmit={handleSendComment} style={{ display: 'flex', gap: 6 }}>
-                <input
-                  type="text"
-                  placeholder="Gõ chỉ đạo... (VD: @Lê_Hoàng_Khoa mẻ bánh xong chưa?)"
-                  value={inputComment}
-                  onChange={e => setInputComment(e.target.value)}
-                  style={{
-                    flex: 1,
-                    padding: '9px 12px',
-                    borderRadius: 12,
-                    border: '1.5px solid #eadcca',
-                    fontSize: 12.5,
-                    outline: 'none',
-                    background: '#faf6f0',
-                    boxSizing: 'border-box'
-                  }}
-                />
-                <button
-                  type="submit"
-                  style={{
-                    background: '#c28c4e',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: 12,
-                    padding: '0 16px',
-                    fontWeight: 900,
-                    fontSize: 12.5,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4
-                  }}
-                >
-                  <Send size={15} />
-                </button>
-              </form>
+              <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '12px 14px 14px', boxSizing: 'border-box' }}>
+                {/* Danh sách tin nhắn */}
+                <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                  {comments.map(cm => (
+                    <div key={cm.id} style={{ background: '#faf6f0', border: '1px solid #eadcca', borderRadius: 14, padding: '10px 12px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+                        <span style={{ fontSize: 12.5, fontWeight: 900, color: '#2d1c10' }}>{cm.author}</span>
+                        <span style={{ fontSize: 10.5, color: '#8c7664' }}>{cm.time}</span>
+                      </div>
+                      <div style={{ fontSize: 12.5, color: '#493526', lineHeight: 1.45 }}>
+                        {renderFormattedText(cm.text)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Form gửi tin nhắn */}
+                <form onSubmit={handleSendComment} style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <input
+                    type="text"
+                    placeholder="Gõ chỉ đạo... (VD: @Lê_Hoàng_Khoa mẻ bánh xong chưa?)"
+                    value={inputComment}
+                    onChange={e => setInputComment(e.target.value)}
+                    style={{
+                      flex: 1,
+                      padding: '9px 12px',
+                      borderRadius: 12,
+                      border: '1.5px solid #eadcca',
+                      fontSize: 12.5,
+                      outline: 'none',
+                      background: '#faf6f0',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    style={{
+                      background: '#c28c4e',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 12,
+                      padding: '0 16px',
+                      fontWeight: 900,
+                      fontSize: 12.5,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4
+                    }}
+                  >
+                    <Send size={15} />
+                  </button>
+                </form>
+              </div>
             </div>
           </div>
         )}
@@ -1168,39 +1222,43 @@ export function BossOverviewV3Inner() {
         {/* ========================================================================= */}
         {activeSheet === 'advance_sheet' && (
           <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
-            <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxHeight: '82%', background: '#fff', borderRadius: '28px 28px 0 0', padding: '16px 14px 30px', boxSizing: 'border-box', overflowY: 'auto' }}>
-              <div style={{ width: 38, height: 4, background: '#cbd5e1', borderRadius: 99, margin: '0 auto 12px' }} />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, paddingBottom: 8, borderBottom: '1.5px solid #eadcca' }}>
-                <div>
-                  <div style={{ fontSize: 15, fontWeight: 900, color: '#ca8a04' }}>💵 Phê Duyệt Tạm Ứng Lương</div>
-                  <div style={{ fontSize: 11, color: '#725f50' }}>{pendingAdvances.length} đơn yêu cầu đang chờ Sếp duyệt</div>
+            <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
+              <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
+                {SHEET_HANDLE}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 900, color: '#ca8a04' }}>💵 Phê Duyệt Tạm Ứng Lương</div>
+                    <div style={{ fontSize: 11, color: '#725f50' }}>{pendingAdvances.length} đơn yêu cầu đang chờ Sếp duyệt</div>
+                  </div>
+                  <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
                 </div>
-                <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
               </div>
 
-              {pendingAdvances.length === 0 && (
-                <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Không có yêu cầu tạm ứng nào đang chờ.</div>
-              )}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {pendingAdvances.map((a: any) => (
-                  <div key={a.id} style={{ background: '#fefce8', border: '1.5px solid #facc15', borderRadius: 14, padding: 12 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div>
-                        <div style={{ fontSize: 13.5, fontWeight: 900, color: '#2d1c10' }}>{a.employee_name}</div>
-                        <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>Lý do: {a.reason} · Nộp lúc {new Date(a.created_at).toLocaleString('vi-VN')}</div>
+              <div style={sheetBodyStyle({ paddingTop: 12 })}>
+                {pendingAdvances.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Không có yêu cầu tạm ứng nào đang chờ.</div>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {pendingAdvances.map((a: any) => (
+                    <div key={a.id} style={{ background: '#fefce8', border: '1.5px solid #facc15', borderRadius: 14, padding: 12 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                          <div style={{ fontSize: 13.5, fontWeight: 900, color: '#2d1c10' }}>{a.employee_name}</div>
+                          <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>Lý do: {a.reason} · Nộp lúc {new Date(a.created_at).toLocaleString('vi-VN')}</div>
+                        </div>
+                        <span style={{ fontSize: 15, fontWeight: 900, color: '#b45309' }}>{formatVND(a.amount)}</span>
                       </div>
-                      <span style={{ fontSize: 15, fontWeight: 900, color: '#b45309' }}>{formatVND(a.amount)}</span>
+                      <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                        <button onClick={() => handleReviewAdvance(a.id, true)} style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
+                          ✓ Duyệt Chi Tiền
+                        </button>
+                        <button onClick={() => handleReviewAdvance(a.id, false)} style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
+                          ✕ Từ Chối
+                        </button>
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
-                      <button onClick={() => handleReviewAdvance(a.id, true)} style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
-                        ✓ Duyệt Chi Tiền
-                      </button>
-                      <button onClick={() => handleReviewAdvance(a.id, false)} style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
-                        ✕ Từ Chối
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -1211,38 +1269,42 @@ export function BossOverviewV3Inner() {
         {/* ========================================================================= */}
         {activeSheet === 'leave_sheet' && (
           <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
-            <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxHeight: '82%', background: '#fff', borderRadius: '28px 28px 0 0', padding: '16px 14px 30px', boxSizing: 'border-box', overflowY: 'auto' }}>
-              <div style={{ width: 38, height: 4, background: '#cbd5e1', borderRadius: 99, margin: '0 auto 12px' }} />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, paddingBottom: 8, borderBottom: '1.5px solid #eadcca' }}>
-                <div>
-                  <div style={{ fontSize: 15, fontWeight: 900, color: '#2563eb' }}>📝 Phê Duyệt Đơn Nghỉ Phép</div>
-                  <div style={{ fontSize: 11, color: '#725f50' }}>{pendingLeaves.length} đơn đang chờ duyệt</div>
+            <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
+              <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
+                {SHEET_HANDLE}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 900, color: '#2563eb' }}>📝 Phê Duyệt Đơn Nghỉ Phép</div>
+                    <div style={{ fontSize: 11, color: '#725f50' }}>{pendingLeaves.length} đơn đang chờ duyệt</div>
+                  </div>
+                  <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
                 </div>
-                <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
               </div>
 
-              {pendingLeaves.length === 0 && (
-                <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Không có đơn nghỉ phép nào đang chờ.</div>
-              )}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {pendingLeaves.map((l: any) => (
-                  <div key={l.id} style={{ background: '#eff6ff', border: '1.5px solid #93c5fd', borderRadius: 14, padding: 12 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div>
-                        <div style={{ fontSize: 13.5, fontWeight: 900, color: '#2d1c10' }}>{l.requester_name}</div>
-                        <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>Ngày nghỉ: <strong>{l.leave_date}</strong> {l.reason ? `· ${l.reason}` : ''}</div>
+              <div style={sheetBodyStyle({ paddingTop: 12 })}>
+                {pendingLeaves.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Không có đơn nghỉ phép nào đang chờ.</div>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {pendingLeaves.map((l: any) => (
+                    <div key={l.id} style={{ background: '#eff6ff', border: '1.5px solid #93c5fd', borderRadius: 14, padding: 12 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                          <div style={{ fontSize: 13.5, fontWeight: 900, color: '#2d1c10' }}>{l.requester_name}</div>
+                          <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>Ngày nghỉ: <strong>{l.leave_date}</strong> {l.reason ? `· ${l.reason}` : ''}</div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                        <button onClick={() => handleReviewLeave(l.id, true)} style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
+                          ✓ Đồng Ý Duyệt
+                        </button>
+                        <button onClick={() => handleReviewLeave(l.id, false)} style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
+                          ✕ Từ Chối
+                        </button>
                       </div>
                     </div>
-                    <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
-                      <button onClick={() => handleReviewLeave(l.id, true)} style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
-                        ✓ Đồng Ý Duyệt
-                      </button>
-                      <button onClick={() => handleReviewLeave(l.id, false)} style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
-                        ✕ Từ Chối
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -1253,33 +1315,37 @@ export function BossOverviewV3Inner() {
         {/* ========================================================================= */}
         {activeSheet === 'report_sheet' && (
           <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
-            <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxHeight: '82%', background: '#fff', borderRadius: '28px 28px 0 0', padding: '16px 14px 30px', boxSizing: 'border-box', overflowY: 'auto' }}>
-              <div style={{ width: 38, height: 4, background: '#cbd5e1', borderRadius: 99, margin: '0 auto 12px' }} />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, paddingBottom: 8, borderBottom: '1.5px solid #eadcca' }}>
-                <div>
-                  <div style={{ fontSize: 15, fontWeight: 900, color: '#db2777' }}>📋 Tổng Hợp Báo Cáo Ca Ngày</div>
-                  <div style={{ fontSize: 11, color: '#725f50' }}>{shiftReports.length} báo cáo cuối ca đã nộp hôm nay</div>
+            <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
+              <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
+                {SHEET_HANDLE}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 900, color: '#db2777' }}>📋 Tổng Hợp Báo Cáo Ca Ngày</div>
+                    <div style={{ fontSize: 11, color: '#725f50' }}>{shiftReports.length} báo cáo cuối ca đã nộp hôm nay</div>
+                  </div>
+                  <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
                 </div>
-                <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
               </div>
 
-              {shiftReports.length === 0 && (
-                <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Chưa có báo cáo cuối ca nào hôm nay.</div>
-              )}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {shiftReports.map((r: any) => (
-                  <div key={r.id} style={{ background: '#faf6f0', border: '1.5px solid #eadcca', borderRadius: 12, padding: 10 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>👤 {r.staff_name}{r.station ? ` · ${r.station}` : ''}</div>
-                      <div style={{ fontSize: 10.5, color: '#725f50' }}>{new Date(r.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</div>
+              <div style={sheetBodyStyle({ paddingTop: 12 })}>
+                {shiftReports.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Chưa có báo cáo cuối ca nào hôm nay.</div>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {shiftReports.map((r: any) => (
+                    <div key={r.id} style={{ background: '#faf6f0', border: '1.5px solid #eadcca', borderRadius: 12, padding: 10 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>👤 {r.staff_name}{r.station ? ` · ${r.station}` : ''}</div>
+                        <div style={{ fontSize: 10.5, color: '#725f50' }}>{new Date(r.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</div>
+                      </div>
+                      <div style={{ fontSize: 11.5, color: '#493526', marginTop: 2 }}>
+                        Doanh thu ca: <strong>{formatVND(r.revenue)}</strong> · Tiền mặt bàn giao: <strong>{formatVND(r.cash_handover)}</strong>
+                        {r.stock_remaining != null && <> · Tồn kho: <strong>{r.stock_remaining}</strong></>}
+                      </div>
+                      {r.note && <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>Ghi chú: {r.note}</div>}
                     </div>
-                    <div style={{ fontSize: 11.5, color: '#493526', marginTop: 2 }}>
-                      Doanh thu ca: <strong>{formatVND(r.revenue)}</strong> · Tiền mặt bàn giao: <strong>{formatVND(r.cash_handover)}</strong>
-                      {r.stock_remaining != null && <> · Tồn kho: <strong>{r.stock_remaining}</strong></>}
-                    </div>
-                    {r.note && <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>Ghi chú: {r.note}</div>}
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -1290,42 +1356,46 @@ export function BossOverviewV3Inner() {
         {/* ========================================================================= */}
         {activeSheet === 'schedule_sheet' && (
           <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
-            <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxHeight: '82%', background: '#fff', borderRadius: '28px 28px 0 0', padding: '16px 14px 30px', boxSizing: 'border-box', overflowY: 'auto' }}>
-              <div style={{ width: 38, height: 4, background: '#cbd5e1', borderRadius: 99, margin: '0 auto 12px' }} />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, paddingBottom: 8, borderBottom: '1.5px solid #eadcca' }}>
-                <div>
-                  <div style={{ fontSize: 15, fontWeight: 900, color: '#9333ea' }}>📅 Lịch Phân Ca Tuần — 5 Khu Vực</div>
-                  <div style={{ fontSize: 11, color: '#725f50' }}>
-                    {weeklySchedule.from && new Date(weeklySchedule.from).toLocaleDateString('vi-VN')} - {weeklySchedule.to && new Date(weeklySchedule.to).toLocaleDateString('vi-VN')} · {weeklySchedule.totalAssignments} lượt phân ca · Bakery · Bếp Nóng · Bếp Lạnh · Xưởng 41 · Xưởng 42
+            <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
+              <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
+                {SHEET_HANDLE}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 900, color: '#9333ea' }}>📅 Lịch Phân Ca Tuần — 5 Khu Vực</div>
+                    <div style={{ fontSize: 11, color: '#725f50' }}>
+                      {weeklySchedule.from && new Date(weeklySchedule.from).toLocaleDateString('vi-VN')} - {weeklySchedule.to && new Date(weeklySchedule.to).toLocaleDateString('vi-VN')} · {weeklySchedule.totalAssignments} lượt phân ca · Bakery · Bếp Nóng · Bếp Lạnh · Xưởng 41 · Xưởng 42
+                    </div>
                   </div>
+                  <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
                 </div>
-                <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
               </div>
 
-              {weeklySchedule.totalAssignments === 0 && (
-                <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Chưa có ca nào được phân trong tuần này.</div>
-              )}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {weeklySchedule.days.map((day: any) => {
-                  const sang = day['Sáng'] as any[];
-                  const chieu = day['Chiều'] as any[];
-                  if (sang.length === 0 && chieu.length === 0) return null;
-                  return (
-                    <div key={day.date} style={{ background: '#faf6f0', border: '1px solid #eadcca', borderRadius: 10, padding: 8 }}>
-                      <div style={{ fontSize: 12.5, fontWeight: 900, color: '#2d1c10' }}>{day.dow} · {new Date(day.date).toLocaleDateString('vi-VN')}</div>
-                      {sang.length > 0 && (
-                        <div style={{ fontSize: 11, color: '#725f50', marginTop: 3 }}>
-                          <strong>Ca Sáng ({sang.length}):</strong> {sang.map((s: any) => `${s.staff_name} (${s.stationLabel})`).join(', ')}
-                        </div>
-                      )}
-                      {chieu.length > 0 && (
-                        <div style={{ fontSize: 11, color: '#725f50', marginTop: 3 }}>
-                          <strong>Ca Chiều ({chieu.length}):</strong> {chieu.map((s: any) => `${s.staff_name} (${s.stationLabel})`).join(', ')}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+              <div style={sheetBodyStyle({ paddingTop: 12 })}>
+                {weeklySchedule.totalAssignments === 0 && (
+                  <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Chưa có ca nào được phân trong tuần này.</div>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {weeklySchedule.days.map((day: any) => {
+                    const sang = day['Sáng'] as any[];
+                    const chieu = day['Chiều'] as any[];
+                    if (sang.length === 0 && chieu.length === 0) return null;
+                    return (
+                      <div key={day.date} style={{ background: '#faf6f0', border: '1px solid #eadcca', borderRadius: 10, padding: 8 }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 900, color: '#2d1c10' }}>{day.dow} · {new Date(day.date).toLocaleDateString('vi-VN')}</div>
+                        {sang.length > 0 && (
+                          <div style={{ fontSize: 11, color: '#725f50', marginTop: 3 }}>
+                            <strong>Ca Sáng ({sang.length}):</strong> {sang.map((s: any) => `${s.staff_name} (${s.stationLabel})`).join(', ')}
+                          </div>
+                        )}
+                        {chieu.length > 0 && (
+                          <div style={{ fontSize: 11, color: '#725f50', marginTop: 3 }}>
+                            <strong>Ca Chiều ({chieu.length}):</strong> {chieu.map((s: any) => `${s.staff_name} (${s.stationLabel})`).join(', ')}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
@@ -1336,23 +1406,23 @@ export function BossOverviewV3Inner() {
         {/* ========================================================================= */}
         {activeSheet === 'order_drawer' && (
           <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1300, display: 'flex', alignItems: 'flex-end' }}>
-            <div onClick={e => e.stopPropagation()} style={{ width: '100%', height: '86%', background: '#fff', borderRadius: '28px 28px 0 0', padding: '16px 14px 30px', boxSizing: 'border-box', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ width: 38, height: 4, background: '#cbd5e1', borderRadius: 99, margin: '0 auto 12px' }} />
-              
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingBottom: 8, borderBottom: '1.5px solid #eadcca' }}>
-                <div>
-                  <div style={{ fontSize: 15, fontWeight: 900, color: '#2d1c10' }}>
-                    🧾 Danh Sách Đơn Hàng ({filteredOrders.length} đơn)
+            <div onClick={e => e.stopPropagation()} style={sheetPanelStyle({ height: '86vh' })}>
+              <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
+                {SHEET_HANDLE}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 900, color: '#2d1c10' }}>
+                      🧾 Danh Sách Đơn Hàng ({filteredOrders.length} đơn)
+                    </div>
+                    <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 800 }}>
+                      ⬇️ Sắp xếp ưu tiên giảm dần từ trên xuống dưới
+                    </div>
                   </div>
-                  <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 800 }}>
-                    ⬇️ Sắp xếp ưu tiên giảm dần từ trên xuống dưới
-                  </div>
+                  <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
                 </div>
-                <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
-              </div>
 
-              {/* Thanh lọc trạng thái con bên trong Drawer */}
-              <div style={{ display: 'flex', gap: 4, overflowX: 'auto', paddingBottom: 8, marginBottom: 8 }}>
+                {/* Thanh lọc trạng thái con bên trong Drawer */}
+                <div style={{ display: 'flex', gap: 4, overflowX: 'auto', padding: '8px 14px' }}>
                 <button
                   onClick={() => setSelectedOrderFilter('all')}
                   style={{
@@ -1417,10 +1487,12 @@ export function BossOverviewV3Inner() {
                 >
                   ⚠️ Trễ hạn ({orderCounts.overdue})
                 </button>
+                </div>
               </div>
 
               {/* Danh sách đơn hàng ưu tiên */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto' }}>
+              <div style={sheetBodyStyle({ paddingTop: 8 })}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {filteredOrders.map((ord: any, idx: number) => {
                   const flow = ORDER_FLOWS.find((f) => f.key === ord.order_type);
                   const statusLabelMap: Record<string, string> = {
@@ -1465,6 +1537,7 @@ export function BossOverviewV3Inner() {
                   </div>
                 )}
               </div>
+              </div>
             </div>
           </div>
         )}
@@ -1474,23 +1547,23 @@ export function BossOverviewV3Inner() {
         {/* ========================================================================= */}
         {activeSheet === 'staff_detail' && (
           <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
-            <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxHeight: '85%', background: '#fff', borderRadius: '28px 28px 0 0', padding: '16px 14px 30px', boxSizing: 'border-box', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ width: 38, height: 4, background: '#cbd5e1', borderRadius: 99, margin: '0 auto 12px' }} />
-              
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingBottom: 8, borderBottom: '1.5px solid #eadcca' }}>
-                <div>
-                  <div style={{ fontSize: 15, fontWeight: 900, color: '#2d1c10' }}>
-                    👥 Chi Tiết Trạng Thái Nhân Sự ({staffCounts.total} NV)
+            <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
+              <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
+                {SHEET_HANDLE}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 900, color: '#2d1c10' }}>
+                      👥 Chi Tiết Trạng Thái Nhân Sự ({staffCounts.total} NV)
+                    </div>
+                    <div style={{ fontSize: 11, color: '#725f50' }}>
+                      Theo dõi chấm công & hiện diện 3 phân xưởng hôm nay
+                    </div>
                   </div>
-                  <div style={{ fontSize: 11, color: '#725f50' }}>
-                    Theo dõi chấm công & hiện diện 3 phân xưởng hôm nay
-                  </div>
+                  <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
                 </div>
-                <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
-              </div>
 
-              {/* 3 Tab chuyển đổi luồng nhân sự */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 12 }}>
+                {/* 3 Tab chuyển đổi luồng nhân sự */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, padding: '10px 14px 0' }}>
                 <button
                   onClick={() => setSelectedStaffTab('working')}
                   style={{
@@ -1553,11 +1626,13 @@ export function BossOverviewV3Inner() {
                   <span>🔴 Nghỉ ca</span>
                   <span style={{ fontSize: 13, fontWeight: 900 }}>{staffCounts.off} người</span>
                 </button>
+                </div>
               </div>
 
               {/* Danh sách nhân viên theo từng tab */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto' }}>
-                
+              <div style={sheetBodyStyle({ paddingTop: 12 })}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+
                 {/* 1. Luồng: ĐANG LÀM VIỆC */}
                 {selectedStaffTab === 'working' && (
                   <>
@@ -1658,12 +1733,10 @@ export function BossOverviewV3Inner() {
                 )}
 
               </div>
+              </div>
             </div>
           </div>
         )}
-
-        {/* Home Indicator Bar */}
-        <div style={{ width: 135, height: 4.5, background: '#2d1c10', borderRadius: 99, position: 'absolute', bottom: 6, left: '50%', transform: 'translateX(-50%)', zIndex: 1000, opacity: 0.8 }} />
 
         {/* Toast Notification */}
         {toast && (
