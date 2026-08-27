@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
-import { fetchFinishedGoodsStock, fetchProducts, addFinishedGoodsEntryV2, uploadFile } from '../../lib/queries';
+import { fetchFinishedGoodsStock, fetchProducts, addFinishedGoodsEntryV2, uploadFile, fetchFinishedGoodsStockInLog, fetchFinishedGoodsStockOutLog } from '../../lib/queries';
 import { useAuth } from '../../lib/AuthContext';
 
 // Kho Thành Phẩm V2 — theo mockup đã duyệt
@@ -155,7 +155,62 @@ function NhapKhoSheet({ defaultBranch, defaultStore, products, staffName, onClos
   );
 }
 
-export default function FinishedGoodsInventoryV2() {
+// Chi tiết 1 dòng tồn kho — lịch sử nhập/xuất THẬT (từ finished_goods_stock_in_log
+// / _out_log). KHÔNG bịa "mã lô", "bếp trưởng chịu trách nhiệm", hay "trạng thái QA"
+// — schema hiện tại không có các trường này (xem giới hạn "1 dòng gộp, không
+// FIFO nhiều lô" ghi trong migration 202608270080). Người nhập gần nhất lấy từ
+// staff_name trong log, đó là dữ liệu thật gần nhất với "ai chịu trách nhiệm".
+function ChiTietDongTonKho({ row, productLabel }) {
+  const [logs, setLogs] = useState(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    Promise.all([fetchFinishedGoodsStockInLog(80), fetchFinishedGoodsStockOutLog(80)])
+      .then(([inLog, outLog]) => {
+        const merged = [
+          ...inLog.filter((l) => l.product_id === row.product_id && (l.size || null) === (row.size || null) && l.branch === row.branch).map((l) => ({ ...l, kind: 'in' })),
+          ...outLog.filter((l) => l.product_id === row.product_id && (l.size || null) === (row.size || null) && l.branch === row.branch).map((l) => ({ ...l, kind: 'out' })),
+        ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        setLogs(merged);
+      })
+      .catch((e) => setError(e.message));
+  }, [row.product_id, row.size, row.branch]);
+
+  return (
+    <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed #e2cdb6' }}>
+      <div style={{ fontSize: 12, fontWeight: 900, color: '#9a7f68', textTransform: 'uppercase', marginBottom: 8 }}>
+        Lịch sử nhập/xuất — {productLabel}
+      </div>
+      {error && <div style={{ color: '#d94a40', fontWeight: 700, fontSize: 12 }}>{error}</div>}
+      {logs === null ? (
+        <div style={{ color: '#806a58', fontSize: 12 }}>Đang tải...</div>
+      ) : logs.length === 0 ? (
+        <div style={{ color: '#806a58', fontSize: 12 }}>Chưa có lịch sử nhập/xuất cho dòng này.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 260, overflowY: 'auto' }}>
+          {logs.map((l) => (
+            <div key={`${l.kind}-${l.id}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '6px 8px', borderRadius: 10, background: '#fbf5ed' }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 800, color: l.kind === 'in' ? '#078653' : '#d94a40' }}>
+                  {l.kind === 'in' ? '➕ Nhập' : '➖ Xuất'} {l.qty}
+                  {l.kind === 'out' && l.order_code ? ` · Đơn ${l.order_code}` : ''}
+                </div>
+                <div style={{ fontSize: 11, color: '#806a58' }}>
+                  {l.staff_name ? `Người nhập: ${l.staff_name}` : ''}{l.store_location ? ` · ${l.store_location}` : ''}
+                </div>
+              </div>
+              <div style={{ fontSize: 11, color: '#806a58', flexShrink: 0, textAlign: 'right' }}>
+                {new Date(l.created_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function FinishedGoodsInventoryV2({ onBack }) {
   const { profile } = useAuth();
   const [stock, setStock] = useState([]);
   const [products, setProducts] = useState([]);
@@ -164,6 +219,7 @@ export default function FinishedGoodsInventoryV2() {
   const [flow, setFlow] = useState('bakery');
   const [store, setStore] = useState(STORES[0]);
   const [showNhapKho, setShowNhapKho] = useState(false);
+  const [expandedId, setExpandedId] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -193,7 +249,13 @@ export default function FinishedGoodsInventoryV2() {
   const expiringSoon = stock.filter((s) => { const c = countdown(s.expiry_date); return c && c.tone !== 'ok'; }).length;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 720, margin: '0 auto', width: '100%', boxSizing: 'border-box', padding: '0 4px' }}>
+      {onBack && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button onClick={onBack} style={{ width: 44, height: 44, border: '1px solid #e2cdb6', borderRadius: 14, background: '#fff', fontSize: 20, cursor: 'pointer' }}>‹</button>
+          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 900, color: '#2d1b10' }}>🏬 Kho Thành Phẩm</h1>
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
         <div style={{ background: '#fffaf2', border: '1px solid #e2cdb6', borderRadius: 16, padding: 12, textAlign: 'center' }}>
           <div style={{ fontSize: 22, fontWeight: 900, color: '#b7431e' }}>{stock.reduce((t, s) => t + (Number(s.qty) || 0), 0)}</div>
@@ -243,8 +305,13 @@ export default function FinishedGoodsInventoryV2() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {items.map((s) => {
             const cd = countdown(s.expiry_date);
+            const isOpen = expandedId === s.id;
             return (
-              <div key={s.id} style={{ display: 'grid', gridTemplateColumns: '68px 1fr', gap: 12, padding: 12, border: '1px solid #e2cdb6', borderRadius: 20, background: '#fff' }}>
+              <button key={s.id} onClick={() => setExpandedId(isOpen ? null : s.id)} style={{
+                display: 'block', textAlign: 'left', font: 'inherit', cursor: 'pointer',
+                padding: 12, border: `1px solid ${isOpen ? '#ca873a' : '#e2cdb6'}`, borderRadius: 20, background: '#fff',
+              }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '68px 1fr', gap: 12 }}>
                 <div style={{ borderRadius: 16, overflow: 'hidden', background: '#ffe6ad', display: 'grid', placeItems: 'center', fontSize: 30 }}>
                   {s.photo_url ? <img src={s.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '🍰'}
                 </div>
@@ -273,6 +340,8 @@ export default function FinishedGoodsInventoryV2() {
                   {cd && <div style={{ marginTop: 8, padding: '7px 9px', borderRadius: 12, fontSize: 12, fontWeight: 900, ...toneStyle[cd.tone] }}>{cd.text}</div>}
                 </div>
               </div>
+              {isOpen && <ChiTietDongTonKho row={s} productLabel={`${productName(s.product_id)}${s.size ? ` · ${s.size}` : ''}`} />}
+              </button>
             );
           })}
         </div>

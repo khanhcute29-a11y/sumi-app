@@ -148,6 +148,9 @@ export default function OrdersV2Screen() {
   const stage = (s) => s === 'completed' ? 5 : s === 'in_delivery' ? 4 : s === 'ready_for_fulfillment' ? 3 : s === 'in_production' ? 2 : 1;
 
   if (showCreate) return <CreateOrderV2Modal embedded resumeDraftId={resumeDraftId} onClose={() => { setShowCreate(false); setResumeDraftId(null); }} onCreated={load} />;
+  // Kho Thành Phẩm: trang toàn màn hình (không phải modal/drawer co cụm) — cùng
+  // kiểu chuyển màn với showCreate ở trên, khớp mockup "screen" riêng của nó.
+  if (showKho) return <div style={{ padding: '16px 0' }}><FinishedGoodsInventoryV2 onBack={() => setShowKho(false)} /></div>;
 
   const currentFilterLabel = FILTERS.find(x => x.key === filter)?.label || 'Đơn hàng';
   const currentFlowMeta = FLOW_GROUPS.find(x => x.key === flowGroup);
@@ -240,18 +243,6 @@ export default function OrdersV2Screen() {
             </span>
             <span style={{ color: '#b93e13', fontWeight: 800 }}>Xem →</span>
           </button>
-        </div>
-      )}
-
-      {showKho && (
-        <div onClick={() => setShowKho(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: '#faf6f0', width: '96vw', maxWidth: 920, maxHeight: '92vh', overflowY: 'auto', borderRadius: '20px 20px 0 0', padding: '16px 18px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: '#2d1c10' }}>🏬 Kho Thành Phẩm</h3>
-              <button onClick={() => setShowKho(false)} style={{ border: 'none', background: 'none', fontSize: 18, cursor: 'pointer' }}>✕</button>
-            </div>
-            <FinishedGoodsInventoryV2 />
-          </div>
         </div>
       )}
 
