@@ -105,6 +105,12 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
  const [type,setType]=useState(null); const [requiredAt,setRequiredAt]=useState('');
  const [customerName,setCustomerName]=useState(''); const [customerPhone,setCustomerPhone]=useState('');
  const [fulfillment,setFulfillment]=useState('delivery'); const [address,setAddress]=useState(''); const [note,setNote]=useState('');
+ // Vị trí xưởng xuất đơn — KHÁC với "Địa chỉ" ở trên (địa chỉ nhà khách để
+ // shipper tìm tới). Chỉ là thông tin ghi chú nội bộ (vào `note`), KHÔNG ảnh
+ // hưởng cách chia kho/bếp — việc đó đã tự động theo category sản phẩm
+ // (xem branchForCategory trong cakePricing.js), không nên có 2 nguồn quyết
+ // trùng nhau kẻo đá nhau.
+ const [viTriXuong,setViTriXuong]=useState('Quốc Lộ 13'); const [viTriKhac,setViTriKhac]=useState('');
  const [items,setItems]=useState([]); const [photos,setPhotos]=useState([]); const [saving,setSaving]=useState(false); const [error,setError]=useState('');
  const [showLibraryPicker,setShowLibraryPicker]=useState(false); const [libraryPhotos,setLibraryPhotos]=useState([]); const [libraryLoading,setLibraryLoading]=useState(false); const [selectedLibraryPhotos,setSelectedLibraryPhotos]=useState([]); const [libraryUploading,setLibraryUploading]=useState(false);
  const [isReadyStock, setIsReadyStock] = useState(false);
@@ -149,8 +155,8 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
  // hoặc truyền vào từ danh sách "Nháp đã lưu" để tiếp tục đúng đơn đó) — nhiều
  // đơn bỏ dở cùng lúc không ghi đè lên nhau.
  const [activeDraftId,setActiveDraftId]=useState(resumeDraftId);
- const draftValues={type,requiredAt,customerName,customerPhone,fulfillment,address,note,items,isReadyStock,guestCount,selectedSchool,entryMode,cakeLine,hasShipFee,shipFee,paymentMethod,deposit,selectedLibraryPhotos};
- const draftSetters={type:setType,requiredAt:setRequiredAt,customerName:setCustomerName,customerPhone:setCustomerPhone,fulfillment:setFulfillment,address:setAddress,note:setNote,items:setItems,isReadyStock:setIsReadyStock,guestCount:setGuestCount,selectedSchool:setSelectedSchool,entryMode:setEntryMode,cakeLine:setCakeLine,hasShipFee:setHasShipFee,shipFee:setShipFee,paymentMethod:setPaymentMethod,deposit:setDeposit,selectedLibraryPhotos:setSelectedLibraryPhotos};
+ const draftValues={type,requiredAt,customerName,customerPhone,fulfillment,address,note,items,isReadyStock,guestCount,selectedSchool,entryMode,cakeLine,hasShipFee,shipFee,paymentMethod,deposit,selectedLibraryPhotos,viTriXuong,viTriKhac};
+ const draftSetters={type:setType,requiredAt:setRequiredAt,customerName:setCustomerName,customerPhone:setCustomerPhone,fulfillment:setFulfillment,address:setAddress,note:setNote,items:setItems,isReadyStock:setIsReadyStock,guestCount:setGuestCount,selectedSchool:setSelectedSchool,entryMode:setEntryMode,cakeLine:setCakeLine,hasShipFee:setHasShipFee,shipFee:setShipFee,paymentMethod:setPaymentMethod,deposit:setDeposit,selectedLibraryPhotos:setSelectedLibraryPhotos,viTriXuong:setViTriXuong,viTriKhac:setViTriKhac};
  const {saveStatus:draftSaveStatus,clearDraft}=useOrderDraftAutosave(activeDraftId,draftValues,draftSetters);
  const resetDraftForm=()=>{
   clearDraft();
@@ -158,6 +164,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
   setType(null);setRequiredAt('');setCustomerName('');setCustomerPhone('');setFulfillment('delivery');setAddress('');setNote('');
   setItems([]);setPhotos([]);setIsReadyStock(false);setGuestCount('');setSchoolSearch('');setSelectedSchool(null);setEntryMode('manual');
   setCakeLine('decorated_cake');setHasShipFee('no');setShipFee('');setPaymentMethod('cod');setDeposit('');setSelectedLibraryPhotos([]);
+  setViTriXuong('Quốc Lộ 13');setViTriKhac('');
  };
  useEffect(()=>{const onResize=()=>setIsMobile(window.innerWidth<860);window.addEventListener('resize',onResize);return()=>window.removeEventListener('resize',onResize)},[]);
  useEffect(()=>{let active=true;supabase.from('products').select('id,name,category,unit,price,product_variants(id,label,price)').eq('active',true).order('name').limit(500).then(({data,error})=>{if(active&&!error)setProductCatalog([...(data||[]),...MOONCAKE_CATALOG])});return()=>{active=false}},[]);
@@ -238,7 +245,8 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
       customerId = cust?.id || null;
     }
   }
-  const customerNote=[customerName&&`Khách hàng: ${customerName}`,customerPhone&&`SĐT: ${customerPhone}`,type==='teabreak'&&guestCount&&`Số khách: ${guestCount}`,note,isReadyStock&&'⚡ BÁNH CÓ SẴN (XUẤT KHO THÀNH PHẨM NGAY)'].filter(Boolean).join(' · ');
+  const viTriXuongText=fulfillment==='delivery'?(viTriXuong==='Chọn khác'?viTriKhac:viTriXuong):'';
+  const customerNote=[customerName&&`Khách hàng: ${customerName}`,customerPhone&&`SĐT: ${customerPhone}`,type==='teabreak'&&guestCount&&`Số khách: ${guestCount}`,viTriXuongText&&`Vị trí xưởng: ${viTriXuongText}`,note,isReadyStock&&'⚡ BÁNH CÓ SẴN (XUẤT KHO THÀNH PHẨM NGAY)'].filter(Boolean).join(' · ');
   const normalizedItems=items.map((item,index)=>({...item,display_order:index,specification:{...(item.specification||{}),product_flow:item.flow_type||type,is_ready_stock:isReadyStock}}));
   // Bánh có sẵn: KIỂM TRA KHO TRƯỚC KHI TẠO ĐƠN.
   // Nếu để tạo đơn xong mới kiểm tra rồi báo lỗi thì đơn đã nằm trong hệ
@@ -420,7 +428,11 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
     <div style={{marginTop:12,padding:'12px 14px',borderRadius:14,background:'#f5f1eb',border:'1px solid #e0d5c7',fontSize:14,color:'#725f50'}}>🚚 Giao tận nơi đến địa chỉ trường đã chọn — không thu ship, không thu tiền tại chỗ (trường thanh toán riêng).</div>
    :<>
     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:12}}><button onClick={()=>setFulfillment('delivery')} style={{...fieldStyle,fontWeight:900,border:fulfillment==='delivery'?'3px solid #138a53':fieldStyle.border,background:fulfillment==='delivery'?'#e6f6ed':'#fff',color:fulfillment==='delivery'?'#09663d':'#2d1c10'}}>🛵 Giao tận nơi</button><button onClick={()=>setFulfillment('pickup')} style={{...fieldStyle,fontWeight:900,border:fulfillment==='pickup'?'3px solid #138a53':fieldStyle.border,background:fulfillment==='pickup'?'#e6f6ed':'#fff',color:fulfillment==='pickup'?'#09663d':'#2d1c10'}}>🏬 Nhận tại quầy</button></div>
-    {fulfillment==='delivery'&&<input style={{...fieldStyle,marginTop:10}} placeholder="Địa chỉ giao" value={address} onChange={e=>setAddress(e.target.value)}/>}
+    <label style={{display:'block',marginTop:10,fontWeight:800}}>Vị trí xưởng xuất đơn</label>
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginTop:6}}>
+     {['Quốc Lộ 13','Vĩnh Phú 42','Chọn khác'].map(x=><button type="button" key={x} onClick={()=>setViTriXuong(x)} style={{...fieldStyle,fontSize:13,fontWeight:800,border:viTriXuong===x?'3px solid #138a53':fieldStyle.border,background:viTriXuong===x?'#e6f6ed':'#fff',color:viTriXuong===x?'#09663d':'#2d1c10'}}>{x}</button>)}
+    </div>
+    {viTriXuong==='Chọn khác'&&<input style={{...fieldStyle,marginTop:8}} placeholder="Nhập vị trí khác (VD: Xưởng 41)" value={viTriKhac} onChange={e=>setViTriKhac(e.target.value)}/>}
     {fulfillment==='delivery'&&<div style={{display:'grid',gridTemplateColumns:hasShipFee==='yes'?'1fr 1fr':'1fr',gap:8,marginTop:10}}>
       <select style={fieldStyle} value={hasShipFee} onChange={e=>{setHasShipFee(e.target.value);if(e.target.value==='no')setShipFee('')}}><option value="no">Ship miễn phí</option><option value="yes">Có phí ship</option></select>
       {hasShipFee==='yes'&&<input style={fieldStyle} inputMode="numeric" placeholder="VD: 30.000" value={fmtMoney(shipFee)} onChange={e=>setShipFee(parseMoney(e.target.value)||'')}/>}
