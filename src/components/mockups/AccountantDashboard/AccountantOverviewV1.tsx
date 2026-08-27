@@ -17,6 +17,14 @@ import {
 
 const formatVND = (amount?: number | null) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount || 0);
 
+// Số gọn cho ô chỉ số nhanh trên header (tránh tràn dòng khi số tiền thật lớn) — vd 115.105.500 -> "115,1tr"
+const formatVNDCompact = (amount?: number | null) => {
+  const n = Number(amount) || 0;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}tr`;
+  if (n >= 1_000) return `${(n / 1_000).toLocaleString('vi-VN', { maximumFractionDigits: 0 })}k`;
+  return n.toLocaleString('vi-VN');
+};
+
 const TABS = [
   { key: 'pay', label: 'Chờ chi' },
   { key: 'advance', label: 'Tạm ứng' },
@@ -175,40 +183,42 @@ export function AccountantOverviewV1Inner() {
           </div>
         )}
 
-        {/* Hero */}
-        <div style={{ padding: '18px 16px 16px', background: 'linear-gradient(135deg, #3a2113 0%, #24140c 100%)', color: '#fff', borderRadius: '0 0 24px 24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 14, background: '#fff4d7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>🧾</div>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 1, color: '#ffdca9' }}>KẾ TOÁN SUMI</div>
-              <div style={{ fontSize: 18, fontWeight: 900 }}>Duyệt chi & Tạm ứng</div>
+        {/* Hero — thẻ nổi bo tròn đủ 4 góc, tách khỏi mép màn hình */}
+        <div style={{ margin: '14px 14px 0', padding: '18px 16px 16px', background: 'linear-gradient(135deg, #3a2113 0%, #24140c 100%)', color: '#fff', borderRadius: 24, boxShadow: '0 10px 28px rgba(45,28,16,0.25)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 14, background: '#fff4d7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>🧾</div>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 1, color: '#ffdca9' }}>KẾ TOÁN SUMI</div>
+                <div style={{ fontSize: 18, fontWeight: 900 }}>Duyệt chi & Tạm ứng</div>
+              </div>
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginTop: 14 }}>
-            <div style={{ background: 'rgba(255,255,255,0.14)', borderRadius: 14, padding: '8px 4px', textAlign: 'center' }}>
-              <div style={{ fontSize: 15, fontWeight: 900 }}>{formatVND((readyExpenses || []).reduce((s, c) => s + (Number(c?.amount) || 0), 0))}</div>
-              <div style={{ fontSize: 9.5, fontWeight: 800, opacity: 0.85, marginTop: 2 }}>chờ chi</div>
+            <div style={{ background: 'rgba(255,255,255,0.14)', borderRadius: 14, padding: '10px 4px', textAlign: 'center' }}>
+              <div style={{ fontSize: 16, fontWeight: 900, fontFamily: 'ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace' }}>{formatVNDCompact((readyExpenses || []).reduce((s, c) => s + (Number(c?.amount) || 0), 0))}</div>
+              <div style={{ fontSize: 9.5, fontWeight: 800, opacity: 0.7, marginTop: 2 }}>chờ chi</div>
             </div>
-            <div style={{ background: 'rgba(255,255,255,0.14)', borderRadius: 14, padding: '8px 4px', textAlign: 'center' }}>
-              <div style={{ fontSize: 15, fontWeight: 900 }}>{formatVND(totalAdvancesOutstanding)}</div>
-              <div style={{ fontSize: 9.5, fontWeight: 800, opacity: 0.85, marginTop: 2 }}>tạm ứng</div>
+            <div style={{ background: 'rgba(255,255,255,0.14)', borderRadius: 14, padding: '10px 4px', textAlign: 'center' }}>
+              <div style={{ fontSize: 16, fontWeight: 900, fontFamily: 'ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace' }}>{formatVNDCompact(totalAdvancesOutstanding)}</div>
+              <div style={{ fontSize: 9.5, fontWeight: 800, opacity: 0.7, marginTop: 2 }}>tạm ứng</div>
             </div>
-            <div style={{ background: 'rgba(255,255,255,0.14)', borderRadius: 14, padding: '8px 4px', textAlign: 'center' }}>
-              <div style={{ fontSize: 15, fontWeight: 900 }}>{formatVND(pendingDirector?.total)}</div>
-              <div style={{ fontSize: 9.5, fontWeight: 800, opacity: 0.85, marginTop: 2 }}>cần duyệt</div>
+            <div style={{ background: 'rgba(255,255,255,0.14)', borderRadius: 14, padding: '10px 4px', textAlign: 'center' }}>
+              <div style={{ fontSize: 16, fontWeight: 900, fontFamily: 'ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace' }}>{formatVNDCompact(pendingDirector?.total)}</div>
+              <div style={{ fontSize: 9.5, fontWeight: 800, opacity: 0.7, marginTop: 2 }}>cần duyệt</div>
             </div>
-            <div style={{ background: 'rgba(255,255,255,0.14)', borderRadius: 14, padding: '8px 4px', textAlign: 'center' }}>
-              <div style={{ fontSize: 15, fontWeight: 900, opacity: 0.6 }}>—</div>
-              <div style={{ fontSize: 9.5, fontWeight: 800, opacity: 0.85, marginTop: 2 }}>lệch quỹ</div>
+            <div style={{ background: 'rgba(255,255,255,0.14)', borderRadius: 14, padding: '10px 4px', textAlign: 'center' }}>
+              <div style={{ fontSize: 16, fontWeight: 900, opacity: 0.6 }}>—</div>
+              <div style={{ fontSize: 9.5, fontWeight: 800, opacity: 0.7, marginTop: 2 }}>lệch quỹ</div>
             </div>
           </div>
         </div>
 
-        {/* Subnav */}
-        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '12px 14px 4px' }}>
+        {/* Subnav — dạng viên thuốc bo tròn hoàn toàn */}
+        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '14px 14px 4px' }}>
           {TABS.map((t) => (
             <button key={t.key} onClick={() => setActiveTab(t.key)} style={{
-              flex: '0 0 auto', padding: '8px 14px', borderRadius: 12, border: '1px solid #eadcca', fontSize: 12.5, fontWeight: 900, cursor: 'pointer',
+              flex: '0 0 auto', padding: '9px 16px', borderRadius: 999, border: '1px solid #eadcca', fontSize: 12.5, fontWeight: 900, cursor: 'pointer',
               background: activeTab === t.key ? '#2d1c10' : '#fff', color: activeTab === t.key ? '#ffd284' : '#725f50',
             }}>
               {t.label}
