@@ -37,7 +37,11 @@ alter table public.finished_goods_stock_in_log
 -- không gộp chung Vĩnh Phú 42 với Quốc Lộ 13 nữa. Dòng cũ chưa gán cửa hàng
 -- (store_location null) coi như một "cửa hàng" riêng biệt (NULLS NOT DISTINCT
 -- giữ đúng hành vi cũ, tránh sinh 2 dòng trùng nếu chạy lại).
-drop index if exists public.finished_goods_stock_product_id_size_branch_key;
+-- Đây là index đứng SAU một unique CONSTRAINT cùng tên (không phải index trần) —
+-- DROP INDEX bị Postgres chặn ("2BP01: cannot drop index ... because
+-- constraint ... requires it"). Phải gỡ đúng constraint.
+alter table public.finished_goods_stock
+  drop constraint if exists finished_goods_stock_product_id_size_branch_key;
 create unique index if not exists finished_goods_stock_product_size_branch_store_key
   on public.finished_goods_stock (product_id, size, branch, store_location) nulls not distinct;
 
