@@ -16,6 +16,7 @@ const items = [
   { key: 'products', label: 'Sản Phẩm', Icon: IconProducts },
   { key: 'shifts', label: 'Ca Làm Việc', Icon: IconShifts },
   { key: 'approvals', label: 'Yêu Cầu Duyệt', Icon: IconCheck },
+  { key: 'financeRequests', label: 'Chi & Tạm Ứng', Icon: IconMoney },
   { key: 'tasks', label: 'Quản Lý Công Việc', Icon: IconClipboard },
   { key: 'incidents', label: 'Báo Cáo Sự Cố', Icon: IconWarning },
   { key: 'reports', label: 'Báo Cáo', Icon: IconReports },
