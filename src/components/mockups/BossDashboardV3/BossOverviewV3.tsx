@@ -86,7 +86,7 @@ function StaffProfileSheet({ staffBasic, onBack }: { staffBasic: any; onBack: ()
     const tu = new Date(homNay.getTime() - 6 * 86400000).toISOString().slice(0, 10);
     Promise.all([
       fetchShiftLogsRange(tu, den),
-      supabase.from('tasks').select('status,completed_at')
+      supabase.from('tasks').select('status,accepted_at,completed_at,exclusion_reason_code')
         .eq('assignee_id', staffBasic.id)
         .in('category', ['assigned', 'adhoc'])
         .is('deleted_at', null),
@@ -95,9 +95,14 @@ function StaffProfileSheet({ staffBasic, onBack }: { staffBasic: any; onBack: ()
       setLogs((shiftLogs || []).filter((l: any) => l.staff_id === staffBasic.id));
       const tasks = taskRes?.data || [];
       const homNayStr = new Date().toDateString();
+      // Đếm ĐÚNG cùng công thức với nhomViecNhanVien() (nguồn thật cho khối
+      // "Đang làm" mà chính nhân viên đó thấy trên màn hình của họ) — không tự
+      // viết lại filter riêng ở đây, tránh số bên Giám đốc lệch với số nhân
+      // viên tự thấy như đã xảy ra ở hero-metrics trước đó.
+      const dsHopLe = tasks.filter((t: any) => !t.exclusion_reason_code);
       setTaskCounts({
-        dangLam: tasks.filter((t: any) => t.status === 'accepted').length,
-        xongHomNay: tasks.filter((t: any) => t.status === 'done' && t.completed_at && new Date(t.completed_at).toDateString() === homNayStr).length,
+        dangLam: dsHopLe.filter((t: any) => t.status === 'accepted' || (t.status === 'open' && t.accepted_at)).length,
+        xongHomNay: dsHopLe.filter((t: any) => t.status === 'done' && t.completed_at && new Date(t.completed_at).toDateString() === homNayStr).length,
       });
     }).catch((e: any) => { if (!huy) setError(e.message || 'Không tải được dữ liệu.'); })
       .finally(() => { if (!huy) setLoading(false); });

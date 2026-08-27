@@ -4,6 +4,7 @@ import ViecNhanVien from './ViecNhanVien';
 import ViecQuanLy from './ViecQuanLy';
 import ViecGiamDoc from './ViecGiamDoc';
 import GiaoViecModal from './GiaoViecModal';
+import { nhomViecNhanVien } from '../../../lib/congViec';
 import '../../../styles/cong-viec.css';
 
 // Cửa ngõ của phân hệ Công việc: tự chọn góc nhìn theo vai trò người đăng nhập,
@@ -77,13 +78,20 @@ export default function CongViecV2({ profile, staffList = [], onMetrics }) {
 
   // Số liệu nhỏ cho hero-metrics ở khung ngoài (TasksScreen.jsx) — dùng chung
   // một lần tải `tasks` ở đây, không mở thêm truy vấn riêng chỉ để đếm.
+  //
+  // ⚠️ LỖI THẬT đã vá: trước đây "Đang làm" tự đếm status==='accepted', LỆCH
+  // với đúng cách nhomViecNhanVien() (nguồn thật cho khối "Đang làm" hiển thị
+  // bên dưới) tính — nhomViecNhanVien còn gộp cả case status==='open' nhưng đã
+  // có accepted_at. Số trên hero có thể ít hơn số thực tế thợ thấy trong danh
+  // sách của chính họ. Dùng thẳng nhomViecNhanVien() để không bao giờ lệch.
   useEffect(() => {
     if (!onMetrics) return;
     const homNay = new Date().toDateString();
+    const nhom = nhomViecNhanVien(tasks);
     onMetrics({
-      dangLam: tasks.filter((t) => t.status === 'accepted').length,
-      choDuyet: tasks.filter((t) => t.status === 'pending_approval').length,
-      xongHomNay: tasks.filter((t) => t.status === 'done' && t.completed_at && new Date(t.completed_at).toDateString() === homNay).length,
+      dangLam: nhom.dangLam.length,
+      choDuyet: nhom.choDuyet.length,
+      xongHomNay: nhom.daXong.filter((t) => t.completed_at && new Date(t.completed_at).toDateString() === homNay).length,
     });
   }, [tasks, onMetrics]);
 
