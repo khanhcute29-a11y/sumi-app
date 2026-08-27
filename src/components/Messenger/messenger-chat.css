@@ -816,6 +816,14 @@
   right: 18px;
   bottom: calc(84px + env(safe-area-inset-bottom, 0px));
   z-index: 900;
+  /* Kéo thả được cả mobile lẫn desktop — tắt hẳn cử chỉ cuộn/pan mặc định của
+     trình duyệt trên vùng này, nhường trọn cho JS xử lý kéo mượt 60fps. */
+  touch-action: none;
+  cursor: grab;
+}
+
+.sumi-chat-launcher-stack:active {
+  cursor: grabbing;
 }
 
 .sumi-chat-launcher-overlay {
