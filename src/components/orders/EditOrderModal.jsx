@@ -136,15 +136,6 @@ export default function EditOrderModal({ orderId, onClose, onSaved }) {
     if (mon.some((x) => !(Number(x.quantity) > 0))) { setLoi('Số lượng của mỗi món phải lớn hơn 0.'); return; }
     setDangLuu(true); setLoi(''); setXong('');
     try {
-      // Tên/SĐT nằm ở bảng customers (qua customer_id), không phải cột của
-      // orders — lưu riêng trước, giống cách updateOrderFull() ở màn Đơn hàng
-      // cũ đã làm. Không chặn lưu phần còn lại nếu bước này lỗi.
-      if (don.customer_id && (don.ten_khach || don.sdt_khach)) {
-        const { error: custErr } = await supabase.from('customers')
-          .update({ name: don.ten_khach || null, phone: don.sdt_khach || null })
-          .eq('id', don.customer_id);
-        if (custErr) throw new Error(`Không lưu được tên/SĐT khách: ${custErr.message}`);
-      }
       const { data, error } = await supabase.rpc('update_order_v2', {
         p_order_id: orderId,
         p_expected_version: don.version,
@@ -157,6 +148,10 @@ export default function EditOrderModal({ orderId, onClose, onSaved }) {
           payment_method: don.payment_method || 'cod',
           total: String(tongDon),
         },
+        // Tên/SĐT nằm ở bảng customers, không phải cột của orders — orders bị
+        // khoá update trực tiếp (RLS orders_update_disabled), nên phải đi qua
+        // RPC. RPC tự tạo customer mới nếu đơn chưa có customer_id.
+        p_customer_patch: (don.ten_khach || don.sdt_khach) ? { name: don.ten_khach || '', phone: don.sdt_khach || '' } : null,
         p_items: mon.map((x, i) => ({
           product_id: x.product_id,
           name: x.name,
@@ -327,14 +322,12 @@ export default function EditOrderModal({ orderId, onClose, onSaved }) {
     </div>
 
     {/* ----- Khách hàng ----- */}
-    {don.customer_id && (
-      <div style={oNen}>
-        <label style={oNhan}>👤 Tên khách hàng</label>
-        <input type="text" value={don.ten_khach || ''} onChange={(e) => setDon({ ...don, ten_khach: e.target.value })} style={{ ...oO, minHeight: 44, marginBottom: 12 }} />
-        <label style={oNhan}>📞 Số điện thoại</label>
-        <input type="tel" value={don.sdt_khach || ''} onChange={(e) => setDon({ ...don, sdt_khach: e.target.value })} style={{ ...oO, minHeight: 44 }} />
-      </div>
-    )}
+    <div style={oNen}>
+      <label style={oNhan}>👤 Tên khách hàng</label>
+      <input type="text" value={don.ten_khach || ''} onChange={(e) => setDon({ ...don, ten_khach: e.target.value })} style={{ ...oO, minHeight: 44, marginBottom: 12 }} />
+      <label style={oNhan}>📞 Số điện thoại</label>
+      <input type="tel" value={don.sdt_khach || ''} onChange={(e) => setDon({ ...don, sdt_khach: e.target.value })} style={{ ...oO, minHeight: 44 }} />
+    </div>
 
     {/* ----- Giao hàng ----- */}
     <div style={oNen}>
