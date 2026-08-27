@@ -37,6 +37,8 @@ import { ORDER_FLOWS } from '../../../data/orderCatalogs';
 // KHÔNG động tới bất kỳ file nào khác của anh Khánh ngoài file này.
 import OrderV2DetailModal from '../../OrderV2DetailModal';
 import FinishedGoodsInventoryV2 from '../../warehouse/FinishedGoodsInventoryV2';
+import { supabase } from '../../../lib/supabaseClient';
+import { fetchShiftLogsRange } from '../../../lib/queries';
 import {
   fetchRevenueByChannel,
   fetchExpenseClaimsToday,
@@ -62,6 +64,104 @@ const formatVND = (amount: number) => {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
 };
 
+// Hồ sơ 1 nhân viên — lớp "thông tin cuối" khi bấm vào 1 người trong Chi Tiết
+// Trạng Thái Nhân Sự. Không có sẵn component nào để dùng lại (khác với Đơn
+// hàng/Kho Thành Phẩm), nên dựng mới gọn, chỉ dùng dữ liệu THẬT có sẵn:
+//   - `staffBasic`: đúng object `st` đang hiển thị trên thẻ (đỡ phải chờ tải
+//     lại những gì đã có sẵn trên màn hình).
+//   - 7 ngày chấm công gần nhất: bảng `shift_logs` (đã có sẵn, dùng lại
+//     fetchShiftLogsRange thay vì viết truy vấn mới).
+//   - Việc đang làm/hoàn thành hôm nay: đếm thẳng trên bảng `tasks`
+//     (category in assigned/adhoc, đúng phạm vi phân hệ Việc).
+function StaffProfileSheet({ staffBasic, onBack }: { staffBasic: any; onBack: () => void }) {
+  const [logs, setLogs] = useState<any[]>([]);
+  const [taskCounts, setTaskCounts] = useState<{ dangLam: number; xongHomNay: number } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let huy = false;
+    const homNay = new Date();
+    const den = homNay.toISOString().slice(0, 10);
+    const tu = new Date(homNay.getTime() - 6 * 86400000).toISOString().slice(0, 10);
+    Promise.all([
+      fetchShiftLogsRange(tu, den),
+      supabase.from('tasks').select('status,completed_at')
+        .eq('assignee_id', staffBasic.id)
+        .in('category', ['assigned', 'adhoc'])
+        .is('deleted_at', null),
+    ]).then(([shiftLogs, taskRes]: any) => {
+      if (huy) return;
+      setLogs((shiftLogs || []).filter((l: any) => l.staff_id === staffBasic.id));
+      const tasks = taskRes?.data || [];
+      const homNayStr = new Date().toDateString();
+      setTaskCounts({
+        dangLam: tasks.filter((t: any) => t.status === 'accepted').length,
+        xongHomNay: tasks.filter((t: any) => t.status === 'done' && t.completed_at && new Date(t.completed_at).toDateString() === homNayStr).length,
+      });
+    }).catch((e: any) => { if (!huy) setError(e.message || 'Không tải được dữ liệu.'); })
+      .finally(() => { if (!huy) setLoading(false); });
+    return () => { huy = true; };
+  }, [staffBasic.id]);
+
+  // Ghép checkin/checkout thành từng ca theo work_date để hiển thị gọn.
+  const caTheoNgay: Record<string, { vao?: string; ra?: string }> = {};
+  logs.forEach((l: any) => {
+    const ngay = l.work_date;
+    if (!caTheoNgay[ngay]) caTheoNgay[ngay] = {};
+    const gio = new Date(l.checkin_time || l.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    if (l.type === 'checkin') caTheoNgay[ngay].vao = gio;
+    else if (l.type === 'checkout') caTheoNgay[ngay].ra = gio;
+  });
+  const ngayDs = Object.keys(caTheoNgay).sort((a, b) => b.localeCompare(a));
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 2100, background: '#fdf9f2', overflowY: 'auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px', borderBottom: '1.5px solid #eadcca', position: 'sticky', top: 0, background: '#fdf9f2', zIndex: 1 }}>
+        <button onClick={onBack} aria-label="Quay lại" style={{ width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer', flexShrink: 0 }}>‹</button>
+        <div style={{ fontSize: 24 }}>{staffBasic.avatar}</div>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 15, fontWeight: 900, color: '#2d1c10' }}>{staffBasic.name}</div>
+          <div style={{ fontSize: 11.5, color: '#725f50' }}>{staffBasic.role} · [{staffBasic.zone}]</div>
+        </div>
+      </div>
+
+      <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {error && <div style={{ color: '#dc2626', fontWeight: 700, fontSize: 12.5 }}>⚠️ {error}</div>}
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <div style={{ background: '#fff', border: '1.5px solid #eadcca', borderRadius: 14, padding: 12, textAlign: 'center' }}>
+            <div style={{ fontSize: 20, fontWeight: 900, color: '#c28c4e' }}>{taskCounts ? taskCounts.dangLam : '—'}</div>
+            <div style={{ fontSize: 10.5, color: '#725f50', fontWeight: 800 }}>Việc đang làm</div>
+          </div>
+          <div style={{ background: '#fff', border: '1.5px solid #eadcca', borderRadius: 14, padding: 12, textAlign: 'center' }}>
+            <div style={{ fontSize: 20, fontWeight: 900, color: '#15803d' }}>{taskCounts ? taskCounts.xongHomNay : '—'}</div>
+            <div style={{ fontSize: 10.5, color: '#725f50', fontWeight: 800 }}>Xong hôm nay</div>
+          </div>
+        </div>
+
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 900, color: '#2d1c10', marginBottom: 6 }}>📅 Chấm công 7 ngày gần đây</div>
+          {loading && <div style={{ fontSize: 12, color: '#725f50' }}>Đang tải...</div>}
+          {!loading && ngayDs.length === 0 && (
+            <div style={{ fontSize: 12, color: '#725f50' }}>Chưa có dữ liệu chấm công trong 7 ngày qua.</div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {ngayDs.map((ngay) => (
+              <div key={ngay} style={{ display: 'flex', justifyContent: 'space-between', background: '#fff', border: '1px solid #eadcca', borderRadius: 10, padding: '8px 10px', fontSize: 12 }}>
+                <span style={{ fontWeight: 800, color: '#2d1c10' }}>{ngay}</span>
+                <span style={{ color: '#725f50' }}>
+                  {caTheoNgay[ngay].vao ? `▶ ${caTheoNgay[ngay].vao}` : '—'} → {caTheoNgay[ngay].ra ? `⏹ ${caTheoNgay[ngay].ra}` : 'chưa kết thúc ca'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function BossOverviewV3Inner() {
   const { profile } = useAuth();
 
@@ -77,6 +177,7 @@ export function BossOverviewV3Inner() {
   // không mất trạng thái lọc/cuộn của sheet bên dưới).
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [selectedLeaveTab, setSelectedLeaveTab] = useState<string>('all');
+  const [selectedStaff, setSelectedStaff] = useState<any>(null);
 
   // ── Khoá cuộn nền + vuốt kéo xuống để đóng Bottom Sheet (dùng chung cho mọi sheet) ──
   const [dragY, setDragY] = useState(0);
@@ -1642,6 +1743,13 @@ export function BossOverviewV3Inner() {
           </div>
         )}
 
+        {/* Lớp "thông tin cuối" của Nhân sự — bấm 1 người trong Chi Tiết Trạng
+            Thái Nhân Sự mở ra hồ sơ riêng. Đóng lại quay đúng về đúng tab
+            (Đang làm/Đi trễ/Nghỉ ca) đang xem, không mất trạng thái. */}
+        {selectedStaff && (
+          <StaffProfileSheet staffBasic={selectedStaff} onBack={() => setSelectedStaff(null)} />
+        )}
+
         {/* ========================================================================= */}
         {/* ── BOTTOM SHEET: TRẠNG THÁI NHÂN SỰ (3 LUỒNG: ĐANG LÀM, ĐI TRỄ, NGHỈ CA) ── */}
         {/* ========================================================================= */}
@@ -1740,7 +1848,7 @@ export function BossOverviewV3Inner() {
                       ✓ Danh sách nhân viên có mặt đúng giờ ({staffCounts.working} nhân sự):
                     </div>
                     {staffList.filter(st => st.status === 'working').map(st => (
-                      <div key={st.id} style={{ background: '#faf6f0', border: '1.5px solid #dcfce7', borderRadius: 14, padding: '10px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div key={st.id} onClick={() => setSelectedStaff(st)} style={{ background: '#faf6f0', border: '1.5px solid #dcfce7', borderRadius: 14, padding: '10px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <span style={{ fontSize: 24 }}>{st.avatar}</span>
                           <div>
@@ -1766,7 +1874,7 @@ export function BossOverviewV3Inner() {
                     {staffList.filter(st => st.status === 'late').map(st => (
                       <div key={st.id} style={{ background: '#fff9f5', border: '1.5px solid #fdba74', borderRadius: 14, padding: '10px 12px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div onClick={() => setSelectedStaff(st)} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
                             <span style={{ fontSize: 24 }}>{st.avatar}</span>
                             <div>
                               <div style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>{st.name}</div>
@@ -1811,7 +1919,7 @@ export function BossOverviewV3Inner() {
                     {staffList.filter(st => st.status === 'off').map(st => (
                       <div key={st.id} style={{ background: '#fef2f2', border: '1.5px solid #fecaca', borderRadius: 14, padding: '10px 12px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div onClick={() => setSelectedStaff(st)} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
                             <span style={{ fontSize: 24 }}>{st.avatar}</span>
                             <div>
                               <div style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>{st.name}</div>
