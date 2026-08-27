@@ -855,9 +855,13 @@
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
     pointer-events: auto;
   }
-  /* Kéo thả cửa sổ chat — chỉ vùng header, không đè lên nút đóng/tab bên trong */
+  /* Kéo thả cửa sổ chat — chỉ vùng header, không đè lên nút đóng/tab bên trong.
+     touch-action:none báo cho trình duyệt bỏ hẳn việc tự cuộn/pan khi chạm vào
+     header, nhường trọn cử chỉ cho JS xử lý kéo — không set trên toàn cửa sổ
+     vì sẽ chặn luôn cuộn danh sách tin nhắn bên trong. */
   .sumi-chat-launcher-window .m-chat-header {
     cursor: grab;
+    touch-action: none;
   }
   .sumi-chat-launcher-window .m-chat-header:active {
     cursor: grabbing;
