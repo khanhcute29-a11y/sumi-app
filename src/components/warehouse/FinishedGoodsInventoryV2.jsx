@@ -1,0 +1,293 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { supabase } from '../../lib/supabaseClient';
+import { fetchFinishedGoodsStock, fetchProducts, addFinishedGoodsEntryV2, uploadFile } from '../../lib/queries';
+import { useAuth } from '../../lib/AuthContext';
+
+// Kho Thành Phẩm V2 — theo mockup đã duyệt
+// docs/mockups/SUMI-finished-goods-inventory-v2-handoff/finished-goods-inventory-v2-approved.html
+//
+// PHẠM VI BẢN NÀY (V1 thật, không phải mockup tĩnh) — ghi rõ để đối chiếu:
+//   ĐÃ LÀM: tồn kho realtime theo luồng Bakery/Macaron 41/Kho mù, theo cửa
+//     hàng Vĩnh Phú 42/Quốc Lộ 13, thẻ sản phẩm có ảnh/hạn dùng/đếm ngược màu
+//     theo mức cảnh báo, sheet "Nhập kho thành phẩm" ghi thật lên Supabase.
+//   CHƯA LÀM (đợt sau nếu cần): "Oder bếp" (gửi yêu cầu sản xuất cho bếp),
+//     "Kiểm kho / chỉnh số thực tế" (đã có sẵn AdjustStockForm.jsx ở màn Kho
+//     Hàng cũ — chưa nối vào đây), bảng màu Macaron dạng swatch trực quan,
+//     panel Kho mù liên kết trực tiếp từng đơn hàng cụ thể.
+//   ĐƠN GIẢN HOÁ CÓ CHỦ Ý: mockup tách "Bakery nóng"/"Bakery lạnh" thành 2
+//     tab riêng — dữ liệu hiện tại (`branch` = bakery/xuong41/xuong42) không
+//     có cột nào phân biệt nóng/lạnh, nên gộp chung 1 tab "Bakery" thay vì tự
+//     bịa ra một cách phân loại không có thật.
+
+const FLOWS = [
+  { key: 'bakery', label: '🍞 Bakery', hasBranchTabs: true },
+  { key: 'xuong41', label: '🌈 Macaron 41', hasBranchTabs: true },
+  { key: 'xuong42', label: '🚚 Kho mù (Xưởng 42)', hasBranchTabs: false },
+];
+const STORES = ['Vĩnh Phú 42', 'Quốc Lộ 13'];
+
+function countdown(expiryDate) {
+  if (!expiryDate) return null;
+  const ms = new Date(expiryDate).getTime() - Date.now();
+  if (ms <= 0) return { tone: 'danger', text: '🚫 Đã hết hạn' };
+  const hours = ms / 3600000;
+  const days = Math.floor(hours / 24);
+  const remH = Math.floor(hours % 24);
+  const text = days > 0 ? `Còn ${days} ngày ${remH} giờ` : `Còn ${remH} giờ`;
+  if (hours <= 24) return { tone: 'danger', text: `🚫 ${text}` };
+  if (hours <= 48) return { tone: 'warn', text: `⚠️ ${text}` };
+  return { tone: 'ok', text: `✅ ${text}` };
+}
+
+const toneStyle = {
+  ok: { background: '#e8f8ef', color: '#078653' },
+  warn: { background: '#fff4cf', color: '#8b5900' },
+  danger: { background: '#fff0ee', color: '#d94a40' },
+};
+
+function ProductPicker({ products, value, onChange }) {
+  const [q, setQ] = useState('');
+  const filtered = q.trim() ? products.filter((p) => p.name.toLowerCase().includes(q.trim().toLowerCase())) : products;
+  const selected = products.find((p) => p.id === value);
+  return (
+    <div style={{ position: 'relative' }}>
+      <input placeholder="Gõ để tìm sản phẩm..." value={q || selected?.name || ''} onFocus={() => setQ('')}
+        onChange={(e) => setQ(e.target.value)}
+        style={{ width: '100%', minHeight: 48, padding: '0 12px', borderRadius: 14, border: '1px solid #e2cdb6' }} />
+      {q && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 5, background: '#fff', border: '1px solid #e2cdb6', borderRadius: 12, maxHeight: 200, overflowY: 'auto' }}>
+          {filtered.slice(0, 30).map((p) => (
+            <button type="button" key={p.id} onClick={() => { onChange(p.id); setQ(''); }}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', border: 0, background: 'none', cursor: 'pointer' }}>
+              {p.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NhapKhoSheet({ defaultBranch, defaultStore, products, staffName, onClose, onSaved }) {
+  const [productId, setProductId] = useState('');
+  const [size, setSize] = useState('');
+  const [qty, setQty] = useState('');
+  const [branch, setBranch] = useState(defaultBranch);
+  const [storeLocation, setStoreLocation] = useState(defaultStore || STORES[0]);
+  const [productionDate, setProductionDate] = useState(() => new Date().toISOString().slice(0, 16));
+  const [expiryDate, setExpiryDate] = useState('');
+  const [color, setColor] = useState('');
+  const [packing, setPacking] = useState('');
+  const [photo, setPhoto] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const selectedProduct = products.find((p) => p.id === productId);
+
+  const save = async () => {
+    if (!selectedProduct) { setError('Chọn sản phẩm.'); return; }
+    const qtyNum = Number(qty);
+    if (!qtyNum || qtyNum <= 0) { setError('Nhập số lượng hợp lệ.'); return; }
+    if (!photo) { setError('Bắt buộc chụp ảnh thực tế.'); return; }
+    setSaving(true); setError('');
+    try {
+      const uploaded = await uploadFile(photo, `finished-goods-v2/${branch}`);
+      await addFinishedGoodsEntryV2({
+        productId, productName: selectedProduct.name, size: size || null, branch, storeLocation,
+        qty: qtyNum, productionDate: productionDate ? new Date(productionDate).toISOString() : null,
+        expiryDate: expiryDate ? new Date(expiryDate).toISOString() : null,
+        photoUrl: uploaded.url, color: color || null, packing: packing || null, staffName,
+      });
+      onSaved?.();
+      onClose();
+    } catch (e) { setError(e.message || 'Không lưu được.'); } finally { setSaving(false); }
+  };
+
+  const field = { width: '100%', minHeight: 48, padding: '0 12px', borderRadius: 14, border: '1px solid #e2cdb6', boxSizing: 'border-box' };
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(45,27,16,.55)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 480, maxHeight: '90dvh', overflowY: 'auto', background: '#fffaf2', borderRadius: '24px 24px 0 0', padding: 18 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: '#2d1b10' }}>Nhập kho thành phẩm</h2>
+          <button onClick={onClose} style={{ width: 40, height: 40, border: '1px solid #e2cdb6', borderRadius: 12, background: '#fff', fontSize: 18 }}>✕</button>
+        </div>
+        <div style={{ display: 'grid', gap: 10 }}>
+          <div><label style={{ display: 'block', fontWeight: 900, marginBottom: 6 }}>Sản phẩm</label><ProductPicker products={products} value={productId} onChange={setProductId} /></div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div><label style={{ display: 'block', fontWeight: 900, marginBottom: 6 }}>Kích thước / size</label><input style={field} value={size} onChange={(e) => setSize(e.target.value)} placeholder="VD: 18cm, 220g..." /></div>
+            <div><label style={{ display: 'block', fontWeight: 900, marginBottom: 6 }}>Số lượng</label><input style={field} type="number" min="1" value={qty} onChange={(e) => setQty(e.target.value)} /></div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div><label style={{ display: 'block', fontWeight: 900, marginBottom: 6 }}>Luồng</label>
+              <select style={field} value={branch} onChange={(e) => setBranch(e.target.value)}>
+                {FLOWS.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+              </select>
+            </div>
+            <div><label style={{ display: 'block', fontWeight: 900, marginBottom: 6 }}>Cửa hàng</label>
+              <select style={field} value={storeLocation} onChange={(e) => setStoreLocation(e.target.value)}>
+                {STORES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div><label style={{ display: 'block', fontWeight: 900, marginBottom: 6 }}>Ngày sản xuất</label><input style={field} type="datetime-local" value={productionDate} onChange={(e) => setProductionDate(e.target.value)} /></div>
+            <div><label style={{ display: 'block', fontWeight: 900, marginBottom: 6 }}>Hạn dùng</label><input style={field} type="datetime-local" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} /></div>
+          </div>
+          {branch === 'xuong41' && (
+            <div><label style={{ display: 'block', fontWeight: 900, marginBottom: 6 }}>Màu (nếu là Macaron trang trí)</label><input style={field} value={color} onChange={(e) => setColor(e.target.value)} placeholder="VD: 12 màu mix, Màu cam..." /></div>
+          )}
+          <div><label style={{ display: 'block', fontWeight: 900, marginBottom: 6 }}>Quy cách</label><input style={field} value={packing} onChange={(e) => setPacking(e.target.value)} placeholder="VD: 6 khay/thùng, hộp lẻ..." /></div>
+          <div>
+            <label style={{ display: 'block', fontWeight: 900, marginBottom: 6 }}>Ảnh thực tế (bắt buộc)</label>
+            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 52, border: '2px dashed #e2cdb6', borderRadius: 14, cursor: 'pointer' }}>
+              {photo ? `📷 ${photo.name}` : '📷 Chụp / chọn ảnh'}
+              <input hidden type="file" accept="image/*" capture="environment" onChange={(e) => setPhoto(e.target.files?.[0] || null)} />
+            </label>
+          </div>
+          {error && <div style={{ color: '#d94a40', fontWeight: 700 }}>{error}</div>}
+          <button onClick={save} disabled={saving} style={{ minHeight: 58, border: 0, borderRadius: 18, background: '#f05c2b', color: '#fff', fontSize: 17, fontWeight: 950, cursor: saving ? 'not-allowed' : 'pointer' }}>
+            {saving ? 'Đang lưu...' : 'Lưu nhập kho'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function FinishedGoodsInventoryV2() {
+  const { profile } = useAuth();
+  const [stock, setStock] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [flow, setFlow] = useState('bakery');
+  const [store, setStore] = useState(STORES[0]);
+  const [showNhapKho, setShowNhapKho] = useState(false);
+
+  const load = () => {
+    setLoading(true);
+    Promise.all([fetchFinishedGoodsStock(), fetchProducts()])
+      .then(([s, p]) => { setStock(s); setProducts(p); setError(''); })
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(load, []);
+
+  useEffect(() => {
+    const ch = supabase.channel('kho-thanh-pham-v2')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'finished_goods_stock' }, load)
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, []);
+
+  const currentFlow = FLOWS.find((f) => f.key === flow);
+  const items = useMemo(() => {
+    let ds = stock.filter((s) => s.branch === flow);
+    if (currentFlow?.hasBranchTabs) ds = ds.filter((s) => (s.store_location || STORES[0]) === store);
+    return ds;
+  }, [stock, flow, store]);
+
+  const productName = (id) => products.find((p) => p.id === id)?.name || 'Sản phẩm đã xoá';
+  const expiringSoon = stock.filter((s) => { const c = countdown(s.expiry_date); return c && c.tone !== 'ok'; }).length;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
+        <div style={{ background: '#fffaf2', border: '1px solid #e2cdb6', borderRadius: 16, padding: 12, textAlign: 'center' }}>
+          <div style={{ fontSize: 22, fontWeight: 900, color: '#b7431e' }}>{stock.reduce((t, s) => t + (Number(s.qty) || 0), 0)}</div>
+          <div style={{ fontSize: 10, fontWeight: 900, color: '#806a58', textTransform: 'uppercase' }}>Đang tồn</div>
+        </div>
+        <div style={{ background: '#fffaf2', border: '1px solid #e2cdb6', borderRadius: 16, padding: 12, textAlign: 'center' }}>
+          <div style={{ fontSize: 22, fontWeight: 900, color: expiringSoon ? '#d94a40' : '#078653' }}>{expiringSoon}</div>
+          <div style={{ fontSize: 10, fontWeight: 900, color: '#806a58', textTransform: 'uppercase' }}>Cận/hết hạn</div>
+        </div>
+        <div style={{ background: '#fffaf2', border: '1px solid #e2cdb6', borderRadius: 16, padding: 12, textAlign: 'center' }}>
+          <div style={{ fontSize: 22, fontWeight: 900, color: '#b7431e' }}>{stock.filter((s) => Number(s.qty) < 0).length}</div>
+          <div style={{ fontSize: 10, fontWeight: 900, color: '#806a58', textTransform: 'uppercase' }}>Âm kho</div>
+        </div>
+      </div>
+
+      <button onClick={() => setShowNhapKho(true)} style={{ minHeight: 54, border: 0, borderRadius: 16, background: '#078653', color: '#fff', fontWeight: 950, fontSize: 15, cursor: 'pointer' }}>
+        + Nhập kho thành phẩm
+      </button>
+
+      <div style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
+        {FLOWS.map((f) => (
+          <button key={f.key} onClick={() => setFlow(f.key)} style={{
+            flex: '0 0 auto', minHeight: 46, padding: '0 14px', borderRadius: 14,
+            border: flow === f.key ? '1px solid #ca873a' : '1px solid #e2cdb6',
+            background: flow === f.key ? '#fff1d4' : '#fff', color: flow === f.key ? '#7d420c' : '#705640', fontWeight: 900, cursor: 'pointer',
+          }}>{f.label}</button>
+        ))}
+      </div>
+
+      {currentFlow?.hasBranchTabs && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          {STORES.map((s) => (
+            <button key={s} onClick={() => setStore(s)} style={{
+              minHeight: 46, borderRadius: 14, border: store === s ? 'none' : '1px solid #e2cdb6',
+              background: store === s ? '#078653' : '#fff', color: store === s ? '#fff' : '#806a58', fontWeight: 900, cursor: 'pointer',
+            }}>{s}</button>
+          ))}
+        </div>
+      )}
+
+      {error && <div style={{ color: '#d94a40', fontWeight: 700 }}>⚠️ {error}</div>}
+      {loading ? (
+        <div style={{ color: '#806a58', textAlign: 'center', padding: 20 }}>Đang tải...</div>
+      ) : items.length === 0 ? (
+        <div style={{ color: '#806a58', textAlign: 'center', padding: 20 }}>Chưa có tồn kho ở đây — sẽ tự cộng khi nhập kho hoặc bếp ghi sản xuất.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {items.map((s) => {
+            const cd = countdown(s.expiry_date);
+            return (
+              <div key={s.id} style={{ display: 'grid', gridTemplateColumns: '68px 1fr', gap: 12, padding: 12, border: '1px solid #e2cdb6', borderRadius: 20, background: '#fff' }}>
+                <div style={{ borderRadius: 16, overflow: 'hidden', background: '#ffe6ad', display: 'grid', placeItems: 'center', fontSize: 30 }}>
+                  {s.photo_url ? <img src={s.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : '🍰'}
+                </div>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <div>
+                      <div style={{ fontWeight: 900, fontSize: 15 }}>{productName(s.product_id)}</div>
+                      <div style={{ fontSize: 12, color: '#806a58', fontWeight: 800 }}>
+                        {[s.size, s.color, s.packing].filter(Boolean).join(' · ') || '—'}
+                      </div>
+                    </div>
+                    <div style={{ minWidth: 44, textAlign: 'center', padding: '4px 8px', borderRadius: 12, background: '#f4eadc', fontWeight: 900, color: Number(s.qty) < 0 ? '#d94a40' : '#2d1b10' }}>{s.qty}</div>
+                  </div>
+                  {(s.production_date || s.expiry_date) && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 8 }}>
+                      <div style={{ padding: '6px 8px', borderRadius: 10, background: '#fbf5ed' }}>
+                        <div style={{ fontSize: 9, fontWeight: 900, color: '#9a7f68' }}>SẢN XUẤT</div>
+                        <div style={{ fontSize: 11, fontWeight: 800 }}>{s.production_date ? new Date(s.production_date).toLocaleString('vi-VN') : '—'}</div>
+                      </div>
+                      <div style={{ padding: '6px 8px', borderRadius: 10, background: '#fbf5ed' }}>
+                        <div style={{ fontSize: 9, fontWeight: 900, color: '#9a7f68' }}>HẾT HẠN</div>
+                        <div style={{ fontSize: 11, fontWeight: 800 }}>{s.expiry_date ? new Date(s.expiry_date).toLocaleString('vi-VN') : '—'}</div>
+                      </div>
+                    </div>
+                  )}
+                  {cd && <div style={{ marginTop: 8, padding: '7px 9px', borderRadius: 12, fontSize: 12, fontWeight: 900, ...toneStyle[cd.tone] }}>{cd.text}</div>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {showNhapKho && (
+        <NhapKhoSheet
+          defaultBranch={flow === 'xuong42' ? 'bakery' : flow}
+          defaultStore={store}
+          products={products}
+          staffName={profile?.full_name}
+          onClose={() => setShowNhapKho(false)}
+          onSaved={load}
+        />
+      )}
+    </div>
+  );
+}
