@@ -36,6 +36,7 @@ import { ORDER_FLOWS } from '../../../data/orderCatalogs';
 // nhận giao/hoàn thành/sửa đơn/GPS/chat) thay vì tự dựng lại một bản rút gọn.
 // KHÔNG động tới bất kỳ file nào khác của anh Khánh ngoài file này.
 import OrderV2DetailModal from '../../OrderV2DetailModal';
+import FinishedGoodsInventoryV2 from '../../warehouse/FinishedGoodsInventoryV2';
 import {
   fetchRevenueByChannel,
   fetchExpenseClaimsToday,
@@ -66,7 +67,7 @@ export function BossOverviewV3Inner() {
 
   // ── States Quản Lý Bottom Sheets & Bộ Lọc Đơn Hàng ──
   const [activeSheet, setActiveSheet] = useState<
-    'revenue_detail' | 'expense_detail' | 'order_drawer' | 'staff_detail' | 'task_sheet' | 'feed_sheet' | 'advance_sheet' | 'leave_sheet' | 'report_sheet' | 'schedule_sheet' | null
+    'revenue_detail' | 'expense_detail' | 'order_drawer' | 'staff_detail' | 'task_sheet' | 'feed_sheet' | 'advance_sheet' | 'leave_sheet' | 'report_sheet' | 'schedule_sheet' | 'warehouse_sheet' | null
   >(null);
   const [selectedOrderFilter, setSelectedOrderFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
@@ -615,7 +616,7 @@ export function BossOverviewV3Inner() {
             <span style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10', display: 'flex', alignItems: 'center', gap: 6 }}>
               👤 TÔI (QUẢN TRỊ & TIỆN ÍCH ĐIỀU HÀNH)
             </span>
-            <span style={{ fontSize: 11, fontWeight: 800, color: '#c28c4e' }}>6 mục điều hành</span>
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#c28c4e' }}>7 mục điều hành</span>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
@@ -772,6 +773,34 @@ export function BossOverviewV3Inner() {
               <div style={{ marginTop: 6 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>6. Lịch làm</div>
                 <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>{weeklySchedule.totalAssignments} lượt phân ca tuần này</div>
+              </div>
+            </div>
+
+            {/* Ô 7: Kho Thành Phẩm — mở FinishedGoodsInventoryV2 thật (đã có sẵn từ
+                phân hệ Đơn hàng: tồn kho realtime, hạn dùng, phân luồng, nút "‹"
+                quay lại riêng), không tự dựng lại bản khác ở đây. */}
+            <div
+              onClick={() => setActiveSheet('warehouse_sheet')}
+              style={{
+                background: '#ffffff',
+                border: '1.5px solid #eadcca',
+                borderRadius: 18,
+                padding: '12px 14px',
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                minHeight: 88,
+                boxSizing: 'border-box'
+              }}
+            >
+              <div>
+                <Package size={22} color="#b87a48" strokeWidth={1.6} />
+              </div>
+              <div style={{ marginTop: 6 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>7. Kho Thành Phẩm</div>
+                <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>Tồn kho, hạn dùng, nhập kho</div>
               </div>
             </div>
           </div>
@@ -1601,6 +1630,15 @@ export function BossOverviewV3Inner() {
         {selectedOrderId && (
           <div style={{ position: 'fixed', inset: 0, zIndex: 2000 }}>
             <OrderV2DetailModal orderId={selectedOrderId} onClose={() => setSelectedOrderId(null)} onChanged={() => {}} />
+          </div>
+        )}
+
+        {/* Ô 7: Kho Thành Phẩm — FinishedGoodsInventoryV2 tự vẽ nội dung trang
+            (không phải overlay), nên bọc trong 1 lớp toàn màn hình riêng ở đây.
+            Nút "‹" quay lại của chính component này đã đóng đúng lớp này. */}
+        {activeSheet === 'warehouse_sheet' && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 1400, background: '#fdf9f2', overflowY: 'auto', padding: 16, boxSizing: 'border-box' }}>
+            <FinishedGoodsInventoryV2 onBack={() => setActiveSheet(null)} />
           </div>
         )}
 
