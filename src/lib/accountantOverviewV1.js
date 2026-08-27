@@ -1,6 +1,41 @@
 import { supabase } from './supabaseClient';
 import { fetchCashbookEntries } from './queries';
 
+// ---- Phân luồng theo phòng ban — suy ra từ role/station THẬT của người xin
+// (profiles.role, profiles.station), không có cột phòng ban riêng nên không
+// bịa nhóm mới. profiles.station chỉ khoảng 30% nhân sự có điền, phần còn lại
+// (văn phòng, Bếp Lạnh/Nóng, không rõ) mặc định xếp vào Bakery — đây là mảng
+// kinh doanh chính, hợp lý làm nhóm "còn lại".
+export const DEPARTMENTS = [
+  { key: 'all', label: 'Tất cả' },
+  { key: 'bakery', label: '🍞 Bakery' },
+  { key: 'macaron', label: '🍬 Macaron' },
+  { key: 'truong_hoc', label: '🏫 Trường học' },
+  { key: 'van_tai', label: '🚚 Vận tải' },
+];
+
+function classifyDepartment(role, station) {
+  const r = String(role || '').toLowerCase();
+  const s = String(station || '').toLowerCase();
+  if (['shipper', 'shipper_school', 'transport_lead'].includes(r)) return 'van_tai';
+  if (s === 'xuong41' || r === 'deputy_director_x41' || r === 'kho_xuong41') return 'macaron';
+  if (s === 'xuong42' || r === 'deputy_director_x42' || r === 'kho_xuong42') return 'truong_hoc';
+  return 'bakery';
+}
+
+async function attachDepartment(rows, idField) {
+  const ids = [...new Set(rows.map((r) => r?.[idField]).filter(Boolean))];
+  if (ids.length === 0) return rows.map((r) => ({ ...r, department: 'bakery' }));
+  const { data, error } = await supabase.from('profiles').select('id, role, station').in('id', ids);
+  if (error) throw error;
+  const byId = {};
+  (data || []).forEach((p) => { byId[p.id] = p; });
+  return rows.map((r) => {
+    const p = byId[r?.[idField]];
+    return { ...r, department: classifyDepartment(p?.role, p?.station) };
+  });
+}
+
 const pad2 = (n) => String(n).padStart(2, '0');
 const monthKeyOf = (d = new Date()) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
 const monthStartOf = (monthKey) => `${monthKey}-01`;
@@ -18,7 +53,7 @@ export async function fetchReadyToPayExpenses() {
     .eq('status', 'pending_accounting')
     .order('created_at', { ascending: true });
   if (error) throw error;
-  return data || [];
+  return attachDepartment(data || [], 'claimant_id');
 }
 
 export async function markExpensePaid(id, paymentMethod, receiptUrl) {
@@ -37,7 +72,7 @@ export async function fetchReadyToPayAdvances() {
     .eq('status', 'pending_accounting')
     .order('created_at', { ascending: true });
   if (error) throw error;
-  return data || [];
+  return attachDepartment(data || [], 'employee_id');
 }
 
 export async function payAdvance(id, paymentMethod, receiptUrl) {

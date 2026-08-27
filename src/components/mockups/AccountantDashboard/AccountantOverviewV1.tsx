@@ -13,6 +13,7 @@ import {
   fetchWagesSummaryForMonth,
   submitMyExpenseClaim,
   monthKeyOf,
+  DEPARTMENTS,
 } from '../../../lib/accountantOverviewV1';
 import { uploadFile } from '../../../lib/queries';
 
@@ -56,6 +57,7 @@ export function AccountantOverviewV1Inner() {
   const { profile, loading: authLoading } = useAuth() || ({} as any);
 
   const [activeTab, setActiveTab] = useState<TabKey>('pay');
+  const [deptFilter, setDeptFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
 
@@ -200,6 +202,20 @@ export function AccountantOverviewV1Inner() {
   };
 
   const totalAdvancesOutstanding = (readyAdvances || []).reduce((s, a) => s + (Number(a?.amount) || 0), 0);
+  const visibleExpenses = deptFilter === 'all' ? (readyExpenses || []) : (readyExpenses || []).filter((e: any) => e?.department === deptFilter);
+  const visibleAdvances = deptFilter === 'all' ? (readyAdvances || []) : (readyAdvances || []).filter((a: any) => a?.department === deptFilter);
+  const DeptTabs = (
+    <div style={{ display: 'flex', gap: 6, overflowX: 'auto', marginBottom: 10 }}>
+      {DEPARTMENTS.map((d) => (
+        <button key={d.key} onClick={() => setDeptFilter(d.key)} style={{
+          flex: '0 0 auto', padding: '6px 12px', borderRadius: 999, border: '1px solid #eadcca', fontSize: 11, fontWeight: 800, cursor: 'pointer',
+          background: deptFilter === d.key ? '#f05c2b' : '#fff', color: deptFilter === d.key ? '#fff' : '#725f50',
+        }}>
+          {d.label}
+        </button>
+      ))}
+    </div>
+  );
   const ledgerTotalChi = (ledgerRows || []).filter((r) => r?.type === 'chi').reduce((s, r) => s + (Number(r?.amount) || 0), 0);
   const ledgerTotalThu = (ledgerRows || []).filter((r) => r?.type === 'thu').reduce((s, r) => s + (Number(r?.amount) || 0), 0);
 
@@ -290,14 +306,15 @@ export function AccountantOverviewV1Inner() {
                 </div>
               </div>
 
+              {DeptTabs}
               <div style={{ fontSize: 11, fontWeight: 900, color: '#725f50', textTransform: 'uppercase', marginBottom: 8 }}>
-                Đã qua duyệt — chờ Kế toán chi ({(readyExpenses || []).length})
+                Đã qua duyệt — chờ Kế toán chi ({visibleExpenses.length})
               </div>
-              {(readyExpenses || []).length === 0 && !loading && (
+              {visibleExpenses.length === 0 && !loading && (
                 <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Không có khoản chi nào đang chờ.</div>
               )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {(readyExpenses || []).map((exp: any) => (
+                {visibleExpenses.map((exp: any) => (
                   <div
                     key={exp?.id}
                     onClick={() => { setSelectedExpense(exp); setActiveSheet('expense_detail'); setDisburseMethod(''); setDisburseReceipt(null); }}
@@ -336,14 +353,15 @@ export function AccountantOverviewV1Inner() {
                   Khi Kế toán bấm chi, số tiền tự động trừ vào bảng lương tháng của nhân sự đó.
                 </div>
               </div>
+              {DeptTabs}
               <div style={{ fontSize: 11, fontWeight: 900, color: '#725f50', textTransform: 'uppercase', marginBottom: 8 }}>
-                Đã Giám đốc duyệt — chờ chi ({(readyAdvances || []).length})
+                Đã Giám đốc duyệt — chờ chi ({visibleAdvances.length})
               </div>
-              {(readyAdvances || []).length === 0 && !loading && (
+              {visibleAdvances.length === 0 && !loading && (
                 <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Không có yêu cầu tạm ứng nào đang chờ.</div>
               )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {(readyAdvances || []).map((a: any) => (
+                {visibleAdvances.map((a: any) => (
                   <div
                     key={a?.id}
                     onClick={() => { setSelectedAdvance(a); setActiveSheet('advance_detail'); setDisburseMethod(''); setDisburseReceipt(null); }}
