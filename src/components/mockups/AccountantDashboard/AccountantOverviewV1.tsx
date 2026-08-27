@@ -224,9 +224,30 @@ export function AccountantOverviewV1Inner() {
           {/* ── TAB: CHỜ CHI ── */}
           {activeTab === 'pay' && (
             <>
-              <button onClick={() => setActiveSheet('new_expense')} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#15803d', color: '#fff', border: 'none', borderRadius: 14, padding: '12px 0', fontWeight: 900, fontSize: 13.5, cursor: 'pointer', marginTop: 8, marginBottom: 12 }}>
-                <Plus size={16} /> Ghi khoản chi
-              </button>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9, marginTop: 8, marginBottom: 12 }}>
+                <button onClick={() => setActiveSheet('new_expense')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#15803d', color: '#fff', border: 'none', borderRadius: 14, padding: '12px 0', fontWeight: 900, fontSize: 13, cursor: 'pointer' }}>
+                  <Plus size={16} /> Ghi khoản chi
+                </button>
+                <button disabled title="Chưa có bảng chốt quỹ trong hệ thống" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#fff', color: '#a08060', border: '1.5px solid #eadcca', borderRadius: 14, padding: '12px 0', fontWeight: 900, fontSize: 13, cursor: 'not-allowed' }}>
+                  Chốt quỹ ngày
+                </button>
+              </div>
+
+              {/* Vòng đời khoản chi */}
+              <div style={{ background: '#2d1c10', borderRadius: 16, padding: 12, marginBottom: 14 }}>
+                <div style={{ color: '#fff', fontSize: 12.5, fontWeight: 900, marginBottom: 8 }}>Vòng đời khoản chi</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+                  {['1. Nhân sự gửi', '2. Sếp duyệt', '3. Kế toán chi', '4. Vào sổ lương/KPI'].map((step, i) => (
+                    <div key={step} style={{
+                      minHeight: 46, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 5,
+                      fontSize: 9.5, fontWeight: 900, background: i === 2 ? '#ffd284' : 'rgba(255,255,255,0.12)', color: i === 2 ? '#4b2a14' : '#fff',
+                    }}>
+                      {step}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <div style={{ fontSize: 11, fontWeight: 900, color: '#725f50', textTransform: 'uppercase', marginBottom: 8 }}>
                 Đã qua duyệt — chờ Kế toán chi ({(readyExpenses || []).length})
               </div>
@@ -235,17 +256,26 @@ export function AccountantOverviewV1Inner() {
               )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {(readyExpenses || []).map((exp: any) => (
-                  <div key={exp?.id} style={{ background: '#fff', border: '1.5px solid #eadcca', borderRadius: 16, padding: 12 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 13.5, fontWeight: 900, color: '#2d1c10' }}>{exp?.description || 'Khoản chi'}</div>
-                        <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>{exp?.claimant_name || 'Không rõ'}{exp?.approval_reason ? ` · ${exp.approval_reason}` : ''}</div>
-                      </div>
-                      <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontWeight: 900, fontSize: 14, color: '#4A2610', whiteSpace: 'nowrap', marginLeft: 8 }}>
-                        {formatVND(exp?.amount)}
+                  <div key={exp?.id} style={{ background: '#fffcf7', border: '1.5px solid rgba(74,38,16,0.16)', borderRadius: 16, padding: 12 }}>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                      <div style={{ width: 42, height: 42, borderRadius: 12, background: '#fff0d4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>🧾</div>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                          <div style={{ fontSize: 13.5, fontWeight: 900, color: '#2d1b10' }}>{exp?.description || 'Khoản chi'}</div>
+                          <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace', fontWeight: 900, fontSize: 14, color: '#4A2610', whiteSpace: 'nowrap' }}>
+                            {formatVND(exp?.amount)}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 11, color: '#6b5b48', marginTop: 2 }}>{exp?.claimant_name || 'Không rõ'}</div>
+                        <span style={{
+                          display: 'inline-block', marginTop: 6, padding: '3px 9px', borderRadius: 99, fontSize: 10.5, fontWeight: 900,
+                          background: exp?.approval_reason ? '#fff4cf' : '#e8f8ef', color: exp?.approval_reason ? '#805200' : '#078653',
+                        }}>
+                          {exp?.approval_reason ? `⚠️ ${exp.approval_reason}` : '✓ Đã duyệt'}
+                        </span>
                       </div>
                     </div>
-                    <button onClick={() => handleMarkPaid(exp?.id)} style={{ width: '100%', marginTop: 8, background: '#c28c4e', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 0', fontWeight: 900, fontSize: 12.5, cursor: 'pointer' }}>
+                    <button onClick={() => handleMarkPaid(exp?.id)} style={{ width: '100%', marginTop: 10, background: '#f05c2b', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 0', fontWeight: 900, fontSize: 12.5, cursor: 'pointer' }}>
                       ⚡ Đã chi tiền
                     </button>
                   </div>
@@ -271,17 +301,23 @@ export function AccountantOverviewV1Inner() {
               )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {(readyAdvances || []).map((a: any) => (
-                  <div key={a?.id} style={{ background: '#fefce8', border: '1.5px solid #facc15', borderRadius: 16, padding: 12 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 13.5, fontWeight: 900, color: '#2d1c10' }}>{a?.employee_name || 'Không rõ'}</div>
-                        <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>Lý do: {a?.reason || '—'}</div>
-                      </div>
-                      <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontWeight: 900, fontSize: 14, color: '#4A2610', whiteSpace: 'nowrap', marginLeft: 8 }}>
-                        {formatVND(a?.amount)}
+                  <div key={a?.id} style={{ background: '#fffcf7', border: '1.5px solid rgba(74,38,16,0.16)', borderRadius: 16, padding: 12 }}>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                      <div style={{ width: 42, height: 42, borderRadius: 12, background: '#fff0d4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>💵</div>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                          <div style={{ fontSize: 13.5, fontWeight: 900, color: '#2d1b10' }}>{a?.employee_name || 'Không rõ'}</div>
+                          <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace', fontWeight: 900, fontSize: 14, color: '#4A2610', whiteSpace: 'nowrap' }}>
+                            {formatVND(a?.amount)}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 11, color: '#6b5b48', marginTop: 2 }}>Lý do: {a?.reason || '—'}</div>
+                        <span style={{ display: 'inline-block', marginTop: 6, padding: '3px 9px', borderRadius: 99, fontSize: 10.5, fontWeight: 900, background: '#e8f8ef', color: '#078653' }}>
+                          ✓ Sếp đã duyệt
+                        </span>
                       </div>
                     </div>
-                    <button onClick={() => handlePayAdvance(a?.id)} style={{ width: '100%', marginTop: 8, background: '#c28c4e', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 0', fontWeight: 900, fontSize: 12.5, cursor: 'pointer' }}>
+                    <button onClick={() => handlePayAdvance(a?.id)} style={{ width: '100%', marginTop: 10, background: '#f05c2b', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 0', fontWeight: 900, fontSize: 12.5, cursor: 'pointer' }}>
                       ⚡ Đã chi tạm ứng
                     </button>
                   </div>
