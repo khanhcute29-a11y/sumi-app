@@ -171,7 +171,14 @@ export default function OrdersV2Screen() {
             </button>
           )}
           {(canCreate || roleCanCreate) && (
-            <button onClick={() => setShowCreate(true)}>＋ TẠO ĐƠN</button>
+            // Style inline vì nút này không còn là con trực tiếp của .mock-page-head
+            // từ khi thêm nút "Nháp" bên cạnh (bọc thêm 1 div) — CSS .mock-page-head>button
+            // trong App.css dùng selector con trực tiếp nên không còn khớp nữa.
+            <button onClick={() => setShowCreate(true)} style={{
+              minHeight: 58, padding: '0 17px', border: 0, borderRadius: 18,
+              background: '#ef642b', color: '#fff', fontSize: 16, fontWeight: 950,
+              boxShadow: '0 6px 0 #b93e13', whiteSpace: 'nowrap', cursor: 'pointer',
+            }}>＋ TẠO ĐƠN</button>
           )}
         </div>
       </div>
