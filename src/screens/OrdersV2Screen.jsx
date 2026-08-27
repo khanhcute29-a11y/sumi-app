@@ -236,10 +236,7 @@ export default function OrdersV2Screen() {
             }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ fontSize: 20 }}>🏬</span>
-              <span>
-                <strong style={{ display: 'block', color: '#2d1c10', fontSize: 15 }}>Kho Thành Phẩm</strong>
-                <small style={{ color: '#8c5a3c' }}>Bakery · Macaron · Xưởng 42 (Trường học/Teabreak) — tồn kho &amp; ghi sản xuất</small>
-              </span>
+              <strong style={{ color: '#2d1c10', fontSize: 18 }}>Kho Thành Phẩm</strong>
             </span>
             <span style={{ color: '#b93e13', fontWeight: 800 }}>Xem →</span>
           </button>
@@ -248,7 +245,7 @@ export default function OrdersV2Screen() {
 
       {showKho && (
         <div onClick={() => setShowKho(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: '#faf6f0', width: '100%', maxWidth: 560, maxHeight: '85vh', overflowY: 'auto', borderRadius: '20px 20px 0 0', padding: 16 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: '#faf6f0', width: '96vw', maxWidth: 920, maxHeight: '92vh', overflowY: 'auto', borderRadius: '20px 20px 0 0', padding: '16px 18px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: '#2d1c10' }}>🏬 Kho Thành Phẩm</h3>
               <button onClick={() => setShowKho(false)} style={{ border: 'none', background: 'none', fontSize: 18, cursor: 'pointer' }}>✕</button>
