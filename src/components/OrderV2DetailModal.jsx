@@ -439,24 +439,34 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
     }
   };
 
+  // Cập nhật lạc quan: đổi trạng thái gói việc + đóng modal NGAY khi bấm,
+  // không chờ round-trip RPC — bếp trưởng cảm giác nhận đơn tức thì. RPC này
+  // (khác với `accept` phía trên) KHÔNG dùng p_expected_version — chỉ update
+  // theo package_id, nên đoán trước status 'in_progress' ở client không đụng
+  // tới cơ chế optimistic-concurrency nào của server. Nếu RPC lỗi, phục hồi
+  // đúng snapshot trước đó + mở lại modal để bếp trưởng thử lại.
   const acceptPackageSelf = async (p) => {
-    setBusy(true);
     setError('');
+    const snapshot = data;
+    setData((d) => ({ ...d, packages: d.packages.map((x) => (x.id === p.id ? { ...x, status: 'in_progress', assigned_to_staff_id: profile.id, assigned_to_staff_name: profile.full_name || profile.email } : x)) }));
+    setShowAcceptPackageModal(false);
+    setSelectedPackage(null);
+    setBusy(true);
     try {
       // Call RPC to accept work package by kitchen lead (bypasses RLS)
-      const { data, error } = await supabase.rpc('accept_work_package_self', {
+      const { data: result, error } = await supabase.rpc('accept_work_package_self', {
         p_package_id: p.id,
         p_staff_id: profile.id,
         p_staff_name: profile.full_name || profile.email
       });
 
       if (error) throw error;
-      if (!data.success) throw new Error(data.message || 'Failed to accept work package');
+      if (!result.success) throw new Error(result.message || 'Failed to accept work package');
 
       // RPC accept_work_package_self CHỈ sửa bảng công việc bếp, không đụng
       // vào bảng `orders` — mà chỉ `orders` mới được phát realtime. Nên phải
       // tự bắn tín hiệu, nếu không các máy khác sẽ không hay biết gì.
-      broadcastEvent(BroadcastEvents.SOUND_NOTIFICATION, { soundType: 'kitchen_receive', orderCode: data?.order?.order_code, orderId })
+      broadcastEvent(BroadcastEvents.SOUND_NOTIFICATION, { soundType: 'kitchen_receive', orderCode: result?.order?.order_code, orderId })
         .catch(e => console.error('[OrderV2] Không gửi được chuông nhận đơn:', e));
 
       // Log KPI: work_package_accepted by bếp trưởng
@@ -468,11 +478,12 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
         notes: 'Bếp trưởng tự nhận đơn để làm'
       }); // Fire-and-forget KPI logging
 
-      setShowAcceptPackageModal(false);
-      setSelectedPackage(null);
       await load();
       onChanged?.();
     } catch (e) {
+      setData(snapshot);
+      setShowAcceptPackageModal(true);
+      setSelectedPackage(p);
       setError(e.message);
     } finally {
       setBusy(false);
@@ -507,24 +518,30 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
     }
   };
 
+  // Cùng cơ chế lạc quan như acceptPackageSelf — accept_delegate_work_package
+  // cũng chỉ update theo package_id, không có p_expected_version.
   const acceptPackageDelegate = async (p, staffId, staffName) => {
-    setBusy(true);
+    if (!staffId) { setError('Chưa chọn nhân viên'); return; }
     setError('');
+    const snapshot = data;
+    setData((d) => ({ ...d, packages: d.packages.map((x) => (x.id === p.id ? { ...x, status: 'in_progress', assigned_to_staff_id: staffId, assigned_to_staff_name: staffName } : x)) }));
+    setShowAcceptPackageModal(false);
+    setSelectedPackage(null);
+    setSelectedStaff('');
+    setBusy(true);
     try {
-      if (!staffId) throw new Error('Chưa chọn nhân viên');
-
       // Call RPC to delegate work package to staff (bypasses RLS)
-      const { data, error } = await supabase.rpc('accept_delegate_work_package', {
+      const { data: result, error } = await supabase.rpc('accept_delegate_work_package', {
         p_package_id: p.id,
         p_staff_id: staffId,
         p_staff_name: staffName
       });
 
       if (error) throw error;
-      if (!data.success) throw new Error(data.message || 'Failed to delegate work package');
+      if (!result.success) throw new Error(result.message || 'Failed to delegate work package');
 
       // Cùng lý do như acceptPackageSelf: RPC này không sửa bảng `orders`.
-      broadcastEvent(BroadcastEvents.SOUND_NOTIFICATION, { soundType: 'kitchen_receive', orderCode: data?.order?.order_code, orderId })
+      broadcastEvent(BroadcastEvents.SOUND_NOTIFICATION, { soundType: 'kitchen_receive', orderCode: result?.order?.order_code, orderId })
         .catch(e => console.error('[OrderV2] Không gửi được chuông nhận đơn:', e));
 
       // Log KPI: work_package_accepted by delegated staff
@@ -536,12 +553,12 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
         notes: 'Nhân viên nhận đơn từ bếp trưởng'
       }); // Fire-and-forget KPI logging
 
-      setShowAcceptPackageModal(false);
-      setSelectedPackage(null);
-      setSelectedStaff('');
       await load();
       onChanged?.();
     } catch (e) {
+      setData(snapshot);
+      setShowAcceptPackageModal(true);
+      setSelectedPackage(p);
       setError(e.message);
     } finally {
       setBusy(false);
