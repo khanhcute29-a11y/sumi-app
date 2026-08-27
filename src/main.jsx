@@ -71,6 +71,10 @@ async function mountApp() {
     const mod = await import('./components/mockups/ViecLifecycleDemo.jsx');
     RootComponent = mod.default;
     wrapWithErrorBoundary = false;
+  } else if (_mkParam === 'accountant' || _mkParam === 'accountant-v1') {
+    const mod = await import('./components/mockups/AccountantDashboard/AccountantOverviewV1.tsx');
+    RootComponent = mod.default;
+    wrapWithErrorBoundary = false;
   } else if (_mkParam === 'messenger-chat' || _mkParam === 'chat-box' || _mkParam === 'chat') {
     const mod = await import('./components/mockups/MessengerChatBox/MessengerChatBox.jsx');
     RootComponent = mod.default;
