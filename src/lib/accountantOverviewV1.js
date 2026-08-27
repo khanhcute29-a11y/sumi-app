@@ -83,6 +83,25 @@ export async function payAdvance(id, paymentMethod, receiptUrl) {
   return data;
 }
 
+// ---- 2b. Chốt quỹ ngày (bản tối giản) — expected_amount do server tự tính
+// từ cashbook_entries, KHÔNG nhận từ client ----
+export async function closeDailyCash(actualAmount) {
+  const { data, error } = await supabase.rpc('close_daily_cash', { p_actual_amount: actualAmount });
+  if (error) throw error;
+  return data;
+}
+
+export async function fetchLatestCashClose() {
+  const { data, error } = await supabase
+    .from('daily_cash_closes')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
 // ---- 3. Đơn đang chờ Giám đốc (chưa tới lượt Kế toán) — dùng cho ô "Cần duyệt" ----
 export async function fetchPendingDirectorTotals() {
   const [claimsRes, advancesRes] = await Promise.all([

@@ -14,6 +14,8 @@ import {
   submitMyExpenseClaim,
   monthKeyOf,
   DEPARTMENTS,
+  closeDailyCash,
+  fetchLatestCashClose,
 } from '../../../lib/accountantOverviewV1';
 import { uploadFile } from '../../../lib/queries';
 
@@ -66,6 +68,7 @@ export function AccountantOverviewV1Inner() {
   const [pendingDirector, setPendingDirector] = useState({ count: 0, total: 0 });
   const [ledgerRows, setLedgerRows] = useState<any[]>([]);
   const [wages, setWages] = useState<{ periodStatus: string | null; rows: any[] }>({ periodStatus: null, rows: [] });
+  const [lastCashClose, setLastCashClose] = useState<any>(null);
   const monthKey = useMemo(() => {
     try { return monthKeyOf(); } catch { return ''; }
   }, []);
@@ -75,18 +78,20 @@ export function AccountantOverviewV1Inner() {
     setLoading(true);
     setLoadError('');
     try {
-      const [expenses, advances, directorTotals, ledger, wagesSummary] = await Promise.all([
+      const [expenses, advances, directorTotals, ledger, wagesSummary, cashClose] = await Promise.all([
         fetchReadyToPayExpenses(),
         fetchReadyToPayAdvances(),
         fetchPendingDirectorTotals(),
         fetchLedgerForMonth(monthKey),
         fetchWagesSummaryForMonth(monthKey),
+        fetchLatestCashClose(),
       ]);
       setReadyExpenses(expenses || []);
       setReadyAdvances(advances || []);
       setPendingDirector(directorTotals || { count: 0, total: 0 });
       setLedgerRows(ledger || []);
       setWages(wagesSummary || { periodStatus: null, rows: [] });
+      setLastCashClose(cashClose || null);
     } catch (e: any) {
       setLoadError(e?.message || 'Không tải được dữ liệu thật, thử lại sau.');
     } finally {
@@ -101,7 +106,9 @@ export function AccountantOverviewV1Inner() {
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 2800); };
 
   // ── Bottom sheet: + Ghi khoản chi / chi tiết khoản chi & tạm ứng ──
-  const [activeSheet, setActiveSheet] = useState<'new_expense' | 'expense_detail' | 'advance_detail' | null>(null);
+  const [activeSheet, setActiveSheet] = useState<'new_expense' | 'expense_detail' | 'advance_detail' | 'cash_close' | null>(null);
+  const [cashCloseInput, setCashCloseInput] = useState('');
+  const [closingCash, setClosingCash] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<any>(null);
   const [selectedAdvance, setSelectedAdvance] = useState<any>(null);
   // Nguồn tiền chi ra + ảnh chứng từ — bắt buộc trước khi ghi sổ/chi tạm ứng
@@ -181,6 +188,25 @@ export function AccountantOverviewV1Inner() {
     }
   };
 
+  // Chốt quỹ ngày (bản tối giản) — expected_amount do server tự tính từ
+  // cashbook_entries, không gửi từ client, tránh gian lận/nhập nhầm.
+  const handleCloseCash = async () => {
+    const amountNum = Number((cashCloseInput || '').replace(/[^\d]/g, ''));
+    if (!cashCloseInput.trim() || Number.isNaN(amountNum)) { showToast('⚠️ Vui lòng nhập số tiền mặt thực tế kiểm đếm'); return; }
+    setClosingCash(true);
+    try {
+      const closed = await closeDailyCash(amountNum);
+      showToast(`✓ Đã chốt quỹ — lệch ${formatVND(closed.discrepancy)}`);
+      setActiveSheet(null);
+      setCashCloseInput('');
+      setLastCashClose(closed);
+    } catch (e: any) {
+      showToast(`⚠️ ${e?.message || 'Không chốt quỹ được'}`);
+    } finally {
+      setClosingCash(false);
+    }
+  };
+
   const handleSubmitExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     const amountNum = Number((formAmount || '').replace(/[^\d]/g, ''));
@@ -256,7 +282,13 @@ export function AccountantOverviewV1Inner() {
               <div style={{ fontSize: 9.5, fontWeight: 800, opacity: 0.7, marginTop: 2 }}>cần duyệt</div>
             </div>
             <div style={{ background: 'rgba(255,255,255,0.14)', borderRadius: 14, padding: '10px 4px', textAlign: 'center' }}>
-              <div style={{ fontSize: 16, fontWeight: 900, opacity: 0.6 }}>—</div>
+              {lastCashClose ? (
+                <div style={{ fontSize: 16, fontWeight: 900, fontFamily: 'ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace', color: Number(lastCashClose.discrepancy) === 0 ? '#a7f3d0' : Number(lastCashClose.discrepancy) > 0 ? '#a7f3d0' : '#fecaca' }}>
+                  {Number(lastCashClose.discrepancy) > 0 ? '+' : ''}{formatVNDCompact(lastCashClose.discrepancy)}
+                </div>
+              ) : (
+                <div style={{ fontSize: 16, fontWeight: 900, opacity: 0.6 }}>—</div>
+              )}
               <div style={{ fontSize: 9.5, fontWeight: 800, opacity: 0.7, marginTop: 2 }}>lệch quỹ</div>
             </div>
           </div>
@@ -286,7 +318,7 @@ export function AccountantOverviewV1Inner() {
                 <button onClick={() => setActiveSheet('new_expense')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#15803d', color: '#fff', border: 'none', borderRadius: 14, padding: '12px 0', fontWeight: 900, fontSize: 13, cursor: 'pointer' }}>
                   <Plus size={16} /> Ghi khoản chi
                 </button>
-                <button disabled title="Chưa có bảng chốt quỹ trong hệ thống" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#fff', color: '#a08060', border: '1.5px solid #eadcca', borderRadius: 14, padding: '12px 0', fontWeight: 900, fontSize: 13, cursor: 'not-allowed' }}>
+                <button onClick={() => { setCashCloseInput(''); setActiveSheet('cash_close'); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#fff', color: '#4A2610', border: '1.5px solid #eadcca', borderRadius: 14, padding: '12px 0', fontWeight: 900, fontSize: 13, cursor: 'pointer' }}>
                   Chốt quỹ ngày
                 </button>
               </div>
@@ -596,6 +628,45 @@ export function AccountantOverviewV1Inner() {
                       {submitting ? 'Đang gửi...' : 'Gửi ghi chi'}
                     </button>
                   </form>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeSheet === 'cash_close' && (
+            <div onClick={() => setActiveSheet(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
+              <div onClick={(e) => e.stopPropagation()} style={sheetPanelStyle}>
+                <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
+                  {SHEET_HANDLE}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
+                    <div>
+                      <div style={{ fontSize: 15, fontWeight: 900, color: '#8b5900' }}>🧮 Chốt Quỹ Ngày</div>
+                      <div style={{ fontSize: 11, color: '#725f50' }}>Nhập số tiền mặt thực tế kiểm đếm tại quầy</div>
+                    </div>
+                    <button onClick={() => setActiveSheet(null)} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
+                  </div>
+                </div>
+                <div style={sheetBodyStyle}>
+                  <div style={{ display: 'flex', gap: 8, background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 14, padding: 10, marginTop: 12, marginBottom: 14 }}>
+                    <span style={{ fontSize: 18 }}>⚠️</span>
+                    <div style={{ fontSize: 11, color: '#7c5000', fontWeight: 700, lineHeight: 1.4 }}>
+                      Bản tối giản: số dư lý thuyết hiện chỉ tính từ tổng đã CHI trong Sổ Quỹ (chưa có dòng ghi doanh thu tiền mặt), nên số lệch quỹ dưới đây chỉ mang tính tham khảo trong giai đoạn chạy thử.
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: '#725f50', marginBottom: 3 }}>Số tiền mặt thực tế kiểm đếm *</div>
+                  <input inputMode="numeric" placeholder="VD: 2500000" value={cashCloseInput} onChange={(e) => setCashCloseInput(e.target.value)}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1.5px solid #eadcca', fontSize: 14, outline: 'none', background: '#faf6f0', boxSizing: 'border-box', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }} />
+                  <button onClick={handleCloseCash} disabled={closingCash} style={{ width: '100%', background: closingCash ? '#e8b6a0' : '#f05c2b', color: '#fff', border: 'none', borderRadius: 12, padding: '13px 0', fontWeight: 900, fontSize: 14, cursor: closingCash ? 'not-allowed' : 'pointer', marginTop: 14 }}>
+                    {closingCash ? 'Đang chốt...' : '✓ Xác nhận chốt quỹ'}
+                  </button>
+                  {lastCashClose && (
+                    <div style={{ marginTop: 16, background: '#faf6f0', border: '1px solid #eadcca', borderRadius: 14, padding: 12 }}>
+                      <div style={{ fontSize: 10.5, fontWeight: 800, color: '#725f50', marginBottom: 6 }}>LẦN CHỐT GẦN NHẤT — {new Date(lastCashClose.created_at).toLocaleString('vi-VN')}</div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 3 }}><span>Lý thuyết (Sổ Quỹ)</span><b>{formatVND(lastCashClose.expected_amount)}</b></div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 3 }}><span>Thực tế kiểm đếm</span><b>{formatVND(lastCashClose.actual_amount)}</b></div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 900, color: Number(lastCashClose.discrepancy) === 0 ? '#15803d' : '#dc2626' }}><span>Lệch quỹ</span><span>{Number(lastCashClose.discrepancy) > 0 ? '+' : ''}{formatVND(lastCashClose.discrepancy)}</span></div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
