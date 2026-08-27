@@ -13,11 +13,53 @@ const labels={pending_director:'Chờ Giám đốc',pending_accounting:'Chờ K�
 export default function FinanceRequestsScreen(){
  const {profile}=useAuth(),director=hasAnyRole(profile,['owner','admin']),finance=hasAnyRole(profile,['owner','admin','accountant','cashier']);
  const[tab,setTab]=useState('expense'),[expenses,setExpenses]=useState([]),[advances,setAdvances]=useState([]),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+ // Khoản chi thật (chi tạm ứng) — kể từ khi bắt buộc Nguồn tiền + ảnh chứng
+ // từ ở database, đơn nào đang chờ "Xác nhận đã chi" phải mở popup này thay
+ // vì gọi thẳng RPC chỉ với p_id (RPC cũ đã bị xoá, chỉ còn bản 3 tham số).
+ const[payingRow,setPayingRow]=useState(null);
  const load=async()=>{setError('');try{const[e,a]=await Promise.all([supabase.from('expense_claims').select('*').order('created_at',{ascending:false}),supabase.from('salary_advance_requests').select('*').order('created_at',{ascending:false})]);if(e.error)throw e.error;if(a.error)throw a.error;setExpenses(e.data||[]);setAdvances(a.data||[])}catch(e){setError(e.message)}};
  useEffect(()=>{load()},[profile?.id]);
  const act=async(fn,args)=>{setBusy(true);try{const r=await supabase.rpc(fn,args);if(r.error)throw r.error;await load()}catch(e){setError(e.message)}finally{setBusy(false)}};
  const friendly=error&&(error.includes('does not exist')||error.includes('schema cache')||error.includes('expense_claims'))?'Chức năng đang chờ kích hoạt dữ liệu tài chính trên Supabase.':error;
- return <div className="finance-request-page"><header><small>CHI TIÊU MINH BẠCH</small><h1>Chi & tạm ứng</h1><p>Báo nhanh bằng chữ, giọng nói hoặc ảnh. Hệ thống tự xác định khoản cần Giám đốc duyệt.</p></header><nav><button className={tab==='expense'?'active':''} onClick={()=>setTab('expense')}>🧾 Khoản chi</button><button className={tab==='advance'?'active':''} onClick={()=>setTab('advance')}>💵 Tạm ứng lương</button></nav>{tab==='expense'?<><ExpenseForm onDone={load}/><Rows rows={expenses} kind="expense" director={director} finance={finance} busy={busy} act={act}/></>:<><AdvanceForm onDone={load}/><Rows rows={advances} kind="advance" director={director} finance={finance} busy={busy} act={act}/></>}{friendly&&<div className="finance-error">{friendly}</div>}</div>
+ return <div className="finance-request-page"><header><small>CHI TIÊU MINH BẠCH</small><h1>Chi & tạm ứng</h1><p>Báo nhanh bằng chữ, giọng nói hoặc ảnh. Hệ thống tự xác định khoản cần Giám đốc duyệt.</p></header><nav><button className={tab==='expense'?'active':''} onClick={()=>setTab('expense')}>🧾 Khoản chi</button><button className={tab==='advance'?'active':''} onClick={()=>setTab('advance')}>💵 Tạm ứng lương</button></nav>{tab==='expense'?<><ExpenseForm onDone={load}/><Rows rows={expenses} kind="expense" director={director} finance={finance} busy={busy} act={act} onNeedDisburse={setPayingRow}/></>:<><AdvanceForm onDone={load}/><Rows rows={advances} kind="advance" director={director} finance={finance} busy={busy} act={act} onNeedDisburse={setPayingRow}/></>}{friendly&&<div className="finance-error">{friendly}</div>}{payingRow&&<DisburseForm row={payingRow} act={act} busy={busy} onClose={()=>setPayingRow(null)}/>}</div>
+}
+
+// Chọn Nguồn tiền chi ra + ảnh chứng từ — bắt buộc ở database (xem migration
+// 202608271700), nên bắt buộc ở đây trước khi gọi record_expense_claim /
+// pay_salary_advance.
+function DisburseForm({row,act,busy,onClose}){
+ const[method,setMethod]=useState('cash'),[receipt,setReceipt]=useState(null),[uploading,setUploading]=useState(false),[error,setError]=useState('');
+ const ref=useRef();
+ const pick=async f=>{if(!f)return;setUploading(true);setError('');try{const safe=await toWebSafeImage(f);const url=await uploadPhoto(safe,`disburse_${row.kind}_${row.id}`);setReceipt(url)}catch(e){setError(e.message)}finally{setUploading(false)}};
+ const confirm=async()=>{
+  if(!receipt){setError('Bắt buộc chụp ảnh chứng từ chi tiền.');return}
+  await act(row.kind==='expense'?'record_expense_claim':'pay_salary_advance',{p_id:row.id,p_payment_method:method,p_receipt_url:receipt});
+  onClose();
+ };
+ return <div className="finance-disburse-overlay" onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:200,display:'flex',alignItems:'flex-end',justifyContent:'center'}}>
+  <div onClick={e=>e.stopPropagation()} style={{background:'#fff',width:'100%',maxWidth:420,borderRadius:'18px 18px 0 0',padding:18,boxSizing:'border-box'}}>
+   <h3 style={{margin:'0 0 4px'}}>Xác nhận chi tiền</h3>
+   <p style={{margin:'0 0 12px',color:'#725f50',fontSize:13}}>Bắt buộc chọn nguồn tiền và ảnh chứng từ trước khi ghi sổ.</p>
+   <label style={{display:'block',fontWeight:700,fontSize:13,marginBottom:6}}>Nguồn tiền chi ra</label>
+   <select value={method} onChange={e=>setMethod(e.target.value)} style={{width:'100%',minHeight:44,borderRadius:10,border:'1px solid #eadcca',marginBottom:12}}>
+    <option value="cash">💵 Tiền mặt</option>
+    <option value="bank_vcb">🏦 Chuyển khoản VCB</option>
+    <option value="bank_tcb">🏦 Chuyển khoản TCB</option>
+    <option value="momo">📱 MoMo</option>
+   </select>
+   <button onClick={()=>ref.current?.click()} disabled={uploading} style={{width:'100%',minHeight:44,borderRadius:10,border:'2px dashed #eadcca',background:'#fff',marginBottom:12}}>
+    {uploading?'Đang tải ảnh...':receipt?'📎 Đã có ảnh chứng từ':'📷 Chụp ảnh chứng từ'}
+   </button>
+   <input ref={ref} hidden type="file" accept="image/*" capture="environment" onChange={e=>pick(e.target.files?.[0])}/>
+   {error&&<p className="finance-inline-error">{error}</p>}
+   <div style={{display:'flex',gap:8}}>
+    <button onClick={onClose} disabled={busy} style={{flex:1,minHeight:46,borderRadius:10,border:'1px solid #eadcca',background:'#fff'}}>Huỷ</button>
+    <button onClick={confirm} disabled={busy||uploading||!receipt} style={{flex:2,minHeight:46,borderRadius:10,border:'none',background:(busy||uploading||!receipt)?'#e8b6a0':'#f05c2b',color:'#fff',fontWeight:800}}>
+     {busy?'Đang lưu...':'✓ Xác nhận'}
+    </button>
+   </div>
+  </div>
+ </div>;
 }
 
 function ExpenseForm({onDone}){const[a,setA]=useState(''),[desc,setDesc]=useState(''),[note,setNote]=useState(''),[order,setOrder]=useState(''),[when,setWhen]=useState(nowLocal()),[receipt,setReceipt]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState('');const ref=useRef();
