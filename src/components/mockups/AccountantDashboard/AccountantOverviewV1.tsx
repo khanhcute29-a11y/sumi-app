@@ -90,8 +90,10 @@ export function AccountantOverviewV1Inner() {
   const [toast, setToast] = useState('');
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 2800); };
 
-  // ── Bottom sheet: + Ghi khoản chi ──
-  const [activeSheet, setActiveSheet] = useState<'new_expense' | null>(null);
+  // ── Bottom sheet: + Ghi khoản chi / chi tiết khoản chi & tạm ứng ──
+  const [activeSheet, setActiveSheet] = useState<'new_expense' | 'expense_detail' | 'advance_detail' | null>(null);
+  const [selectedExpense, setSelectedExpense] = useState<any>(null);
+  const [selectedAdvance, setSelectedAdvance] = useState<any>(null);
   const [formAmount, setFormAmount] = useState('');
   const [formDesc, setFormDesc] = useState('');
   const [formNote, setFormNote] = useState('');
@@ -125,6 +127,8 @@ export function AccountantOverviewV1Inner() {
     try {
       await markExpensePaid(id);
       showToast('⚡ Đã ghi nhận chi tiền vào Sổ chi');
+      setActiveSheet(null);
+      setSelectedExpense(null);
       const [expenses, ledger] = await Promise.all([fetchReadyToPayExpenses(), fetchLedgerForMonth(monthKey)]);
       setReadyExpenses(expenses || []);
       setLedgerRows(ledger || []);
@@ -138,6 +142,8 @@ export function AccountantOverviewV1Inner() {
     try {
       await payAdvance(id);
       showToast('⚡ Đã chi tạm ứng, đã trừ vào bảng lương tháng');
+      setActiveSheet(null);
+      setSelectedAdvance(null);
       const [advances, ledger, wagesSummary] = await Promise.all([fetchReadyToPayAdvances(), fetchLedgerForMonth(monthKey), fetchWagesSummaryForMonth(monthKey)]);
       setReadyAdvances(advances || []);
       setLedgerRows(ledger || []);
@@ -266,7 +272,11 @@ export function AccountantOverviewV1Inner() {
               )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {(readyExpenses || []).map((exp: any) => (
-                  <div key={exp?.id} style={{ background: '#fffcf7', border: '1.5px solid rgba(74,38,16,0.16)', borderRadius: 16, padding: 12 }}>
+                  <div
+                    key={exp?.id}
+                    onClick={() => { setSelectedExpense(exp); setActiveSheet('expense_detail'); }}
+                    style={{ background: '#fffcf7', border: '1.5px solid rgba(74,38,16,0.16)', borderRadius: 16, padding: 12, cursor: 'pointer' }}
+                  >
                     <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                       <div style={{ width: 42, height: 42, borderRadius: 12, background: '#fff0d4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>🧾</div>
                       <div style={{ minWidth: 0, flex: 1 }}>
@@ -285,9 +295,6 @@ export function AccountantOverviewV1Inner() {
                         </span>
                       </div>
                     </div>
-                    <button onClick={() => handleMarkPaid(exp?.id)} style={{ width: '100%', marginTop: 10, background: '#f05c2b', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 0', fontWeight: 900, fontSize: 12.5, cursor: 'pointer' }}>
-                      ⚡ Đã chi tiền
-                    </button>
                   </div>
                 ))}
               </div>
@@ -311,7 +318,11 @@ export function AccountantOverviewV1Inner() {
               )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {(readyAdvances || []).map((a: any) => (
-                  <div key={a?.id} style={{ background: '#fffcf7', border: '1.5px solid rgba(74,38,16,0.16)', borderRadius: 16, padding: 12 }}>
+                  <div
+                    key={a?.id}
+                    onClick={() => { setSelectedAdvance(a); setActiveSheet('advance_detail'); }}
+                    style={{ background: '#fffcf7', border: '1.5px solid rgba(74,38,16,0.16)', borderRadius: 16, padding: 12, cursor: 'pointer' }}
+                  >
                     <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                       <div style={{ width: 42, height: 42, borderRadius: 12, background: '#fff0d4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>💵</div>
                       <div style={{ minWidth: 0, flex: 1 }}>
@@ -327,9 +338,6 @@ export function AccountantOverviewV1Inner() {
                         </span>
                       </div>
                     </div>
-                    <button onClick={() => handlePayAdvance(a?.id)} style={{ width: '100%', marginTop: 10, background: '#f05c2b', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 0', fontWeight: 900, fontSize: 12.5, cursor: 'pointer' }}>
-                      ⚡ Đã chi tạm ứng
-                    </button>
                   </div>
                 ))}
               </div>
@@ -423,6 +431,73 @@ export function AccountantOverviewV1Inner() {
 
       {createPortal(
         <>
+          {activeSheet === 'expense_detail' && selectedExpense && (
+            <div onClick={() => { setActiveSheet(null); setSelectedExpense(null); }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
+              <div onClick={(e) => e.stopPropagation()} style={sheetPanelStyle}>
+                <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
+                  {SHEET_HANDLE}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 1, color: '#b8692f', textTransform: 'uppercase' }}>Chi tiết khoản chi</div>
+                      <div style={{ fontSize: 15, fontWeight: 900, color: '#2d1b10' }}>{selectedExpense?.description || 'Khoản chi'}</div>
+                    </div>
+                    <button onClick={() => { setActiveSheet(null); setSelectedExpense(null); }} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
+                  </div>
+                </div>
+                <div style={sheetBodyStyle}>
+                  <div style={{ marginTop: 14, marginBottom: 14 }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: '#725f50' }}>Số tiền cần chi</div>
+                    <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace', fontSize: 32, fontWeight: 900, color: '#4A2610', marginTop: 2 }}>
+                      {formatVND(selectedExpense?.amount)}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#6b5b48', marginTop: 6, lineHeight: 1.5 }}>
+                      Người gửi: <strong>{selectedExpense?.claimant_name || 'Không rõ'}</strong>.{' '}
+                      {selectedExpense?.approval_reason ? `Cần xác nhận: ${selectedExpense.approval_reason}.` : 'Đã qua duyệt.'}{' '}
+                      Bấm "Đã chi tiền" để ghi vào Sổ chi.
+                    </div>
+                  </div>
+                  <div style={{ background: '#faf6f0', border: '1px solid #eadcca', borderRadius: 14, padding: 10, marginBottom: 16 }}>
+                    <div style={{ fontSize: 11, color: '#725f50' }}>Ghi chú: {selectedExpense?.note || '—'}</div>
+                  </div>
+                  <button onClick={() => handleMarkPaid(selectedExpense?.id)} style={{ width: '100%', background: '#f05c2b', color: '#fff', border: 'none', borderRadius: 12, padding: '13px 0', fontWeight: 900, fontSize: 14, cursor: 'pointer' }}>
+                    ⚡ Đã chi tiền
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeSheet === 'advance_detail' && selectedAdvance && (
+            <div onClick={() => { setActiveSheet(null); setSelectedAdvance(null); }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
+              <div onClick={(e) => e.stopPropagation()} style={sheetPanelStyle}>
+                <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
+                  {SHEET_HANDLE}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 1, color: '#b8692f', textTransform: 'uppercase' }}>Chi tiết tạm ứng</div>
+                      <div style={{ fontSize: 15, fontWeight: 900, color: '#2d1b10' }}>{selectedAdvance?.employee_name || 'Không rõ'}</div>
+                    </div>
+                    <button onClick={() => { setActiveSheet(null); setSelectedAdvance(null); }} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
+                  </div>
+                </div>
+                <div style={sheetBodyStyle}>
+                  <div style={{ marginTop: 14, marginBottom: 14 }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: '#725f50' }}>Số tiền tạm ứng</div>
+                    <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace', fontSize: 32, fontWeight: 900, color: '#4A2610', marginTop: 2 }}>
+                      {formatVND(selectedAdvance?.amount)}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#6b5b48', marginTop: 6, lineHeight: 1.5 }}>
+                      Lý do: <strong>{selectedAdvance?.reason || '—'}</strong>. Sếp đã duyệt. Khi chi xong sẽ tự trừ vào bảng lương tháng của nhân sự này.
+                    </div>
+                  </div>
+                  <button onClick={() => handlePayAdvance(selectedAdvance?.id)} style={{ width: '100%', background: '#f05c2b', color: '#fff', border: 'none', borderRadius: 12, padding: '13px 0', fontWeight: 900, fontSize: 14, cursor: 'pointer' }}>
+                    ⚡ Đã chi tạm ứng
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {activeSheet === 'new_expense' && (
             <div onClick={() => setActiveSheet(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
               <div onClick={(e) => e.stopPropagation()} style={sheetPanelStyle}>
