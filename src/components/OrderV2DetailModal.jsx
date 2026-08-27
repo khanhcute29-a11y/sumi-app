@@ -299,6 +299,14 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
     }
   };
 
+  // Tự lấy GPS ngay khi mở "Nhận Giao"/"Hoàn Thành Giao" thay vì bắt buộc phải
+  // bấm nút "Bấm để lấy GPS hiện tại" — nhân viên hay bỏ qua bước bấm tay, dẫn
+  // tới hoàn thành đơn bị chặn ở bước cuối vì tưởng đã có GPS mà thực ra chưa.
+  useEffect(() => {
+    if ((showDeliveryModal || showCompletionModal) && !gpsCoords) captureGPS();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showDeliveryModal, showCompletionModal]);
+
   const capturePhoto = async () => {
     if (cameraInputRef.current) {
       cameraInputRef.current.click();
