@@ -45,6 +45,11 @@ export function ChatLauncher({ profile }) {
   const [dragPosition, setDragPosition] = useState(loadSavedPosition);
   const [isDraggingWindow, setIsDraggingWindow] = useState(false);
   const dragOffset = useRef({ x: 0, y: 0 });
+  const windowRef = useRef(null);
+  // Cờ ref song song với isDraggingWindow (state) — dùng trong listener touchmove
+  // gắn thủ công (xem useEffect bên dưới) để tránh đọc closure cũ, vì effect đó
+  // chỉ chạy 1 lần lúc mount chứ không re-run theo mỗi lần đổi isDraggingWindow.
+  const isDraggingRef = useRef(false);
 
   const unreadTotal = useMemo(() => Object.values(unreadCounts).reduce((s, n) => s + n, 0), [unreadCounts]);
 
@@ -140,6 +145,7 @@ export function ChatLauncher({ profile }) {
     const base = dragPosition || clampPosition(window.innerWidth - CHAT_WIDTH - 24, window.innerHeight - CHAT_HEIGHT - 24);
     dragOffset.current = { x: clientX - base.x, y: clientY - base.y };
     setDragPosition(base);
+    isDraggingRef.current = true;
     setIsDraggingWindow(true);
   };
 
@@ -148,6 +154,7 @@ export function ChatLauncher({ profile }) {
   };
 
   const endDrag = () => {
+    isDraggingRef.current = false;
     setIsDraggingWindow(false);
     setDragPosition((prev) => {
       if (prev) {
@@ -178,19 +185,36 @@ export function ChatLauncher({ profile }) {
     const t = e.touches[0];
     startDrag(t.clientX, t.clientY);
   };
-  const handleHeaderTouchMove = (e) => {
-    if (!isDraggingWindow) return;
-    const t = e.touches[0];
-    moveDrag(t.clientX, t.clientY);
-  };
   const handleHeaderTouchEnd = () => {
-    if (isDraggingWindow) endDrag();
+    if (isDraggingRef.current) endDrag();
   };
+
+  // touchmove gắn thủ công qua ref với { passive: false } thay vì prop JSX
+  // onTouchMove — React 18 mặc định đăng ký listener touchmove ở root là
+  // passive để tối ưu hiệu năng cuộn trang, nghĩa là gọi e.preventDefault()
+  // từ handler onTouchMove khai theo kiểu JSX gần như không có tác dụng chặn
+  // cuộn trang thật (đây chính xác là lý do khung chat "đơ", ngón tay vuốt
+  // nhưng khung không theo vì trang web giành quyền cuộn trước). Chỉ addEventListener
+  // thủ công với passive:false mới đảm bảo preventDefault ăn thật.
+  useEffect(() => {
+    const el = windowRef.current;
+    if (!el) return;
+    const onTouchMove = (e) => {
+      if (!isDraggingRef.current) return;
+      if (e.cancelable) e.preventDefault();
+      const t = e.touches[0];
+      moveDrag(t.clientX, t.clientY);
+    };
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    return () => el.removeEventListener('touchmove', onTouchMove);
+  }, []);
 
   const draggedWindowStyle = dragPosition
     ? {
-        position: 'fixed', left: dragPosition.x, top: dragPosition.y, right: 'auto', bottom: 'auto',
-        transition: isDraggingWindow ? 'none' : 'left 0.15s ease, top 0.15s ease',
+        position: 'fixed', left: 0, top: 0, right: 'auto', bottom: 'auto',
+        transform: `translate3d(${dragPosition.x}px, ${dragPosition.y}px, 0)`,
+        willChange: 'transform',
+        transition: isDraggingWindow ? 'none' : 'transform 0.15s ease',
         cursor: isDraggingWindow ? 'grabbing' : undefined,
       }
     : undefined;
@@ -215,11 +239,11 @@ export function ChatLauncher({ profile }) {
       {open && (
         <div className="sumi-chat-launcher-overlay">
           <div
+            ref={windowRef}
             className="sumi-chat-launcher-window"
             style={draggedWindowStyle}
             onMouseDown={handleHeaderMouseDown}
             onTouchStart={handleHeaderTouchStart}
-            onTouchMove={handleHeaderTouchMove}
             onTouchEnd={handleHeaderTouchEnd}
           >
             <ChatWindowModal
