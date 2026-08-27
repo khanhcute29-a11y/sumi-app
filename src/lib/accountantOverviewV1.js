@@ -21,8 +21,10 @@ export async function fetchReadyToPayExpenses() {
   return data || [];
 }
 
-export async function markExpensePaid(id) {
-  const { data, error } = await supabase.rpc('record_expense_claim', { p_id: id });
+export async function markExpensePaid(id, paymentMethod, receiptUrl) {
+  const { data, error } = await supabase.rpc('record_expense_claim', {
+    p_id: id, p_payment_method: paymentMethod, p_receipt_url: receiptUrl,
+  });
   if (error) throw error;
   return data;
 }
@@ -38,8 +40,10 @@ export async function fetchReadyToPayAdvances() {
   return data || [];
 }
 
-export async function payAdvance(id) {
-  const { data, error } = await supabase.rpc('pay_salary_advance', { p_id: id });
+export async function payAdvance(id, paymentMethod, receiptUrl) {
+  const { data, error } = await supabase.rpc('pay_salary_advance', {
+    p_id: id, p_payment_method: paymentMethod, p_receipt_url: receiptUrl,
+  });
   if (error) throw error;
   return data;
 }

@@ -14,6 +14,14 @@ import {
   submitMyExpenseClaim,
   monthKeyOf,
 } from '../../../lib/accountantOverviewV1';
+import { uploadFile } from '../../../lib/queries';
+
+const PHUONG_THUC_CHI = [
+  { value: 'cash', label: '💵 Tiền mặt' },
+  { value: 'bank_vcb', label: '🏦 Chuyển khoản VCB' },
+  { value: 'bank_tcb', label: '🏦 Chuyển khoản TCB' },
+  { value: 'momo', label: '📱 MoMo' },
+];
 
 const formatVND = (amount?: number | null) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount || 0);
 
@@ -94,6 +102,12 @@ export function AccountantOverviewV1Inner() {
   const [activeSheet, setActiveSheet] = useState<'new_expense' | 'expense_detail' | 'advance_detail' | null>(null);
   const [selectedExpense, setSelectedExpense] = useState<any>(null);
   const [selectedAdvance, setSelectedAdvance] = useState<any>(null);
+  // Nguồn tiền chi ra + ảnh chứng từ — bắt buộc trước khi ghi sổ/chi tạm ứng
+  // (server chặn cứng ở record_expense_claim/pay_salary_advance, đây chỉ là
+  // UI để nhập trước khi gọi).
+  const [disburseMethod, setDisburseMethod] = useState('');
+  const [disburseReceipt, setDisburseReceipt] = useState<File | null>(null);
+  const [disbursing, setDisbursing] = useState(false);
   const [formAmount, setFormAmount] = useState('');
   const [formDesc, setFormDesc] = useState('');
   const [formNote, setFormNote] = useState('');
@@ -122,34 +136,46 @@ export function AccountantOverviewV1Inner() {
   const sheetBodyStyle: React.CSSProperties = { flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '0 14px 30px', boxSizing: 'border-box' };
   const SHEET_HANDLE = <div style={{ width: 38, height: 4, background: '#cbd5e1', borderRadius: 99, margin: '8px auto 2px', flexShrink: 0 }} />;
 
+  const resetDisburseForm = () => { setDisburseMethod(''); setDisburseReceipt(null); };
+
   const handleMarkPaid = async (id: string) => {
-    if (!id) return;
+    if (!id || !disburseMethod || !disburseReceipt) return;
+    setDisbursing(true);
     try {
-      await markExpensePaid(id);
+      const uploaded = await uploadFile(disburseReceipt, `expense-claims/${id}`);
+      await markExpensePaid(id, disburseMethod, uploaded.url);
       showToast('⚡ Đã ghi nhận chi tiền vào Sổ chi');
       setActiveSheet(null);
       setSelectedExpense(null);
+      resetDisburseForm();
       const [expenses, ledger] = await Promise.all([fetchReadyToPayExpenses(), fetchLedgerForMonth(monthKey)]);
       setReadyExpenses(expenses || []);
       setLedgerRows(ledger || []);
     } catch (e: any) {
       showToast(`⚠️ ${e?.message || 'Không thao tác được'}`);
+    } finally {
+      setDisbursing(false);
     }
   };
 
   const handlePayAdvance = async (id: string) => {
-    if (!id) return;
+    if (!id || !disburseMethod || !disburseReceipt) return;
+    setDisbursing(true);
     try {
-      await payAdvance(id);
+      const uploaded = await uploadFile(disburseReceipt, `salary-advances/${id}`);
+      await payAdvance(id, disburseMethod, uploaded.url);
       showToast('⚡ Đã chi tạm ứng, đã trừ vào bảng lương tháng');
       setActiveSheet(null);
       setSelectedAdvance(null);
+      resetDisburseForm();
       const [advances, ledger, wagesSummary] = await Promise.all([fetchReadyToPayAdvances(), fetchLedgerForMonth(monthKey), fetchWagesSummaryForMonth(monthKey)]);
       setReadyAdvances(advances || []);
       setLedgerRows(ledger || []);
       setWages(wagesSummary || { periodStatus: null, rows: [] });
     } catch (e: any) {
       showToast(`⚠️ ${e?.message || 'Không thao tác được'}`);
+    } finally {
+      setDisbursing(false);
     }
   };
 
@@ -274,7 +300,7 @@ export function AccountantOverviewV1Inner() {
                 {(readyExpenses || []).map((exp: any) => (
                   <div
                     key={exp?.id}
-                    onClick={() => { setSelectedExpense(exp); setActiveSheet('expense_detail'); }}
+                    onClick={() => { setSelectedExpense(exp); setActiveSheet('expense_detail'); setDisburseMethod(''); setDisburseReceipt(null); }}
                     style={{ background: '#fffcf7', border: '1.5px solid rgba(74,38,16,0.16)', borderRadius: 16, padding: 12, cursor: 'pointer' }}
                   >
                     <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
@@ -320,7 +346,7 @@ export function AccountantOverviewV1Inner() {
                 {(readyAdvances || []).map((a: any) => (
                   <div
                     key={a?.id}
-                    onClick={() => { setSelectedAdvance(a); setActiveSheet('advance_detail'); }}
+                    onClick={() => { setSelectedAdvance(a); setActiveSheet('advance_detail'); setDisburseMethod(''); setDisburseReceipt(null); }}
                     style={{ background: '#fffcf7', border: '1.5px solid rgba(74,38,16,0.16)', borderRadius: 16, padding: 12, cursor: 'pointer' }}
                   >
                     <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
@@ -432,68 +458,87 @@ export function AccountantOverviewV1Inner() {
       {createPortal(
         <>
           {activeSheet === 'expense_detail' && selectedExpense && (
-            <div onClick={() => { setActiveSheet(null); setSelectedExpense(null); }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
-              <div onClick={(e) => e.stopPropagation()} style={sheetPanelStyle}>
-                <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
-                  {SHEET_HANDLE}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
-                    <div>
-                      <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 1, color: '#b8692f', textTransform: 'uppercase' }}>Chi tiết khoản chi</div>
-                      <div style={{ fontSize: 15, fontWeight: 900, color: '#2d1b10' }}>{selectedExpense?.description || 'Khoản chi'}</div>
-                    </div>
-                    <button onClick={() => { setActiveSheet(null); setSelectedExpense(null); }} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
+            <div style={{ position: 'fixed', inset: 0, zIndex: 2000, background: '#fdf9f2', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 14, borderBottom: '1.5px solid #eadcca', position: 'sticky', top: 0, background: '#fdf9f2', zIndex: 1 }}>
+                <button onClick={() => { setActiveSheet(null); setSelectedExpense(null); resetDisburseForm(); }} aria-label="Quay lại" style={{ width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1b10', cursor: 'pointer', flexShrink: 0 }}>‹</button>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 1, color: '#b8692f', textTransform: 'uppercase' }}>Chi tiết khoản chi</div>
+                  <div style={{ fontSize: 15, fontWeight: 900, color: '#2d1b10' }}>{selectedExpense?.description || 'Khoản chi'}</div>
+                </div>
+              </div>
+              <div style={{ padding: '0 14px 30px', boxSizing: 'border-box' }}>
+                <div style={{ marginTop: 14, marginBottom: 14 }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: '#725f50' }}>Số tiền cần chi</div>
+                  <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace', fontSize: 32, fontWeight: 900, color: '#4A2610', marginTop: 2 }}>
+                    {formatVND(selectedExpense?.amount)}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#6b5b48', marginTop: 6, lineHeight: 1.5 }}>
+                    Người gửi: <strong>{selectedExpense?.claimant_name || 'Không rõ'}</strong>.{' '}
+                    {selectedExpense?.approval_reason ? `Cần xác nhận: ${selectedExpense.approval_reason}.` : 'Đã qua duyệt.'}
                   </div>
                 </div>
-                <div style={sheetBodyStyle}>
-                  <div style={{ marginTop: 14, marginBottom: 14 }}>
-                    <div style={{ fontSize: 11, fontWeight: 800, color: '#725f50' }}>Số tiền cần chi</div>
-                    <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace', fontSize: 32, fontWeight: 900, color: '#4A2610', marginTop: 2 }}>
-                      {formatVND(selectedExpense?.amount)}
-                    </div>
-                    <div style={{ fontSize: 12, color: '#6b5b48', marginTop: 6, lineHeight: 1.5 }}>
-                      Người gửi: <strong>{selectedExpense?.claimant_name || 'Không rõ'}</strong>.{' '}
-                      {selectedExpense?.approval_reason ? `Cần xác nhận: ${selectedExpense.approval_reason}.` : 'Đã qua duyệt.'}{' '}
-                      Bấm "Đã chi tiền" để ghi vào Sổ chi.
-                    </div>
-                  </div>
-                  <div style={{ background: '#faf6f0', border: '1px solid #eadcca', borderRadius: 14, padding: 10, marginBottom: 16 }}>
-                    <div style={{ fontSize: 11, color: '#725f50' }}>Ghi chú: {selectedExpense?.note || '—'}</div>
-                  </div>
-                  <button onClick={() => handleMarkPaid(selectedExpense?.id)} style={{ width: '100%', background: '#f05c2b', color: '#fff', border: 'none', borderRadius: 12, padding: '13px 0', fontWeight: 900, fontSize: 14, cursor: 'pointer' }}>
-                    ⚡ Đã chi tiền
-                  </button>
+                <div style={{ background: '#faf6f0', border: '1px solid #eadcca', borderRadius: 14, padding: 10, marginBottom: 16 }}>
+                  <div style={{ fontSize: 11, color: '#725f50' }}>Ghi chú: {selectedExpense?.note || '—'}</div>
                 </div>
+
+                <div style={{ fontSize: 12, fontWeight: 900, color: '#2d1b10', marginBottom: 6 }}>💰 Nguồn tiền chi ra (bắt buộc)</div>
+                <select value={disburseMethod} onChange={(e) => setDisburseMethod(e.target.value)}
+                  style={{ width: '100%', minHeight: 46, padding: '0 10px', borderRadius: 12, border: '1.5px solid #eadcca', fontSize: 13, fontWeight: 700, marginBottom: 14, boxSizing: 'border-box' }}>
+                  <option value="">— Chọn nguồn tiền —</option>
+                  {PHUONG_THUC_CHI.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </select>
+
+                <div style={{ fontSize: 12, fontWeight: 900, color: '#2d1b10', marginBottom: 6 }}>📷 Ảnh chứng từ chi tiền (bắt buộc)</div>
+                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 48, border: '2px dashed #eadcca', borderRadius: 12, cursor: 'pointer', marginBottom: 16, fontSize: 13, fontWeight: 700, color: '#725f50' }}>
+                  {disburseReceipt ? `📎 ${disburseReceipt.name}` : '📷 Chụp / chọn ảnh chứng từ'}
+                  <input hidden type="file" accept="image/*" capture="environment" onChange={(e) => setDisburseReceipt(e.target.files?.[0] || null)} />
+                </label>
+
+                <button onClick={() => handleMarkPaid(selectedExpense?.id)} disabled={!disburseMethod || !disburseReceipt || disbursing}
+                  style={{ width: '100%', background: (!disburseMethod || !disburseReceipt || disbursing) ? '#e8b6a0' : '#f05c2b', color: '#fff', border: 'none', borderRadius: 12, padding: '13px 0', fontWeight: 900, fontSize: 14, cursor: (!disburseMethod || !disburseReceipt || disbursing) ? 'not-allowed' : 'pointer' }}>
+                  {disbursing ? 'Đang ghi sổ…' : '⚡ Đã chi tiền'}
+                </button>
               </div>
             </div>
           )}
 
           {activeSheet === 'advance_detail' && selectedAdvance && (
-            <div onClick={() => { setActiveSheet(null); setSelectedAdvance(null); }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
-              <div onClick={(e) => e.stopPropagation()} style={sheetPanelStyle}>
-                <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
-                  {SHEET_HANDLE}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
-                    <div>
-                      <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 1, color: '#b8692f', textTransform: 'uppercase' }}>Chi tiết tạm ứng</div>
-                      <div style={{ fontSize: 15, fontWeight: 900, color: '#2d1b10' }}>{selectedAdvance?.employee_name || 'Không rõ'}</div>
-                    </div>
-                    <button onClick={() => { setActiveSheet(null); setSelectedAdvance(null); }} style={{ width: 28, height: 28, borderRadius: 8, background: '#f4efe8', border: 'none', fontWeight: 900, cursor: 'pointer' }}>✕</button>
+            <div style={{ position: 'fixed', inset: 0, zIndex: 2000, background: '#fdf9f2', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 14, borderBottom: '1.5px solid #eadcca', position: 'sticky', top: 0, background: '#fdf9f2', zIndex: 1 }}>
+                <button onClick={() => { setActiveSheet(null); setSelectedAdvance(null); resetDisburseForm(); }} aria-label="Quay lại" style={{ width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1b10', cursor: 'pointer', flexShrink: 0 }}>‹</button>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 1, color: '#b8692f', textTransform: 'uppercase' }}>Chi tiết tạm ứng</div>
+                  <div style={{ fontSize: 15, fontWeight: 900, color: '#2d1b10' }}>{selectedAdvance?.employee_name || 'Không rõ'}</div>
+                </div>
+              </div>
+              <div style={{ padding: '0 14px 30px', boxSizing: 'border-box' }}>
+                <div style={{ marginTop: 14, marginBottom: 14 }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: '#725f50' }}>Số tiền tạm ứng</div>
+                  <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace', fontSize: 32, fontWeight: 900, color: '#4A2610', marginTop: 2 }}>
+                    {formatVND(selectedAdvance?.amount)}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#6b5b48', marginTop: 6, lineHeight: 1.5 }}>
+                    Lý do: <strong>{selectedAdvance?.reason || '—'}</strong>. Sếp đã duyệt. Khi chi xong sẽ tự trừ vào bảng lương tháng của nhân sự này.
                   </div>
                 </div>
-                <div style={sheetBodyStyle}>
-                  <div style={{ marginTop: 14, marginBottom: 14 }}>
-                    <div style={{ fontSize: 11, fontWeight: 800, color: '#725f50' }}>Số tiền tạm ứng</div>
-                    <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace', fontSize: 32, fontWeight: 900, color: '#4A2610', marginTop: 2 }}>
-                      {formatVND(selectedAdvance?.amount)}
-                    </div>
-                    <div style={{ fontSize: 12, color: '#6b5b48', marginTop: 6, lineHeight: 1.5 }}>
-                      Lý do: <strong>{selectedAdvance?.reason || '—'}</strong>. Sếp đã duyệt. Khi chi xong sẽ tự trừ vào bảng lương tháng của nhân sự này.
-                    </div>
-                  </div>
-                  <button onClick={() => handlePayAdvance(selectedAdvance?.id)} style={{ width: '100%', background: '#f05c2b', color: '#fff', border: 'none', borderRadius: 12, padding: '13px 0', fontWeight: 900, fontSize: 14, cursor: 'pointer' }}>
-                    ⚡ Đã chi tạm ứng
-                  </button>
-                </div>
+
+                <div style={{ fontSize: 12, fontWeight: 900, color: '#2d1b10', marginBottom: 6 }}>💰 Nguồn tiền chi ra (bắt buộc)</div>
+                <select value={disburseMethod} onChange={(e) => setDisburseMethod(e.target.value)}
+                  style={{ width: '100%', minHeight: 46, padding: '0 10px', borderRadius: 12, border: '1.5px solid #eadcca', fontSize: 13, fontWeight: 700, marginBottom: 14, boxSizing: 'border-box' }}>
+                  <option value="">— Chọn nguồn tiền —</option>
+                  {PHUONG_THUC_CHI.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </select>
+
+                <div style={{ fontSize: 12, fontWeight: 900, color: '#2d1b10', marginBottom: 6 }}>📷 Ảnh chứng từ chi tiền (bắt buộc)</div>
+                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 48, border: '2px dashed #eadcca', borderRadius: 12, cursor: 'pointer', marginBottom: 16, fontSize: 13, fontWeight: 700, color: '#725f50' }}>
+                  {disburseReceipt ? `📎 ${disburseReceipt.name}` : '📷 Chụp / chọn ảnh chứng từ'}
+                  <input hidden type="file" accept="image/*" capture="environment" onChange={(e) => setDisburseReceipt(e.target.files?.[0] || null)} />
+                </label>
+
+                <button onClick={() => handlePayAdvance(selectedAdvance?.id)} disabled={!disburseMethod || !disburseReceipt || disbursing}
+                  style={{ width: '100%', background: (!disburseMethod || !disburseReceipt || disbursing) ? '#e8b6a0' : '#f05c2b', color: '#fff', border: 'none', borderRadius: 12, padding: '13px 0', fontWeight: 900, fontSize: 14, cursor: (!disburseMethod || !disburseReceipt || disbursing) ? 'not-allowed' : 'pointer' }}>
+                  {disbursing ? 'Đang chi…' : '⚡ Đã chi tạm ứng'}
+                </button>
               </div>
             </div>
           )}
