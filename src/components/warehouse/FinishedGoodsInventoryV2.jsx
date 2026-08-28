@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
-import { fetchFinishedGoodsStock, fetchProducts, addFinishedGoodsEntryV2, uploadFile, fetchFinishedGoodsStockInLog, fetchFinishedGoodsStockOutLog } from '../../lib/queries';
+import { fetchFinishedGoodsStock, fetchProducts, addFinishedGoodsEntryV2, uploadFile, fetchFinishedGoodsStockInLog, fetchFinishedGoodsStockOutLog, createProduct } from '../../lib/queries';
 import { useAuth } from '../../lib/AuthContext';
 
 // Kho Thành Phẩm V2 — theo mockup đã duyệt
@@ -45,31 +45,54 @@ const toneStyle = {
   danger: { background: '#fff0ee', color: '#d94a40' },
 };
 
-function ProductPicker({ products, value, onChange }) {
-  const [q, setQ] = useState('');
-  const filtered = q.trim() ? products.filter((p) => p.name.toLowerCase().includes(q.trim().toLowerCase())) : products;
-  const selected = products.find((p) => p.id === value);
+// Cho phép gõ tự do — không bắt buộc phải chọn đúng 1 dòng có sẵn trong
+// danh mục sản phẩm. Nếu tên gõ chưa khớp sản phẩm nào, hiện gợi ý
+// "+ Thêm sản phẩm mới" để tạo luôn vào danh mục (products), lần sau sẽ
+// hiện sẵn trong danh sách. Giá trị cuối cùng luôn được chốt qua
+// resolveProduct() ở NhapKhoSheet lúc bấm Lưu, kể cả khi không bấm gợi ý nào.
+function ProductPicker({ products, query, onQueryChange, onSelectExisting, onAddNew, creating }) {
+  const [focused, setFocused] = useState(false);
+  const trimmed = query.trim();
+  const filtered = trimmed ? products.filter((p) => p.name.toLowerCase().includes(trimmed.toLowerCase())) : products;
+  const exactMatch = products.find((p) => p.name.trim().toLowerCase() === trimmed.toLowerCase());
+  const showList = focused && (trimmed.length > 0 || products.length > 0);
   return (
     <div style={{ position: 'relative' }}>
-      <input placeholder="Gõ để tìm sản phẩm..." value={q || selected?.name || ''} onFocus={() => setQ('')}
-        onChange={(e) => setQ(e.target.value)}
-        style={{ width: '100%', minHeight: 48, padding: '0 12px', borderRadius: 14, border: '1px solid #e2cdb6' }} />
-      {q && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 5, background: '#fff', border: '1px solid #e2cdb6', borderRadius: 12, maxHeight: 200, overflowY: 'auto' }}>
+      <input
+        placeholder="Gõ tên sản phẩm — có thể nhập tự do nếu chưa có trong danh mục..."
+        value={query}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setTimeout(() => setFocused(false), 150)}
+        onChange={(e) => onQueryChange(e.target.value)}
+        style={{ width: '100%', minHeight: 48, padding: '0 12px', borderRadius: 14, border: '1px solid #e2cdb6', boxSizing: 'border-box' }}
+      />
+      {showList && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 5, background: '#fff', border: '1px solid #e2cdb6', borderRadius: 12, maxHeight: 220, overflowY: 'auto' }}>
           {filtered.slice(0, 30).map((p) => (
-            <button type="button" key={p.id} onClick={() => { onChange(p.id); setQ(''); }}
+            <button type="button" key={p.id} onClick={() => onSelectExisting(p)}
               style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', border: 0, background: 'none', cursor: 'pointer' }}>
               {p.name}
             </button>
           ))}
+          {trimmed && !exactMatch && (
+            <button type="button" disabled={creating} onClick={() => onAddNew(trimmed)}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', border: 0, borderTop: filtered.length ? '1px dashed #e2cdb6' : 'none', background: '#fff7ec', color: '#b7431e', fontWeight: 800, cursor: creating ? 'not-allowed' : 'pointer' }}>
+              {creating ? 'Đang thêm...' : `➕ Thêm sản phẩm mới: "${trimmed}"`}
+            </button>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-function NhapKhoSheet({ defaultBranch, defaultStore, products, staffName, onClose, onSaved }) {
+function NhapKhoSheet({ defaultBranch, defaultStore, products: productsProp, staffName, onClose, onSaved }) {
+  // Bản sao cục bộ của danh mục sản phẩm — cập nhật ngay khi tự thêm sản phẩm
+  // mới trong lúc mở sheet này, không cần đợi load lại từ server mới thấy.
+  const [products, setProducts] = useState(productsProp);
   const [productId, setProductId] = useState('');
+  const [productQuery, setProductQuery] = useState('');
+  const [creatingProduct, setCreatingProduct] = useState(false);
   const [size, setSize] = useState('');
   const [qty, setQty] = useState('');
   const [branch, setBranch] = useState(defaultBranch);
@@ -82,10 +105,44 @@ function NhapKhoSheet({ defaultBranch, defaultStore, products, staffName, onClos
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const selectedProduct = products.find((p) => p.id === productId);
+  const selectExistingProduct = (p) => { setProductId(p.id); setProductQuery(p.name); };
+
+  const addNewProduct = async (name) => {
+    setCreatingProduct(true); setError('');
+    try {
+      const created = await createProduct({ name, category: 'khac', unit: 'cái', price: 0 });
+      setProducts((prev) => [...prev, created]);
+      selectExistingProduct(created);
+    } catch (e) {
+      setError('Không thêm được sản phẩm mới: ' + (e.message || ''));
+    } finally {
+      setCreatingProduct(false);
+    }
+  };
+
+  // Chốt sản phẩm cuối cùng lúc bấm Lưu — kể cả khi nhân viên gõ tên rồi bấm
+  // Lưu thẳng, không bấm chọn/thêm gì trong gợi ý cả (đúng ý "cho nhập tay").
+  const resolveProduct = async () => {
+    if (productId) return products.find((p) => p.id === productId) || null;
+    const q = productQuery.trim();
+    if (!q) return null;
+    const exact = products.find((p) => p.name.trim().toLowerCase() === q.toLowerCase());
+    if (exact) { setProductId(exact.id); return exact; }
+    const created = await createProduct({ name: q, category: 'khac', unit: 'cái', price: 0 });
+    setProducts((prev) => [...prev, created]);
+    setProductId(created.id);
+    return created;
+  };
 
   const save = async () => {
-    if (!selectedProduct) { setError('Chọn sản phẩm.'); return; }
+    let selectedProduct;
+    try {
+      selectedProduct = await resolveProduct();
+    } catch (e) {
+      setError('Không tạo được sản phẩm mới: ' + (e.message || ''));
+      return;
+    }
+    if (!selectedProduct) { setError('Nhập hoặc chọn tên sản phẩm.'); return; }
     const qtyNum = Number(qty);
     if (!qtyNum || qtyNum <= 0) { setError('Nhập số lượng hợp lệ.'); return; }
     if (!photo) { setError('Bắt buộc chụp ảnh thực tế.'); return; }
@@ -93,7 +150,7 @@ function NhapKhoSheet({ defaultBranch, defaultStore, products, staffName, onClos
     try {
       const uploaded = await uploadFile(photo, `finished-goods-v2/${branch}`);
       await addFinishedGoodsEntryV2({
-        productId, productName: selectedProduct.name, size: size || null, branch, storeLocation,
+        productId: selectedProduct.id, productName: selectedProduct.name, size: size || null, branch, storeLocation,
         qty: qtyNum, productionDate: productionDate ? new Date(productionDate).toISOString() : null,
         expiryDate: expiryDate ? new Date(expiryDate).toISOString() : null,
         photoUrl: uploaded.url, color: color || null, packing: packing || null, staffName,
@@ -113,7 +170,17 @@ function NhapKhoSheet({ defaultBranch, defaultStore, products, staffName, onClos
           <button onClick={onClose} style={{ width: 40, height: 40, border: '1px solid #e2cdb6', borderRadius: 12, background: '#fff', fontSize: 18 }}>✕</button>
         </div>
         <div style={{ display: 'grid', gap: 10 }}>
-          <div><label style={{ display: 'block', fontWeight: 900, marginBottom: 6 }}>Sản phẩm</label><ProductPicker products={products} value={productId} onChange={setProductId} /></div>
+          <div>
+            <label style={{ display: 'block', fontWeight: 900, marginBottom: 6 }}>Sản phẩm</label>
+            <ProductPicker
+              products={products}
+              query={productQuery}
+              onQueryChange={(v) => { setProductQuery(v); setProductId(''); }}
+              onSelectExisting={selectExistingProduct}
+              onAddNew={addNewProduct}
+              creating={creatingProduct}
+            />
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <div><label style={{ display: 'block', fontWeight: 900, marginBottom: 6 }}>Kích thước / size</label><input style={field} value={size} onChange={(e) => setSize(e.target.value)} placeholder="VD: 18cm, 220g..." /></div>
             <div><label style={{ display: 'block', fontWeight: 900, marginBottom: 6 }}>Số lượng</label><input style={field} type="number" min="1" value={qty} onChange={(e) => setQty(e.target.value)} /></div>
