@@ -1877,7 +1877,6 @@ export function BossOverviewV3Inner() {
                               <button
                                 onClick={(e) => handleHeartOrder(e, ord.id)}
                                 disabled={iHearted}
-                                title={hearts.length ? `Đã xem: ${hearts.map((h: any) => h.staff_name).join(', ')}` : 'Thả tim = đánh dấu đã xem đơn này'}
                                 style={{
                                   display: 'flex', alignItems: 'center', gap: 3, border: 'none', background: 'transparent',
                                   padding: '2px 4px', cursor: iHearted ? 'default' : 'pointer',
@@ -1891,6 +1890,12 @@ export function BossOverviewV3Inner() {
                         </div>
                         <ChevronRight size={16} color="#a08a76" />
                       </div>
+
+                      {(orderHearts[ord.id] || []).length > 0 && (
+                        <div style={{ fontSize: 10.5, color: '#a08a76', marginTop: 3 }}>
+                          ❤️ Đã xem: {(orderHearts[ord.id] || []).map((h: any) => h.staff_name).join(', ')}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
