@@ -176,28 +176,36 @@ export function ChatLauncher({ profile }) {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
+  // Vị trí "sống" trong lúc kéo — cập nhật thẳng vào DOM qua ref mỗi lần di
+  // chuyển, KHÔNG setState mỗi pixel (tránh re-render toàn cây ChatLauncher
+  // liên tục gây giật/nghẽn trên điện thoại yếu). State chỉ đồng bộ lại một
+  // lần duy nhất khi kết thúc kéo (touchend/touchcancel/mouseup).
+  const dragLivePos = useRef({ x: 0, y: 0 });
+
   const startDrag = (clientX, clientY) => {
     if (window.innerWidth < DESKTOP_BREAKPOINT) return; // mobile: fullscreen, không kéo
     const base = dragPosition || clampPosition(window.innerWidth - CHAT_WIDTH - 24, window.innerHeight - CHAT_HEIGHT - 24);
     dragOffset.current = { x: clientX - base.x, y: clientY - base.y };
+    dragLivePos.current = base;
     setDragPosition(base);
     isDraggingRef.current = true;
     setIsDraggingWindow(true);
   };
 
   const moveDrag = (clientX, clientY) => {
-    setDragPosition(clampPosition(clientX - dragOffset.current.x, clientY - dragOffset.current.y));
+    const next = clampPosition(clientX - dragOffset.current.x, clientY - dragOffset.current.y);
+    dragLivePos.current = next;
+    const el = windowRef.current;
+    if (el) el.style.transform = `translate3d(${next.x}px, ${next.y}px, 0)`;
   };
 
   const endDrag = () => {
+    if (!isDraggingRef.current) return;
     isDraggingRef.current = false;
     setIsDraggingWindow(false);
-    setDragPosition((prev) => {
-      if (prev) {
-        try { localStorage.setItem(POSITION_STORAGE_KEY, JSON.stringify(prev)); } catch { /* ignore */ }
-      }
-      return prev;
-    });
+    const finalPos = dragLivePos.current;
+    setDragPosition(finalPos);
+    try { localStorage.setItem(POSITION_STORAGE_KEY, JSON.stringify(finalPos)); } catch { /* ignore */ }
   };
 
   const handleHeaderMouseDown = (e) => {
@@ -222,6 +230,13 @@ export function ChatLauncher({ profile }) {
     startDrag(t.clientX, t.clientY);
   };
   const handleHeaderTouchEnd = () => {
+    if (isDraggingRef.current) endDrag();
+  };
+  // touchcancel bắn ra khi hệ điều hành ngắt cử chỉ giữa chừng (cuộc gọi đến,
+  // kéo Trung tâm điều khiển, thanh thông báo...) — touchend sẽ KHÔNG bắn
+  // trong trường hợp này. Không xử lý thì isDraggingRef kẹt ở true mãi mãi,
+  // lần chạm tiếp theo bị hiểu nhầm là đang kéo dở.
+  const handleHeaderTouchCancel = () => {
     if (isDraggingRef.current) endDrag();
   };
 
@@ -264,6 +279,9 @@ export function ChatLauncher({ profile }) {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
+  // Cùng kỹ thuật như cửa sổ chat ở trên — xem ghi chú tại dragLivePos.
+  const bubbleLivePos = useRef({ x: 0, y: 0 });
+
   const startBubbleDrag = (clientX, clientY) => {
     const base = bubblePosition || clampBubblePosition(
       window.innerWidth - BUBBLE_SIZE - BUBBLE_EDGE_PADDING,
@@ -273,6 +291,7 @@ export function ChatLauncher({ profile }) {
     bubbleStartClient.current = { x: clientX, y: clientY };
     bubbleHasMoved.current = false;
     bubbleIsDraggingRef.current = true;
+    bubbleLivePos.current = base;
     setBubblePosition(base);
     setIsDraggingBubble(true);
   };
@@ -280,19 +299,20 @@ export function ChatLauncher({ profile }) {
   const moveBubbleDrag = (clientX, clientY) => {
     const dist = Math.hypot(clientX - bubbleStartClient.current.x, clientY - bubbleStartClient.current.y);
     if (dist > DRAG_MOVE_THRESHOLD) bubbleHasMoved.current = true;
-    setBubblePosition(clampBubblePosition(clientX - bubbleDragOffset.current.x, clientY - bubbleDragOffset.current.y));
+    const next = clampBubblePosition(clientX - bubbleDragOffset.current.x, clientY - bubbleDragOffset.current.y);
+    bubbleLivePos.current = next;
+    const el = bubbleStackRef.current;
+    if (el) el.style.transform = `translate3d(${next.x}px, ${next.y}px, 0)`;
   };
 
   const endBubbleDrag = () => {
+    if (!bubbleIsDraggingRef.current) return;
     bubbleIsDraggingRef.current = false;
     setIsDraggingBubble(false);
     const moved = bubbleHasMoved.current;
-    setBubblePosition((prev) => {
-      if (prev) {
-        try { localStorage.setItem(BUBBLE_POSITION_KEY, JSON.stringify(prev)); } catch { /* ignore */ }
-      }
-      return prev;
-    });
+    const finalPos = bubbleLivePos.current;
+    setBubblePosition(finalPos);
+    try { localStorage.setItem(BUBBLE_POSITION_KEY, JSON.stringify(finalPos)); } catch { /* ignore */ }
     // Không dịch chuyển đáng kể -> đây là một cú chạm/click thật, mở chat.
     // Có dịch chuyển -> chỉ lưu vị trí mới, không mở.
     if (!moved) setOpen(true);
@@ -316,6 +336,9 @@ export function ChatLauncher({ profile }) {
     startBubbleDrag(t.clientX, t.clientY);
   };
   const handleBubbleTouchEnd = () => {
+    if (bubbleIsDraggingRef.current) endBubbleDrag();
+  };
+  const handleBubbleTouchCancel = () => {
     if (bubbleIsDraggingRef.current) endBubbleDrag();
   };
 
@@ -356,6 +379,7 @@ export function ChatLauncher({ profile }) {
           onMouseDown={handleBubbleMouseDown}
           onTouchStart={handleBubbleTouchStart}
           onTouchEnd={handleBubbleTouchEnd}
+          onTouchCancel={handleBubbleTouchCancel}
         >
           <button className="m-chat-avatar-btn" title="Mở tin nhắn nội bộ" onClick={() => setOpen(true)}>
             <div className="m-chat-avatar-img" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5EBE1', fontSize: 22 }}>💬</div>
@@ -377,6 +401,7 @@ export function ChatLauncher({ profile }) {
             onMouseDown={handleHeaderMouseDown}
             onTouchStart={handleHeaderTouchStart}
             onTouchEnd={handleHeaderTouchEnd}
+            onTouchCancel={handleHeaderTouchCancel}
           >
             <ChatWindowModal
               profile={profile}
