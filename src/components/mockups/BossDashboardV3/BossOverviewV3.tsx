@@ -27,7 +27,8 @@ import {
   Inbox,
   Zap,
   Megaphone,
-  Gift
+  Gift,
+  Heart
 } from 'lucide-react';
 import { AuthProvider, useAuth } from '../../../lib/AuthContext';
 import { listOrdersV2 } from '../../../lib/featureFlags';
@@ -59,6 +60,8 @@ import {
   reviewLeaveRequest,
   fetchTodayShiftReports,
   fetchWeeklyScheduleAllStations,
+  fetchOrderHearts,
+  addOrderHeart,
 } from '../../../lib/bossOverviewV3';
 
 const formatVND = (amount: number) => {
@@ -322,6 +325,7 @@ export function BossOverviewV3Inner() {
       setAssignableStaff(staffOptions);
 
       setAllOrders(sortOrdersByPriority(orders));
+      loadOrderHearts(orders);
       setFeedPosts(posts);
       setPendingAdvances(advances);
       setPendingLeaves(leaves);
@@ -362,6 +366,39 @@ export function BossOverviewV3Inner() {
 
   // ── Dữ liệu thật: đơn hàng (order_operations_list qua listOrdersV2) ──
   const [allOrders, setAllOrders] = useState<any[]>([]);
+  // ── Thả tim đơn hàng (đánh dấu đã xem) — order_id -> [{staff_id, staff_name}] ──
+  const [orderHearts, setOrderHearts] = useState<Record<string, any[]>>({});
+  const [heartingId, setHeartingId] = useState<string | null>(null);
+
+  const loadOrderHearts = async (orders: any[]) => {
+    try {
+      const ids = (orders || []).map((o: any) => o.id).filter(Boolean);
+      setOrderHearts(await fetchOrderHearts(ids));
+    } catch {
+      /* không chặn màn hình chính nếu lỗi tải lượt thả tim */
+    }
+  };
+
+  const handleHeartOrder = async (e: React.MouseEvent, orderId: string) => {
+    e.stopPropagation();
+    if (heartingId || !profile?.id) return;
+    const already = (orderHearts[orderId] || []).some((h: any) => h.staff_id === profile.id);
+    if (already) return;
+    setHeartingId(orderId);
+    // Optimistic: hiện tim ngay, không chờ round-trip.
+    setOrderHearts((prev) => ({
+      ...prev,
+      [orderId]: [...(prev[orderId] || []), { staff_id: profile.id, staff_name: profile.full_name || 'Bạn' }],
+    }));
+    try {
+      await addOrderHeart(orderId);
+    } catch {
+      // Thất bại thì gỡ lại lượt tim vừa thêm lạc quan.
+      setOrderHearts((prev) => ({ ...prev, [orderId]: (prev[orderId] || []).filter((h: any) => h.staff_id !== profile.id) }));
+    } finally {
+      setHeartingId(null);
+    }
+  };
 
   const orderCounts = useMemo(() => summarizeOrderCounts(allOrders), [allOrders]);
 
@@ -1829,9 +1866,29 @@ export function BossOverviewV3Inner() {
                       <div style={{ fontSize: 11.5, color: '#493526', margin: '2px 0' }}>• Người tạo: {ord.created_by_name || 'Không rõ'}</div>
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, paddingTop: 4, borderTop: '1px solid #f2e9de' }}>
-                        <span style={{ fontSize: 11, fontWeight: 800, color: ord.status_v2 === 'completed' ? '#16a34a' : ord.is_overdue ? '#dc2626' : '#138a53' }}>
-                          {ord.is_overdue ? 'Chưa thực hiện ⚠️' : (statusLabelMap[ord.status_v2] || ord.status_v2)}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 11, fontWeight: 800, color: ord.status_v2 === 'completed' ? '#16a34a' : ord.is_overdue ? '#dc2626' : '#138a53' }}>
+                            {ord.is_overdue ? 'Chưa thực hiện ⚠️' : (statusLabelMap[ord.status_v2] || ord.status_v2)}
+                          </span>
+                          {(() => {
+                            const hearts = orderHearts[ord.id] || [];
+                            const iHearted = hearts.some((h: any) => h.staff_id === profile?.id);
+                            return (
+                              <button
+                                onClick={(e) => handleHeartOrder(e, ord.id)}
+                                disabled={iHearted}
+                                title={hearts.length ? `Đã xem: ${hearts.map((h: any) => h.staff_name).join(', ')}` : 'Thả tim = đánh dấu đã xem đơn này'}
+                                style={{
+                                  display: 'flex', alignItems: 'center', gap: 3, border: 'none', background: 'transparent',
+                                  padding: '2px 4px', cursor: iHearted ? 'default' : 'pointer',
+                                }}
+                              >
+                                <Heart size={14} color={iHearted ? '#e11d48' : '#a08a76'} fill={iHearted ? '#e11d48' : 'none'} />
+                                {hearts.length > 0 && <span style={{ fontSize: 11, fontWeight: 800, color: '#a08a76' }}>{hearts.length}</span>}
+                              </button>
+                            );
+                          })()}
+                        </div>
                         <ChevronRight size={16} color="#a08a76" />
                       </div>
                     </div>

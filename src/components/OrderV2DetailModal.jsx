@@ -6,7 +6,9 @@ import { useAuth } from '../lib/AuthContext';
 import PackageTaskPanel from './PackageTaskPanel';
 import { CommentSection } from './CommentSection';
 import OrderStatusTimeline from './OrderStatusTimeline';
-import { MapPin, Camera } from 'lucide-react';
+import { MapPin, Camera, Trash2 } from 'lucide-react';
+import { hasAnyRole } from '../lib/roles';
+import { deleteOrderByDirector } from '../lib/bossOverviewV3';
 import { CAKE_FILLINGS } from '../lib/cakePricing';
 import { canViewSchoolOrder, canViewMacaronPrice } from '../lib/orderVisibility';
 import { broadcastEvent, BroadcastEvents } from '../lib/realtimeSync';
@@ -101,6 +103,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
   const [unit, setUnit] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [deletingOrder, setDeletingOrder] = useState(false);
   const [zoomImage, setZoomImage] = useState(null);
   const [idempotencyKey] = useState(() => crypto.randomUUID());
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
@@ -242,6 +245,21 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       setError(e.message);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleDeleteOrder = async () => {
+    if (deletingOrder) return;
+    if (!window.confirm('Xóa hẳn đơn hàng này? Toàn bộ sản phẩm/phân công/lịch sử liên quan sẽ mất vĩnh viễn, không khôi phục được.')) return;
+    setDeletingOrder(true);
+    setError('');
+    try {
+      await deleteOrderByDirector(orderId);
+      onChanged?.();
+      onClose?.();
+    } catch (e) {
+      setError(e.message);
+      setDeletingOrder(false);
     }
   };
 
@@ -714,6 +732,21 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                 title="Bánh có sẵn tại kho thành phẩm/tủ - Bỏ qua khâu bếp và báo Vận tải nhận đơn"
               >
                 ⚡ Bánh có sẵn (Vào kho ngay)
+              </button>
+            )}
+            {hasAnyRole(profile, ['owner', 'admin']) && (
+              <button
+                type="button"
+                disabled={busy || deletingOrder}
+                onClick={handleDeleteOrder}
+                title="Chỉ Giám đốc mới xóa được đơn hàng — xóa hẳn, không khôi phục"
+                style={{
+                  minHeight: 38, padding: '0 10px', borderRadius: 10, border: '1.5px solid #dc2626',
+                  background: '#fef2f2', color: '#dc2626', fontWeight: 800, fontSize: 13, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 5
+                }}
+              >
+                <Trash2 size={14} /> {deletingOrder ? 'Đang xóa…' : 'Xóa đơn'}
               </button>
             )}
             {quyenSua && (quyenSua.duoc_sua || quyenSua.ly_do === 'qua_han') && (

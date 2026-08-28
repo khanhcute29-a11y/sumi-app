@@ -303,4 +303,29 @@ export async function fetchWeeklyScheduleAllStations() {
   return { from, to, days: Object.values(byDate), totalAssignments: rows.length };
 }
 
+// ---- Thả tim đơn hàng (đánh dấu đã xem) ----
+export async function fetchOrderHearts(orderIds) {
+  if (!orderIds || orderIds.length === 0) return {};
+  const { data, error } = await supabase.from('order_hearts').select('order_id, staff_id, staff_name').in('order_id', orderIds);
+  if (error) throw error;
+  const byOrder = {};
+  (data || []).forEach((h) => {
+    if (!byOrder[h.order_id]) byOrder[h.order_id] = [];
+    byOrder[h.order_id].push(h);
+  });
+  return byOrder;
+}
+
+export async function addOrderHeart(orderId) {
+  const { data, error } = await supabase.rpc('add_order_heart', { p_order_id: orderId });
+  if (error) throw error;
+  return data;
+}
+
+// ---- Xóa đơn hàng — chỉ Giám đốc (owner/admin) ----
+export async function deleteOrderByDirector(orderId) {
+  const { error } = await supabase.rpc('delete_order_by_director', { p_order_id: orderId });
+  if (error) throw error;
+}
+
 export { monthStart, todayStr };
