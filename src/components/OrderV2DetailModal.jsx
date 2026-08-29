@@ -129,6 +129,12 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
   const [whExpiryDate, setWhExpiryDate] = useState('');
   const [whBusy, setWhBusy] = useState(false);
   const [whError, setWhError] = useState('');
+  // Vỏ Macaron Hạnh Nhân chưa bơm nhân KHÔNG giữ được ở nhiệt độ thường —
+  // theo yêu cầu thật: Xưởng 41 làm xong là phải chuyển ngay cho Bếp Lạnh,
+  // không chờ ai "tạo đơn" thủ công. Đánh dấu ở bước Nhập kho vì đó là lúc
+  // biết chắc mẻ này thuộc loại nào (cùng 1 luồng macaron có 2 loại hàng
+  // khác nhau — trang trí xong bán được ngay, và vỏ hạnh nhân cần bơm nhân).
+  const [isUnfilledShell, setIsUnfilledShell] = useState(false);
 
   const director = ['owner', 'admin'].includes(profile?.role) || (profile?.extra_roles || []).some(x => ['owner', 'admin'].includes(x));
 
@@ -353,26 +359,57 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       const { data: urlData } = supabase.storage.from('uploads').getPublicUrl(photoPath);
       const photoUrl = urlData.publicUrl;
 
+      const staffName = profile?.full_name || profile?.email;
       for (const item of data.items) {
-        await addFinishedGoodsEntryV2({
-          productId: item.product_id || null,
-          productName: item.name_snapshot || item.name || 'Sản phẩm',
-          size: item.specification?.size || null,
-          branch: branchForOrderType(data.order.order_type),
-          storeLocation: data.order.target_store || null,
-          qty: Number(item.quantity) || 1,
-          productionDate: new Date(whProductionDate).toISOString(),
-          expiryDate: new Date(whExpiryDate).toISOString(),
-          photoUrl,
-          staffName: profile?.full_name || profile?.email,
-        });
+        const productId = item.product_id || null;
+        const productName = item.name_snapshot || item.name || 'Sản phẩm';
+        // Xưởng 41 đếm sản lượng vỏ theo CẶP (2 mặt bánh), nhưng 1 cặp vỏ =
+        // đúng 1 cái bánh hoàn chỉnh sau khi Bếp Lạnh bơm nhân — số lượng
+        // không đổi, chỉ đổi đơn vị hiển thị.
+        const qty = Number(item.quantity) || 1;
+
+        if (isUnfilledShell) {
+          // Vỏ chưa bơm nhân: KHÔNG giữ được ở nhiệt độ thường, Xưởng 41 làm
+          // xong là chuyển thẳng Bếp Lạnh ngay, không chờ ai tạo đơn tay.
+          // Vẫn phải nhập kho mù trước (ghi nhận sản lượng/KPI Xưởng 41) rồi
+          // tự xuất ngay trong cùng lượt — tồn ở kho mù luôn về lại ~0.
+          await addFinishedGoodsEntryV2({
+            productId, productName: `${productName} (vỏ, chưa bơm nhân)`, size: item.specification?.size || null,
+            branch: 'xuong41_mu', storeLocation: null, qty,
+            productionDate: new Date(whProductionDate).toISOString(),
+            expiryDate: new Date(whExpiryDate).toISOString(),
+            photoUrl, staffName,
+          });
+          await supabase.from('finished_goods_stock_out_log').insert({
+            product_id: productId, product_name: `${productName} (vỏ, chưa bơm nhân)`,
+            size: item.specification?.size || null, branch: 'xuong41_mu', qty,
+            order_id: orderId, order_code: data.order.order_code,
+          });
+          await addFinishedGoodsEntryV2({
+            productId, productName: `${productName} (vỏ, chưa bơm nhân)`, size: item.specification?.size || null,
+            branch: 'xuong41_mu', storeLocation: null, qty: -qty,
+            productionDate: new Date(whProductionDate).toISOString(),
+            expiryDate: new Date(whExpiryDate).toISOString(),
+            photoUrl, staffName,
+          });
+        } else {
+          await addFinishedGoodsEntryV2({
+            productId, productName, size: item.specification?.size || null,
+            branch: branchForOrderType(data.order.order_type),
+            storeLocation: data.order.target_store || null,
+            qty,
+            productionDate: new Date(whProductionDate).toISOString(),
+            expiryDate: new Date(whExpiryDate).toISOString(),
+            photoUrl, staffName,
+          });
+        }
       }
 
       const { error: updErr } = await supabase.from('orders').update({ status_v2: 'completed', completed_at: new Date().toISOString() }).eq('id', orderId);
       if (updErr) throw updErr;
 
       setShowWarehouseForm(false);
-      setWhPhoto(null); setWhProductionDate(''); setWhExpiryDate('');
+      setWhPhoto(null); setWhProductionDate(''); setWhExpiryDate(''); setIsUnfilledShell(false);
       await load();
       onChanged?.();
     } catch (e) {
@@ -877,6 +914,14 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                     <input type="datetime-local" value={whExpiryDate} onChange={(e) => setWhExpiryDate(e.target.value)} style={{ width: '100%', minHeight: 46, borderRadius: 10, border: '1px solid #c4b5fd', padding: '0 10px', boxSizing: 'border-box' }} />
                   </div>
                 </div>
+                {data.order.order_type === 'macaron' && (
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: 10, borderRadius: 12, background: '#fff', border: '1px dashed #c4b5fd', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={isUnfilledShell} onChange={(e) => setIsUnfilledShell(e.target.checked)} style={{ marginTop: 3 }} />
+                    <span style={{ fontSize: 12.5, lineHeight: 1.4 }}>
+                      🥚 Đây là <b>vỏ Macaron Hạnh Nhân chưa bơm nhân</b> — không giữ được lâu ở nhiệt độ thường, hệ thống sẽ tự ghi nhận sản lượng (KPI Xưởng 41) rồi chuyển ngay cho Bếp Lạnh, không vào kho bán được.
+                    </span>
+                  </label>
+                )}
                 {whError && <div style={{ color: '#dc2626', fontWeight: 700, fontSize: 13 }}>⚠️ {whError}</div>}
                 <button type="button" disabled={whBusy} onClick={completeInternalOrderToWarehouse} style={{ minHeight: 50, border: 0, borderRadius: 12, background: whBusy ? '#c4b5fd' : '#7c3aed', color: '#fff', fontWeight: 900, cursor: whBusy ? 'not-allowed' : 'pointer' }}>
                   {whBusy ? 'Đang lưu...' : '✓ Xác nhận nhập kho & hoàn thành đơn'}

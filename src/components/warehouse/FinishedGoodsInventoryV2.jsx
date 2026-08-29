@@ -24,6 +24,11 @@ const FLOWS = [
   { key: 'bakery', label: '🍞 Bakery', hasBranchTabs: true },
   { key: 'xuong41', label: '🌈 Macaron 41', hasBranchTabs: true },
   { key: 'xuong42', label: '🚚 Kho mù (Xưởng 42)', hasBranchTabs: false },
+  // Vỏ Macaron Hạnh Nhân SAU KHI Xưởng 41 làm xong nhưng CHƯA bơm nhân —
+  // không phải hàng bán được, chỉ tồn tạm để ghi nhận KPI sản lượng Xưởng 41
+  // trước khi tự động chuyển hết sang Bếp Lạnh (xem completeInternalOrderToWarehouse
+  // trong OrderV2DetailModal.jsx). Tồn ở đây gần như luôn = 0 vì tự xuất ngay.
+  { key: 'xuong41_mu', label: '🥚 Kho mù vỏ Macaron (chờ bơm nhân)', hasBranchTabs: false },
 ];
 const STORES = ['Vĩnh Phú 42', 'Quốc Lộ 13'];
 
