@@ -93,6 +93,15 @@ export function WeeklyScheduleSection({ profile }) {
     }
   };
 
+  // Chỉ cảnh báo, không chặn — Sếp/Admin vẫn có thể gán nếu thật sự cần.
+  const conflictWarning = (staffId, dateStr) => {
+    const key = `${staffId}_${dateStr}`;
+    if (leaveByStaffDate.has(key)) return 'Người này đã được duyệt nghỉ ngày này.';
+    if (pendingLeaveByStaffDate.has(key)) return 'Người này đang có đơn xin nghỉ chờ duyệt ngày này.';
+    if (liveStaffIds.has(key)) return 'Người này đang chấm công/làm ca khác trong ngày này.';
+    return null;
+  };
+
   const handleAssign = async (staffId, staffName) => {
     if (!assignCell) return;
     try {
@@ -198,7 +207,11 @@ export function WeeklyScheduleSection({ profile }) {
               value=""
               onChange={(e) => {
                 const p = allProfiles.find((p) => p.id === e.target.value);
-                if (p) handleAssign(p.id, p.full_name);
+                if (!p || !assignCell) return;
+                const dateStr = localDateStr(assignCell.date);
+                const warning = conflictWarning(p.id, dateStr);
+                if (warning && !window.confirm(`⚠️ ${warning}\nVẫn muốn gán "${p.full_name}" vào ca này?`)) return;
+                handleAssign(p.id, p.full_name);
               }}
               options={allProfiles.filter((p) => p.approved && p.active !== false && p.full_name).map((p) => ({ value: p.id, label: p.full_name }))}
               placeholder="Chọn nhân viên..."
