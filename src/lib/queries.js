@@ -365,6 +365,17 @@ export async function fetchOrderNotes(orderId) {
   return data;
 }
 
+// Đếm số bình luận theo nhiều đơn cùng lúc — dùng cho badge 💬 trên thẻ đơn
+// trong danh sách, không tải nội dung bình luận (nhẹ hơn fetchOrderNotes).
+export async function fetchOrderNoteCounts(orderIds) {
+  if (!orderIds || orderIds.length === 0) return {};
+  const { data, error } = await supabase.from('order_notes').select('order_id').in('order_id', orderIds);
+  if (error) throw error;
+  const counts = {};
+  (data || []).forEach((r) => { counts[r.order_id] = (counts[r.order_id] || 0) + 1; });
+  return counts;
+}
+
 export async function addOrderNote({ orderId, message, attachments, noteType = 'normal', mentionedProfileIds = [] }) {
   const { data, error } = await supabase.rpc('add_order_comment', {
     p_order_id: orderId,

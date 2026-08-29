@@ -9,6 +9,8 @@ import { supabase } from '../lib/supabaseClient';
 import { canUserViewOrder, getUserWorkflows } from '../lib/orderVisibility';
 import { subscribeToBroadcast, BroadcastEvents } from '../lib/realtimeSync';
 import FinishedGoodsInventoryV2 from '../components/warehouse/FinishedGoodsInventoryV2';
+import { fetchOrderNoteCounts } from '../lib/queries';
+import { fetchOrderHearts, addOrderHeart } from '../lib/bossOverviewV3';
 
 const LABELS = {
   awaiting_assignment: 'Đơn chờ làm', awaiting_acceptance: 'Đơn chờ làm', in_production: 'Bếp đang làm',
@@ -57,17 +59,44 @@ export default function OrdersV2Screen() {
   const [selectedId, setSelectedId] = useState(null);
   const [error, setError] = useState('');
   const [showKho, setShowKho] = useState(false);
+  // ── Thả tim (đánh dấu đã xem) + số lượng bình luận trên thẻ đơn ──
+  const [orderHearts, setOrderHearts] = useState({});
+  const [noteCounts, setNoteCounts] = useState({});
+  const [heartingId, setHeartingId] = useState(null);
 
   const load = async () => {
     setLoading(true);
     setError('');
     try {
       await supabase.rpc('enqueue_order_operational_alerts');
-      setOrders(await listOrdersV2());
+      const list = await listOrdersV2();
+      setOrders(list);
+      const ids = list.map((o) => o.id).filter(Boolean);
+      fetchOrderHearts(ids).then(setOrderHearts).catch(() => {});
+      fetchOrderNoteCounts(ids).then(setNoteCounts).catch(() => {});
     } catch (err) {
       setError(err?.message || 'Không tải được danh sách đơn hàng.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleHeartOrder = async (e, orderId) => {
+    e.stopPropagation();
+    if (heartingId || !profile?.id) return;
+    const already = (orderHearts[orderId] || []).some((h) => h.staff_id === profile.id);
+    if (already) return;
+    setHeartingId(orderId);
+    setOrderHearts((prev) => ({
+      ...prev,
+      [orderId]: [...(prev[orderId] || []), { staff_id: profile.id, staff_name: profile.full_name || 'Bạn' }],
+    }));
+    try {
+      await addOrderHeart(orderId);
+    } catch {
+      setOrderHearts((prev) => ({ ...prev, [orderId]: (prev[orderId] || []).filter((h) => h.staff_id !== profile.id) }));
+    } finally {
+      setHeartingId(null);
     }
   };
 
@@ -347,7 +376,33 @@ export default function OrdersV2Screen() {
                   {o.is_overdue ? '⚠️ Chưa thực hiện' : (LABELS[o.status_v2] || o.status_v2)}
                 </span>
               </div>
-              <h2>{o.customer_name || 'Khách chưa ghi tên'}</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 2 }}>
+                {(() => {
+                  const hearts = orderHearts[o.id] || [];
+                  const iHearted = hearts.some((h) => h.staff_id === profile?.id);
+                  return (
+                    <span
+                      onClick={(e) => handleHeartOrder(e, o.id)}
+                      title={hearts.length ? `Đã xem: ${hearts.map((h) => h.staff_name).join(', ')}` : 'Thả tim = đánh dấu đã xem đơn này'}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 3, cursor: iHearted ? 'default' : 'pointer', fontSize: 13, color: iHearted ? '#e11d48' : '#8a7a66' }}
+                    >
+                      {iHearted ? '❤️' : '🤍'} {hearts.length > 0 && hearts.length}
+                    </span>
+                  );
+                })()}
+                {noteCounts[o.id] > 0 && (
+                  <span style={{ fontSize: 13, color: '#8a7a66' }}>💬 {noteCounts[o.id]}</span>
+                )}
+              </div>
+              {(orderHearts[o.id] || []).length > 0 && (
+                <p className="mock-order-metric" style={{ fontSize: 11, color: '#8a7a66' }}>
+                  ❤️ Đã xem: {(orderHearts[o.id] || []).map((h) => h.staff_name).join(', ')}
+                </p>
+              )}
+              <h2>
+                {o.customer_name || 'Khách chưa ghi tên'}
+                {o.created_by_name && <span style={{ fontSize: '0.7em', fontWeight: 400, color: '#8a7a66' }}> ({o.created_by_name})</span>}
+              </h2>
               <p><b>{o.order_type_label || o.order_type || 'Đơn sản xuất'}</b> · {o.address || 'Nhận tại quầy'}</p>
               {o.product_names && <p className="mock-order-metric">🍰 {o.product_names}</p>}
               {o.kitchen_names && <p className="mock-order-metric">👨‍🍳 Bếp: {o.kitchen_names}</p>}
