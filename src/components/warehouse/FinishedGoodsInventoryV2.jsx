@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
-import { fetchFinishedGoodsStock, fetchProducts, addFinishedGoodsEntryV2, uploadFile, fetchFinishedGoodsStockInLog, fetchFinishedGoodsStockOutLog, createProduct } from '../../lib/queries';
+import { fetchFinishedGoodsStock, fetchProducts, addFinishedGoodsEntryV2, uploadFile, fetchFinishedGoodsStockInLog, fetchFinishedGoodsStockOutLog, createProduct, completeSemiFinishedToFinished } from '../../lib/queries';
 import { useAuth } from '../../lib/AuthContext';
 import DonSanXuatTab from './DonSanXuatTab';
 
@@ -24,13 +24,17 @@ const FLOWS = [
   { key: 'bakery', label: '🍞 Bakery', hasBranchTabs: true },
   { key: 'xuong41', label: '🌈 Macaron 41', hasBranchTabs: true },
   { key: 'xuong42', label: '🚚 Kho mù (Xưởng 42)', hasBranchTabs: false },
-  // Vỏ Macaron Hạnh Nhân SAU KHI Xưởng 41 làm xong nhưng CHƯA bơm nhân —
-  // không phải hàng bán được, chỉ tồn tạm để ghi nhận KPI sản lượng Xưởng 41
-  // trước khi tự động chuyển hết sang Bếp Lạnh (xem completeInternalOrderToWarehouse
-  // trong OrderV2DetailModal.jsx). Tồn ở đây gần như luôn = 0 vì tự xuất ngay.
-  { key: 'xuong41_mu', label: '🥚 Kho mù vỏ Macaron (chờ bơm nhân)', hasBranchTabs: false },
 ];
 const STORES = ['Vĩnh Phú 42', 'Quốc Lộ 13'];
+
+// Kho Bán Thành Phẩm (generic, finished_goods_stock.is_semi_finished) — trước
+// tiên áp dụng cho vỏ Macaron Hạnh Nhân (Xưởng 41) chờ Bếp Lạnh bơm nhân,
+// nhưng KHÔNG hardcode riêng macaron: bất kỳ luồng nào (bakery/xuong41/xuong42)
+// đều có thể có tồn bán thành phẩm, chỉ cần lọc theo cờ này.
+const STAGE_TABS = [
+  { key: 'finished', label: 'Thành phẩm' },
+  { key: 'semi', label: 'Bán thành phẩm' },
+];
 
 function countdown(expiryDate) {
   if (!expiryDate) return null;
@@ -228,6 +232,71 @@ function NhapKhoSheet({ defaultBranch, defaultStore, products: productsProp, sta
   );
 }
 
+// Kho Bán Thành Phẩm -> Thành Phẩm: bộ phận nhận hàng (vd Bếp Lạnh nhận vỏ
+// Macaron) bấm "Đã hoàn thiện", nhập số lượng + ảnh thành phẩm cuối. Ngày SX
+// giữ nguyên từ lô bán thành phẩm gốc, chỉ cập nhật HSD nếu cần đổi.
+function CompleteSemiFinishedSheet({ row, productName, staffName, onClose, onSaved }) {
+  const [qty, setQty] = useState(String(row.qty));
+  const [expiryDate, setExpiryDate] = useState(row.expiry_date ? new Date(row.expiry_date).toISOString().slice(0, 16) : '');
+  const [photo, setPhoto] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const save = async () => {
+    const qtyNum = Number(qty);
+    if (!qtyNum || qtyNum <= 0) { setError('Nhập số lượng hợp lệ.'); return; }
+    if (qtyNum > Number(row.qty)) { setError(`Kho bán thành phẩm chỉ còn ${row.qty}.`); return; }
+    if (!photo) { setError('Bắt buộc chụp ảnh thành phẩm sau khi hoàn thiện.'); return; }
+    setSaving(true); setError('');
+    try {
+      const uploaded = await uploadFile(photo, `finished-goods-v2/${row.branch}/semi-finished`);
+      await completeSemiFinishedToFinished({
+        stockId: row.id, productId: row.product_id, productName, size: row.size, branch: row.branch,
+        qty: qtyNum, productionDate: row.production_date,
+        expiryDate: expiryDate ? new Date(expiryDate).toISOString() : row.expiry_date,
+        photoUrl: uploaded.url, staffName,
+      });
+      onSaved?.();
+      onClose();
+    } catch (e) { setError(e.message || 'Không lưu được.'); } finally { setSaving(false); }
+  };
+
+  const field = { width: '100%', minHeight: 48, padding: '0 12px', borderRadius: 14, border: '1px solid #e2cdb6', boxSizing: 'border-box' };
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(45,27,16,.55)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 480, maxHeight: '90dvh', overflowY: 'auto', background: '#fffaf2', borderRadius: '24px 24px 0 0', padding: 18 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: '#2d1b10' }}>✅ Đã hoàn thiện</h2>
+          <button onClick={onClose} style={{ width: 40, height: 40, border: '1px solid #e2cdb6', borderRadius: 12, background: '#fff', fontSize: 18 }}>✕</button>
+        </div>
+        <div style={{ fontSize: 13, color: '#806a58', marginBottom: 12 }}>{productName}{row.size ? ` · ${row.size}` : ''} — bán thành phẩm còn <b>{row.qty}</b></div>
+        <div style={{ display: 'grid', gap: 10 }}>
+          <div>
+            <label style={{ display: 'block', fontWeight: 900, marginBottom: 6 }}>Số lượng hoàn thiện</label>
+            <input style={field} type="number" min="1" max={row.qty} value={qty} onChange={(e) => setQty(e.target.value)} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontWeight: 900, marginBottom: 6 }}>Hạn sử dụng (thành phẩm sau khi hoàn thiện)</label>
+            <input style={field} type="datetime-local" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontWeight: 900, marginBottom: 6 }}>Ảnh thành phẩm (bắt buộc)</label>
+            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 52, border: '2px dashed #e2cdb6', borderRadius: 14, cursor: 'pointer' }}>
+              {photo ? `📷 ${photo.name}` : '📷 Chụp / chọn ảnh'}
+              <input hidden type="file" accept="image/*" onChange={(e) => setPhoto(e.target.files?.[0] || null)} />
+            </label>
+          </div>
+          {error && <div style={{ color: '#d94a40', fontWeight: 700 }}>{error}</div>}
+          <button onClick={save} disabled={saving} style={{ minHeight: 58, border: 0, borderRadius: 18, background: saving ? '#c4b5fd' : '#7c3aed', color: '#fff', fontSize: 17, fontWeight: 950, cursor: saving ? 'not-allowed' : 'pointer' }}>
+            {saving ? 'Đang lưu...' : 'Xác nhận hoàn thiện'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Chi tiết 1 dòng tồn kho — lịch sử nhập/xuất THẬT (từ finished_goods_stock_in_log
 // / _out_log). KHÔNG bịa "mã lô", "bếp trưởng chịu trách nhiệm", hay "trạng thái QA"
 // — schema hiện tại không có các trường này (xem giới hạn "1 dòng gộp, không
@@ -297,6 +366,9 @@ export default function FinishedGoodsInventoryV2({ onBack }) {
   // theo yêu cầu, tách hẳn khỏi các tab Tồn kho hiện có (view riêng, không
   // đụng logic flow/store/stock bên dưới).
   const [view, setView] = useState('stock');
+  // Kho Bán Thành Phẩm — sub-tab trong mỗi luồng, lọc theo is_semi_finished.
+  const [stage, setStage] = useState('finished');
+  const [completingRow, setCompletingRow] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -317,10 +389,11 @@ export default function FinishedGoodsInventoryV2({ onBack }) {
 
   const currentFlow = FLOWS.find((f) => f.key === flow);
   const items = useMemo(() => {
-    let ds = stock.filter((s) => s.branch === flow);
-    if (currentFlow?.hasBranchTabs) ds = ds.filter((s) => (s.store_location || STORES[0]) === store);
+    let ds = stock.filter((s) => s.branch === flow && !!s.is_semi_finished === (stage === 'semi'));
+    if (stage === 'finished' && currentFlow?.hasBranchTabs) ds = ds.filter((s) => (s.store_location || STORES[0]) === store);
     return ds;
-  }, [stock, flow, store]);
+  }, [stock, flow, store, stage, currentFlow]);
+  const semiFinishedCount = useMemo(() => stock.filter((s) => s.branch === flow && s.is_semi_finished && Number(s.qty) > 0).length, [stock, flow]);
 
   const productName = (id) => products.find((p) => p.id === id)?.name || 'Sản phẩm đã xoá';
   const expiringSoon = stock.filter((s) => { const c = countdown(s.expiry_date); return c && c.tone !== 'ok'; }).length;
@@ -376,7 +449,18 @@ export default function FinishedGoodsInventoryV2({ onBack }) {
         ))}
       </div>
 
-      {currentFlow?.hasBranchTabs && (
+      <div style={{ display: 'flex', gap: 8 }}>
+        {STAGE_TABS.map((t) => (
+          <button key={t.key} onClick={() => setStage(t.key)} style={{
+            flex: 1, minHeight: 40, borderRadius: 12, border: stage === t.key ? '2px solid #7c3aed' : '1px solid #e2cdb6',
+            background: stage === t.key ? '#f5f0ff' : '#fff', color: stage === t.key ? '#6d28d9' : '#806a58', fontWeight: 800, fontSize: 13, cursor: 'pointer',
+          }}>
+            {t.label}{t.key === 'semi' && semiFinishedCount > 0 ? ` (${semiFinishedCount})` : ''}
+          </button>
+        ))}
+      </div>
+
+      {stage === 'finished' && currentFlow?.hasBranchTabs && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           {STORES.map((s) => (
             <button key={s} onClick={() => setStore(s)} style={{
@@ -429,6 +513,15 @@ export default function FinishedGoodsInventoryV2({ onBack }) {
                     </div>
                   )}
                   {cd && <div style={{ marginTop: 8, padding: '7px 9px', borderRadius: 12, fontSize: 12, fontWeight: 900, ...toneStyle[cd.tone] }}>{cd.text}</div>}
+                  {stage === 'semi' && Number(s.qty) > 0 && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setCompletingRow(s); }}
+                      style={{ marginTop: 8, width: '100%', minHeight: 42, border: 0, borderRadius: 12, background: '#7c3aed', color: '#fff', fontWeight: 900, fontSize: 13, cursor: 'pointer' }}
+                    >
+                      ✅ Đã hoàn thiện — chuyển thành phẩm
+                    </button>
+                  )}
                 </div>
               </div>
               {isOpen && <ChiTietDongTonKho row={s} productLabel={`${productName(s.product_id)}${s.size ? ` · ${s.size}` : ''}`} />}
@@ -436,6 +529,16 @@ export default function FinishedGoodsInventoryV2({ onBack }) {
             );
           })}
         </div>
+      )}
+
+      {completingRow && (
+        <CompleteSemiFinishedSheet
+          row={completingRow}
+          productName={productName(completingRow.product_id)}
+          staffName={profile?.full_name}
+          onClose={() => setCompletingRow(null)}
+          onSaved={load}
+        />
       )}
 
       {showNhapKho && (

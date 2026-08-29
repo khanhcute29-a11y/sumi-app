@@ -369,28 +369,18 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
         const qty = Number(item.quantity) || 1;
 
         if (isUnfilledShell) {
-          // Vỏ chưa bơm nhân: KHÔNG giữ được ở nhiệt độ thường, Xưởng 41 làm
-          // xong là chuyển thẳng Bếp Lạnh ngay, không chờ ai tạo đơn tay.
-          // Vẫn phải nhập kho mù trước (ghi nhận sản lượng/KPI Xưởng 41) rồi
-          // tự xuất ngay trong cùng lượt — tồn ở kho mù luôn về lại ~0.
+          // Vỏ chưa bơm nhân: ghi vào Kho Bán Thành Phẩm (is_semi_finished),
+          // giữ tồn THẬT (không tự xoá ngay) để Bếp Lạnh có hàng đợi thật
+          // trong "Bán thành phẩm" của tab Macaron 41 — bấm "Đã hoàn thiện"
+          // khi bơm nhân xong (xem CompleteSemiFinishedSheet trong
+          // FinishedGoodsInventoryV2.jsx). Đồng thời vẫn là bản ghi sản
+          // lượng/KPI thật cho Xưởng 41 ngay khi nhập.
           await addFinishedGoodsEntryV2({
             productId, productName: `${productName} (vỏ, chưa bơm nhân)`, size: item.specification?.size || null,
-            branch: 'xuong41_mu', storeLocation: null, qty,
+            branch: branchForOrderType(data.order.order_type), storeLocation: null, qty,
             productionDate: new Date(whProductionDate).toISOString(),
             expiryDate: new Date(whExpiryDate).toISOString(),
-            photoUrl, staffName,
-          });
-          await supabase.from('finished_goods_stock_out_log').insert({
-            product_id: productId, product_name: `${productName} (vỏ, chưa bơm nhân)`,
-            size: item.specification?.size || null, branch: 'xuong41_mu', qty,
-            order_id: orderId, order_code: data.order.order_code,
-          });
-          await addFinishedGoodsEntryV2({
-            productId, productName: `${productName} (vỏ, chưa bơm nhân)`, size: item.specification?.size || null,
-            branch: 'xuong41_mu', storeLocation: null, qty: -qty,
-            productionDate: new Date(whProductionDate).toISOString(),
-            expiryDate: new Date(whExpiryDate).toISOString(),
-            photoUrl, staffName,
+            photoUrl, staffName, isSemiFinished: true,
           });
         } else {
           await addFinishedGoodsEntryV2({
@@ -918,7 +908,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                   <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: 10, borderRadius: 12, background: '#fff', border: '1px dashed #c4b5fd', cursor: 'pointer' }}>
                     <input type="checkbox" checked={isUnfilledShell} onChange={(e) => setIsUnfilledShell(e.target.checked)} style={{ marginTop: 3 }} />
                     <span style={{ fontSize: 12.5, lineHeight: 1.4 }}>
-                      🥚 Đây là <b>vỏ Macaron Hạnh Nhân chưa bơm nhân</b> — không giữ được lâu ở nhiệt độ thường, hệ thống sẽ tự ghi nhận sản lượng (KPI Xưởng 41) rồi chuyển ngay cho Bếp Lạnh, không vào kho bán được.
+                      🥚 Đây là <b>vỏ Macaron Hạnh Nhân chưa bơm nhân</b> — hệ thống ghi nhận sản lượng (KPI Xưởng 41) và đưa vào <b>Kho Bán Thành Phẩm</b> (tab "Bán thành phẩm" trong Macaron 41), Bếp Lạnh bấm "Đã hoàn thiện" khi bơm nhân xong. Không vào kho bán được cho tới lúc đó.
                     </span>
                   </label>
                 )}

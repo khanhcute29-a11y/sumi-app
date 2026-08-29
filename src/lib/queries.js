@@ -552,11 +552,15 @@ async function upsertFinishedGoodsStock({ productId, size, branch }, delta) {
 export async function addFinishedGoodsEntryV2({
   productId, productName, size, branch, storeLocation, qty,
   productionDate, expiryDate, photoUrl, color, packing, staffName,
+  // Kho Bán Thành Phẩm (generic, mặc định false — không đổi hành vi cũ cho
+  // bất kỳ nơi gọi nào khác): true = đây là hàng CHƯA hoàn thiện (vd vỏ
+  // Macaron chưa bơm nhân), giữ tách riêng khỏi tồn thành phẩm cùng product/branch.
+  isSemiFinished = false,
 }) {
   const normalizedSize = size || null;
   const normalizedStore = storeLocation || null;
   let q = supabase.from('finished_goods_stock').select('*')
-    .eq('product_id', productId).eq('branch', branch);
+    .eq('product_id', productId).eq('branch', branch).eq('is_semi_finished', isSemiFinished);
   q = normalizedSize === null ? q.is('size', null) : q.eq('size', normalizedSize);
   q = normalizedStore === null ? q.is('store_location', null) : q.eq('store_location', normalizedStore);
   const { data: row, error: findErr } = await q.maybeSingle();
@@ -575,7 +579,8 @@ export async function addFinishedGoodsEntryV2({
     if (error) throw error;
   } else {
     const { error } = await supabase.from('finished_goods_stock').insert({
-      product_id: productId, size: normalizedSize, branch, store_location: normalizedStore, qty: delta, ...meta,
+      product_id: productId, size: normalizedSize, branch, store_location: normalizedStore, qty: delta,
+      is_semi_finished: isSemiFinished, ...meta,
     });
     if (error) throw error;
   }
@@ -584,6 +589,36 @@ export async function addFinishedGoodsEntryV2({
     product_id: productId, product_name: productName, size: normalizedSize, branch,
     store_location: normalizedStore, qty: delta, source: 'nhap_kho_v2', staff_name: staffName || null,
     ...meta,
+  });
+}
+
+// Kho Bán Thành Phẩm -> Thành Phẩm: bộ phận nhận hàng bán thành phẩm (vd Bếp
+// Lạnh nhận vỏ Macaron) bấm "Đã hoàn thiện" — trừ đúng dòng bán thành phẩm,
+// cộng vào dòng thành phẩm CÙNG branch (chuyển trạng thái, không đổi khâu sở
+// hữu kho). Generic — không hardcode riêng macaron, dùng lại được cho luồng
+// bán thành phẩm khác sau này.
+export async function completeSemiFinishedToFinished({
+  stockId, productId, productName, size, branch, qty,
+  productionDate, expiryDate, photoUrl, staffName,
+}) {
+  const { data: row, error: rowErr } = await supabase.from('finished_goods_stock').select('*').eq('id', stockId).single();
+  if (rowErr) throw rowErr;
+  const delta = Number(qty) || 0;
+  if (delta <= 0) throw new Error('Số lượng phải lớn hơn 0');
+  if (Number(row.qty || 0) < delta) throw new Error(`Kho bán thành phẩm chỉ còn ${row.qty}, không đủ ${delta}`);
+
+  const { error: updErr } = await supabase.from('finished_goods_stock')
+    .update({ qty: Number(row.qty) - delta, updated_at: new Date().toISOString() }).eq('id', stockId);
+  if (updErr) throw updErr;
+
+  await supabase.from('finished_goods_stock_out_log').insert({
+    product_id: productId, product_name: productName, size: size || null, branch, qty: delta,
+  });
+
+  await addFinishedGoodsEntryV2({
+    productId, productName, size: size || null, branch, storeLocation: null, qty: delta,
+    productionDate: productionDate || row.production_date, expiryDate: expiryDate || row.expiry_date,
+    photoUrl: photoUrl || row.photo_url, staffName, isSemiFinished: false,
   });
 }
 
