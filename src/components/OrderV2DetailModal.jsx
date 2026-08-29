@@ -15,6 +15,7 @@ import { broadcastEvent, BroadcastEvents } from '../lib/realtimeSync';
 import { getCurrentPositionSmart } from '../lib/geo';
 import { showToast } from '../lib/toast';
 import { addFinishedGoodsEntryV2 } from '../lib/queries';
+import { branchForOrderType } from '../lib/internalOrders';
 
 const ORDER_TYPE_LABELS = {
   cake: '🎂 Bánh kem & Bánh lạnh',
@@ -357,7 +358,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
           productId: item.product_id || null,
           productName: item.name_snapshot || item.name || 'Sản phẩm',
           size: item.specification?.size || null,
-          branch: data.order.order_type === 'cake' ? 'bakery' : (data.order.order_type || 'bakery'),
+          branch: branchForOrderType(data.order.order_type),
           storeLocation: data.order.target_store || null,
           qty: Number(item.quantity) || 1,
           productionDate: new Date(whProductionDate).toISOString(),

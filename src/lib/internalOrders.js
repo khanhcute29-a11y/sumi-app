@@ -6,7 +6,19 @@ import { newId } from './ids';
 // không phải hệ thống song song — thả tim/lịch sử/timeline có sẵn tự hoạt
 // động vì mọi thứ vẫn là 1 hàng trong `orders`.
 
-export async function fetchStockAvailableFor(branch, store) {
+// Kho thành phẩm (finished_goods_stock.branch) chỉ dùng 3 khoá thật:
+// 'bakery' | 'xuong41' | 'xuong42' (xem FLOWS trong FinishedGoodsInventoryV2.jsx).
+// order_type của đơn hàng lại dùng khoá khác ('cake'/'bakery'/'macaron'/...),
+// nên PHẢI quy đổi trước khi tra kho — nếu truyền thẳng order_type vào sẽ
+// không bao giờ khớp (vd 'cake' hay 'macaron' không phải branch thật nào cả).
+export function branchForOrderType(orderType) {
+  if (orderType === 'macaron') return 'xuong41';
+  if (orderType === 'school' || orderType === 'teabreak') return 'xuong42';
+  return 'bakery'; // cake, bakery
+}
+
+export async function fetchStockAvailableFor(orderType, store) {
+  const branch = branchForOrderType(orderType);
   let q = supabase
     .from('finished_goods_stock')
     .select('id, product_id, size, branch, store_location, qty, production_date, expiry_date, photo_url, products(name)')
