@@ -41,6 +41,7 @@ import FinishedGoodsInventoryV2 from '../../warehouse/FinishedGoodsInventoryV2';
 import UserAvatar from '../../UserAvatar';
 import { supabase } from '../../../lib/supabaseClient';
 import { fetchShiftLogsRange } from '../../../lib/queries';
+import { WeeklyScheduleSection } from '../../WeeklyScheduleSection';
 import {
   fetchRevenueByChannel,
   fetchExpenseAndAdvanceLedgerToday,
@@ -1702,39 +1703,26 @@ export function BossOverviewV3Inner() {
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 900, color: '#9333ea' }}>📅 Lịch Phân Ca Tuần — 5 Khu Vực</div>
                     <div style={{ fontSize: 11, color: '#725f50' }}>
-                      {weeklySchedule.from && new Date(weeklySchedule.from).toLocaleDateString('vi-VN')} - {weeklySchedule.to && new Date(weeklySchedule.to).toLocaleDateString('vi-VN')} · {weeklySchedule.totalAssignments} lượt phân ca · Bakery · Bếp Nóng · Bếp Lạnh · Xưởng 41 · Xưởng 42
+                      Bấm vào 1 ô để gán/gỡ nhân sự trực tiếp tại đây
                     </div>
                   </div>
                   <button onClick={() => setActiveSheet(null)} aria-label="Quay lại" style={{ order: -1, flexShrink: 0, width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer' }}>‹</button>
                 </div>
+                <div style={{ padding: '8px 14px 0' }}>
+                  <button
+                    onClick={() => {
+                      setActiveSheet(null);
+                      window.dispatchEvent(new CustomEvent('sumi-navigate', { detail: { tab: 'shifts', view: 'schedule' } }));
+                    }}
+                    style={{ width: '100%', padding: '9px 0', borderRadius: 10, border: '1px solid #9333ea', background: '#faf5ff', color: '#9333ea', fontWeight: 800, fontSize: 12.5, cursor: 'pointer' }}
+                  >
+                    Mở đầy đủ trong "Ca Làm Việc" →
+                  </button>
+                </div>
               </div>
 
               <div style={sheetBodyStyle({ paddingTop: 12 })}>
-                {weeklySchedule.totalAssignments === 0 && (
-                  <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Chưa có ca nào được phân trong tuần này.</div>
-                )}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {weeklySchedule.days.map((day: any) => {
-                    const sang = day['Sáng'] as any[];
-                    const chieu = day['Chiều'] as any[];
-                    if (sang.length === 0 && chieu.length === 0) return null;
-                    return (
-                      <div key={day.date} style={{ background: '#faf6f0', border: '1px solid #eadcca', borderRadius: 10, padding: 8 }}>
-                        <div style={{ fontSize: 12.5, fontWeight: 900, color: '#2d1c10' }}>{day.dow} · {new Date(day.date).toLocaleDateString('vi-VN')}</div>
-                        {sang.length > 0 && (
-                          <div style={{ fontSize: 11, color: '#725f50', marginTop: 3 }}>
-                            <strong>Ca Sáng ({sang.length}):</strong> {sang.map((s: any) => `${s.staff_name} (${s.stationLabel})`).join(', ')}
-                          </div>
-                        )}
-                        {chieu.length > 0 && (
-                          <div style={{ fontSize: 11, color: '#725f50', marginTop: 3 }}>
-                            <strong>Ca Chiều ({chieu.length}):</strong> {chieu.map((s: any) => `${s.staff_name} (${s.stationLabel})`).join(', ')}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                <WeeklyScheduleSection profile={profile} />
               </div>
             </div>
           </div>

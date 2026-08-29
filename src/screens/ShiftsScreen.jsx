@@ -548,6 +548,16 @@ export default function ShiftsScreen() {
     window.addEventListener('sumi-open-shift-action', handleAction);
     return () => window.removeEventListener('sumi-open-shift-action', handleAction);
   }, []);
+
+  // Cho phép nơi khác (vd: sheet "Lịch Phân Ca Tuần" ở Boss Dashboard) điều
+  // hướng thẳng vào đúng tab con "Lịch tuần" thay vì luôn mở mặc định "Chấm
+  // công realtime" — tách riêng khỏi handleAction ở trên, không đụng logic
+  // chấm công đã có.
+  useEffect(() => {
+    const handleView = (e) => { if (e.detail?.view) setViewMode(e.detail.view); };
+    window.addEventListener('sumi-open-shift-view', handleView);
+    return () => window.removeEventListener('sumi-open-shift-view', handleView);
+  }, []);
   const refreshAfterAction = () => { loadLogs(); window.dispatchEvent(new Event('sumi-shift-changed')); };
 
   // Hồ sơ nhân sự dùng cho màn hình quản lý.
