@@ -371,28 +371,28 @@ export default function OrdersV2Screen() {
           {shownOrders.map(o => (
             <button className="mock-order-card" key={o.id} onClick={() => setSelectedId(o.id)}>
               <div className="mock-order-top">
-                <strong>#{o.order_code || 'CHƯA CÓ MÃ'}</strong>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <strong>#{o.order_code || 'CHƯA CÓ MÃ'}</strong>
+                  {(() => {
+                    const hearts = orderHearts[o.id] || [];
+                    const iHearted = hearts.some((h) => h.staff_id === profile?.id);
+                    return (
+                      <span
+                        onClick={(e) => handleHeartOrder(e, o.id)}
+                        title={hearts.length ? `Đã xem: ${hearts.map((h) => h.staff_name).join(', ')}` : 'Thả tim = đánh dấu đã xem đơn này'}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 3, cursor: iHearted ? 'default' : 'pointer', fontSize: 14, color: iHearted ? '#e11d48' : '#8a7a66' }}
+                      >
+                        {iHearted ? '❤️' : '🤍'} {hearts.length > 0 && hearts.length}
+                      </span>
+                    );
+                  })()}
+                  {noteCounts[o.id] > 0 && (
+                    <span style={{ fontSize: 14, color: '#8a7a66' }}>💬 {noteCounts[o.id]}</span>
+                  )}
+                </div>
                 <span className={o.is_overdue ? 'is-overdue' : ''}>
                   {o.is_overdue ? '⚠️ Chưa thực hiện' : (LABELS[o.status_v2] || o.status_v2)}
                 </span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 2 }}>
-                {(() => {
-                  const hearts = orderHearts[o.id] || [];
-                  const iHearted = hearts.some((h) => h.staff_id === profile?.id);
-                  return (
-                    <span
-                      onClick={(e) => handleHeartOrder(e, o.id)}
-                      title={hearts.length ? `Đã xem: ${hearts.map((h) => h.staff_name).join(', ')}` : 'Thả tim = đánh dấu đã xem đơn này'}
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: 3, cursor: iHearted ? 'default' : 'pointer', fontSize: 13, color: iHearted ? '#e11d48' : '#8a7a66' }}
-                    >
-                      {iHearted ? '❤️' : '🤍'} {hearts.length > 0 && hearts.length}
-                    </span>
-                  );
-                })()}
-                {noteCounts[o.id] > 0 && (
-                  <span style={{ fontSize: 13, color: '#8a7a66' }}>💬 {noteCounts[o.id]}</span>
-                )}
               </div>
               {(orderHearts[o.id] || []).length > 0 && (
                 <p className="mock-order-metric" style={{ fontSize: 11, color: '#8a7a66' }}>
