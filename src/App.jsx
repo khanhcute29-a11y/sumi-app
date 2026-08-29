@@ -288,6 +288,11 @@ function OpsApp({ onSignOut }) {
       if ((nextTab === 'tasks' || nextTab === 'staffTasks') && e.detail?.entityId) {
         setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-task', { detail: { entityId: e.detail.entityId } })), 0);
       }
+      // Mở thẳng đúng tab con bên trong "Ca Làm Việc" (vd: 'schedule' = Lịch tuần)
+      // thay vì luôn rơi về mặc định "Chấm công realtime".
+      if (nextTab === 'shifts' && e.detail?.view) {
+        setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-shift-view', { detail: { view: e.detail.view } })), 0);
+      }
     };
     window.addEventListener('sumi-navigate', go);
     return () => window.removeEventListener('sumi-navigate', go);
