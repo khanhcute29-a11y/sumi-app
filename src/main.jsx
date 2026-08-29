@@ -28,6 +28,19 @@ const updateSW = registerSW({
   onNeedRefresh() {
     updateSW(true);
   },
+  // Trình duyệt mặc định chỉ tự kiểm tra bản Service Worker mới khi điều
+  // hướng trang — nếu nhân viên cứ để app mở nguyên cả ca làm việc (rất phổ
+  // biến trên điện thoại bếp/vận tải), không bao giờ tự hỏi lại server xem
+  // có bản mới chưa, phải xoá cache/gỡ app mới thấy cập nhật. Chủ động hỏi
+  // định kỳ + mỗi khi app quay lại từ nền để không ai phải làm vậy nữa.
+  onRegisteredSW(swUrl, registration) {
+    if (!registration) return;
+    const checkForUpdate = () => registration.update().catch(() => {});
+    setInterval(checkForUpdate, 60_000);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') checkForUpdate();
+    });
+  },
 });
 
 // ── MOCKUP SANDBOX ────────────────────────────────────────────────

@@ -111,6 +111,20 @@ export default function OrdersV2Screen() {
     };
   }, []);
 
+  // Lớp bảo hiểm cho việc mất tín hiệu realtime (broadcast không được lưu lại —
+  // điện thoại tắt màn hình/chuyển app/rớt mạng đúng lúc có đơn mới sẽ bỏ lỡ
+  // vĩnh viễn, không có cách "bù lại"). Mỗi lần app được mở lại/focus, tự tải
+  // lại danh sách 1 lần cho chắc, không phụ thuộc hoàn toàn vào broadcast.
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') load(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, []);
+
   const roleCanCreate = ['owner', 'admin', 'cashier', 'sale', 'kitchen_lead'].includes(profile?.role) || (profile?.extra_roles || []).some(r => ['owner', 'admin', 'cashier', 'sale', 'kitchen_lead'].includes(r));
 
   // Lọc luồng có sẵn dựa trên quyền của user
