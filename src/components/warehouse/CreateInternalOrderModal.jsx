@@ -30,6 +30,14 @@ export default function CreateInternalOrderModal({ onClose, onCreated }) {
   const [targetStore, setTargetStore] = useState(STORES[0]);
   const [requiredAt, setRequiredAt] = useState(nowLocal());
   const [note, setNote] = useState('');
+  // Macaron KHÔNG đi thẳng ra cửa hàng — đích là Xưởng 41 (vỏ chưa bơm nhân
+  // còn phải qua Bếp Lạnh trước khi tính chuyện ra cửa hàng nào). Đổi sang
+  // luồng Macaron thì bỏ chọn cửa hàng; đổi lại Bánh mặn ngọt/lạnh thì trả
+  // về cửa hàng mặc định.
+  const isMacaron = orderType === 'macaron';
+  useEffect(() => {
+    setTargetStore(isMacaron ? null : STORES[0]);
+  }, [isMacaron]);
 
   const [mode, setMode] = useState('checking'); // 'checking' | 'stock' | 'new'
   const [stockList, setStockList] = useState([]);
@@ -125,17 +133,23 @@ export default function CreateInternalOrderModal({ onClose, onCreated }) {
             </div>
           </div>
 
-          <div>
-            <label style={{ display: 'block', fontWeight: 900, marginBottom: 6 }}>Cửa hàng đích</label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-              {STORES.map((s) => (
-                <button key={s} type="button" onClick={() => setTargetStore(s)} style={{
-                  minHeight: 46, borderRadius: 14, border: targetStore === s ? '2px solid #f05c2b' : '1px solid #e2cdb6',
-                  background: targetStore === s ? '#fff1e8' : '#fff', fontWeight: 800, fontSize: 13, cursor: 'pointer',
-                }}>{s}</button>
-              ))}
+          {isMacaron ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderRadius: 14, background: '#fff1e8', border: '1px solid #f0c3a5', fontWeight: 800, fontSize: 13, color: '#7d420c' }}>
+              🏭 Đích: Xưởng 41 — vỏ Macaron chưa qua Bếp Lạnh nên chưa ra cửa hàng nào cả
             </div>
-          </div>
+          ) : (
+            <div>
+              <label style={{ display: 'block', fontWeight: 900, marginBottom: 6 }}>Cửa hàng đích</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                {STORES.map((s) => (
+                  <button key={s} type="button" onClick={() => setTargetStore(s)} style={{
+                    minHeight: 46, borderRadius: 14, border: targetStore === s ? '2px solid #f05c2b' : '1px solid #e2cdb6',
+                    background: targetStore === s ? '#fff1e8' : '#fff', fontWeight: 800, fontSize: 13, cursor: 'pointer',
+                  }}>{s}</button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div>
             <label style={{ display: 'block', fontWeight: 900, marginBottom: 6 }}>Ngày giờ yêu cầu hoàn thành</label>
