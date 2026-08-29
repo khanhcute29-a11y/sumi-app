@@ -343,11 +343,16 @@ export default function OrdersV2Screen() {
             <button className="mock-order-card" key={o.id} onClick={() => setSelectedId(o.id)}>
               <div className="mock-order-top">
                 <strong>#{o.order_code || 'CHƯA CÓ MÃ'}</strong>
+                {o.is_internal && (
+                  <span style={{ background: '#7c3aed', color: '#fff', fontWeight: 900, fontSize: 11, padding: '2px 8px', borderRadius: 999, letterSpacing: 0.3 }}>
+                    🏷️ NỘI BỘ
+                  </span>
+                )}
                 <span className={o.is_overdue ? 'is-overdue' : ''}>
                   {o.is_overdue ? '⚠️ Chưa thực hiện' : (LABELS[o.status_v2] || o.status_v2)}
                 </span>
               </div>
-              <h2>{o.customer_name || 'Khách chưa ghi tên'}</h2>
+              <h2>{o.is_internal ? `Đơn nội bộ${o.target_store ? ` — ${o.target_store}` : ''}` : (o.customer_name || 'Khách chưa ghi tên')}</h2>
               <p><b>{o.order_type_label || o.order_type || 'Đơn sản xuất'}</b> · {o.address || 'Nhận tại quầy'}</p>
               {o.product_names && <p className="mock-order-metric">🍰 {o.product_names}</p>}
               {o.kitchen_names && <p className="mock-order-metric">👨‍🍳 Bếp: {o.kitchen_names}</p>}

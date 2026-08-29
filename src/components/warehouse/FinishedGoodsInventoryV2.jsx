@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { fetchFinishedGoodsStock, fetchProducts, addFinishedGoodsEntryV2, uploadFile, fetchFinishedGoodsStockInLog, fetchFinishedGoodsStockOutLog, createProduct } from '../../lib/queries';
 import { useAuth } from '../../lib/AuthContext';
+import DonSanXuatTab from './DonSanXuatTab';
 
 // Kho Thành Phẩm V2 — theo mockup đã duyệt
 // docs/mockups/SUMI-finished-goods-inventory-v2-handoff/finished-goods-inventory-v2-approved.html
@@ -287,6 +288,10 @@ export default function FinishedGoodsInventoryV2({ onBack }) {
   const [store, setStore] = useState(STORES[0]);
   const [showNhapKho, setShowNhapKho] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
+  // "Đơn sản xuất" — lịch sử đơn hàng nội bộ, đặt CHUNG màn Kho Thành Phẩm
+  // theo yêu cầu, tách hẳn khỏi các tab Tồn kho hiện có (view riêng, không
+  // đụng logic flow/store/stock bên dưới).
+  const [view, setView] = useState('stock');
 
   const load = () => {
     setLoading(true);
@@ -323,6 +328,20 @@ export default function FinishedGoodsInventoryV2({ onBack }) {
           <h1 style={{ margin: 0, fontSize: 24, fontWeight: 900, color: '#2d1b10' }}>🏬 Kho Thành Phẩm</h1>
         </div>
       )}
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button onClick={() => setView('stock')} style={{
+          flex: 1, minHeight: 46, borderRadius: 14, border: view === 'stock' ? '2px solid #f05c2b' : '1px solid #e2cdb6',
+          background: view === 'stock' ? '#fff1e8' : '#fff', color: view === 'stock' ? '#b7431e' : '#806a58', fontWeight: 900, cursor: 'pointer',
+        }}>📦 Tồn kho</button>
+        <button onClick={() => setView('orders')} style={{
+          flex: 1, minHeight: 46, borderRadius: 14, border: view === 'orders' ? '2px solid #f05c2b' : '1px solid #e2cdb6',
+          background: view === 'orders' ? '#fff1e8' : '#fff', color: view === 'orders' ? '#b7431e' : '#806a58', fontWeight: 900, cursor: 'pointer',
+        }}>🧾 Đơn sản xuất</button>
+      </div>
+
+      {view === 'orders' ? <DonSanXuatTab /> : (
+      <>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
         <div style={{ background: '#fffaf2', border: '1px solid #e2cdb6', borderRadius: 16, padding: 12, textAlign: 'center' }}>
           <div style={{ fontSize: 22, fontWeight: 900, color: '#b7431e' }}>{stock.reduce((t, s) => t + (Number(s.qty) || 0), 0)}</div>
@@ -423,6 +442,8 @@ export default function FinishedGoodsInventoryV2({ onBack }) {
           onClose={() => setShowNhapKho(false)}
           onSaved={load}
         />
+      )}
+      </>
       )}
     </div>
   );

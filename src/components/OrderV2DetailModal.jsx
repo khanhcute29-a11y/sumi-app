@@ -14,6 +14,7 @@ import { canViewSchoolOrder, canViewMacaronPrice } from '../lib/orderVisibility'
 import { broadcastEvent, BroadcastEvents } from '../lib/realtimeSync';
 import { getCurrentPositionSmart } from '../lib/geo';
 import { showToast } from '../lib/toast';
+import { addFinishedGoodsEntryV2 } from '../lib/queries';
 
 const ORDER_TYPE_LABELS = {
   cake: '🎂 Bánh kem & Bánh lạnh',
@@ -118,6 +119,15 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
   const [photoPreview, setPhotoPreview] = useState(null);
   const cameraInputRef = React.useRef(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  // Hoàn thành đơn nội bộ -> đẩy thẳng lên Kho Thành Phẩm. Bắt buộc ảnh/ngày
+  // SX/HSD theo đúng yêu cầu — dùng lại addFinishedGoodsEntryV2 đã có sẵn
+  // (Khánh viết cho Nhập kho), không tạo đường ghi kho mới.
+  const [showWarehouseForm, setShowWarehouseForm] = useState(false);
+  const [whPhoto, setWhPhoto] = useState(null);
+  const [whProductionDate, setWhProductionDate] = useState('');
+  const [whExpiryDate, setWhExpiryDate] = useState('');
+  const [whBusy, setWhBusy] = useState(false);
+  const [whError, setWhError] = useState('');
 
   const director = ['owner', 'admin'].includes(profile?.role) || (profile?.extra_roles || []).some(x => ['owner', 'admin'].includes(x));
 
@@ -130,7 +140,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
 
   const load = async () => {
     const [o, i, p, u, e, kpi, ops, att, changes, qs] = await Promise.all([
-      supabase.from('orders').select('id,order_code,order_type,status_v2,required_at,fulfillment_method_v2,address,note,created_by,created_by_name,created_at,confidentiality,version,ship_fee,deposit,payment_method,total,customers(name,phone)').eq('id', orderId).single(),
+      supabase.from('orders').select('id,order_code,order_type,status_v2,required_at,fulfillment_method_v2,address,note,created_by,created_by_name,created_at,confidentiality,version,ship_fee,deposit,payment_method,total,is_internal,target_store,customers(name,phone)').eq('id', orderId).single(),
       supabase.from('order_items').select('id,name_snapshot,quantity,unit,specification,unit_price,display_order').eq('order_id', orderId).order('display_order'),
       supabase.from('order_work_packages_readable').select('id,unit_id,status,due_at,accepted_at,completed_at,version,organization_units(name,code),work_package_items(order_item_id,quantity)').eq('order_id', orderId),
       supabase.from('organization_units').select('id,name,code').eq('unit_type', 'kitchen').eq('active', true),
@@ -321,6 +331,53 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
   const capturePhoto = async () => {
     if (cameraInputRef.current) {
       cameraInputRef.current.click();
+    }
+  };
+
+  // Đơn nội bộ đã sản xuất xong (status_v2='ready_for_fulfillment') -> bấm
+  // "Nhập kho thành phẩm" bắt buộc ảnh + ngày SX + HSD, ghi từng loại bánh
+  // trong đơn vào finished_goods_stock (dùng đúng hàm Nhập kho có sẵn), rồi
+  // đóng đơn (completed) — không đẩy qua luồng giao hàng nữa vì bản Phase 1
+  // này coi "nhập kho" là bước cuối của đơn sản xuất mới.
+  const completeInternalOrderToWarehouse = async () => {
+    if (!whPhoto) { setWhError('Bắt buộc chụp ảnh thành phẩm.'); return; }
+    if (!whProductionDate) { setWhError('Bắt buộc nhập ngày sản xuất.'); return; }
+    if (!whExpiryDate) { setWhError('Bắt buộc nhập hạn sử dụng.'); return; }
+    setWhBusy(true); setWhError('');
+    try {
+      const cleanExt = (whPhoto.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+      const photoPath = `internal-orders/${orderId}/warehouse/${crypto.randomUUID()}.${cleanExt}`;
+      const { error: upErr } = await supabase.storage.from('uploads').upload(photoPath, whPhoto, { contentType: whPhoto.type || 'image/jpeg' });
+      if (upErr) throw upErr;
+      const { data: urlData } = supabase.storage.from('uploads').getPublicUrl(photoPath);
+      const photoUrl = urlData.publicUrl;
+
+      for (const item of data.items) {
+        await addFinishedGoodsEntryV2({
+          productId: item.product_id || null,
+          productName: item.name_snapshot || item.name || 'Sản phẩm',
+          size: item.specification?.size || null,
+          branch: data.order.order_type === 'cake' ? 'bakery' : (data.order.order_type || 'bakery'),
+          storeLocation: data.order.target_store || null,
+          qty: Number(item.quantity) || 1,
+          productionDate: new Date(whProductionDate).toISOString(),
+          expiryDate: new Date(whExpiryDate).toISOString(),
+          photoUrl,
+          staffName: profile?.full_name || profile?.email,
+        });
+      }
+
+      const { error: updErr } = await supabase.from('orders').update({ status_v2: 'completed', completed_at: new Date().toISOString() }).eq('id', orderId);
+      if (updErr) throw updErr;
+
+      setShowWarehouseForm(false);
+      setWhPhoto(null); setWhProductionDate(''); setWhExpiryDate('');
+      await load();
+      onChanged?.();
+    } catch (e) {
+      setWhError(e.message || 'Không nhập kho được.');
+    } finally {
+      setWhBusy(false);
     }
   };
 
@@ -703,6 +760,11 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
               Đơn #{o.order_code || o.id.slice(0, 8)}
             </h2>
             <div style={{ marginTop: 4, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              {o.is_internal && (
+                <span style={{ background: '#7c3aed', color: '#fff', fontWeight: 900, fontSize: 12, padding: '3px 10px', borderRadius: 999, letterSpacing: 0.3 }}>
+                  🏷️ NỘI BỘ{o.target_store ? ` · ${o.target_store}` : ''}
+                </span>
+              )}
               <span style={{
                 fontSize: 13, fontWeight: 800, padding: '3px 10px', borderRadius: 999,
                 background: isReady ? '#e6f6ed' : '#fff0d4',
@@ -783,6 +845,43 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
         {isSchool && (
           <div style={{ ...box, marginTop: 12, background: '#fff3cd', color: '#856404', fontWeight: 800 }}>
             🔒 Đơn trường học · Tuyệt đối không hiển thị giá
+          </div>
+        )}
+
+        {/* Đơn nội bộ đã sản xuất xong -> bắt buộc nhập kho (ảnh + ngày SX + HSD)
+            trước khi đóng đơn. Chỉ hiện khi bếp đã xong (ready_for_fulfillment). */}
+        {o.is_internal && o.status_v2 === 'ready_for_fulfillment' && (
+          <div style={{ ...box, marginTop: 12, background: '#f5f0ff', border: '1.5px solid #c4b5fd' }}>
+            <div style={{ fontWeight: 900, color: '#6d28d9', marginBottom: 8 }}>📦 Bếp đã sản xuất xong — nhập kho thành phẩm</div>
+            {!showWarehouseForm ? (
+              <button type="button" onClick={() => setShowWarehouseForm(true)} style={{ minHeight: 46, width: '100%', border: 0, borderRadius: 12, background: '#7c3aed', color: '#fff', fontWeight: 900, cursor: 'pointer' }}>
+                📥 Nhập kho thành phẩm
+              </button>
+            ) : (
+              <div style={{ display: 'grid', gap: 10 }}>
+                <div>
+                  <label style={{ display: 'block', fontWeight: 800, fontSize: 13, marginBottom: 6 }}>Ảnh thành phẩm (bắt buộc)</label>
+                  <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 48, border: '2px dashed #c4b5fd', borderRadius: 12, cursor: 'pointer' }}>
+                    {whPhoto ? `📷 ${whPhoto.name}` : '📷 Chụp / chọn ảnh'}
+                    <input hidden type="file" accept="image/*" onChange={(e) => setWhPhoto(e.target.files?.[0] || null)} />
+                  </label>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <div>
+                    <label style={{ display: 'block', fontWeight: 800, fontSize: 13, marginBottom: 6 }}>Ngày sản xuất (bắt buộc)</label>
+                    <input type="datetime-local" value={whProductionDate} onChange={(e) => setWhProductionDate(e.target.value)} style={{ width: '100%', minHeight: 46, borderRadius: 10, border: '1px solid #c4b5fd', padding: '0 10px', boxSizing: 'border-box' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontWeight: 800, fontSize: 13, marginBottom: 6 }}>Hạn sử dụng (bắt buộc)</label>
+                    <input type="datetime-local" value={whExpiryDate} onChange={(e) => setWhExpiryDate(e.target.value)} style={{ width: '100%', minHeight: 46, borderRadius: 10, border: '1px solid #c4b5fd', padding: '0 10px', boxSizing: 'border-box' }} />
+                  </div>
+                </div>
+                {whError && <div style={{ color: '#dc2626', fontWeight: 700, fontSize: 13 }}>⚠️ {whError}</div>}
+                <button type="button" disabled={whBusy} onClick={completeInternalOrderToWarehouse} style={{ minHeight: 50, border: 0, borderRadius: 12, background: whBusy ? '#c4b5fd' : '#7c3aed', color: '#fff', fontWeight: 900, cursor: whBusy ? 'not-allowed' : 'pointer' }}>
+                  {whBusy ? 'Đang lưu...' : '✓ Xác nhận nhập kho & hoàn thành đơn'}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
