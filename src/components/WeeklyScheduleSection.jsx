@@ -112,9 +112,11 @@ export function WeeklyScheduleSection({ profile }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {isOwner && (
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: 2 }}>
           {STATIONS.map((s) => (
-            <Button key={s.key} variant={station === s.key ? 'primary' : 'secondary'} size="sm" onClick={() => setStation(s.key)}>{s.label}</Button>
+            <div key={s.key} style={{ flexShrink: 0 }}>
+              <Button variant={station === s.key ? 'primary' : 'secondary'} size="sm" onClick={() => setStation(s.key)}>{s.label}</Button>
+            </div>
           ))}
         </div>
       )}
