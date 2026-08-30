@@ -3,6 +3,7 @@ import './messenger-chat.css';
 import ChatWindowModal from './ChatWindowModal';
 import { fetchMyRoomIds, fetchUnreadCounts, subscribeToMyRooms } from '../../lib/chat';
 import { notify } from '../../lib/toast';
+import { IconChat } from '../icons/FrogIcons';
 
 // Cửa sổ chat nổi chỉ kéo thả được ở desktop (>= breakpoint này trong
 // messenger-chat.css) — trên mobile nó là modal toàn màn hình, kéo không
@@ -382,7 +383,7 @@ export function ChatLauncher({ profile }) {
           onTouchCancel={handleBubbleTouchCancel}
         >
           <button className="m-chat-avatar-btn" title="Mở tin nhắn nội bộ" onClick={() => setOpen(true)}>
-            <div className="m-chat-avatar-img" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5EBE1', fontSize: 22 }}>💬</div>
+            <div className="m-chat-avatar-img" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5EBE1' }}><IconChat size={24} style={{ color: '#2d1c10' }} /></div>
             {unreadTotal > 0 ? (
               <span className="m-unread-badge">{unreadTotal > 99 ? '99+' : unreadTotal}</span>
             ) : (
