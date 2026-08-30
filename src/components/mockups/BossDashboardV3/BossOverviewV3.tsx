@@ -745,27 +745,12 @@ export function BossOverviewV3Inner() {
             </div>
             <div>
               <div style={{ fontSize: 10.5, fontWeight: 900, color: '#a08060', letterSpacing: '.06em', textTransform: 'uppercase' }}>
-                SUMI BAKERY ENTERPRISE
+                SUMI BAKERY
               </div>
               <h1 style={{ fontSize: 16, fontWeight: 900, margin: 0, color: '#2d1c10' }}>
                 Tổng Giám Đốc (Sếp {profile?.full_name || '...'})
               </h1>
             </div>
-          </div>
-
-          <div style={{
-            background: '#fee2e2',
-            color: '#dc2626',
-            fontSize: 10.5,
-            fontWeight: 900,
-            padding: '4px 8px',
-            borderRadius: 99,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4
-          }}>
-            <span style={{ width: 6, height: 6, background: '#dc2626', borderRadius: '50%' }} />
-            V3 Executive
           </div>
         </div>
 
