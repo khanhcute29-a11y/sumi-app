@@ -478,3 +478,21 @@ export function IconMenu(props) {
     </Wrap>
   );
 }
+
+export function IconMegaphone(props) {
+  return (
+    <Wrap {...props}>
+      <path d="M3 9 L8 9 L17 4 L17 18 L8 13 L3 13 Z" strokeLinejoin="round" />
+      <path d="M6 13 L6 17.5 C6 18.6 6.9 19.5 8 19.5 C8.7 19.5 9 19 9 18.3 L9 13" />
+    </Wrap>
+  );
+}
+
+export function IconUser(props) {
+  return (
+    <Wrap {...props}>
+      <circle cx="12" cy="8" r="3.6" />
+      <path d="M4.5 21 C4.5 15.8 7.6 13.3 12 13.3 C16.4 13.3 19.5 15.8 19.5 21" />
+    </Wrap>
+  );
+}

@@ -1,12 +1,13 @@
 import React from 'react';
 import { NavBadge } from './NavBadge';
+import { IconHome, IconMegaphone, IconReceipt, IconCheck, IconUser } from '../icons/FrogIcons';
 
 const items = [
-  { key: 'home', label: 'Hôm nay', icon: '🏠' },
-  { key: 'feed', label: 'Bảng tin', icon: '📢' },
-  { key: 'orders', label: 'Đơn hàng', icon: '🧾' },
-  { key: 'tasks', label: 'Việc', icon: '✅' },
-  { key: 'profile', label: 'Của tôi', icon: '👤' },
+  { key: 'home', label: 'Hôm nay', Icon: IconHome },
+  { key: 'feed', label: 'Bảng tin', Icon: IconMegaphone },
+  { key: 'orders', label: 'Đơn hàng', Icon: IconReceipt },
+  { key: 'tasks', label: 'Việc', Icon: IconCheck },
+  { key: 'profile', label: 'Của tôi', Icon: IconUser },
 ];
 
 export function BottomNav({ active = 'home', onSelect, badges = {} }) {
@@ -17,7 +18,7 @@ export function BottomNav({ active = 'home', onSelect, badges = {} }) {
       onClick={() => onSelect?.(item.key)}
       aria-current={active === item.key ? 'page' : undefined}
     >
-      <span className="sumi-nav-icon">{item.icon}{badges[item.key] > 0 && <NavBadge count={badges[item.key]} />}</span>
+      <span className="sumi-nav-icon"><item.Icon size={24} />{badges[item.key] > 0 && <NavBadge count={badges[item.key]} />}</span>
       <span>{item.label}</span>
     </button>)}
   </nav>;
