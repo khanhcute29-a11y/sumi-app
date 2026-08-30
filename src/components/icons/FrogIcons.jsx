@@ -496,3 +496,35 @@ export function IconUser(props) {
     </Wrap>
   );
 }
+
+export function IconInbox(props) {
+  return (
+    <Wrap {...props}>
+      <path d="M4 13 L8 13 L9.5 15.5 L14.5 15.5 L16 13 L20 13" />
+      <path d="M4 13 L4 19 C4 19.8 4.7 20.5 5.5 20.5 L18.5 20.5 C19.3 20.5 20 19.8 20 19 L20 13" />
+      <line x1="12" y1="4" x2="12" y2="12.5" />
+      <path d="M9 10 L12 13 L15 10" />
+    </Wrap>
+  );
+}
+
+export function IconPackage(props) {
+  return (
+    <Wrap {...props}>
+      <rect x="4" y="9" width="16" height="11" rx="1.5" />
+      <line x1="4" y1="14" x2="20" y2="14" />
+      <line x1="12" y1="9" x2="12" y2="20" />
+      <path d="M9 9 C9 6.5 10 5 12 5 C14 5 15 6.5 15 9" />
+    </Wrap>
+  );
+}
+
+export function IconLogout(props) {
+  return (
+    <Wrap {...props}>
+      <path d="M9 4 L6 4 C5.4 4 5 4.4 5 5 L5 19 C5 19.6 5.4 20 6 20 L9 20" />
+      <line x1="9" y1="12" x2="20" y2="12" />
+      <path d="M16.5 8.5 L20 12 L16.5 15.5" />
+    </Wrap>
+  );
+}
