@@ -528,3 +528,70 @@ export function IconLogout(props) {
     </Wrap>
   );
 }
+
+// ---- Icon loại đơn (5 luồng sản xuất + đơn tổng hợp) ----
+
+export function IconCake(props) {
+  return (
+    <Wrap {...props}>
+      <path d="M4 20 L4 14 L20 14 L20 20 Z" fill="#f6dcae" />
+      <path d="M4 14 C4 12 5.5 12 7 13 C8.5 14 9.5 12 11 13 C12.5 14 13.5 12 15 13 C16.5 14 18 12 20 14 L20 15.5 C18 13.7 16.5 15.5 15 14.5 C13.5 13.5 12.5 15.5 11 14.5 C9.5 13.5 8.5 15.5 7 14.5 C5.5 13.5 4 15.5 4 15.5 Z" fill="#fbb8c9" strokeLinejoin="round" />
+      <rect x="11" y="6.3" width="2" height="4" rx="0.5" fill="#e8a24d" stroke="none" />
+      <path d="M12 6.3 C11.2 5.2 11.3 4.1 12 3.2 C12.7 4.1 12.8 5.2 12 6.3 Z" fill="#ef642b" stroke="none" />
+    </Wrap>
+  );
+}
+
+export function IconBakery(props) {
+  return (
+    <Wrap {...props}>
+      <path d="M4 12 C4 8 7 5 12 5 C17 5 20 8 20 12 L20 18 C20 19 19 20 18 20 L6 20 C5 20 4 19 4 18 Z" fill="#e3ac6c" />
+      <line x1="9" y1="10" x2="9" y2="15" />
+      <line x1="15" y1="10" x2="15" y2="15" />
+    </Wrap>
+  );
+}
+
+export function IconMacaron(props) {
+  return (
+    <Wrap {...props}>
+      <path d="M4 9.2 C4 6.3 7.5 4.5 12 4.5 C16.5 4.5 20 6.3 20 9.2 C20 10.1 19 10.6 17.5 10.6 L6.5 10.6 C5 10.6 4 10.1 4 9.2 Z" fill="#f5aac2" />
+      <rect x="4.3" y="10.6" width="15.4" height="3" fill="#fdf1e0" />
+      <path d="M4 14.8 C4 13.9 5 13.6 6.5 13.6 L17.5 13.6 C19 13.6 20 13.9 20 14.8 C20 17.7 16.5 19.5 12 19.5 C7.5 19.5 4 17.7 4 14.8 Z" fill="#f5aac2" />
+    </Wrap>
+  );
+}
+
+export function IconSchool(props) {
+  return (
+    <Wrap {...props}>
+      <path d="M4 20 L4 9 L12 4 L20 9 L20 20 Z" fill="#f3e6d3" strokeLinejoin="round" />
+      <path d="M4 9 L12 4 L20 9 Z" fill="#d96b43" strokeLinejoin="round" />
+      <rect x="10" y="14" width="4" height="6" fill="#8b5900" />
+      <line x1="7" y1="11" x2="7" y2="13" />
+      <line x1="17" y1="11" x2="17" y2="13" />
+    </Wrap>
+  );
+}
+
+export function IconTeabreak(props) {
+  return (
+    <Wrap {...props}>
+      <path d="M5 9 L17 9 L17 16 C17 18.2 15.2 20 13 20 L9 20 C6.8 20 5 18.2 5 16 Z" fill="#fdf1e0" />
+      <path d="M5 9 L17 9 L17 11 L5 11 Z" fill="#7a4a25" strokeLinejoin="round" />
+      <path d="M17 10.5 C19.5 10.5 20.5 13.5 18 14.5" />
+      <line x1="8" y1="5.5" x2="8" y2="7.5" />
+      <line x1="11" y1="5.5" x2="11" y2="7.5" />
+    </Wrap>
+  );
+}
+
+export function IconMixed(props) {
+  return (
+    <Wrap {...props}>
+      <path d="M4 11 L20 11 L18.5 20 L5.5 20 Z" fill="#d9a066" strokeLinejoin="round" />
+      <path d="M8 11 C8 7 9.5 5 12 5 C14.5 5 16 7 16 11" />
+      <line x1="4.7" y1="14.5" x2="19.3" y2="14.5" />
+    </Wrap>
+  );
+}

@@ -11,7 +11,7 @@ import { subscribeToBroadcast, BroadcastEvents } from '../lib/realtimeSync';
 import FinishedGoodsInventoryV2 from '../components/warehouse/FinishedGoodsInventoryV2';
 import { fetchOrderNoteCounts } from '../lib/queries';
 import { fetchOrderHearts, addOrderHeart } from '../lib/bossOverviewV3';
-import { IconInbox, IconKitchen, IconPackage, IconShipping, IconCheckCircle, IconWarning, IconWarehouse } from '../components/icons/FrogIcons';
+import { IconInbox, IconKitchen, IconPackage, IconShipping, IconCheckCircle, IconWarning, IconWarehouse, IconCake, IconBakery, IconMacaron, IconSchool, IconTeabreak, IconMixed } from '../components/icons/FrogIcons';
 
 const LABELS = {
   awaiting_assignment: 'Đơn chờ làm', awaiting_acceptance: 'Đơn chờ làm', in_production: 'Bếp đang làm',
@@ -28,12 +28,12 @@ const FILTERS = [
 ];
 
 const FLOW_GROUPS = [
-  { key: 'cake', label: 'Bánh kem & Bánh lạnh', icon: '🎂', desc: 'Bếp Lạnh phụ trách', match: o => o.order_type === 'cake' },
-  { key: 'bakery', label: 'Bánh mặn & Bánh ngọt', icon: '🍞', desc: 'Bếp Nóng phụ trách', match: o => o.order_type === 'bakery' },
-  { key: 'macaron', label: 'Macaron', icon: '🧁', desc: 'Xưởng 41 chuyên biệt', match: o => o.order_type === 'macaron' },
-  { key: 'school', label: 'Trường học', icon: '🏫', desc: 'Xưởng 42 điểm trường', match: o => o.order_type === 'school' },
-  { key: 'teabreak', label: 'Teabreak', icon: '☕', desc: 'Tiệc & Sự kiện', match: o => o.order_type === 'teabreak' },
-  { key: 'mixed', label: 'Đơn tổng hợp', icon: '🧺', desc: 'Nhiều bếp cùng làm', match: o => o.order_type === 'mixed' || !['cake', 'bakery', 'macaron', 'teabreak', 'school'].includes(o.order_type) },
+  { key: 'cake', label: 'Bánh kem & Bánh lạnh', Icon: IconCake, desc: 'Bếp Lạnh phụ trách', match: o => o.order_type === 'cake' },
+  { key: 'bakery', label: 'Bánh mặn & Bánh ngọt', Icon: IconBakery, desc: 'Bếp Nóng phụ trách', match: o => o.order_type === 'bakery' },
+  { key: 'macaron', label: 'Macaron', Icon: IconMacaron, desc: 'Xưởng 41 chuyên biệt', match: o => o.order_type === 'macaron' },
+  { key: 'school', label: 'Trường học', Icon: IconSchool, desc: 'Xưởng 42 điểm trường', match: o => o.order_type === 'school' },
+  { key: 'teabreak', label: 'Teabreak', Icon: IconTeabreak, desc: 'Tiệc & Sự kiện', match: o => o.order_type === 'teabreak' },
+  { key: 'mixed', label: 'Đơn tổng hợp', Icon: IconMixed, desc: 'Nhiều bếp cùng làm', match: o => o.order_type === 'mixed' || !['cake', 'bakery', 'macaron', 'teabreak', 'school'].includes(o.order_type) },
 ];
 
 const minutesText = value => {
@@ -239,10 +239,11 @@ export default function OrdersV2Screen() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {drafts.map(d => {
                 const savedAgo = d.savedAt ? new Date(d.savedAt).toLocaleString('vi-VN') : '';
-                const typeLabel = ({ cake: '🎂 Bánh kem & Bánh lạnh', bakery: '🍞 Bánh mặn & Bánh ngọt', macaron: '🧁 Macaron', school: '🏫 Trường học', teabreak: '☕ Teabreak' })[d.type] || d.type || 'Chưa chọn loại';
+                const typeMeta = FLOW_GROUPS.find(x => x.key === d.type);
+                const typeLabel = typeMeta ? typeMeta.label : (d.type || 'Chưa chọn loại');
                 return (
                   <div key={d.id} style={{ background: '#fff', border: '1.5px solid #eadcca', borderRadius: 14, padding: 12 }}>
-                    <div style={{ fontWeight: 800, color: '#2d1c10' }}>{typeLabel}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, color: '#2d1c10' }}>{typeMeta && <typeMeta.Icon size={16} />}{typeLabel}</div>
                     <div style={{ fontSize: 13, color: '#725f50', margin: '4px 0' }}>{d.customerName || 'Khách chưa đặt tên'}{d.customerPhone ? ` · ${d.customerPhone}` : ''}</div>
                     <div style={{ fontSize: 11.5, color: '#a08060' }}>Lưu lúc {savedAgo}</div>
                     <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
@@ -314,7 +315,7 @@ export default function OrdersV2Screen() {
                   onClick={() => { setFlowGroup(g.key); setSearchQuery(''); }}
                 >
                   <div className="mock-flow-card-head">
-                    <span>{g.icon}</span>
+                    <span><g.Icon size={22} /></span>
                     <b>{count}</b>
                   </div>
                   <div>
@@ -366,7 +367,7 @@ export default function OrdersV2Screen() {
                   className={flowGroup === g.key ? 'active' : ''}
                   onClick={() => setFlowGroup(g.key)}
                 >
-                  <span>{g.icon}</span>
+                  <span><g.Icon size={16} /></span>
                   <span>{g.label}</span>
                   <b>{count}</b>
                 </button>

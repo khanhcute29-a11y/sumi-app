@@ -1,9 +1,14 @@
+import { IconCake, IconBakery, IconMacaron, IconSchool, IconTeabreak, IconMixed } from '../components/icons/FrogIcons';
+
+// `icon` (emoji) giữ lại cho chỗ ghép chuỗi văn bản (title, tiêu đề...) không
+// render được component. `Icon` (component FrogIcons) dùng cho mọi chỗ hiện
+// icon thật trên giao diện — tránh phải đổi kiểu dữ liệu `icon` ở khắp nơi.
 export const ORDER_FLOWS = [
-  { key: 'cake', icon: '🎂', title: 'Bánh kem & Bánh lạnh', subtitle: 'Bếp Lạnh: Bánh kem sinh nhật, Mousse, Tiramisu, su kem…' },
-  { key: 'bakery', icon: '🍞', title: 'Bánh mặn & Bánh ngọt', subtitle: 'Bếp Nóng: Bánh mì, bánh mặn, bánh ngọt, BTT, pía, quy, croissant…' },
-  { key: 'macaron', icon: '🧁', title: 'Macaron', subtitle: 'Xưởng 41: Macaron các vị, vỏ trang trí, đóng hộp' },
-  { key: 'school', icon: '🏫', title: 'Trường học', subtitle: 'Xưởng 42: Suất ăn học đường, điểm trường' },
-  { key: 'teabreak', icon: '☕', title: 'Teabreak', subtitle: 'Tiệc sự kiện từ vài chục đến 1.500 khách' },
+  { key: 'cake', icon: '🎂', Icon: IconCake, title: 'Bánh kem & Bánh lạnh', subtitle: 'Bếp Lạnh: Bánh kem sinh nhật, Mousse, Tiramisu, su kem…' },
+  { key: 'bakery', icon: '🍞', Icon: IconBakery, title: 'Bánh mặn & Bánh ngọt', subtitle: 'Bếp Nóng: Bánh mì, bánh mặn, bánh ngọt, BTT, pía, quy, croissant…' },
+  { key: 'macaron', icon: '🧁', Icon: IconMacaron, title: 'Macaron', subtitle: 'Xưởng 41: Macaron các vị, vỏ trang trí, đóng hộp' },
+  { key: 'school', icon: '🏫', Icon: IconSchool, title: 'Trường học', subtitle: 'Xưởng 42: Suất ăn học đường, điểm trường' },
+  { key: 'teabreak', icon: '☕', Icon: IconTeabreak, title: 'Teabreak', subtitle: 'Tiệc sự kiện từ vài chục đến 1.500 khách' },
 ];
 
 export const CAKE_LINES = [

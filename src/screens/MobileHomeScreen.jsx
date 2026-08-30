@@ -10,7 +10,7 @@ import { BossOverviewV3Inner } from '../components/mockups/BossDashboardV3/BossO
 
 import { ROLE_META, KITCHEN_LEAD_ROLES, getRoleMeta, formatStationLabel } from '../lib/roles';
 import { ORDER_FLOWS } from '../data/orderCatalogs';
-import { IconReceipt, IconInbox, IconKitchen, IconPackage, IconShipping, IconCheckCircle, IconWarning } from '../components/icons/FrogIcons';
+import { IconReceipt, IconInbox, IconKitchen, IconPackage, IconShipping, IconCheckCircle, IconWarning, IconMixed } from '../components/icons/FrogIcons';
 
 const isDirector = p => ['owner', 'admin', 'deputy_director_x41', 'deputy_director_x42'].includes(p?.role) || (p?.extra_roles || []).some(r => ['owner', 'admin', 'deputy_director_x41', 'deputy_director_x42'].includes(r));
 const canViewRevenue = p => ['owner', 'admin'].includes(p?.role) || (p?.extra_roles || []).some(r => ['owner', 'admin'].includes(r));
@@ -67,7 +67,7 @@ function useRevenue(period,customFrom,customTo,enabled=true){
   supabase.from('orders').select('order_type,total').eq('status_v2','completed').gte('completed_at',from.toISOString()).lte('completed_at',to.toISOString()).then(({data,error})=>{setRows(!error&&data?data:[]);setLoading(false)});
  },[period,customFrom,customTo,enabled]);
  const byFlow=useMemo(()=>{
-  const map={}; ORDER_FLOWS.forEach(f=>map[f.key]={...f,revenue:0,count:0}); map.other={key:'other',icon:'🧺',title:'Khác',revenue:0,count:0};
+  const map={}; ORDER_FLOWS.forEach(f=>map[f.key]={...f,revenue:0,count:0}); map.other={key:'other',icon:'🧺',Icon:IconMixed,title:'Khác',revenue:0,count:0};
   rows.forEach(o=>{const bucket=map[o.order_type]||map.other; bucket.revenue+=Number(o.total)||0; bucket.count+=1});
   return [...ORDER_FLOWS.map(f=>map[f.key]),map.other].filter(b=>b.count>0||true);
  },[rows]);
@@ -89,7 +89,7 @@ function RevenueModal({period,setPeriod,customFrom,setCustomFrom,customTo,setCus
    </div>
    <div style={{display:'flex',flexDirection:'column',gap:8,marginTop:14}}>
     {byFlow.map(f=><div key={f.key} style={{display:'flex',alignItems:'center',gap:10,padding:'12px 14px',border:'2px solid #eadcca',borderRadius:16,background:'#fff'}}>
-      <span style={{fontSize:22}}>{f.icon}</span>
+      <span style={{fontSize:22}}><f.Icon size={22}/></span>
       <div style={{flex:1,minWidth:0}}><strong style={{display:'block',fontSize:15}}>{f.title}</strong><small style={{color:'#725f50'}}>{f.count} đơn hoàn thành</small></div>
       <b style={{fontSize:16,color:'#b93e13'}}>{loading?'…':fmtVnd(f.revenue)}</b>
     </div>)}

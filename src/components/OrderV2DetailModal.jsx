@@ -16,14 +16,19 @@ import { getCurrentPositionSmart } from '../lib/geo';
 import { showToast } from '../lib/toast';
 import { addFinishedGoodsEntryV2 } from '../lib/queries';
 import { branchForOrderType } from '../lib/internalOrders';
+import { IconCake, IconBakery, IconMacaron, IconSchool, IconTeabreak, IconMixed } from './icons/FrogIcons';
+
+const ORDER_TYPE_ICONS = {
+  cake: IconCake, bakery: IconBakery, macaron: IconMacaron, school: IconSchool, teabreak: IconTeabreak, mixed: IconMixed,
+};
 
 const ORDER_TYPE_LABELS = {
-  cake: '🎂 Bánh kem & Bánh lạnh',
-  bakery: '🍞 Bánh mặn & Bánh ngọt',
-  macaron: '🧁 Macaron',
-  school: '🏫 Trường học',
-  teabreak: '☕ Teabreak',
-  mixed: '🧺 Đơn tổng hợp'
+  cake: 'Bánh kem & Bánh lạnh',
+  bakery: 'Bánh mặn & Bánh ngọt',
+  macaron: 'Macaron',
+  school: 'Trường học',
+  teabreak: 'Teabreak',
+  mixed: 'Đơn tổng hợp'
 };
 
 const PAYMENT_METHOD_LABELS = {
@@ -803,8 +808,8 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                  o.status_v2 === 'completed' ? '✅ Đã giao thành công' :
                  o.status_v2 === 'in_production' ? '👩‍🍳 Bếp đang làm bánh' : '📥 Đơn chờ làm'}
               </span>
-              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                Loại đơn: {ORDER_TYPE_LABELS[o.order_type] || o.order_type}
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-muted)' }}>
+                Loại đơn: {(() => { const M = ORDER_TYPE_ICONS[o.order_type]; return M ? <M size={15} /> : null; })()} {ORDER_TYPE_LABELS[o.order_type] || o.order_type}
               </span>
             </div>
           </div>
