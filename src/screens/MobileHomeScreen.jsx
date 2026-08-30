@@ -17,7 +17,7 @@ const canViewRevenue = p => ['owner', 'admin'].includes(p?.role) || (p?.extra_ro
 const isLead = p => KITCHEN_LEAD_ROLES.includes(p?.role) || (p?.extra_roles || []).some(r => KITCHEN_LEAD_ROLES.includes(r));
 const getRoleLabel = (r, s) => getRoleMeta(r, s)?.label || r;
 const fmtVnd = n => `${Math.round(n||0).toLocaleString('vi-VN')}đ`;
-const periodRange = (period, customFrom, customTo) => {
+export const periodRange = (period, customFrom, customTo) => {
  const now = new Date();
  if (period === 'today') return { from: new Date(now.getFullYear(), now.getMonth(), now.getDate()), to: now };
  if (period === '7d') return { from: new Date(now.getTime() - 7 * 86400000), to: now };
@@ -56,7 +56,7 @@ function OrderStatusOverview({counts,onNavigate}){
  const open=filter=>{onNavigate('orders');setTimeout(()=>window.dispatchEvent(new CustomEvent('sumi-order-filter',{detail:{filter}})),0)};
  return <><SectionHead title="TÌNH TRẠNG ĐƠN HÀNG" value={`${counts.total} đơn`} onClick={()=>open(null)}/><div className="mock-order-overview"><button onClick={()=>open(null)}><span><IconReceipt size={22}/></span><strong>Tổng đơn hàng</strong><b>{counts.total}</b></button><button onClick={()=>open('waiting')}><span><IconInbox size={22}/></span><strong>Đơn chờ làm</strong><b>{counts.waiting}</b></button><button onClick={()=>open('production')}><span><IconKitchen size={22}/></span><strong>Bếp đang làm</strong><b>{counts.production}</b></button><button onClick={()=>open('ready')}><span><IconPackage size={22}/></span><strong>Chờ vận chuyển</strong><b>{counts.ready}</b></button><button onClick={()=>open('delivery')}><span><IconShipping size={22}/></span><strong>Đang vận chuyển</strong><b>{counts.delivery}</b></button><button onClick={()=>open('completed')}><span><IconCheckCircle size={22}/></span><strong>Giao thành công</strong><b>{counts.completed}</b></button><button onClick={()=>open('overdue')}><span><IconWarning size={22}/></span><strong>Chưa thực hiện</strong><b>{counts.overdue}</b></button></div></>;
 }
-const PERIOD_TABS=[{key:'today',label:'Hôm nay'},{key:'7d',label:'7 ngày'},{key:'month',label:'Tháng'},{key:'custom',label:'Tuỳ chọn'}];
+export const PERIOD_TABS=[{key:'today',label:'Hôm nay'},{key:'7d',label:'7 ngày'},{key:'month',label:'Tháng'},{key:'custom',label:'Tuỳ chọn'}];
 function useRevenue(period,customFrom,customTo,enabled=true){
  const [rows,setRows]=useState([]); const [loading,setLoading]=useState(true);
  useEffect(()=>{

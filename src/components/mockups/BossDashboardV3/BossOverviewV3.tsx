@@ -33,6 +33,10 @@ import {
 import { AuthProvider, useAuth } from '../../../lib/AuthContext';
 import { listOrdersV2 } from '../../../lib/featureFlags';
 import { ORDER_FLOWS } from '../../../data/orderCatalogs';
+// Tái dùng ĐÚNG bộ lọc ngày/tuần/tháng/tuỳ chọn đã có sẵn cho doanh thu theo
+// kênh (Hôm nay) — không viết lại công thức tính khoảng ngày ở đây, tránh
+// lệch cách tính giữa 2 nơi.
+import { periodRange, PERIOD_TABS } from '../../../screens/MobileHomeScreen';
 // Khoan sâu đơn hàng — dùng lại ĐÚNG component chi tiết đơn hàng thật (đã có
 // nhận giao/hoàn thành/sửa đơn/GPS/chat) thay vì tự dựng lại một bản rút gọn.
 // KHÔNG động tới bất kỳ file nào khác của anh Khánh ngoài file này.
@@ -524,6 +528,33 @@ export function BossOverviewV3Inner() {
   };
 
   const orderCounts = useMemo(() => summarizeOrderCounts(allOrders), [allOrders]);
+
+  // Lọc theo ngày/tuần/tháng CHỈ cho 2 ô "Tổng đơn hàng" và "Giao thành công"
+  // (theo yêu cầu Hồ Hoàng Diễm) — KHÔNG đụng orderCounts gốc, vì orderCounts
+  // còn được dùng ở nơi khác (số "Tất cả" trong drawer đơn hàng, số cạnh tiêu
+  // đề) — những chỗ đó vẫn cần là tổng lifetime, không phải theo kỳ đang chọn.
+  const [orderStatsPeriod, setOrderStatsPeriod] = useState<'all' | 'today' | '7d' | 'month' | 'custom'>('all');
+  const [orderStatsCustomFrom, setOrderStatsCustomFrom] = useState('');
+  const [orderStatsCustomTo, setOrderStatsCustomTo] = useState('');
+  const orderStatsRange = useMemo(() => {
+    if (orderStatsPeriod === 'all') return null;
+    return periodRange(orderStatsPeriod, orderStatsCustomFrom, orderStatsCustomTo);
+  }, [orderStatsPeriod, orderStatsCustomFrom, orderStatsCustomTo]);
+  const inRange = (ts: any) => {
+    if (!ts || !orderStatsRange) return false;
+    const d = new Date(ts);
+    if (orderStatsRange.from && d < orderStatsRange.from) return false;
+    if (orderStatsRange.to && d > orderStatsRange.to) return false;
+    return true;
+  };
+  const statsTotal = useMemo(() => {
+    if (!orderStatsRange) return orderCounts.total;
+    return allOrders.filter((o: any) => inRange(o.created_at)).length;
+  }, [allOrders, orderStatsRange, orderCounts.total]);
+  const statsCompleted = useMemo(() => {
+    if (!orderStatsRange) return orderCounts.completed;
+    return allOrders.filter((o: any) => inRange(o.delivery_completed_at || o.completed_at)).length;
+  }, [allOrders, orderStatsRange, orderCounts.completed]);
 
   // Lọc và sắp xếp đơn hàng theo thứ tự ưu tiên giảm dần từ trên xuống
   const filteredOrders = useMemo(() => {
@@ -1137,6 +1168,34 @@ export function BossOverviewV3Inner() {
             </button>
           </div>
 
+          {/* Bộ lọc ngày/tuần/tháng/tuỳ chọn — chỉ ảnh hưởng "Tổng đơn hàng" (theo
+              ngày TẠO đơn) và "Giao thành công" (theo ngày GIAO xong thực tế) bên
+              dưới, theo yêu cầu Hồ Hoàng Diễm 30/08/2026. */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            {[{ key: 'all', label: 'Tất cả' }, ...PERIOD_TABS].map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setOrderStatsPeriod(t.key as any)}
+                style={{
+                  fontSize: 11, fontWeight: 800, padding: '5px 10px', borderRadius: 99,
+                  border: orderStatsPeriod === t.key ? '2px solid #2d1c10' : '1px solid #eadcca',
+                  background: orderStatsPeriod === t.key ? '#2d1c10' : '#fff',
+                  color: orderStatsPeriod === t.key ? '#fff' : '#725f50',
+                  cursor: 'pointer',
+                }}
+              >
+                {t.label}
+              </button>
+            ))}
+            {orderStatsPeriod === 'custom' && (
+              <>
+                <input type="date" value={orderStatsCustomFrom} onChange={(e) => setOrderStatsCustomFrom(e.target.value)} style={{ fontSize: 11, padding: '4px 6px', borderRadius: 8, border: '1px solid #eadcca' }} />
+                <span style={{ fontSize: 11, color: '#725f50' }}>→</span>
+                <input type="date" value={orderStatsCustomTo} onChange={(e) => setOrderStatsCustomTo(e.target.value)} style={{ fontSize: 11, padding: '4px 6px', borderRadius: 8, border: '1px solid #eadcca' }} />
+              </>
+            )}
+          </div>
+
           {/* Lưới 7 Ô Gạch Phân Loại Trực Quan */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
             {/* Ô 1: Tổng đơn hàng */}
@@ -1158,7 +1217,7 @@ export function BossOverviewV3Inner() {
                 <FileText size={20} color="#b87a48" strokeWidth={1.6} />
                 <span style={{ fontSize: 12, fontWeight: 900, color: '#2d1c10' }}>Tổng đơn hàng</span>
               </div>
-              <span style={{ fontSize: 16, fontWeight: 900, color: '#2d1c10' }}>{orderCounts.total}</span>
+              <span style={{ fontSize: 16, fontWeight: 900, color: '#2d1c10' }}>{statsTotal}</span>
             </div>
 
             {/* Ô 2: Đơn chờ làm */}
@@ -1268,7 +1327,7 @@ export function BossOverviewV3Inner() {
                 <CheckCircle2 size={20} color="#16a34a" strokeWidth={1.6} />
                 <span style={{ fontSize: 12, fontWeight: 900, color: '#2d1c10' }}>Giao thành công</span>
               </div>
-              <span style={{ fontSize: 16, fontWeight: 900, color: '#16a34a' }}>{orderCounts.completed}</span>
+              <span style={{ fontSize: 16, fontWeight: 900, color: '#16a34a' }}>{statsCompleted}</span>
             </div>
 
             {/* Ô 7: Chưa thực hiện (Chiếm 2 cột nổi bật) */}
