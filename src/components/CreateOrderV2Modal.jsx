@@ -49,7 +49,7 @@ function ProductNameField({item,products,flowType,onChange}){
  </div>;
 }
 
-function OrderPreviewV2({type,customerName,customerPhone,selectedSchool,items,guestCount,fulfillment,address,requiredAt,note,itemsTotal,shipFee,paymentMethod,deposit,grandTotal,remaining}){
+function OrderPreviewV2({type,customerName,customerPhone,selectedSchool,items,guestCount,fulfillment,address,requiredAt,note,itemsTotal,shipFee,paymentMethod,deposit,grandTotal,remaining,discountAmount,promotionNote,taxCode,vatAmount}){
  const itemSpecLine=(it)=>{
   const s=it.specification||{};
   const fillingLabel=CAKE_FILLINGS.find(f=>f.value===s.filling)?.label;
@@ -87,11 +87,15 @@ function OrderPreviewV2({type,customerName,customerPhone,selectedSchool,items,gu
   {requiredAt&&<div style={{fontSize:13,color:'#725f50'}}>🕒 {new Date(requiredAt).toLocaleString('vi-VN')}</div>}
   {type!=='school'&&<div style={{display:'flex',flexDirection:'column',gap:4,paddingTop:8,borderTop:'1px solid #e0d5c7'}}>
    <div style={{display:'flex',justifyContent:'space-between',color:'#725f50',fontSize:13}}><span>Tiền hàng</span><span>{itemsTotal.toLocaleString('vi-VN')}đ</span></div>
+   {discountAmount>0&&<div style={{display:'flex',justifyContent:'space-between',color:'#b42318',fontSize:13}}><span>Chiết khấu</span><span>−{discountAmount.toLocaleString('vi-VN')}đ</span></div>}
+   {vatAmount>0&&<div style={{display:'flex',justifyContent:'space-between',color:'#725f50',fontSize:13}}><span>VAT 8%</span><span>+{vatAmount.toLocaleString('vi-VN')}đ</span></div>}
    <div style={{display:'flex',justifyContent:'space-between',fontWeight:900,color:'#2d1c10'}}><span>Tổng tiền</span><span>{grandTotal?`${grandTotal.toLocaleString('vi-VN')}đ`:'0 đồng'}</span></div>
    <div style={{display:'flex',justifyContent:'space-between',color:'#725f50',fontSize:13}}><span>Đặt cọc</span><span>{deposit?`${deposit.toLocaleString('vi-VN')}đ`:'0 đồng'}</span></div>
    <div style={{display:'flex',justifyContent:'space-between',color:'#725f50',fontSize:13}}><span>Còn lại</span><span>{remaining.toLocaleString('vi-VN')}đ</span></div>
    <div style={{fontSize:11,color:'#8c5a3c'}}>Thanh toán: <span style={{fontWeight:700}}>{PAYMENT_METHODS.find(p=>p.value===paymentMethod)?.label}</span></div>
   </div>}
+  {promotionNote&&<div style={{fontSize:13,color:'#725f50'}}>🎁 Khuyến mãi: {promotionNote}</div>}
+  {taxCode&&<div style={{fontSize:13,color:'#725f50'}}>🧾 MST: {taxCode}</div>}
   {note&&<div style={{fontSize:13,color:'#725f50'}}>📝 {note}</div>}
  </div>;
 }
@@ -145,6 +149,12 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
  const [entryMode,setEntryMode]=useState('manual'); const [cakeLine,setCakeLine]=useState('decorated_cake');
  const [hasShipFee,setHasShipFee]=useState('no'); const [shipFee,setShipFee]=useState('');
  const [paymentMethod,setPaymentMethod]=useState('cod'); const [deposit,setDeposit]=useState('');
+ // Chiết khấu/khuyến mãi/mã số thuế/VAT — CHỈ áp dụng cho đơn Macaron (theo
+ // yêu cầu Nga Rubi 30/08/2026). Không đụng tới cơ chế Công Nợ Khách Hàng của
+ // đơn trường học (VAT ở đó tính SAU lúc giao hàng, ghi sổ riêng) — đây là
+ // VAT/chiết khấu cộng/trừ thẳng vào tổng đơn Macaron ngay lúc tạo.
+ const [discountAmount,setDiscountAmount]=useState(''); const [promotionNote,setPromotionNote]=useState('');
+ const [taxCode,setTaxCode]=useState(''); const [vatEnabled,setVatEnabled]=useState(false);
  const [productCatalog,setProductCatalog]=useState([]);
  const [isMobile,setIsMobile]=useState(typeof window!=='undefined'?window.innerWidth<860:false);
  const [isRecording,setIsRecording]=useState(false); const [voiceLoading,setVoiceLoading]=useState(false);
@@ -155,8 +165,8 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
  // hoặc truyền vào từ danh sách "Nháp đã lưu" để tiếp tục đúng đơn đó) — nhiều
  // đơn bỏ dở cùng lúc không ghi đè lên nhau.
  const [activeDraftId,setActiveDraftId]=useState(resumeDraftId);
- const draftValues={type,requiredAt,customerName,customerPhone,fulfillment,address,note,items,isReadyStock,guestCount,selectedSchool,entryMode,cakeLine,hasShipFee,shipFee,paymentMethod,deposit,selectedLibraryPhotos,viTriXuong,viTriKhac};
- const draftSetters={type:setType,requiredAt:setRequiredAt,customerName:setCustomerName,customerPhone:setCustomerPhone,fulfillment:setFulfillment,address:setAddress,note:setNote,items:setItems,isReadyStock:setIsReadyStock,guestCount:setGuestCount,selectedSchool:setSelectedSchool,entryMode:setEntryMode,cakeLine:setCakeLine,hasShipFee:setHasShipFee,shipFee:setShipFee,paymentMethod:setPaymentMethod,deposit:setDeposit,selectedLibraryPhotos:setSelectedLibraryPhotos,viTriXuong:setViTriXuong,viTriKhac:setViTriKhac};
+ const draftValues={type,requiredAt,customerName,customerPhone,fulfillment,address,note,items,isReadyStock,guestCount,selectedSchool,entryMode,cakeLine,hasShipFee,shipFee,paymentMethod,deposit,selectedLibraryPhotos,viTriXuong,viTriKhac,discountAmount,promotionNote,taxCode,vatEnabled};
+ const draftSetters={type:setType,requiredAt:setRequiredAt,customerName:setCustomerName,customerPhone:setCustomerPhone,fulfillment:setFulfillment,address:setAddress,note:setNote,items:setItems,isReadyStock:setIsReadyStock,guestCount:setGuestCount,selectedSchool:setSelectedSchool,entryMode:setEntryMode,cakeLine:setCakeLine,hasShipFee:setHasShipFee,shipFee:setShipFee,paymentMethod:setPaymentMethod,deposit:setDeposit,selectedLibraryPhotos:setSelectedLibraryPhotos,viTriXuong:setViTriXuong,viTriKhac:setViTriKhac,discountAmount:setDiscountAmount,promotionNote:setPromotionNote,taxCode:setTaxCode,vatEnabled:setVatEnabled};
  const {saveStatus:draftSaveStatus,clearDraft}=useOrderDraftAutosave(activeDraftId,draftValues,draftSetters);
  const resetDraftForm=()=>{
   clearDraft();
@@ -165,6 +175,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
   setItems([]);setPhotos([]);setIsReadyStock(false);setGuestCount('');setSchoolSearch('');setSelectedSchool(null);setEntryMode('manual');
   setCakeLine('decorated_cake');setHasShipFee('no');setShipFee('');setPaymentMethod('cod');setDeposit('');setSelectedLibraryPhotos([]);
   setViTriXuong('Quốc Lộ 13');setViTriKhac('');
+  setDiscountAmount('');setPromotionNote('');setTaxCode('');setVatEnabled(false);
  };
  useEffect(()=>{const onResize=()=>setIsMobile(window.innerWidth<860);window.addEventListener('resize',onResize);return()=>window.removeEventListener('resize',onResize)},[]);
  useEffect(()=>{let active=true;supabase.from('products').select('id,name,category,unit,price,product_variants(id,label,price)').eq('active',true).order('name').limit(500).then(({data,error})=>{if(active&&!error)setProductCatalog([...(data||[]),...MOONCAKE_CATALOG])});return()=>{active=false}},[]);
@@ -175,7 +186,13 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
  const getItemTotal=(item)=>(getPrice(item)||0)*(Number(item.quantity)||0);
  const getTotalPrice=()=>items.reduce((sum,item)=>sum+getItemTotal(item),0);
  const effectiveShipFee=hasShipFee==='yes'?(Number(shipFee)||0):0;
- const grandTotal=getTotalPrice()+effectiveShipFee;
+ // Chiết khấu/VAT chỉ có giá trị khi type==='macaron' (field chỉ hiện khi đó),
+ // nên với mọi loại đơn khác discountAmount/vatEnabled luôn ở giá trị mặc
+ // định (''/false) và công thức dưới đây tự nhiên giống hệt công thức cũ.
+ const discountVal=type==='macaron'?(Number(discountAmount)||0):0;
+ const subtotalAfterDiscount=getTotalPrice()+effectiveShipFee-discountVal;
+ const vatAmount=(type==='macaron'&&vatEnabled)?Math.round(subtotalAfterDiscount*0.08):0;
+ const grandTotal=subtotalAfterDiscount+vatAmount;
  const remaining=grandTotal-(Number(deposit)||0);
  const blankItem=(key)=>({id:crypto.randomUUID(),flow_type:key,name:'',quantity:1,unit:'cái',specification:{product_flow:key,...(key==='cake'?{cake_line:cakeLine}:{})}});
  const selectFlow=(key)=>{if(key==='school'&&!isDirector)return;if(key==='macaron'&&!isMacaronCreator)return;setActiveDraftId(crypto.randomUUID());setType(key);setItems(key==='teabreak'?[]:[blankItem(key)]);};
@@ -287,7 +304,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
     }
   }
 
-  const {data: orderId, error: orderErr} = await supabase.rpc('create_order_v2',{p_idempotency_key:key,p_order_code:orderCode,p_order_type:isMixed?'mixed':type,p_customer_id:customerId,p_required_at:requiredAt?new Date(requiredAt).toISOString():null,p_fulfillment_method:fulfillment,p_address:fulfillment==='delivery'?address:null,p_note:customerNote||null,p_confidentiality:type==='school'?'school_restricted':'normal',p_items:normalizedItems,p_ship_fee:effectiveShipFee,p_deposit:Number(deposit)||0,p_payment_method:paymentMethod,p_total:grandTotal});
+  const {data: orderId, error: orderErr} = await supabase.rpc('create_order_v2',{p_idempotency_key:key,p_order_code:orderCode,p_order_type:isMixed?'mixed':type,p_customer_id:customerId,p_required_at:requiredAt?new Date(requiredAt).toISOString():null,p_fulfillment_method:fulfillment,p_address:fulfillment==='delivery'?address:null,p_note:customerNote||null,p_confidentiality:type==='school'?'school_restricted':'normal',p_items:normalizedItems,p_ship_fee:effectiveShipFee,p_deposit:Number(deposit)||0,p_payment_method:paymentMethod,p_total:grandTotal,p_discount_amount:discountVal,p_promotion_note:type==='macaron'?(promotionNote||null):null,p_tax_code:type==='macaron'?(taxCode||null):null,p_vat_amount:vatAmount});
   if(orderErr) throw orderErr;
   for(const file of photos){
     try {
@@ -440,7 +457,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
    </div>;})}
    {items.length===0&&<div className="sumi-no-selection">Chưa chọn món. Tìm món phía trên hoặc thêm món tùy chỉnh.</div>}
    <button onClick={()=>{const key=itemFlows.at(-1)||type;setItems(x=>[...x,{...blankItem(key),specification:{...blankItem(key).specification,custom:true}}])}} style={{...fieldStyle,fontWeight:900,borderStyle:'dashed'}}>＋ Thêm món cùng nhóm</button>
-   {type!=='school'&&type!=='macaron'&&<section className="sumi-add-flow"><strong>＋ Thêm nhóm sản phẩm khác</strong><p>Một mã đơn, mỗi nhóm tự chuyển tới đúng bếp.</p><div>{ORDER_FLOWS.filter(x=>x.key!=='school'&&(x.key!=='macaron'||isMacaronCreator)&&!itemFlows.includes(x.key)).map(x=><button key={x.key} onClick={()=>addFlow(x.key)}><span>{x.icon}</span><b>{x.title}</b><small>{routeFor[x.key]}</small></button>)}</div></section>}
+   {type!=='school'&&<section className="sumi-add-flow"><strong>＋ Thêm nhóm sản phẩm khác</strong><p>Một mã đơn, mỗi nhóm tự chuyển tới đúng bếp.</p><div>{ORDER_FLOWS.filter(x=>x.key!=='school'&&(x.key!=='macaron'||isMacaronCreator)&&!itemFlows.includes(x.key)).map(x=><button key={x.key} onClick={()=>addFlow(x.key)}><span>{x.icon}</span><b>{x.title}</b><small>{routeFor[x.key]}</small></button>)}</div></section>}
    <label style={{display:'block',marginTop:14,fontWeight:800}}>Ngày giờ cần giao</label><input style={fieldStyle} type="datetime-local" value={requiredAt} onChange={e=>setRequiredAt(e.target.value)}/>
    {type==='school'?
     <div style={{marginTop:12,padding:'12px 14px',borderRadius:14,background:'#f5f1eb',border:'1px solid #e0d5c7',fontSize:14,color:'#725f50'}}>🚚 Giao tận nơi đến địa chỉ trường đã chọn — không thu ship, không thu tiền tại chỗ (trường thanh toán riêng).</div>
@@ -534,17 +551,29 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
        )}
      </div>
    )}
+   {type==='macaron'&&<section style={{marginTop:14,padding:'12px 14px',borderRadius:14,background:'#fff',border:'1px solid var(--border-default)'}}>
+     <div style={{fontSize:13,fontWeight:900,color:'#2d1c10',marginBottom:8}}>🏷️ Chiết khấu / Khuyến mãi / Xuất hoá đơn</div>
+     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+      <input style={fieldStyle} inputMode="numeric" placeholder="Chiết khấu (VNĐ, VD: 50.000)" value={fmtMoney(discountAmount)} onChange={e=>setDiscountAmount(parseMoney(e.target.value)||'')}/>
+      <input style={fieldStyle} placeholder="Khuyến mãi (VD: Mua 2 tặng 1)" value={promotionNote} onChange={e=>setPromotionNote(e.target.value)}/>
+     </div>
+     <input style={{...fieldStyle,marginTop:8}} placeholder="Mã số thuế khách hàng (nếu xuất hoá đơn)" value={taxCode} onChange={e=>setTaxCode(e.target.value)}/>
+     <label style={{display:'flex',alignItems:'center',gap:10,marginTop:10,padding:'10px 12px',borderRadius:12,background:vatEnabled?'#e6f6ed':'#fcf9f5',border:vatEnabled?'2px solid #087f5b':'1px solid var(--border-default)',cursor:'pointer'}}>
+      <input type="checkbox" checked={vatEnabled} onChange={e=>setVatEnabled(e.target.checked)} style={{width:20,height:20,margin:0}}/>
+      <b style={{fontSize:14,color:vatEnabled?'#087f5b':'var(--text-primary)'}}>Xuất VAT 8% — cộng thẳng vào tổng đơn</b>
+     </label>
+   </section>}
    <div style={{padding:14,marginTop:14,borderRadius:14,background:'#f5f1eb',border:'2px solid #e0d5c7'}}>
      <div style={{fontSize:12,color:'#725f50',fontWeight:700,marginBottom:8}}>💰 TỔNG ĐƠN HÀNG</div>
      <div style={{fontSize:28,fontWeight:900,color:'#d96b43',marginBottom:10}}>{grandTotal.toLocaleString('vi-VN')}đ</div>
-     <div style={{fontSize:11,color:'#8c5a3c'}}>Tiền hàng {getTotalPrice().toLocaleString('vi-VN')}đ{effectiveShipFee?` + Ship ${effectiveShipFee.toLocaleString('vi-VN')}đ`:''}{Number(deposit)>0?` · Đã cọc ${Number(deposit).toLocaleString('vi-VN')}đ · Còn lại ${remaining.toLocaleString('vi-VN')}đ`:''}</div>
+     <div style={{fontSize:11,color:'#8c5a3c'}}>Tiền hàng {getTotalPrice().toLocaleString('vi-VN')}đ{effectiveShipFee?` + Ship ${effectiveShipFee.toLocaleString('vi-VN')}đ`:''}{discountVal>0?` − Chiết khấu ${discountVal.toLocaleString('vi-VN')}đ`:''}{vatAmount>0?` + VAT 8% ${vatAmount.toLocaleString('vi-VN')}đ`:''}{Number(deposit)>0?` · Đã cọc ${Number(deposit).toLocaleString('vi-VN')}đ · Còn lại ${remaining.toLocaleString('vi-VN')}đ`:''}</div>
    </div>
    {error&&<div style={{color:'#b42318',marginTop:10}}>{error}</div>}
    <button disabled={saving} onClick={submit} style={{width:'100%',minHeight:66,marginTop:18,border:0,borderRadius:18,background:saving?'#c7b6a3':'#ef642b',color:'#fff',fontSize:20,fontWeight:950,boxShadow:saving?'none':'0 7px 0 #b93e13',opacity:1}}>{saving?'ĐANG TẠO...':(isReadyStock?'TẠO ĐƠN & BÁO VẬN TẢI NGAY':'TẠO ĐƠN HÀNG')}</button>
    </div>
    <div style={{flex:isMobile?'1 1 auto':'1 1 320px',minWidth:0,width:isMobile?'100%':undefined}}>
     <div style={{position:isMobile?'static':'sticky',top:12}}>
-     <OrderPreviewV2 type={type} customerName={type==='school'?selectedSchool?.name:customerName} customerPhone={customerPhone} selectedSchool={selectedSchool} items={items} guestCount={guestCount} fulfillment={fulfillment} address={address} requiredAt={requiredAt} note={note} itemsTotal={getTotalPrice()} shipFee={effectiveShipFee} paymentMethod={paymentMethod} deposit={Number(deposit)||0} grandTotal={grandTotal} remaining={remaining}/>
+     <OrderPreviewV2 type={type} customerName={type==='school'?selectedSchool?.name:customerName} customerPhone={customerPhone} selectedSchool={selectedSchool} items={items} guestCount={guestCount} fulfillment={fulfillment} address={address} requiredAt={requiredAt} note={note} itemsTotal={getTotalPrice()} shipFee={effectiveShipFee} paymentMethod={paymentMethod} deposit={Number(deposit)||0} grandTotal={grandTotal} remaining={remaining} discountAmount={discountVal} promotionNote={type==='macaron'?promotionNote:''} taxCode={type==='macaron'?taxCode:''} vatAmount={vatAmount}/>
     </div>
    </div>
    </div>

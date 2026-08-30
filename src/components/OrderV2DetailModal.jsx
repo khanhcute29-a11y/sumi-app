@@ -147,7 +147,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
 
   const load = async () => {
     const [o, i, p, u, e, kpi, ops, att, changes, qs] = await Promise.all([
-      supabase.from('orders').select('id,order_code,order_type,status_v2,required_at,fulfillment_method_v2,address,note,created_by,created_by_name,created_at,confidentiality,version,ship_fee,deposit,payment_method,total,is_internal,target_store,customers(name,phone)').eq('id', orderId).single(),
+      supabase.from('orders').select('id,order_code,order_type,status_v2,required_at,fulfillment_method_v2,address,note,created_by,created_by_name,created_at,confidentiality,version,ship_fee,deposit,payment_method,total,is_internal,target_store,discount_amount,promotion_note,tax_code,vat_amount,customers(name,phone)').eq('id', orderId).single(),
       supabase.from('order_items').select('id,name_snapshot,quantity,unit,specification,unit_price,display_order').eq('order_id', orderId).order('display_order'),
       supabase.from('order_work_packages_readable').select('id,unit_id,status,due_at,accepted_at,completed_at,version,organization_units(name,code),work_package_items(order_item_id,quantity)').eq('order_id', orderId),
       supabase.from('organization_units').select('id,name,code').eq('unit_type', 'kitchen').eq('active', true),
@@ -1073,6 +1073,26 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
             {!hidePrice && o.deposit > 0 && (
               <div>
                 <b>Đặt cọc:</b> {Number(o.deposit).toLocaleString('vi-VN')}đ
+              </div>
+            )}
+            {!hidePrice && o.discount_amount > 0 && (
+              <div>
+                <b>Chiết khấu:</b> −{Number(o.discount_amount).toLocaleString('vi-VN')}đ
+              </div>
+            )}
+            {!hidePrice && o.vat_amount > 0 && (
+              <div>
+                <b>VAT 8%:</b> +{Number(o.vat_amount).toLocaleString('vi-VN')}đ
+              </div>
+            )}
+            {o.tax_code && (
+              <div>
+                <b>Mã số thuế:</b> {o.tax_code}
+              </div>
+            )}
+            {o.promotion_note && (
+              <div>
+                <b>Khuyến mãi:</b> {o.promotion_note}
               </div>
             )}
             {!hidePrice && o.total > 0 && (
