@@ -223,6 +223,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
  const routeFor={cake:'Bếp lạnh',bakery:'Bếp nóng / Bakery',teabreak:'Bếp theo món',macaron:'Xưởng 41',school:'Xưởng 42'};
  const submit=async()=>{setError('');setSaving(true);try{
   if(type==='school'&&!selectedSchool)throw new Error('Vui lòng chọn trường hoặc điểm giao.');
+  if(!requiredAt)throw new Error('Vui lòng nhập ngày giờ cần giao trước khi tạo đơn.');
   if(!items.length||items.some(x=>!x.name||Number(x.quantity)<=0))throw new Error('Vui lòng nhập đủ tên bánh và số lượng.');
   for(const it of items){
    if((it.flow_type||type)!=='macaron'||!it.specification?.priceTier)continue;
@@ -423,7 +424,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
    {items.length===0&&<div className="sumi-no-selection">Chưa chọn món. Tìm món phía trên hoặc thêm món tùy chỉnh.</div>}
    <button onClick={()=>{const key=itemFlows.at(-1)||type;setItems(x=>[...x,{...blankItem(key),specification:{...blankItem(key).specification,custom:true}}])}} style={{...fieldStyle,fontWeight:900,borderStyle:'dashed'}}>＋ Thêm món cùng nhóm</button>
    {type!=='school'&&type!=='macaron'&&<section className="sumi-add-flow"><strong>＋ Thêm nhóm sản phẩm khác</strong><p>Một mã đơn, mỗi nhóm tự chuyển tới đúng bếp.</p><div>{ORDER_FLOWS.filter(x=>x.key!=='school'&&(x.key!=='macaron'||isMacaronCreator)&&!itemFlows.includes(x.key)).map(x=><button key={x.key} onClick={()=>addFlow(x.key)}><span>{x.icon}</span><b>{x.title}</b><small>{routeFor[x.key]}</small></button>)}</div></section>}
-   <label style={{display:'block',marginTop:14,fontWeight:800}}>Ngày giờ cần giao</label><input style={fieldStyle} type="datetime-local" value={requiredAt} onChange={e=>setRequiredAt(e.target.value)}/>
+   <label style={{display:'block',marginTop:14,fontWeight:800}}>Ngày giờ cần giao <span style={{color:'#b42318'}}>*</span></label><input style={fieldStyle} type="datetime-local" required value={requiredAt} onChange={e=>setRequiredAt(e.target.value)}/>
    {type==='school'?
     <div style={{marginTop:12,padding:'12px 14px',borderRadius:14,background:'#f5f1eb',border:'1px solid #e0d5c7',fontSize:14,color:'#725f50'}}>🚚 Giao tận nơi đến địa chỉ trường đã chọn — không thu ship, không thu tiền tại chỗ (trường thanh toán riêng).</div>
    :<>
