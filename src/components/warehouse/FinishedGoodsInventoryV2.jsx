@@ -26,6 +26,11 @@ const FLOWS = [
   { key: 'xuong42', label: '🚚 Kho mù (Xưởng 42)', hasBranchTabs: false },
 ];
 const STORES = ['Vĩnh Phú 42', 'Quốc Lộ 13'];
+// Bánh trang trí Macaron vừa ra khỏi Xưởng 41 chưa chắc đã gán ngay cho 1 cửa
+// hàng bán lẻ cụ thể — cần chỗ đứng riêng là "Kho Xưởng 41" trước khi chuyển
+// tiếp. Chỉ luồng xuong41 có thêm lựa chọn này, Bakery vẫn chỉ 2 cửa hàng cũ.
+const XUONG41_WAREHOUSE = 'Kho Xưởng 41';
+const storesForBranch = (branch) => (branch === 'xuong41' ? [XUONG41_WAREHOUSE, ...STORES] : STORES);
 
 // Kho Bán Thành Phẩm (generic, finished_goods_stock.is_semi_finished) — trước
 // tiên áp dụng cho vỏ Macaron Hạnh Nhân (Xưởng 41) chờ Bếp Lạnh bơm nhân,
@@ -106,7 +111,8 @@ function NhapKhoSheet({ defaultBranch, defaultStore, products: productsProp, sta
   const [size, setSize] = useState('');
   const [qty, setQty] = useState('');
   const [branch, setBranch] = useState(defaultBranch);
-  const [storeLocation, setStoreLocation] = useState(defaultStore || STORES[0]);
+  const [storeLocation, setStoreLocation] = useState(defaultStore || storesForBranch(defaultBranch)[0]);
+  const storeOptions = storesForBranch(branch);
   const [productionDate, setProductionDate] = useState(() => new Date().toISOString().slice(0, 16));
   const [expiryDate, setExpiryDate] = useState('');
   const [color, setColor] = useState('');
@@ -197,13 +203,13 @@ function NhapKhoSheet({ defaultBranch, defaultStore, products: productsProp, sta
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <div><label style={{ display: 'block', fontWeight: 900, marginBottom: 6 }}>Luồng</label>
-              <select style={field} value={branch} onChange={(e) => setBranch(e.target.value)}>
+              <select style={field} value={branch} onChange={(e) => { const b = e.target.value; setBranch(b); setStoreLocation(storesForBranch(b)[0]); }}>
                 {FLOWS.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
               </select>
             </div>
-            <div><label style={{ display: 'block', fontWeight: 900, marginBottom: 6 }}>Cửa hàng</label>
+            <div><label style={{ display: 'block', fontWeight: 900, marginBottom: 6 }}>{branch === 'xuong41' ? 'Kho / Cửa hàng' : 'Cửa hàng'}</label>
               <select style={field} value={storeLocation} onChange={(e) => setStoreLocation(e.target.value)}>
-                {STORES.map((s) => <option key={s} value={s}>{s}</option>)}
+                {storeOptions.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
           </div>
@@ -388,11 +394,13 @@ export default function FinishedGoodsInventoryV2({ onBack }) {
   }, []);
 
   const currentFlow = FLOWS.find((f) => f.key === flow);
+  const currentStores = storesForBranch(flow);
+  useEffect(() => { setStore(storesForBranch(flow)[0]); }, [flow]);
   const items = useMemo(() => {
     let ds = stock.filter((s) => s.branch === flow && !!s.is_semi_finished === (stage === 'semi'));
-    if (stage === 'finished' && currentFlow?.hasBranchTabs) ds = ds.filter((s) => (s.store_location || STORES[0]) === store);
+    if (stage === 'finished' && currentFlow?.hasBranchTabs) ds = ds.filter((s) => (s.store_location || currentStores[0]) === store);
     return ds;
-  }, [stock, flow, store, stage, currentFlow]);
+  }, [stock, flow, store, stage, currentFlow, currentStores]);
   const semiFinishedCount = useMemo(() => stock.filter((s) => s.branch === flow && s.is_semi_finished && Number(s.qty) > 0).length, [stock, flow]);
 
   const productName = (id) => products.find((p) => p.id === id)?.name || 'Sản phẩm đã xoá';
@@ -461,8 +469,8 @@ export default function FinishedGoodsInventoryV2({ onBack }) {
       </div>
 
       {stage === 'finished' && currentFlow?.hasBranchTabs && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          {STORES.map((s) => (
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${currentStores.length}, 1fr)`, gap: 8 }}>
+          {currentStores.map((s) => (
             <button key={s} onClick={() => setStore(s)} style={{
               minHeight: 46, borderRadius: 14, border: store === s ? 'none' : '1px solid #e2cdb6',
               background: store === s ? '#078653' : '#fff', color: store === s ? '#fff' : '#806a58', fontWeight: 900, cursor: 'pointer',
