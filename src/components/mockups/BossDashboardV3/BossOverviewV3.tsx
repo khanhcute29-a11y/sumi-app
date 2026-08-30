@@ -118,36 +118,48 @@ function StaffProfileSheet({ staffBasic, onBack }: { staffBasic: any; onBack: ()
   const [taskCounts, setTaskCounts] = useState<{ dangLam: number; xongHomNay: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // Mặc định "Tuần" (7 ngày gần đây) — mẹ yêu cầu thêm lựa chọn xem nguyên
+  // tháng khi bấm vào 1 nhân viên, không đổi hành vi mặc định đang có.
+  const [rangeMode, setRangeMode] = useState<'tuan' | 'thang'>('tuan');
 
   useEffect(() => {
     let huy = false;
+    supabase.from('tasks').select('status,accepted_at,completed_at,exclusion_reason_code')
+      .eq('assignee_id', staffBasic.id)
+      .in('category', ['assigned', 'adhoc'])
+      .is('deleted_at', null)
+      .then(({ data }) => {
+        if (huy) return;
+        const tasks = data || [];
+        const homNayStr = new Date().toDateString();
+        // Đếm ĐÚNG cùng công thức với nhomViecNhanVien() (nguồn thật cho khối
+        // "Đang làm" mà chính nhân viên đó thấy trên màn hình của họ) — không tự
+        // viết lại filter riêng ở đây, tránh số bên Giám đốc lệch với số nhân
+        // viên tự thấy như đã xảy ra ở hero-metrics trước đó.
+        const dsHopLe = tasks.filter((t: any) => !t.exclusion_reason_code);
+        setTaskCounts({
+          dangLam: dsHopLe.filter((t: any) => t.status === 'accepted' || (t.status === 'open' && t.accepted_at)).length,
+          xongHomNay: dsHopLe.filter((t: any) => t.status === 'done' && t.completed_at && new Date(t.completed_at).toDateString() === homNayStr).length,
+        });
+      }).catch(() => {});
+    return () => { huy = true; };
+  }, [staffBasic.id]);
+
+  useEffect(() => {
+    let huy = false;
+    setLoading(true);
     const homNay = new Date();
     const den = homNay.toISOString().slice(0, 10);
-    const tu = new Date(homNay.getTime() - 6 * 86400000).toISOString().slice(0, 10);
-    Promise.all([
-      fetchShiftLogsRange(tu, den),
-      supabase.from('tasks').select('status,accepted_at,completed_at,exclusion_reason_code')
-        .eq('assignee_id', staffBasic.id)
-        .in('category', ['assigned', 'adhoc'])
-        .is('deleted_at', null),
-    ]).then(([shiftLogs, taskRes]: any) => {
+    const tu = rangeMode === 'thang'
+      ? `${homNay.getFullYear()}-${String(homNay.getMonth() + 1).padStart(2, '0')}-01`
+      : new Date(homNay.getTime() - 6 * 86400000).toISOString().slice(0, 10);
+    fetchShiftLogsRange(tu, den).then((shiftLogs: any) => {
       if (huy) return;
       setLogs((shiftLogs || []).filter((l: any) => l.staff_id === staffBasic.id));
-      const tasks = taskRes?.data || [];
-      const homNayStr = new Date().toDateString();
-      // Đếm ĐÚNG cùng công thức với nhomViecNhanVien() (nguồn thật cho khối
-      // "Đang làm" mà chính nhân viên đó thấy trên màn hình của họ) — không tự
-      // viết lại filter riêng ở đây, tránh số bên Giám đốc lệch với số nhân
-      // viên tự thấy như đã xảy ra ở hero-metrics trước đó.
-      const dsHopLe = tasks.filter((t: any) => !t.exclusion_reason_code);
-      setTaskCounts({
-        dangLam: dsHopLe.filter((t: any) => t.status === 'accepted' || (t.status === 'open' && t.accepted_at)).length,
-        xongHomNay: dsHopLe.filter((t: any) => t.status === 'done' && t.completed_at && new Date(t.completed_at).toDateString() === homNayStr).length,
-      });
     }).catch((e: any) => { if (!huy) setError(e.message || 'Không tải được dữ liệu.'); })
       .finally(() => { if (!huy) setLoading(false); });
     return () => { huy = true; };
-  }, [staffBasic.id]);
+  }, [staffBasic.id, rangeMode]);
 
   // Ghép checkin/checkout thành từng ca theo work_date để hiển thị gọn.
   const caTheoNgay: Record<string, { vao?: string; ra?: string }> = {};
@@ -159,6 +171,7 @@ function StaffProfileSheet({ staffBasic, onBack }: { staffBasic: any; onBack: ()
     else if (l.type === 'checkout') caTheoNgay[ngay].ra = gio;
   });
   const ngayDs = Object.keys(caTheoNgay).sort((a, b) => b.localeCompare(a));
+  const soLanTre = logs.filter((l: any) => l.type === 'checkin' && (l.late_minutes || 0) > 0).length;
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 2100, background: '#fdf9f2', overflowY: 'auto' }}>
@@ -186,10 +199,38 @@ function StaffProfileSheet({ staffBasic, onBack }: { staffBasic: any; onBack: ()
         </div>
 
         <div>
-          <div style={{ fontSize: 12, fontWeight: 900, color: '#2d1c10', marginBottom: 6 }}>📅 Chấm công 7 ngày gần đây</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 900, color: '#2d1c10' }}>📅 Chấm công</div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button
+                onClick={() => setRangeMode('tuan')}
+                style={{ fontSize: 11, fontWeight: 800, padding: '4px 10px', borderRadius: 99, border: '1.5px solid #eadcca', cursor: 'pointer', background: rangeMode === 'tuan' ? '#2d1c10' : '#fff', color: rangeMode === 'tuan' ? '#fff' : '#725f50' }}
+              >
+                7 ngày qua
+              </button>
+              <button
+                onClick={() => setRangeMode('thang')}
+                style={{ fontSize: 11, fontWeight: 800, padding: '4px 10px', borderRadius: 99, border: '1.5px solid #eadcca', cursor: 'pointer', background: rangeMode === 'thang' ? '#2d1c10' : '#fff', color: rangeMode === 'thang' ? '#fff' : '#725f50' }}
+              >
+                Tháng này
+              </button>
+            </div>
+          </div>
+          {!loading && ngayDs.length > 0 && (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              <div style={{ flex: 1, background: '#fff', border: '1.5px solid #eadcca', borderRadius: 10, padding: '6px 10px', textAlign: 'center' }}>
+                <div style={{ fontSize: 15, fontWeight: 900, color: '#2d1c10' }}>{ngayDs.length}</div>
+                <div style={{ fontSize: 10, color: '#725f50', fontWeight: 700 }}>Ngày đã chấm công</div>
+              </div>
+              <div style={{ flex: 1, background: '#fff', border: '1.5px solid #eadcca', borderRadius: 10, padding: '6px 10px', textAlign: 'center' }}>
+                <div style={{ fontSize: 15, fontWeight: 900, color: '#dc2626' }}>{soLanTre}</div>
+                <div style={{ fontSize: 10, color: '#725f50', fontWeight: 700 }}>Lần đi trễ</div>
+              </div>
+            </div>
+          )}
           {loading && <div style={{ fontSize: 12, color: '#725f50' }}>Đang tải...</div>}
           {!loading && ngayDs.length === 0 && (
-            <div style={{ fontSize: 12, color: '#725f50' }}>Chưa có dữ liệu chấm công trong 7 ngày qua.</div>
+            <div style={{ fontSize: 12, color: '#725f50' }}>Chưa có dữ liệu chấm công trong khoảng này.</div>
           )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {ngayDs.map((ngay) => (
@@ -318,8 +359,8 @@ export function BossOverviewV3Inner() {
 
       const mapCommon = (p: any) => ({ id: p.id, name: p.full_name, role: p.role || 'Nhân viên', zone: p.station || 'Chưa gán khu vực', avatar: '👤' });
       setStaffList([
-        ...status.working.map((p: any) => ({ ...mapCommon(p), status: 'working', checkinTime: p.checkinTime, shift: p.shiftLabel || 'Ca hôm nay', note: 'Đúng giờ' })),
-        ...status.late.map((p: any) => ({ ...mapCommon(p), status: 'late', checkinTime: p.checkinTime, lateMinutes: p.lateMinutes, reason: p.reason || 'Không ghi lý do', shift: p.shiftLabel || 'Ca hôm nay', shiftLogId: p.shiftLogId })),
+        ...status.working.map((p: any) => ({ ...mapCommon(p), status: 'working', checkinTime: p.checkinTime, checkinDate: p.checkinDate, shift: p.shiftLabel || 'Ca hôm nay', note: 'Đúng giờ' })),
+        ...status.late.map((p: any) => ({ ...mapCommon(p), status: 'late', checkinTime: p.checkinTime, checkinDate: p.checkinDate, lateMinutes: p.lateMinutes, reason: p.reason || 'Không ghi lý do', shift: p.shiftLabel || 'Ca hôm nay', shiftLogId: p.shiftLogId })),
         ...status.off.map((p: any) => ({ ...mapCommon(p), status: 'off', leaveType: 'Nghỉ ca', reason: p.reason || 'Không ghi lý do', approvedBy: 'Đã ghi nhận trong hệ thống' })),
       ]);
       setStaffCounts({ total: status.total, working: status.working.length, late: status.late.length, off: status.off.length });
@@ -491,8 +532,8 @@ export function BossOverviewV3Inner() {
       const status = await fetchTodayStaffStatus();
       const mapCommon = (p: any) => ({ id: p.id, name: p.full_name, role: p.role || 'Nhân viên', zone: p.station || 'Chưa gán khu vực', avatar: '👤' });
       setStaffList([
-        ...status.working.map((p: any) => ({ ...mapCommon(p), status: 'working', checkinTime: p.checkinTime, shift: p.shiftLabel || 'Ca hôm nay', note: 'Đúng giờ' })),
-        ...status.late.map((p: any) => ({ ...mapCommon(p), status: 'late', checkinTime: p.checkinTime, lateMinutes: p.lateMinutes, reason: p.reason || 'Không ghi lý do', shift: p.shiftLabel || 'Ca hôm nay', shiftLogId: p.shiftLogId })),
+        ...status.working.map((p: any) => ({ ...mapCommon(p), status: 'working', checkinTime: p.checkinTime, checkinDate: p.checkinDate, shift: p.shiftLabel || 'Ca hôm nay', note: 'Đúng giờ' })),
+        ...status.late.map((p: any) => ({ ...mapCommon(p), status: 'late', checkinTime: p.checkinTime, checkinDate: p.checkinDate, lateMinutes: p.lateMinutes, reason: p.reason || 'Không ghi lý do', shift: p.shiftLabel || 'Ca hôm nay', shiftLogId: p.shiftLogId })),
         ...status.off.map((p: any) => ({ ...mapCommon(p), status: 'off', leaveType: 'Nghỉ ca', reason: p.reason || 'Không ghi lý do', approvedBy: 'Đã ghi nhận trong hệ thống' })),
       ]);
       setStaffCounts({ total: status.total, working: status.working.length, late: status.late.length, off: status.off.length });
@@ -2030,7 +2071,7 @@ export function BossOverviewV3Inner() {
                           <div>
                             <div style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>{st.name}</div>
                             <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>{st.role} · <strong>[{st.zone}]</strong></div>
-                            <div style={{ fontSize: 10.5, color: '#15803d', fontWeight: 800, marginTop: 2 }}>⏰ Vào ca: {st.checkinTime} ({st.note}) · {st.shift}</div>
+                            <div style={{ fontSize: 10.5, color: '#15803d', fontWeight: 800, marginTop: 2 }}>⏰ Vào ca: {st.checkinTime}{st.checkinDate ? ` · ${st.checkinDate}` : ''} ({st.note}) · {st.shift}</div>
                           </div>
                         </div>
                         <span style={{ fontSize: 10.5, fontWeight: 900, padding: '3px 8px', borderRadius: 99, background: '#dcfce7', color: '#15803d' }}>
@@ -2063,7 +2104,7 @@ export function BossOverviewV3Inner() {
                         </div>
 
                         <div style={{ background: '#fff', border: '1px solid #fde047', borderRadius: 8, padding: '6px 8px', marginTop: 8, fontSize: 11, color: '#493526' }}>
-                          <div>⏰ <strong>Giờ vào ca:</strong> {st.checkinTime} (Quy định 06:00)</div>
+                          <div>⏰ <strong>Giờ vào ca:</strong> {st.checkinTime}{st.checkinDate ? ` · ${st.checkinDate}` : ''} (Quy định 06:00)</div>
                           <div>📝 <strong>Lý do:</strong> {st.reason}</div>
                         </div>
 

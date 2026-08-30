@@ -128,6 +128,9 @@ export async function fetchTodayStaffStatus() {
         checkinTime: checkin.checkin_time
           ? new Date(checkin.checkin_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
           : '--:--',
+        checkinDate: checkin.checkin_time
+          ? new Date(checkin.checkin_time).toLocaleDateString('vi-VN')
+          : (checkin.work_date ? new Date(checkin.work_date).toLocaleDateString('vi-VN') : ''),
         lateMinutes: checkin.late_minutes || 0,
         reason: checkin.reason || '',
         shiftLabel: checkin.shift_label || '',
