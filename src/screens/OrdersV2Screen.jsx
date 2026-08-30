@@ -11,6 +11,7 @@ import { subscribeToBroadcast, BroadcastEvents } from '../lib/realtimeSync';
 import FinishedGoodsInventoryV2 from '../components/warehouse/FinishedGoodsInventoryV2';
 import { fetchOrderNoteCounts } from '../lib/queries';
 import { fetchOrderHearts, addOrderHeart } from '../lib/bossOverviewV3';
+import { IconInbox, IconKitchen, IconPackage, IconShipping, IconCheckCircle, IconWarning, IconWarehouse } from '../components/icons/FrogIcons';
 
 const LABELS = {
   awaiting_assignment: 'Đơn chờ làm', awaiting_acceptance: 'Đơn chờ làm', in_production: 'Bếp đang làm',
@@ -18,12 +19,12 @@ const LABELS = {
 };
 
 const FILTERS = [
-  { key: 'waiting', label: 'Đơn chờ làm', match: o => ['awaiting_assignment', 'awaiting_acceptance'].includes(o.status_v2) && !o.is_overdue },
-  { key: 'production', label: 'Bếp đang làm', match: o => o.status_v2 === 'in_production' && !o.is_overdue },
-  { key: 'ready', label: 'Chờ vận chuyển', match: o => o.status_v2 === 'ready_for_fulfillment' && !o.is_overdue },
-  { key: 'delivery', label: 'Đang vận chuyển', match: o => o.status_v2 === 'in_delivery' && !o.is_overdue },
-  { key: 'completed', label: 'Giao thành công', match: o => o.status_v2 === 'completed' },
-  { key: 'overdue', label: 'Chưa thực hiện', match: o => Boolean(o.is_overdue) },
+  { key: 'waiting', label: 'Đơn chờ làm', Icon: IconInbox, match: o => ['awaiting_assignment', 'awaiting_acceptance'].includes(o.status_v2) && !o.is_overdue },
+  { key: 'production', label: 'Bếp đang làm', Icon: IconKitchen, match: o => o.status_v2 === 'in_production' && !o.is_overdue },
+  { key: 'ready', label: 'Chờ vận chuyển', Icon: IconPackage, match: o => o.status_v2 === 'ready_for_fulfillment' && !o.is_overdue },
+  { key: 'delivery', label: 'Đang vận chuyển', Icon: IconShipping, match: o => o.status_v2 === 'in_delivery' && !o.is_overdue },
+  { key: 'completed', label: 'Giao thành công', Icon: IconCheckCircle, match: o => o.status_v2 === 'completed' },
+  { key: 'overdue', label: 'Chưa thực hiện', Icon: IconWarning, match: o => Boolean(o.is_overdue) },
 ];
 
 const FLOW_GROUPS = [
@@ -265,7 +266,7 @@ export default function OrdersV2Screen() {
               key={item.key}
               onClick={() => { setFilter(item.key); setFlowGroup(null); setSearchQuery(''); }}
             >
-              <span>{item.key === 'waiting' ? '📥' : item.key === 'production' ? '👩‍🍳' : item.key === 'ready' ? '📦' : item.key === 'delivery' ? '🛵' : item.key === 'completed' ? '✅' : '⚠️'}</span>
+              <span><item.Icon size={22} /></span>
               <strong>{item.label}</strong>
               <b>{orders.filter(item.match).length}</b>
             </button>
@@ -281,7 +282,7 @@ export default function OrdersV2Screen() {
               cursor: 'pointer', font: 'inherit', textAlign: 'left',
             }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 20 }}>🏬</span>
+              <IconWarehouse size={22} />
               <strong style={{ color: '#2d1c10', fontSize: 18 }}>Kho Thành Phẩm</strong>
             </span>
             <span style={{ color: '#b93e13', fontWeight: 800 }}>Xem →</span>
