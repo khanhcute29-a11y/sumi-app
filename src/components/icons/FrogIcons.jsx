@@ -43,7 +43,7 @@ export function IconOrders(props) {
 export function IconKitchen(props) {
   return (
     <Wrap {...props}>
-      <path d="M12 3 C8 8 8 11.5 10.5 14.5 C9.3 11.5 12 10 12 10 C12 10 14.7 11.5 13.5 14.5 C16 11.5 16 8 12 3 Z" />
+      <path d="M12 3 C8 8 8 11.5 10.5 14.5 C9.3 11.5 12 10 12 10 C12 10 14.7 11.5 13.5 14.5 C16 11.5 16 8 12 3 Z" fill="#f2955f" />
       <Eyes x1="10.3" x2="13.7" y="9.6" r="0.8" />
     </Wrap>
   );
@@ -52,7 +52,7 @@ export function IconKitchen(props) {
 export function IconWarehouse(props) {
   return (
     <Wrap {...props}>
-      <rect x="4" y="8" width="16" height="12" rx="1" />
+      <rect x="4" y="8" width="16" height="12" rx="1" fill="#e3ac6c" />
       <line x1="4" y1="14" x2="20" y2="14" />
       <Eyes x1="10" x2="14" y="11" />
     </Wrap>
@@ -72,8 +72,8 @@ export function IconCashbook(props) {
 export function IconShipping(props) {
   return (
     <Wrap {...props}>
-      <rect x="3" y="11" width="10" height="7" rx="1" />
-      <path d="M13 13 L18 13 L20.5 16 L20.5 18 L13 18" />
+      <rect x="3" y="11" width="10" height="7" rx="1" fill="#d96b43" />
+      <path d="M13 13 L18 13 L20.5 16 L20.5 18 L13 18" fill="#e3ac6c" />
       <circle cx="7" cy="19.3" r="1.6" fill="currentColor" stroke="none" />
       <circle cx="17.5" cy="19.3" r="1.6" fill="currentColor" stroke="none" />
       <Eyes x1="15.3" x2="17.5" y="14.7" r="0.65" />
@@ -105,8 +105,8 @@ export function IconShifts(props) {
 export function IconReports(props) {
   return (
     <Wrap {...props}>
-      <polyline points="4,18 9,12 13,15 19,7" />
-      <path d="M15,7 L19,7 L19,11" />
+      <polyline points="4,18 9,12 13,15 19,7" stroke="#0ca678" />
+      <path d="M15,7 L19,7 L19,11" stroke="#0ca678" />
       <Eyes x1="9.2" x2="11" y="10" r="0.7" />
     </Wrap>
   );
@@ -141,7 +141,7 @@ export function IconSettings(props) {
           <line key={deg} x1="12" y1="4.2" x2="12" y2="6.4" transform={`rotate(${deg} 12 12)`} />
         ))}
       </g>
-      <circle cx="12" cy="12" r="6" />
+      <circle cx="12" cy="12" r="6" fill="#f3e6d3" />
       <Eyes x1="10" x2="14" y="11" r="0.85" />
     </Wrap>
   );
@@ -194,7 +194,7 @@ export function IconClose(props) {
 export function IconWarning(props) {
   return (
     <Wrap {...props}>
-      <path d="M12 4 L21 19 L3 19 Z" strokeLinejoin="round" />
+      <path d="M12 4 L21 19 L3 19 Z" fill="#f7c948" strokeLinejoin="round" />
       <line x1="12" y1="10" x2="12" y2="14" />
       <circle cx="12" cy="16.6" r="0.15" fill="currentColor" stroke="currentColor" strokeWidth="1.6" />
     </Wrap>
@@ -204,7 +204,7 @@ export function IconWarning(props) {
 export function IconCheck(props) {
   return (
     <Wrap {...props}>
-      <polyline points="5,13 10,18 19,6" />
+      <polyline points="5,13 10,18 19,6" stroke="#0ca678" />
     </Wrap>
   );
 }
@@ -212,8 +212,8 @@ export function IconCheck(props) {
 export function IconCheckCircle(props) {
   return (
     <Wrap {...props}>
-      <circle cx="12" cy="12" r="8" />
-      <polyline points="8,12.5 11,15.5 16,9" />
+      <circle cx="12" cy="12" r="8" fill="#d9f2e3" stroke="#0ca678" />
+      <polyline points="8,12.5 11,15.5 16,9" stroke="#0ca678" />
     </Wrap>
   );
 }
@@ -241,9 +241,9 @@ export function IconTruck(props) {
 export function IconCamera(props) {
   return (
     <Wrap {...props}>
-      <rect x="3" y="7" width="18" height="13" rx="2" />
-      <path d="M8 7 L9.5 4.5 L14.5 4.5 L16 7" />
-      <circle cx="12" cy="13.5" r="3.5" />
+      <rect x="3" y="7" width="18" height="13" rx="2" fill="#e3ac6c" />
+      <path d="M8 7 L9.5 4.5 L14.5 4.5 L16 7" fill="#e3ac6c" />
+      <circle cx="12" cy="13.5" r="3.5" fill="#fdf1e0" />
     </Wrap>
   );
 }
@@ -251,9 +251,9 @@ export function IconCamera(props) {
 export function IconImage(props) {
   return (
     <Wrap {...props}>
-      <rect x="3" y="4" width="18" height="16" rx="2" />
-      <circle cx="8.5" cy="9.5" r="1.5" fill="currentColor" stroke="none" />
-      <path d="M4 17 L9 12 L13 16 L16 13 L20 17" />
+      <rect x="3" y="4" width="18" height="16" rx="2" fill="#cfe3f5" />
+      <circle cx="8.5" cy="9.5" r="1.5" fill="#f2b134" stroke="none" />
+      <path d="M4 17 L9 12 L13 16 L16 13 L20 17" fill="#8bb473" />
     </Wrap>
   );
 }
@@ -261,7 +261,7 @@ export function IconImage(props) {
 export function IconBell(props) {
   return (
     <Wrap {...props}>
-      <path d="M6 10 C6 6.5 8.5 4 12 4 C15.5 4 18 6.5 18 10 C18 14 19.5 15.5 19.5 15.5 L4.5 15.5 C4.5 15.5 6 14 6 10 Z" />
+      <path d="M6 10 C6 6.5 8.5 4 12 4 C15.5 4 18 6.5 18 10 C18 14 19.5 15.5 19.5 15.5 L4.5 15.5 C4.5 15.5 6 14 6 10 Z" fill="#f2b134" />
       <path d="M10 18.5 C10 19.6 10.9 20.5 12 20.5 C13.1 20.5 14 19.6 14 18.5" />
     </Wrap>
   );
@@ -279,7 +279,7 @@ export function IconSearch(props) {
 export function IconChat(props) {
   return (
     <Wrap {...props}>
-      <path d="M4 5 L20 5 L20 16 L9 16 L5 19.5 L5 16 L4 16 Z" strokeLinejoin="round" />
+      <path d="M4 5 L20 5 L20 16 L9 16 L5 19.5 L5 16 L4 16 Z" fill="#fdf1e0" strokeLinejoin="round" />
     </Wrap>
   );
 }
@@ -295,7 +295,7 @@ export function IconStar(props) {
 export function IconClock(props) {
   return (
     <Wrap {...props}>
-      <circle cx="12" cy="12" r="8" />
+      <circle cx="12" cy="12" r="8" fill="#fdf1e0" />
       <line x1="12" y1="12" x2="12" y2="7.5" />
       <line x1="12" y1="12" x2="15.2" y2="13.5" />
     </Wrap>
@@ -305,7 +305,7 @@ export function IconClock(props) {
 export function IconReceipt(props) {
   return (
     <Wrap {...props}>
-      <path d="M6 3 L18 3 L18 21 L15.5 19.5 L13 21 L10.5 19.5 L8 21 L5.5 19.5 L6 21 Z" strokeLinejoin="round" />
+      <path d="M6 3 L18 3 L18 21 L15.5 19.5 L13 21 L10.5 19.5 L8 21 L5.5 19.5 L6 21 Z" fill="#fdf1e0" strokeLinejoin="round" />
       <line x1="9" y1="8" x2="15" y2="8" />
       <line x1="9" y1="12" x2="15" y2="12" />
       <line x1="9" y1="16" x2="13" y2="16" />
@@ -325,8 +325,8 @@ export function IconMapPin(props) {
 export function IconMoney(props) {
   return (
     <Wrap {...props}>
-      <rect x="2.5" y="6" width="19" height="12" rx="2" />
-      <circle cx="12" cy="12" r="3" />
+      <rect x="2.5" y="6" width="19" height="12" rx="2" fill="#d9f2e3" />
+      <circle cx="12" cy="12" r="3" fill="#0ca678" stroke="none" />
       <line x1="5.5" y1="9" x2="5.5" y2="9.01" />
       <line x1="18.5" y1="15" x2="18.5" y2="15.01" />
     </Wrap>
@@ -460,8 +460,8 @@ export function IconDownload(props) {
 export function IconHome(props) {
   return (
     <Wrap {...props}>
-      <path d="M4 11 L12 4 L20 11" />
-      <path d="M6 10 L6 20 L18 20 L18 10" />
+      <path d="M4 11 L12 4 L20 11" fill="#d96b43" />
+      <path d="M6 10 L6 20 L18 20 L18 10" fill="#fdf1e0" />
       <line x1="10" y1="20" x2="10" y2="14.5" />
       <line x1="14" y1="20" x2="14" y2="14.5" />
       <line x1="10" y1="14.5" x2="14" y2="14.5" />
@@ -482,7 +482,7 @@ export function IconMenu(props) {
 export function IconMegaphone(props) {
   return (
     <Wrap {...props}>
-      <path d="M3 9 L8 9 L17 4 L17 18 L8 13 L3 13 Z" strokeLinejoin="round" />
+      <path d="M3 9 L8 9 L17 4 L17 18 L8 13 L3 13 Z" fill="#e8a24d" strokeLinejoin="round" />
       <path d="M6 13 L6 17.5 C6 18.6 6.9 19.5 8 19.5 C8.7 19.5 9 19 9 18.3 L9 13" />
     </Wrap>
   );
@@ -491,8 +491,8 @@ export function IconMegaphone(props) {
 export function IconUser(props) {
   return (
     <Wrap {...props}>
-      <circle cx="12" cy="8" r="3.6" />
-      <path d="M4.5 21 C4.5 15.8 7.6 13.3 12 13.3 C16.4 13.3 19.5 15.8 19.5 21" />
+      <circle cx="12" cy="8" r="3.6" fill="#e3ac6c" />
+      <path d="M4.5 21 C4.5 15.8 7.6 13.3 12 13.3 C16.4 13.3 19.5 15.8 19.5 21" fill="#f3e6d3" />
     </Wrap>
   );
 }
@@ -501,9 +501,9 @@ export function IconInbox(props) {
   return (
     <Wrap {...props}>
       <path d="M4 13 L8 13 L9.5 15.5 L14.5 15.5 L16 13 L20 13" />
-      <path d="M4 13 L4 19 C4 19.8 4.7 20.5 5.5 20.5 L18.5 20.5 C19.3 20.5 20 19.8 20 19 L20 13" />
-      <line x1="12" y1="4" x2="12" y2="12.5" />
-      <path d="M9 10 L12 13 L15 10" />
+      <path d="M4 13 L4 19 C4 19.8 4.7 20.5 5.5 20.5 L18.5 20.5 C19.3 20.5 20 19.8 20 19 L20 13" fill="#fdf1e0" />
+      <line x1="12" y1="4" x2="12" y2="12.5" stroke="#d96b43" />
+      <path d="M9 10 L12 13 L15 10" stroke="#d96b43" />
     </Wrap>
   );
 }
@@ -511,9 +511,9 @@ export function IconInbox(props) {
 export function IconPackage(props) {
   return (
     <Wrap {...props}>
-      <rect x="4" y="9" width="16" height="11" rx="1.5" />
-      <line x1="4" y1="14" x2="20" y2="14" />
-      <line x1="12" y1="9" x2="12" y2="20" />
+      <rect x="4" y="9" width="16" height="11" rx="1.5" fill="#d9a066" />
+      <line x1="4" y1="14" x2="20" y2="14" stroke="#f5aac2" strokeWidth="2.2" />
+      <line x1="12" y1="9" x2="12" y2="20" stroke="#f5aac2" strokeWidth="2.2" />
       <path d="M9 9 C9 6.5 10 5 12 5 C14 5 15 6.5 15 9" />
     </Wrap>
   );
@@ -522,9 +522,9 @@ export function IconPackage(props) {
 export function IconLogout(props) {
   return (
     <Wrap {...props}>
-      <path d="M9 4 L6 4 C5.4 4 5 4.4 5 5 L5 19 C5 19.6 5.4 20 6 20 L9 20" />
-      <line x1="9" y1="12" x2="20" y2="12" />
-      <path d="M16.5 8.5 L20 12 L16.5 15.5" />
+      <path d="M9 4 L6 4 C5.4 4 5 4.4 5 5 L5 19 C5 19.6 5.4 20 6 20 L9 20" fill="#f3e6d3" />
+      <line x1="9" y1="12" x2="20" y2="12" stroke="#dc2626" />
+      <path d="M16.5 8.5 L20 12 L16.5 15.5" stroke="#dc2626" />
     </Wrap>
   );
 }
