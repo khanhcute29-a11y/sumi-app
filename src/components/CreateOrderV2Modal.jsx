@@ -217,7 +217,19 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
    await loadLibraryPhotos();
   }catch(e){setError(e.message);}finally{setLibraryUploading(false);}
  };
- const startVoiceInput=async()=>{if(isRecording)return;setIsRecording(true);setVoiceLoading(false);setError('');try{const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SpeechRecognition){setError('Trình duyệt không hỗ trợ nhập giọng nói');setIsRecording(false);return}const recognition=new SpeechRecognition();recognition.lang='vi-VN';recognition.interimResults=false;recognition.continuous=false;let transcript='';recognition.onstart=()=>{console.log('🎤 Recording started...')};recognition.onresult=(event)=>{for(let i=event.resultIndex;i<event.results.length;i++){if(event.results[i].isFinal){transcript+=event.results[i][0].transcript+' '}}console.log('📝 Transcript:',transcript)};recognition.onerror=(event)=>{console.error('Speech error:',event.error);setError(`Lỗi âm thanh: ${event.error}. Thử lại?`)};recognition.onend=async()=>{setIsRecording(false);if(transcript.trim()){console.log('✅ Parsing...');setVoiceLoading(true);await parseVoiceInput(transcript.trim())}else{setError('Không ghi được tiếng nói. Thử lại - nói rõ và lâu hơn.')}};recognition.start()}catch(e){console.error('Voice error:',e);setError(`Lỗi: ${e.message}`);setIsRecording(false)}};const parseVoiceInput=async(text)=>{try{console.log('Calling parse-voice-order with:',text);const{data,error}=await supabase.functions.invoke('parse-voice-order',{body:{transcript:text,orderType:type||'cake',locale:'vi-VN'}});if(error){console.error('Function error:',error);throw error}console.log('Parsed data:',data);if(data?.customerName)setCustomerName(data.customerName);if(data?.customerPhone)setCustomerPhone(data.customerPhone);if(data?.address)setAddress(data.address);if(data?.items?.length)setItems(data.items.map(it=>({...it,id:crypto.randomUUID()})));if(data?.note)setNote(data.note);if(!data?.items?.length&&!data?.customerName){setError('Không trích xuất được thông tin nào. Nói rõ hơn?')}}catch(e){console.error('Parse error:',e);setError(`Không phân tích được: ${e.message}`)}finally{setVoiceLoading(false)}};
+ const startVoiceInput=async()=>{if(isRecording)return;setIsRecording(true);setVoiceLoading(false);setError('');try{const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SpeechRecognition){setError('Trình duyệt không hỗ trợ nhập giọng nói');setIsRecording(false);return}const recognition=new SpeechRecognition();recognition.lang='vi-VN';recognition.interimResults=false;recognition.continuous=false;let transcript='';recognition.onstart=()=>{console.log('🎤 Recording started...')};recognition.onresult=(event)=>{for(let i=event.resultIndex;i<event.results.length;i++){if(event.results[i].isFinal){transcript+=event.results[i][0].transcript+' '}}console.log('📝 Transcript:',transcript)};recognition.onerror=(event)=>{console.error('Speech error:',event.error);setError(`Lỗi âm thanh: ${event.error}. Thử lại?`)};recognition.onend=async()=>{setIsRecording(false);if(transcript.trim()){console.log('✅ Parsing...');setVoiceLoading(true);await parseVoiceInput(transcript.trim())}else{setError('Không ghi được tiếng nói. Thử lại - nói rõ và lâu hơn.')}};recognition.start()}catch(e){console.error('Voice error:',e);setError(`Lỗi: ${e.message}`);setIsRecording(false)}};const parseVoiceInput=async(text)=>{try{console.log('Calling parse-voice-order with:',text);const{data,error}=await supabase.functions.invoke('parse-voice-order',{body:{transcript:text,orderType:type||'cake',locale:'vi-VN'}});if(error){console.error('Function error:',error);throw error}console.log('Parsed data:',data);
+  if(type==='school'){
+   if(data?.customerName){
+    const q=normalizeSearch(data.customerName);
+    const found=SCHOOL_DELIVERY_POINTS.filter(x=>normalizeSearch(`${x.code} ${x.name}`).includes(q)||q.includes(normalizeSearch(x.name)));
+    if(found.length===1)chooseSchool(found[0]);else setSchoolSearch(data.customerName);
+   }
+  }else{
+   if(data?.customerName)setCustomerName(data.customerName);
+   if(data?.customerPhone)setCustomerPhone(data.customerPhone);
+   if(data?.address)setAddress(data.address);
+  }
+  if(data?.items?.length)setItems(data.items.map(it=>({...it,id:crypto.randomUUID()})));if(data?.note)setNote(data.note);if(!data?.items?.length&&!data?.customerName){setError('Không trích xuất được thông tin nào. Nói rõ hơn?')}}catch(e){console.error('Parse error:',e);setError(`Không phân tích được: ${e.message}`)}finally{setVoiceLoading(false)}};
  const itemFlows=[...new Set(items.map(x=>x.flow_type||type))];
  const isMixed=itemFlows.length>1;
  const routeFor={cake:'Bếp lạnh',bakery:'Bếp nóng / Bakery',teabreak:'Bếp theo món',macaron:'Xưởng 41',school:'Xưởng 42'};
@@ -236,7 +248,12 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
   const timeStr = String(now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()).padStart(5,'0');
   const orderCode = `SUMI-${dateStr}-${timeStr}`;
   let customerId=null;
-  if(customerName||customerPhone){
+  if(type==='school'){
+    if(selectedSchool?.code){
+      const {data: schoolCust} = await supabase.from('customers').select('id').eq('school_code', selectedSchool.code).maybeSingle();
+      customerId = schoolCust?.id || null;
+    }
+  } else if(customerName||customerPhone){
     const {data: cust} = await supabase.from('customers').select('id').match({name: customerName || null, phone: customerPhone || null}).maybeSingle();
     if(!cust) {
       const {data: newCust} = await supabase.from('customers').insert({name: customerName || null, phone: customerPhone || null, created_by: user?.id}).select('id').single();
@@ -367,6 +384,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
    <div style={{flex:isMobile?'1 1 auto':'1 1 480px',minWidth:0}}>
    <p style={{color:'#725f50',fontWeight:700}}>Người tạo: {profile?.full_name||'Nhân viên'} · tự lưu ngày giờ</p>
    {type==='school'&&<section className="sumi-catalog-picker sumi-school-picker">
+    <button onClick={startVoiceInput} disabled={isRecording||voiceLoading} style={{width:'100%',minHeight:54,border:'2px dashed #d7c3aa',borderRadius:17,background:'#fff',fontSize:16,fontWeight:900,color:isRecording?'#b93e13':'#2d1c10',cursor:isRecording||voiceLoading?'not-allowed':'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:8,marginBottom:12}}>🎤 {isRecording?'Đang ghi âm...':voiceLoading?'Đang xử lý...':'Nói để chọn trường + nhập món'}</button>
     <label>Tìm trường hoặc điểm giao</label><input style={fieldStyle} placeholder="Gõ HC 5, Hoa Cúc, Dĩ An…" value={schoolSearch} onChange={e=>setSchoolSearch(e.target.value)}/>
     {!selectedSchool&&<div className="sumi-school-results">{schoolSuggestions.map(school=><button key={`${school.code}-${school.name}`} onClick={()=>chooseSchool(school)}><b>🏫</b><span><strong>{school.name}</strong><small>{school.code} · {school.type}</small><em>{school.address||'Chưa có địa chỉ — cần bổ sung'}</em></span></button>)}</div>}
     {selectedSchool&&<div className="sumi-school-selected"><b>✓</b><span><strong>{selectedSchool.name}</strong><small>{selectedSchool.code} · {selectedSchool.type}</small><em>{selectedSchool.address||'Chưa có địa chỉ'}</em></span><button onClick={()=>setSelectedSchool(null)}>Đổi</button></div>}

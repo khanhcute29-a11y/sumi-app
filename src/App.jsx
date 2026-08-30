@@ -44,6 +44,7 @@ import TasksScreen from './screens/TasksScreen';
 import IncidentsScreen from './screens/IncidentsScreen';
 import KpiScreen from './screens/KpiScreen';
 import SchoolRevenueScreen from './screens/SchoolRevenueScreen';
+import CustomerDebtScreen from './screens/CustomerDebtScreen';
 import InboxV2Screen from './screens/InboxV2Screen';
 import KpiV2Screen from './screens/KpiV2Screen';
 import StaffTasksAssignedScreen from './screens/StaffTasksAssignedScreen';
@@ -77,6 +78,7 @@ const MORE_ITEMS = [
   { key: 'kpi', label: 'KPI', Icon: IconClipboard },
   { key: 'kpiDashboard', label: 'KPI Đo Lường', Icon: IconClipboard },
   { key: 'schoolRevenue', label: 'Doanh Thu Trường Học', Icon: IconMoney },
+  { key: 'customerDebt', label: 'Công Nợ Khách Hàng', Icon: IconMoney },
   { key: 'staffTasks', label: 'Việc Của Tôi', Icon: IconClipboard },
   { key: 'inbox', label: 'Tin Nhắn', Icon: IconWarning },
   { key: 'crm', label: 'Khách Hàng', Icon: IconCustomers },
@@ -324,7 +326,7 @@ function OpsApp({ onSignOut }) {
   const screens = {
     home: <MobileHomeScreen onNavigate={setTab} />, feed: <CompanyFeedScreen />,
     dashboard: <DashboardScreen />, orders: <OrdersV2Screen />, kds: <KdsScreen initialStation={kdsStation} />, warehouse: <WarehouseScreen branch={warehouseBranch} onBranchChange={setWarehouseBranch} />, cashbook: <CashbookScreen />,
-    shipping: featureFlags.delivery_v2 ? <ShippingV2Screen /> : <ShippingScreen />, products: <ProductsScreen />, shifts: <ShiftsScreen />, compensation: <CompensationScreen />, financeRequests: <FinanceRequestsScreen />, accountantOverview: <AccountantOverviewV1Inner />, approvals: <ApprovalRequestsScreen />, tasks: <TasksScreen />, incidents: <IncidentsScreen />, reports: <ReportsScreen />, kpi: featureFlags.kpi_v2 ? <KpiV2Screen /> : <KpiScreen />, inbox: <InboxV2Screen />, crm: <CustomersScreen />, staff: <StaffScreen />, settings: <SettingsScreen onSignOut={onSignOut} />, visualGuides: <VisualGuidesScreen />, staffTasks: <StaffTasksAssignedScreen />, kpiDashboard: <KpiDashboardScreen />, schoolRevenue: <SchoolRevenueScreen />, profile: <MobileProfileScreen onSignOut={onSignOut} onNavigate={setTab} />,
+    shipping: featureFlags.delivery_v2 ? <ShippingV2Screen /> : <ShippingScreen />, products: <ProductsScreen />, shifts: <ShiftsScreen />, compensation: <CompensationScreen />, financeRequests: <FinanceRequestsScreen />, accountantOverview: <AccountantOverviewV1Inner />, approvals: <ApprovalRequestsScreen />, tasks: <TasksScreen />, incidents: <IncidentsScreen />, reports: <ReportsScreen />, kpi: featureFlags.kpi_v2 ? <KpiV2Screen /> : <KpiScreen />, inbox: <InboxV2Screen />, crm: <CustomersScreen />, staff: <StaffScreen />, settings: <SettingsScreen onSignOut={onSignOut} />, visualGuides: <VisualGuidesScreen />, staffTasks: <StaffTasksAssignedScreen />, kpiDashboard: <KpiDashboardScreen />, schoolRevenue: <SchoolRevenueScreen />, customerDebt: <CustomerDebtScreen />, profile: <MobileProfileScreen onSignOut={onSignOut} onNavigate={setTab} />,
   };
   const isBottomKey = (k) => ['home', 'feed', 'orders', 'tasks', 'profile'].includes(k);
   // Chỉ Kế toán/Thu ngân/Quản lý/Giám đốc thấy mục "Kế Toán Tổng Quan" — khớp
