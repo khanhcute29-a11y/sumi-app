@@ -117,7 +117,12 @@ export function caCuaBoPhan(danhSachCa, boPhan) {
 
 // ── Chênh lệch so với quy định ──────────────────────────────────────────────
 // phutMuonDB: `late_minutes` do database tính. Có thì lấy làm chuẩn.
-export function tinhChenhLech(ca, gioVao, gioRa, phutMuonDB) {
+// boPhanThat: bộ phận THẬT của nhân viên (không phải ca.boPhan) — dùng riêng
+// để quyết định mốc tính tăng ca. `ca` có thể là ca "mượn tạm" của bộ phận
+// khác khi caChuanCuaLog() không tìm thấy ca khớp giờ đúng bộ phận (dữ liệu
+// chấm công cũ trước khi sửa giờ chuẩn Bakery ngày 29/08) — ca.boPhan lúc đó
+// KHÔNG phản ánh đúng bộ phận thật, nên không được dùng để rẽ nhánh Bakery.
+export function tinhChenhLech(ca, gioVao, gioRa, phutMuonDB, boPhanThat) {
   if (!ca) return null;
   const mocP = phutTrongNgay(ca.moc);
 
@@ -137,12 +142,18 @@ export function tinhChenhLech(ca, gioVao, gioRa, phutMuonDB) {
     else { nhanVao = `Đúng mốc ${ca.moc}`; loaiVao = 'on_time'; }
   }
 
+  // Mốc tính TĂNG CA: Xưởng 41/42 và Vận tải tính từ mốc CỐ ĐỊNH 16:00 chiều,
+  // không theo giờ tan ca riêng của từng ca — theo xác nhận của chủ tiệm
+  // (30/08/2026). Bakery vẫn giữ nguyên tính theo giờ tan ca chuẩn của ca đó
+  // (05:30 sáng → 14:30, hoặc 13:30 chiều → 22:30).
+  const mocTangCa = (boPhanThat ?? ca.boPhan) === 'bakery' ? ca.ketThuc : '16:00';
+
   let lechRa = null;
   let nhanRa = 'Chưa ra ca';
   let loaiRa = 'pending';
   if (gioRa) {
     const batDauP = phutTrongNgay(ca.batDau);
-    let ketChuan = phutTrongNgay(ca.ketThuc);
+    let ketChuan = phutTrongNgay(mocTangCa);
     if (ketChuan <= batDauP) ketChuan += 1440;
     let ketThat = phutTrongNgay(gioRa);
     if (ketThat < batDauP) ketThat += 1440;
@@ -157,7 +168,7 @@ export function tinhChenhLech(ca, gioVao, gioRa, phutMuonDB) {
     icon: ca.icon,
     chuanVao: ca.batDau,
     moc: ca.moc,
-    chuanRa: ca.ketThuc,
+    chuanRa: mocTangCa,
     soGio: ca.soGio,
     phutSom: ca.phutSom,
     lechVao, nhanVao, loaiVao,
@@ -243,7 +254,7 @@ export function gomChamCongNgay(logs, danhSachCa, boPhanTheoNguoi = {}) {
   });
 
   theoNguoi.forEach((n) => {
-    n.chenhLech = n.coCaChuan ? tinhChenhLech(n.ca, n.vao, n.ra, n.phutMuonDB) : null;
+    n.chenhLech = n.coCaChuan ? tinhChenhLech(n.ca, n.vao, n.ra, n.phutMuonDB, n.boPhan) : null;
     if (n.raISO) n.trangThai = 'done';
     else if (n.vaoISO) n.trangThai = n.chenhLech?.loaiVao === 'late' ? 'late' : 'working';
     else if (n.xinNghi) n.trangThai = 'leave';

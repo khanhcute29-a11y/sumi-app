@@ -38,9 +38,18 @@ import { ORDER_FLOWS } from '../../../data/orderCatalogs';
 // KHÔNG động tới bất kỳ file nào khác của anh Khánh ngoài file này.
 import OrderV2DetailModal from '../../OrderV2DetailModal';
 import FinishedGoodsInventoryV2 from '../../warehouse/FinishedGoodsInventoryV2';
+// Ô "Nhân viên" — dùng lại ĐÚNG StaffScreen thật (duyệt tài khoản chờ, sửa
+// vai trò/khâu, khóa tài khoản...) đã có sẵn ở Sidebar desktop, không tự
+// dựng lại màn quản lý nhân sự khác ở đây.
+import StaffScreen from '../../../screens/StaffScreen';
 import UserAvatar from '../../UserAvatar';
 import { supabase } from '../../../lib/supabaseClient';
 import { fetchShiftLogsRange } from '../../../lib/queries';
+// Tổng giờ làm/tăng ca dùng ĐÚNG cùng công thức với màn Chấm Công (self-view)
+// — tomTatThang() đã tự nhóm log theo work_date, không phụ thuộc khoảng thời
+// gian truyền vào là 7 ngày/tháng/tùy chỉnh gì, nên tái dùng thẳng chứ không
+// viết công thức cộng giờ riêng ở đây (tránh lệch số như đã từng xảy ra).
+import { boPhanCuaHoSo, chuanHoaCa, tomTatThang } from '../../../lib/chamCong';
 import { WeeklyScheduleSection } from '../../WeeklyScheduleSection';
 import {
   fetchRevenueByChannel,
@@ -119,8 +128,23 @@ function StaffProfileSheet({ staffBasic, onBack }: { staffBasic: any; onBack: ()
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   // Mặc định "Tuần" (7 ngày gần đây) — mẹ yêu cầu thêm lựa chọn xem nguyên
-  // tháng khi bấm vào 1 nhân viên, không đổi hành vi mặc định đang có.
-  const [rangeMode, setRangeMode] = useState<'tuan' | 'thang'>('tuan');
+  // tháng, và sau đó thêm cả tùy chỉnh khoảng ngày tự do, khi bấm vào 1 nhân
+  // viên. Không đổi hành vi mặc định đang có.
+  const [rangeMode, setRangeMode] = useState<'tuan' | 'thang' | 'tuychinh'>('tuan');
+  const homNayStrYMD = new Date().toISOString().slice(0, 10);
+  const [tuyChinhTu, setTuyChinhTu] = useState(homNayStrYMD);
+  const [tuyChinhDen, setTuyChinhDen] = useState(homNayStrYMD);
+  // Quy định ca (giờ chuẩn từng bộ phận) — cần để tính đúng "Tổng thời gian
+  // tăng ca" bằng ĐÚNG công thức tomTatThang() dùng ở màn Chấm Công của chính
+  // nhân viên, không tự viết công thức riêng ở đây.
+  const [cauHinhCa, setCauHinhCa] = useState<any[]>([]);
+  useEffect(() => {
+    let huy = false;
+    supabase.from('sumi_quy_dinh_ca').select('*').eq('active', true)
+      .then(({ data }) => { if (!huy) setCauHinhCa(data || []); })
+      .catch(() => { if (!huy) setCauHinhCa([]); });
+    return () => { huy = true; };
+  }, []);
 
   useEffect(() => {
     let huy = false;
@@ -146,7 +170,11 @@ function StaffProfileSheet({ staffBasic, onBack }: { staffBasic: any; onBack: ()
   }, [staffBasic.id]);
 
   useEffect(() => {
+    // Chế độ tùy chỉnh: chỉ tải khi mẹ bấm "Xem" (handleXemTuyChinh), tránh
+    // gọi query liên tục khi đang gõ dở ngày trong 2 ô input.
+    if (rangeMode === 'tuychinh') return;
     let huy = false;
+    setError('');
     setLoading(true);
     const homNay = new Date();
     const den = homNay.toISOString().slice(0, 10);
@@ -161,6 +189,19 @@ function StaffProfileSheet({ staffBasic, onBack }: { staffBasic: any; onBack: ()
     return () => { huy = true; };
   }, [staffBasic.id, rangeMode]);
 
+  const handleXemTuyChinh = () => {
+    if (!tuyChinhTu || !tuyChinhDen || tuyChinhTu > tuyChinhDen) {
+      setError('Khoảng ngày không hợp lệ — "Từ ngày" phải trước hoặc bằng "Đến ngày".');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    fetchShiftLogsRange(tuyChinhTu, tuyChinhDen).then((shiftLogs: any) => {
+      setLogs((shiftLogs || []).filter((l: any) => l.staff_id === staffBasic.id));
+    }).catch((e: any) => setError(e.message || 'Không tải được dữ liệu.'))
+      .finally(() => setLoading(false));
+  };
+
   // Ghép checkin/checkout thành từng ca theo work_date để hiển thị gọn.
   const caTheoNgay: Record<string, { vao?: string; ra?: string }> = {};
   logs.forEach((l: any) => {
@@ -172,6 +213,9 @@ function StaffProfileSheet({ staffBasic, onBack }: { staffBasic: any; onBack: ()
   });
   const ngayDs = Object.keys(caTheoNgay).sort((a, b) => b.localeCompare(a));
   const soLanTre = logs.filter((l: any) => l.type === 'checkin' && (l.late_minutes || 0) > 0).length;
+  const danhSachCa = chuanHoaCa(cauHinhCa);
+  const boPhan = boPhanCuaHoSo({ station: staffBasic.station, role: staffBasic.role });
+  const tomTat = tomTatThang(logs, staffBasic.id, danhSachCa, boPhan);
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 2100, background: '#fdf9f2', overflowY: 'auto' }}>
@@ -196,6 +240,14 @@ function StaffProfileSheet({ staffBasic, onBack }: { staffBasic: any; onBack: ()
             <div style={{ fontSize: 20, fontWeight: 900, color: '#15803d' }}>{taskCounts ? taskCounts.xongHomNay : '—'}</div>
             <div style={{ fontSize: 10.5, color: '#725f50', fontWeight: 800 }}>Xong hôm nay</div>
           </div>
+          <div style={{ background: '#fff', border: '1.5px solid #eadcca', borderRadius: 14, padding: 12, textAlign: 'center' }}>
+            <div style={{ fontSize: 20, fontWeight: 900, color: '#c28c4e' }}>{loading ? '—' : `${tomTat.tongGio}h`}</div>
+            <div style={{ fontSize: 10.5, color: '#725f50', fontWeight: 800 }}>Tổng thời gian làm</div>
+          </div>
+          <div style={{ background: '#fff', border: '1.5px solid #eadcca', borderRadius: 14, padding: 12, textAlign: 'center' }}>
+            <div style={{ fontSize: 20, fontWeight: 900, color: '#1d4ed8' }}>{loading ? '—' : `${tomTat.phutOT}p`}</div>
+            <div style={{ fontSize: 10.5, color: '#725f50', fontWeight: 800 }}>Tổng thời gian tăng ca</div>
+          </div>
         </div>
 
         <div>
@@ -214,8 +266,37 @@ function StaffProfileSheet({ staffBasic, onBack }: { staffBasic: any; onBack: ()
               >
                 Tháng này
               </button>
+              <button
+                onClick={() => setRangeMode('tuychinh')}
+                style={{ fontSize: 11, fontWeight: 800, padding: '4px 10px', borderRadius: 99, border: '1.5px solid #eadcca', cursor: 'pointer', background: rangeMode === 'tuychinh' ? '#2d1c10' : '#fff', color: rangeMode === 'tuychinh' ? '#fff' : '#725f50' }}
+              >
+                Tùy chỉnh
+              </button>
             </div>
           </div>
+          {rangeMode === 'tuychinh' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+              <input
+                type="date"
+                value={tuyChinhTu}
+                onChange={(e) => setTuyChinhTu(e.target.value)}
+                style={{ fontSize: 12, padding: '5px 8px', borderRadius: 8, border: '1.5px solid #eadcca', color: '#2d1c10' }}
+              />
+              <span style={{ fontSize: 12, color: '#725f50' }}>→</span>
+              <input
+                type="date"
+                value={tuyChinhDen}
+                onChange={(e) => setTuyChinhDen(e.target.value)}
+                style={{ fontSize: 12, padding: '5px 8px', borderRadius: 8, border: '1.5px solid #eadcca', color: '#2d1c10' }}
+              />
+              <button
+                onClick={handleXemTuyChinh}
+                style={{ fontSize: 11, fontWeight: 800, padding: '6px 12px', borderRadius: 8, border: 'none', background: '#c28c4e', color: '#fff', cursor: 'pointer' }}
+              >
+                Xem
+              </button>
+            </div>
+          )}
           {!loading && ngayDs.length > 0 && (
             <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
               <div style={{ flex: 1, background: '#fff', border: '1.5px solid #eadcca', borderRadius: 10, padding: '6px 10px', textAlign: 'center' }}>
@@ -253,7 +334,7 @@ export function BossOverviewV3Inner() {
 
   // ── States Quản Lý Bottom Sheets & Bộ Lọc Đơn Hàng ──
   const [activeSheet, setActiveSheet] = useState<
-    'revenue_detail' | 'expense_detail' | 'order_drawer' | 'staff_detail' | 'task_sheet' | 'feed_sheet' | 'advance_sheet' | 'leave_sheet' | 'report_sheet' | 'schedule_sheet' | 'warehouse_sheet' | null
+    'revenue_detail' | 'expense_detail' | 'order_drawer' | 'staff_detail' | 'task_sheet' | 'feed_sheet' | 'advance_sheet' | 'leave_sheet' | 'report_sheet' | 'schedule_sheet' | 'warehouse_sheet' | 'staff_screen_sheet' | null
   >(null);
   const [selectedOrderFilter, setSelectedOrderFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
@@ -357,7 +438,7 @@ export function BossOverviewV3Inner() {
       setExpenseStreams(claims.map(mapLedgerRow));
       setTotalExpense(claims.reduce((s: number, c: any) => s + (Number(c.amount) || 0), 0));
 
-      const mapCommon = (p: any) => ({ id: p.id, name: p.full_name, role: p.role || 'Nhân viên', zone: p.station || 'Chưa gán khu vực', avatar: '👤' });
+      const mapCommon = (p: any) => ({ id: p.id, name: p.full_name, role: p.role || 'Nhân viên', zone: p.station || 'Chưa gán khu vực', station: p.station || null, avatar: '👤' });
       setStaffList([
         ...status.working.map((p: any) => ({ ...mapCommon(p), status: 'working', checkinTime: p.checkinTime, checkinDate: p.checkinDate, shift: p.shiftLabel || 'Ca hôm nay', note: 'Đúng giờ' })),
         ...status.late.map((p: any) => ({ ...mapCommon(p), status: 'late', checkinTime: p.checkinTime, checkinDate: p.checkinDate, lateMinutes: p.lateMinutes, reason: p.reason || 'Không ghi lý do', shift: p.shiftLabel || 'Ca hôm nay', shiftLogId: p.shiftLogId })),
@@ -530,7 +611,7 @@ export function BossOverviewV3Inner() {
       await waiveLatePenalty(shiftLogId);
       showToast(`✓ Đã miễn trừ phạt trễ cho ${name}`);
       const status = await fetchTodayStaffStatus();
-      const mapCommon = (p: any) => ({ id: p.id, name: p.full_name, role: p.role || 'Nhân viên', zone: p.station || 'Chưa gán khu vực', avatar: '👤' });
+      const mapCommon = (p: any) => ({ id: p.id, name: p.full_name, role: p.role || 'Nhân viên', zone: p.station || 'Chưa gán khu vực', station: p.station || null, avatar: '👤' });
       setStaffList([
         ...status.working.map((p: any) => ({ ...mapCommon(p), status: 'working', checkinTime: p.checkinTime, checkinDate: p.checkinDate, shift: p.shiftLabel || 'Ca hôm nay', note: 'Đúng giờ' })),
         ...status.late.map((p: any) => ({ ...mapCommon(p), status: 'late', checkinTime: p.checkinTime, checkinDate: p.checkinDate, lateMinutes: p.lateMinutes, reason: p.reason || 'Không ghi lý do', shift: p.shiftLabel || 'Ca hôm nay', shiftLogId: p.shiftLogId })),
@@ -840,7 +921,7 @@ export function BossOverviewV3Inner() {
             <span style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10', display: 'flex', alignItems: 'center', gap: 6 }}>
               👤 TÔI (QUẢN TRỊ & TIỆN ÍCH ĐIỀU HÀNH)
             </span>
-            <span style={{ fontSize: 11, fontWeight: 800, color: '#c28c4e' }}>7 mục điều hành</span>
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#c28c4e' }}>8 mục điều hành</span>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
@@ -1025,6 +1106,33 @@ export function BossOverviewV3Inner() {
               <div style={{ marginTop: 6 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>7. Kho Thành Phẩm</div>
                 <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>Tồn kho, hạn dùng, nhập kho</div>
+              </div>
+            </div>
+
+            {/* Ô 8: Nhân viên — mở StaffScreen thật (đã có sẵn từ Sidebar desktop):
+                duyệt tài khoản chờ, sửa vai trò/khâu, khóa tài khoản. */}
+            <div
+              onClick={() => setActiveSheet('staff_screen_sheet')}
+              style={{
+                background: '#ffffff',
+                border: '1.5px solid #eadcca',
+                borderRadius: 18,
+                padding: '12px 14px',
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                minHeight: 88,
+                boxSizing: 'border-box'
+              }}
+            >
+              <div>
+                <Users size={22} color="#b45309" strokeWidth={1.6} />
+              </div>
+              <div style={{ marginTop: 6 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>8. Nhân viên</div>
+                <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>Duyệt tài khoản, vai trò, khâu</div>
               </div>
             </div>
           </div>
@@ -1957,6 +2065,21 @@ export function BossOverviewV3Inner() {
         {activeSheet === 'warehouse_sheet' && (
           <div style={{ position: 'fixed', inset: 0, zIndex: 1400, background: '#fdf9f2', overflowY: 'auto', padding: 16, boxSizing: 'border-box' }}>
             <FinishedGoodsInventoryV2 onBack={() => setActiveSheet(null)} />
+          </div>
+        )}
+
+        {/* Ô 8: Nhân viên — StaffScreen không tự vẽ header/nút quay lại (khác
+            FinishedGoodsInventoryV2), nên tự bọc header ở đây theo đúng mẫu
+            đang dùng cho StaffProfileSheet phía trên. */}
+        {activeSheet === 'staff_screen_sheet' && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 1400, background: '#fdf9f2', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px', borderBottom: '1.5px solid #eadcca', position: 'sticky', top: 0, background: '#fdf9f2', zIndex: 1 }}>
+              <button onClick={() => setActiveSheet(null)} aria-label="Quay lại" style={{ width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer', flexShrink: 0 }}>‹</button>
+              <div style={{ fontSize: 15, fontWeight: 900, color: '#2d1c10' }}>👥 Nhân Viên</div>
+            </div>
+            <div style={{ padding: 16, boxSizing: 'border-box' }}>
+              <StaffScreen />
+            </div>
           </div>
         )}
 
