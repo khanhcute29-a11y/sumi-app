@@ -12,6 +12,7 @@ import {
 } from '../../lib/chat';
 import { uploadFile } from '../../lib/queries';
 import { toWebSafeImage } from '../../lib/imageConvert';
+import { IconStaff, IconUser, IconCamera, IconTag } from '../icons/FrogIcons';
 
 export default function ChatWindowModal({ onClose, profile, initialRoomId = null, unreadCounts = {}, onRoomRead, onActiveRoomChange }) {
   const [navTab, setNavTab] = useState('group'); // 'group' | 'direct'
@@ -313,10 +314,10 @@ export default function ChatWindowModal({ onClose, profile, initialRoomId = null
       {/* 2. TABS */}
       <div className="m-chat-category-tabs">
         <button className={`m-cat-tab-btn ${navTab === 'group' ? 'active' : ''}`} onClick={switchToGroupTab}>
-          🥐 Nhóm Chat ({groupRooms.length})
+          <IconStaff size={16} /> Nhóm Chat ({groupRooms.length})
         </button>
         <button className={`m-cat-tab-btn ${navTab === 'direct' ? 'active' : ''}`} onClick={() => { setNavTab('direct'); setCurrentDirectUserId(null); }}>
-          👤 Chat Riêng 1-1 ({directConversations.length || directory.length})
+          <IconUser size={16} /> Chat Riêng 1-1 ({directConversations.length || directory.length})
         </button>
       </div>
 
@@ -462,8 +463,8 @@ export default function ChatWindowModal({ onClose, profile, initialRoomId = null
 
         <div className="m-tool-chips-row">
           <input ref={photoInputRef} type="file" accept="image/*" hidden onChange={handlePickPhoto} />
-          <button type="button" className="m-tool-btn" onClick={() => photoInputRef.current?.click()}>📷 Gửi ảnh</button>
-          <button type="button" className="m-tool-btn" onClick={() => { setInputText((p) => `${p}@`); setShowMentionPopup(true); setMentionFilter(''); setSelectedMentionIds([]); inputRef.current?.focus(); }}>🏷️ Tag người</button>
+          <button type="button" className="m-tool-btn" onClick={() => photoInputRef.current?.click()}><IconCamera size={16} /> Gửi ảnh</button>
+          <button type="button" className="m-tool-btn" onClick={() => { setInputText((p) => `${p}@`); setShowMentionPopup(true); setMentionFilter(''); setSelectedMentionIds([]); inputRef.current?.focus(); }}><IconTag size={16} /> Tag người</button>
           <button type="button" className="m-tool-btn" onClick={() => setInputText((p) => `${p}👍`)}>👍 Like</button>
         </div>
 

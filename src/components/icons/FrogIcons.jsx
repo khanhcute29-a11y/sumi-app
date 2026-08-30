@@ -595,3 +595,12 @@ export function IconMixed(props) {
     </Wrap>
   );
 }
+
+export function IconTag(props) {
+  return (
+    <Wrap {...props}>
+      <path d="M3 12 L11 4 L20 4 L20 13 L12 21 Z" fill="#e3ac6c" strokeLinejoin="round" />
+      <circle cx="15.5" cy="8.5" r="1.3" fill="#fdf1e0" stroke="none" />
+    </Wrap>
+  );
+}
