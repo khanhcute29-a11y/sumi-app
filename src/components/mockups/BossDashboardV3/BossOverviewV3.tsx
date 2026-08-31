@@ -8,7 +8,6 @@ import {
   Clock,
   MessageSquare,
   Send,
-  Plus,
   Receipt,
   CheckCircle2,
   AlertTriangle,
@@ -63,7 +62,6 @@ import {
   remindStaff,
   waiveLatePenalty,
   fetchAssignableStaff,
-  assignTaskToStaff,
   fetchRecentFeedPosts,
   postCompanyAnnouncement,
   summarizeOrderCounts,
@@ -338,7 +336,7 @@ export function BossOverviewV3Inner() {
 
   // ── States Quản Lý Bottom Sheets & Bộ Lọc Đơn Hàng ──
   const [activeSheet, setActiveSheet] = useState<
-    'revenue_detail' | 'expense_detail' | 'order_drawer' | 'staff_detail' | 'task_sheet' | 'feed_sheet' | 'advance_sheet' | 'leave_sheet' | 'report_sheet' | 'schedule_sheet' | 'warehouse_sheet' | 'staff_screen_sheet' | null
+    'revenue_detail' | 'expense_detail' | 'order_drawer' | 'staff_detail' | 'feed_sheet' | 'advance_sheet' | 'leave_sheet' | 'report_sheet' | 'schedule_sheet' | 'warehouse_sheet' | 'staff_screen_sheet' | null
   >(null);
   const [selectedOrderFilter, setSelectedOrderFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
@@ -477,19 +475,6 @@ export function BossOverviewV3Inner() {
     time: new Date(p.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' · ' + new Date(p.created_at).toLocaleDateString('vi-VN'),
     text: p.body,
   }));
-
-  // ── Giao việc nhanh — ghi thật vào bảng tasks, hiện ngay trên màn Nhân viên ──
-  const [taskTitle, setTaskTitle] = useState('');
-  const [taskDesc, setTaskDesc] = useState('');
-  const [taskAssignee, setTaskAssignee] = useState(''); // profile id
-  const [sendingTask, setSendingTask] = useState(false);
-  // Chỉ lưu ngay trong phiên này để Sếp thấy đã giao gì — hệ thống chưa có
-  // view "toàn bộ việc tôi đã giao cho tất cả nhân viên" để tải lại từ DB.
-  const [managedTasks, setManagedTasks] = useState<any[]>([]);
-
-  useEffect(() => {
-    if (!taskAssignee && assignableStaff.length) setTaskAssignee(assignableStaff[0].id);
-  }, [assignableStaff]);
 
   // ── Dữ liệu thật: đơn hàng (order_operations_list qua listOrdersV2) ──
   const [allOrders, setAllOrders] = useState<any[]>([]);
@@ -676,29 +661,6 @@ export function BossOverviewV3Inner() {
       showToast(`⚠️ ${err.message || 'Không gửi được, thử lại sau.'}`);
     } finally {
       setSendingComment(false);
-    }
-  };
-
-  // ── Giao Việc Nhanh — ghi thật vào bảng tasks, hiện ngay trên màn Nhân viên ──
-  const handleCreateTask = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!taskTitle.trim()) {
-      showToast('⚠️ Vui lòng nhập tên công việc!');
-      return;
-    }
-    if (!taskAssignee || !profile?.id) return;
-    setSendingTask(true);
-    try {
-      const assignee = assignableStaff.find((s) => s.id === taskAssignee);
-      await assignTaskToStaff({ assigneeId: taskAssignee, title: taskTitle.trim(), description: taskDesc.trim() || null, createdBy: profile.id });
-      setManagedTasks([{ id: `tsk-${Date.now()}`, title: taskTitle.trim(), desc: taskDesc.trim(), assignee: assignee?.full_name || 'Nhân viên', statusLabel: 'Mới giao' }, ...managedTasks]);
-      setTaskTitle('');
-      setTaskDesc('');
-      showToast(`⚡ Đã giao việc "${taskTitle.trim()}" cho ${assignee?.full_name || 'nhân viên'}!`);
-    } catch (err: any) {
-      showToast(`⚠️ ${err.message || 'Không giao được việc, thử lại sau.'}`);
-    } finally {
-      setSendingTask(false);
     }
   };
 
@@ -941,9 +903,10 @@ export function BossOverviewV3Inner() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
-            {/* Ô 1: Giao việc nhanh */}
+            {/* Ô 1: Giao việc — chuyển hẳn sang trang "Giao việc" (TasksScreen)
+                thật, không còn form nhập liệu tại chỗ trùng lặp trong dashboard. */}
             <div
-              onClick={() => setActiveSheet('task_sheet')}
+              onClick={() => window.dispatchEvent(new CustomEvent('sumi-navigate', { detail: { tab: 'tasks' } }))}
               style={{
                 background: '#ffffff',
                 border: '1.5px solid #eadcca',
@@ -1549,106 +1512,6 @@ export function BossOverviewV3Inner() {
         {/* ========================================================================= */}
         {/* ── BOTTOM SHEET: 3. GIAO VIỆC NHANH (TASK DELEGATION) ── */}
         {/* ========================================================================= */}
-        {activeSheet === 'task_sheet' && (
-          <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1300, display: 'flex', alignItems: 'flex-end' }}>
-            <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
-              <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
-                {SHEET_HANDLE}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
-                  <div>
-                    <div style={{ fontSize: 15, fontWeight: 900, color: '#8b5900' }}>⚡ Giao Việc Nhanh Cho Nhân Viên</div>
-                    <div style={{ fontSize: 11, color: '#725f50' }}>Tự động đồng bộ sang màn hình Nhân viên</div>
-                  </div>
-                  <button onClick={() => setActiveSheet(null)} aria-label="Quay lại" style={{ order: -1, flexShrink: 0, width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer' }}>‹</button>
-                </div>
-              </div>
-
-              <div style={sheetBodyStyle({ paddingTop: 12 })}>
-              <form onSubmit={handleCreateTask} style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: '#725f50', marginBottom: 2 }}>Tên công việc *</div>
-                  <input
-                    type="text"
-                    placeholder="VD: Kiểm tra chất lượng mẻ bánh Macaron"
-                    value={taskTitle}
-                    onChange={e => setTaskTitle(e.target.value)}
-                    style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1.5px solid #eadcca', fontSize: 12, outline: 'none', background: '#faf6f0', boxSizing: 'border-box' }}
-                  />
-                </div>
-
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: '#725f50', marginBottom: 2 }}>Mô tả chi tiết nhiệm vụ</div>
-                  <textarea
-                    rows={3}
-                    placeholder="Nhập yêu cầu thực hiện, kích thước, tiêu chuẩn chất lượng..."
-                    value={taskDesc}
-                    onChange={e => setTaskDesc(e.target.value)}
-                    style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1.5px solid #eadcca', fontSize: 12, outline: 'none', background: '#faf6f0', boxSizing: 'border-box' }}
-                  />
-                </div>
-
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: '#725f50', marginBottom: 2 }}>Người nhận việc</div>
-                  <select
-                    value={taskAssignee}
-                    onChange={e => setTaskAssignee(e.target.value)}
-                    style={{ width: '100%', padding: '7px 8px', borderRadius: 8, border: '1.5px solid #eadcca', fontSize: 11.5, fontWeight: 700, outline: 'none', background: '#faf6f0' }}
-                  >
-                    {assignableStaff.map((st: any) => (
-                      <option key={st.id} value={st.id}>
-                        {st.full_name} ({st.station || st.role})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={sendingTask}
-                  style={{
-                    background: '#c28c4e',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: 10,
-                    padding: '10px 0',
-                    fontWeight: 900,
-                    fontSize: 13,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 6,
-                    marginTop: 4
-                  }}
-                >
-                  <Plus size={16} /> {sendingTask ? 'Đang giao...' : 'Giao Việc Ngay (Tự Động Đồng Bộ)'}
-                </button>
-              </form>
-
-              {/* Danh sách việc đã giao trong phiên này */}
-              {managedTasks.length > 0 && (
-                <>
-                  <div style={{ fontSize: 12, fontWeight: 900, color: '#2d1c10', marginBottom: 6 }}>
-                    📋 Vừa giao trong phiên này:
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {managedTasks.map((t: any) => (
-                      <div key={t.id} style={{ background: '#faf6f0', border: '1px solid #eadcca', borderRadius: 10, padding: 8 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ fontSize: 12.5, fontWeight: 900 }}>{t.title}</span>
-                          <span style={{ fontSize: 10.5, color: '#c28c4e', fontWeight: 800 }}>{t.statusLabel}</span>
-                        </div>
-                        <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>👤 Người nhận: <strong>{t.assignee}</strong></div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* ========================================================================= */}
         {/* ── BOTTOM SHEET: 4. BẢNG TIN CHỈ ĐẠO CÔNG KHAI & TAG TÊN ── */}
         {/* ========================================================================= */}
