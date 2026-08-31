@@ -4,6 +4,7 @@ import { StatCard } from '../components/data/StatCard';
 import { Button } from '../components/forms/Button';
 import { Input } from '../components/forms/Input';
 import { VoiceMicButton } from '../components/VoiceMicButton';
+import { parseThuChiVoice } from '../lib/parseVoiceAmount';
 import { Badge } from '../components/feedback/Badge';
 import {
   fetchCashbookEntries, addCashbookEntry, fetchOrders, markOrderPaid,
@@ -73,6 +74,16 @@ function AddEntryForm({ type, onAdded }) {
   const [amount, setAmount] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Nói 1 câu là điền cả 2 ô — "Chi năm trăm cành mua nguyên liệu" tự bóc
+  // tách ra Số tiền=500000 + Nội dung="mua nguyên liệu". Điền xong người
+  // dùng vẫn bấm/gõ chỉnh tay bình thường vì đây chỉ là setState, không khoá
+  // input lại.
+  const handleVoiceEntry = (transcript) => {
+    const { amount: parsedAmount, label: parsedLabel } = parseThuChiVoice(transcript);
+    if (parsedAmount) setAmount(String(parsedAmount));
+    setLabel(parsedLabel || transcript);
+  };
+
   const handleSubmit = async () => {
     if (!label || !amount) return;
     setSaving(true);
@@ -86,11 +97,18 @@ function AddEntryForm({ type, onAdded }) {
   };
 
   return (
-    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-      <Input label={type === 'thu' ? 'Khoản thu' : 'Khoản chi'} placeholder="VD: Thanh toán VietQR" value={label} onChange={(e) => setLabel(e.target.value)} style={{ flex: '2 1 200px' }} />
-      <VoiceMicButton onTranscript={setLabel} />
-      <Input label="Số tiền" type="number" placeholder="VD: 500000" value={amount} onChange={(e) => setAmount(e.target.value)} style={{ flex: '1 1 140px' }} />
-      <Button variant="secondary" size="sm" onClick={handleSubmit} disabled={saving || !label || !amount}>{saving ? 'Đang lưu...' : '+ Thêm'}</Button>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <VoiceMicButton onTranscript={handleVoiceEntry} />
+        <span style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>
+          Nói VD: "{type === 'thu' ? 'Thu 2 triệu tiền cọc bánh' : 'Chi năm trăm cành mua nguyên liệu'}"
+        </span>
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <Input label={type === 'thu' ? 'Khoản thu' : 'Khoản chi'} placeholder="VD: Thanh toán VietQR" value={label} onChange={(e) => setLabel(e.target.value)} style={{ flex: '2 1 200px' }} />
+        <Input label="Số tiền" type="number" placeholder="VD: 500000" value={amount} onChange={(e) => setAmount(e.target.value)} style={{ flex: '1 1 140px' }} />
+        <Button variant="secondary" size="sm" onClick={handleSubmit} disabled={saving || !label || !amount}>{saving ? 'Đang lưu...' : '+ Thêm'}</Button>
+      </div>
     </div>
   );
 }
