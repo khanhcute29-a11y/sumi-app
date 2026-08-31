@@ -344,6 +344,7 @@ export function playNotificationSound(soundKey) {
     }
   } else if (soundKey === 'cash_complete') playDeliveredSound();
   else if (soundKey === 'ting') playTingSound();
+  else if (soundKey === 'task_progress') playTaskProgressSound();
 }
 
 // GIAO VIỆC — 3 nốt nảy Mi-La-Đô, tươi và gấp gáp, khác hẳn tiếng bếp/shipper
@@ -357,4 +358,24 @@ export function playTaskAssignedSound() {
   ];
   playPatternLooped(pattern, 6000, 1.15);
   console.log('[playTaskAssignedSound] ✓ Done');
+}
+
+// BÁO CÁO TIẾN ĐỘ / DUYỆT VIỆC — 2 nốt Fa-La ngắn gọn, nhẹ hơn tiếng giao
+// việc (không lặp dài 6s vì đây là cập nhật qua lại giữa 2 người, không cần
+// "gọi" ai bằng chuông dồn dập như đơn hàng mới).
+export function playTaskProgressSound() {
+  withRunningCtx(() => {
+    beep({ freq: 698, duration: 0.13, type: 'sine' });          // Fa5
+    beep({ freq: 880, duration: 0.2, delay: 0.15, type: 'sine' }); // La5
+  });
+}
+
+// XÁC NHẬN THAO TÁC — 1 tiếng "cạch" ngắn, gọn, cho chính người vừa bấm
+// Duyệt/Từ chối nghe thấy ngay hành động của mình đã được ghi nhận. Không
+// lặp, không dùng playOnce (đây là phản hồi trực tiếp cho 1 cú bấm, không
+// phải sự kiện realtime có thể tới trùng qua 2 đường).
+export function playConfirmSound() {
+  withRunningCtx(() => {
+    beep({ freq: 988, duration: 0.09, type: 'triangle', volume: 0.8 });
+  });
 }

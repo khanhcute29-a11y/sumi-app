@@ -13,7 +13,7 @@ import { navBadgeVisibility, hasAnyRole } from './lib/roles';
 import { initAudioUnlock } from './lib/sound';
 import { useOrderNotifications } from './lib/useOrderNotifications';
 import { requestNotificationPermission, playAlertSound, preloadAlertAudio } from './lib/alarmSound';
-import { playKitchenReceiveSound, playKitchenCompleteSound, playShipperReceiveSound, playShipperCompleteSound, playTaskAssignedSound, playOnce } from './lib/sound';
+import { playKitchenReceiveSound, playKitchenCompleteSound, playShipperReceiveSound, playShipperCompleteSound, playTaskAssignedSound, playNotificationSound, playOnce } from './lib/sound';
 import { setupAutoRefresh, cleanupAllSubscriptions, subscribeToMultipleTables, subscribeToBroadcast, BroadcastEvents } from './lib/realtimeSync';
 import { ConnectivityBanner } from './components/ConnectivityBanner';
 import ToastHost from './components/ToastHost';
@@ -237,6 +237,22 @@ function OpsApp({ onSignOut }) {
                 message: n.body || n.title,
                 entityId: n.entity_id,
                 ...(laViecTrongDon ? { tab: 'orders' } : {}),
+              });
+            });
+            return;
+          }
+
+          // Báo cáo tiến độ / duyệt việc qua lại (giao việc <-> nhận việc),
+          // và kết quả duyệt/từ chối khoản chi + tạm ứng — TRƯỚC ĐÂY 2 loại
+          // tài chính này chỉ kêu khi đang mở đúng màn Hộp thư
+          // (InboxV2Screen), giờ kêu TOÀN CỤC như các loại tin khác ở trên.
+          if (['task_progress', 'expense_claim', 'salary_advance'].includes(n.notification_type)) {
+            playOnce(n.notification_type + ':' + n.id, () => {
+              playNotificationSound(n.sound_key);
+              showToast({
+                ...NOTIFY_KINDS[n.notification_type],
+                message: n.body || n.title,
+                entityId: n.entity_id,
               });
             });
           }

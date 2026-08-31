@@ -30,6 +30,7 @@ import {
   Heart
 } from 'lucide-react';
 import { AuthProvider, useAuth } from '../../../lib/AuthContext';
+import { playConfirmSound } from '../../../lib/sound';
 import { listOrdersV2 } from '../../../lib/featureFlags';
 import { ORDER_FLOWS } from '../../../data/orderCatalogs';
 // Tái dùng ĐÚNG bộ lọc ngày/tuần/tháng/tuỳ chọn đã có sẵn cho doanh thu theo
@@ -579,6 +580,7 @@ export function BossOverviewV3Inner() {
     try {
       if (source === 'advance') await reviewSalaryAdvance(id, approve);
       else await reviewExpenseClaim(id, approve);
+      playConfirmSound();
       showToast(approve ? '✓ Sếp đã DUYỆT khoản chi' : '✕ Sếp đã từ chối khoản chi');
       const claims = await fetchExpenseAndAdvanceLedgerToday();
       setExpenseStreams(claims.map(mapLedgerRow));
@@ -594,6 +596,7 @@ export function BossOverviewV3Inner() {
   const handleReviewAdvance = async (id: string, approve: boolean) => {
     try {
       await reviewSalaryAdvance(id, approve);
+      playConfirmSound();
       showToast(approve ? '✓ Sếp đã DUYỆT tạm ứng' : '✕ Sếp đã từ chối tạm ứng');
       setPendingAdvances(await fetchPendingSalaryAdvances());
     } catch (e: any) {
@@ -605,6 +608,7 @@ export function BossOverviewV3Inner() {
   const handleReviewLeave = async (id: string, approve: boolean) => {
     try {
       await reviewLeaveRequest(id, approve);
+      playConfirmSound();
       showToast(approve ? '✓ Sếp đã ĐỒNG Ý đơn nghỉ phép' : '✕ Sếp đã từ chối đơn nghỉ phép');
       setPendingLeaves(await fetchPendingLeaveRequests());
     } catch (e: any) {

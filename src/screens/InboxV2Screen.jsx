@@ -2,6 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { playNotificationSound } from '../lib/sound';
 
+// Các loại tin đã có bộ nghe toàn cục trong App.jsx lo chuông (chạy nền,
+// không cần mở Hộp thư) — tránh kêu chồng bằng cách không phát lại ở đây.
+const HANDLED_GLOBALLY = new Set([
+  'company_announcement', 'task_assigned', 'task_reminder',
+  'task_progress', 'expense_claim', 'salary_advance',
+]);
+
 const LABELS = {
   new_order: 'Đơn mới',
   order_in_production: 'Bếp đang làm',
@@ -48,10 +55,13 @@ export default function InboxV2Screen() {
     const ch = supabase
       .channel('notifications-v2-inbox')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (p) => {
-        // Giữ nguyên logic âm thanh cũ. Tin do trigger đơn hàng ghi có
-        // sound_key='silent' nên hàm này không phát gì — chuông đã do hệ
-        // thống thông báo hiện tại lo, tránh kêu chồng hai lần.
-        playNotificationSound(p.new.sound_key);
+        // Loại nào bộ nghe toàn cục trong App.jsx đã lo chuông rồi (chạy nền
+        // dù có mở Hộp thư hay không) thì KHÔNG phát lại ở đây — trước đây
+        // task_assigned từng kêu chồng 2 tiếng khác nhau (playTaskAssignedSound
+        // ở App.jsx + playTingSound ở đây) khi ai đó mở đúng lúc đang ở Hộp thư.
+        if (!HANDLED_GLOBALLY.has(p.new.notification_type)) {
+          playNotificationSound(p.new.sound_key);
+        }
         load().catch(() => {});
       })
       .subscribe();

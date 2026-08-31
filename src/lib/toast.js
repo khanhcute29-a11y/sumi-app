@@ -135,6 +135,27 @@ export const NOTIFY_KINDS = {
     tone: 'info',
     tab: 'messenger',
   },
+  // 9. Báo cáo tiến độ / duyệt việc qua lại -> Trang công việc
+  task_progress: {
+    icon: '📝',
+    title: 'Cập nhật công việc',
+    tone: 'info',
+    tab: 'tasks',
+  },
+  // 10-11. Kết quả duyệt/từ chối khoản chi & tạm ứng -> màn Chi & Tạm Ứng
+  // (trước đây chỉ hiện tin khi đang mở Hộp thư, giờ hiện toàn cục)
+  expense_claim: {
+    icon: '💸',
+    title: 'Cập nhật khoản chi',
+    tone: 'info',
+    tab: 'financeRequests',
+  },
+  salary_advance: {
+    icon: '💰',
+    title: 'Cập nhật tạm ứng lương',
+    tone: 'info',
+    tab: 'financeRequests',
+  },
 };
 
 /**

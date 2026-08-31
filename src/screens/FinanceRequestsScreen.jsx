@@ -3,6 +3,7 @@ import {supabase} from '../lib/supabaseClient';
 import {useAuth} from '../lib/AuthContext';
 import {hasAnyRole} from '../lib/roles';
 import {VoiceMicButton} from '../components/VoiceMicButton';
+import {playConfirmSound} from '../lib/sound';
 import {uploadPhoto} from '../lib/queries';
 import {toWebSafeImage} from '../lib/imageConvert';
 import {parseVoiceByContext} from '../lib/parseVoiceContext';
@@ -20,7 +21,7 @@ export default function FinanceRequestsScreen(){
  const[payingRow,setPayingRow]=useState(null);
  const load=async()=>{setError('');try{const[e,a]=await Promise.all([supabase.from('expense_claims').select('*').order('created_at',{ascending:false}),supabase.from('salary_advance_requests').select('*').order('created_at',{ascending:false})]);if(e.error)throw e.error;if(a.error)throw a.error;setExpenses(e.data||[]);setAdvances(a.data||[])}catch(e){setError(e.message)}};
  useEffect(()=>{load()},[profile?.id]);
- const act=async(fn,args)=>{setBusy(true);try{const r=await supabase.rpc(fn,args);if(r.error)throw r.error;await load()}catch(e){setError(e.message)}finally{setBusy(false)}};
+ const act=async(fn,args)=>{setBusy(true);try{const r=await supabase.rpc(fn,args);if(r.error)throw r.error;playConfirmSound();await load()}catch(e){setError(e.message)}finally{setBusy(false)}};
  const friendly=error&&(error.includes('does not exist')||error.includes('schema cache')||error.includes('expense_claims'))?'Chức năng đang chờ kích hoạt dữ liệu tài chính trên Supabase.':error;
  return <div className="finance-request-page"><header><small>CHI TIÊU MINH BẠCH</small><h1>Chi & tạm ứng</h1><p>Báo nhanh bằng chữ, giọng nói hoặc ảnh. Hệ thống tự xác định khoản cần Giám đốc duyệt.</p></header><nav><button className={tab==='expense'?'active':''} onClick={()=>setTab('expense')}>🧾 Khoản chi</button><button className={tab==='advance'?'active':''} onClick={()=>setTab('advance')}>💵 Tạm ứng lương</button></nav>{tab==='expense'?<><ExpenseForm onDone={load}/><Rows rows={expenses} kind="expense" director={director} finance={finance} busy={busy} act={act} onNeedDisburse={setPayingRow}/></>:<><AdvanceForm onDone={load}/><Rows rows={advances} kind="advance" director={director} finance={finance} busy={busy} act={act} onNeedDisburse={setPayingRow}/></>}{friendly&&<div className="finance-error">{friendly}</div>}{payingRow&&<DisburseForm row={payingRow} act={act} busy={busy} onClose={()=>setPayingRow(null)}/>}</div>
 }
