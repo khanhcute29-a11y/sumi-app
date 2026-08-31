@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { createAssignedTasks } from '../../../lib/queries';
+import { VoiceMicButton } from '../../VoiceMicButton';
+import { parseVoiceByContext } from '../../../lib/parseVoiceContext';
 
 // Form GIAO VIỆC của giao diện mới.
 //
@@ -82,6 +84,15 @@ export default function GiaoViecModal({ hoSo, danhSachTho = [], khauMacDinh, onC
         borderRadius: '20px 20px 0 0', padding: 20, paddingBottom: 'calc(20px + env(safe-area-inset-bottom))', maxHeight: '92dvh', overflowY: 'auto',
       }}>
         <h3 style={{ margin: '0 0 14px', fontSize: 18, fontWeight: 900 }}>➕ Giao việc mới</h3>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+          <VoiceMicButton onTranscript={(t) => {
+            const { title, description } = parseVoiceByContext('task', t);
+            setTieuDe(title);
+            if (description) setMoTa(description);
+          }} />
+          <span style={{ fontSize: 12, color: 'var(--cv-muted)' }}>Nói VD: "Chuẩn bị 2 cốt bánh kem lạnh size 18, giao trước 5 giờ chiều"</span>
+        </div>
 
         <label style={o.nhan}>Tên công việc <span style={{ color: '#d03027' }}>*</span></label>
         <input style={{ ...o.o, marginBottom: 12 }} value={tieuDe} autoFocus

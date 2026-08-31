@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { fetchFinishedGoodsStock, fetchProducts, addFinishedGoodsEntryV2, uploadFile, fetchFinishedGoodsStockInLog, fetchFinishedGoodsStockOutLog, createProduct, completeSemiFinishedToFinished } from '../../lib/queries';
 import { useAuth } from '../../lib/AuthContext';
+import { VoiceMicButton } from '../VoiceMicButton';
+import { parseVoiceByContext } from '../../lib/parseVoiceContext';
 import DonSanXuatTab from './DonSanXuatTab';
 
 // Kho Thành Phẩm V2 — theo mockup đã duyệt
@@ -186,6 +188,15 @@ function NhapKhoSheet({ defaultBranch, defaultStore, products: productsProp, sta
           <button onClick={onClose} style={{ width: 40, height: 40, border: '1px solid #e2cdb6', borderRadius: 12, background: '#fff', fontSize: 18 }}>✕</button>
         </div>
         <div style={{ display: 'grid', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <VoiceMicButton onTranscript={(t) => {
+              const { qty: parsedQty, product, size: parsedSize } = parseVoiceByContext('warehouse', t);
+              if (parsedQty) setQty(String(parsedQty));
+              if (product) { setProductQuery(product); setProductId(''); }
+              if (parsedSize) setSize(parsedSize);
+            }} />
+            <span style={{ fontSize: 12, color: '#806a58' }}>Nói VD: "Nhập 50 bánh su kem size 18cm"</span>
+          </div>
           <div>
             <label style={{ display: 'block', fontWeight: 900, marginBottom: 6 }}>Sản phẩm</label>
             <ProductPicker
