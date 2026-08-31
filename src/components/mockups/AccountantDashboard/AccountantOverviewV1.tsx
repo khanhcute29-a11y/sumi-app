@@ -18,6 +18,8 @@ import {
   fetchLatestCashClose,
 } from '../../../lib/accountantOverviewV1';
 import { uploadFile } from '../../../lib/queries';
+import { VoiceMicButton } from '../../VoiceMicButton';
+import { parseThuChiVoice } from '../../../lib/parseVoiceAmount';
 
 const PHUONG_THUC_CHI = [
   { value: 'cash', label: '💵 Tiền mặt' },
@@ -608,7 +610,15 @@ export function AccountantOverviewV1Inner() {
                   </div>
                 </div>
                 <div style={sheetBodyStyle}>
-                  <form onSubmit={handleSubmitExpense} style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, marginBottom: 4 }}>
+                    <VoiceMicButton onTranscript={(t) => {
+                      const { amount, label } = parseThuChiVoice(t);
+                      if (amount) setFormAmount(String(amount));
+                      setFormDesc(label || t);
+                    }} />
+                    <span style={{ fontSize: 11, color: '#725f50' }}>Nói VD: "Chi năm trăm cành mua nguyên liệu" — tự điền cả Số tiền và Nội dung</span>
+                  </div>
+                  <form onSubmit={handleSubmitExpense} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     <div>
                       <div style={{ fontSize: 11, fontWeight: 800, color: '#725f50', marginBottom: 3 }}>Số tiền *</div>
                       <input inputMode="numeric" placeholder="VD: 420000" value={formAmount} onChange={(e) => setFormAmount(e.target.value)}
