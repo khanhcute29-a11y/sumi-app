@@ -193,7 +193,7 @@ begin
   if v_t.assignee_id is not null and v_t.assignee_id is distinct from v_uid then
     insert into public.notifications(event_key,recipient_profile_id,notification_type,severity,sound_key,title,body,entity_type,entity_id,deep_link)
     values('task_progress:'||p_task_id||':approved:'||extract(epoch from now())::text,
-      v_t.assignee_id,'task_progress','success','task_progress',
+      v_t.assignee_id,'task_progress','info','task_progress',
       'Việc của bạn đã được duyệt',v_t.title||' · '||v_ly_do,'task',p_task_id,'/tasks/'||p_task_id)
     on conflict(event_key) do nothing;
   end if;
