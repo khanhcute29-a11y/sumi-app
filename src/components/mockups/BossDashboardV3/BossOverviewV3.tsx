@@ -73,6 +73,10 @@ import {
   reviewSalaryAdvance,
   fetchPendingLeaveRequests,
   reviewLeaveRequest,
+  fetchPendingOrderEditRequests,
+  reviewOrderEditRequest,
+  fetchPendingOvertimeRequests,
+  reviewOvertimeRequest,
   fetchTodayShiftReports,
   fetchWeeklyScheduleAllStations,
   fetchOrderHearts,
@@ -339,7 +343,7 @@ export function BossOverviewV3Inner() {
 
   // ── States Quản Lý Bottom Sheets & Bộ Lọc Đơn Hàng ──
   const [activeSheet, setActiveSheet] = useState<
-    'revenue_detail' | 'expense_detail' | 'order_drawer' | 'staff_detail' | 'staff_overview_v2' | 'feed_sheet' | 'advance_sheet' | 'leave_sheet' | 'report_sheet' | 'schedule_sheet' | 'warehouse_sheet' | 'staff_screen_sheet' | null
+    'revenue_detail' | 'expense_detail' | 'order_drawer' | 'staff_detail' | 'staff_overview_v2' | 'approval_center' | 'feed_sheet' | 'advance_sheet' | 'leave_sheet' | 'report_sheet' | 'schedule_sheet' | 'warehouse_sheet' | 'staff_screen_sheet' | null
   >(null);
   const [selectedOrderFilter, setSelectedOrderFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
@@ -431,6 +435,11 @@ export function BossOverviewV3Inner() {
   const [pendingAdvances, setPendingAdvances] = useState<any[]>([]);
   const [pendingLeaves, setPendingLeaves] = useState<any[]>([]);
 
+  // ── Dữ liệu thật: Yêu Cầu Duyệt (gom mọi thứ chờ Sếp duyệt vào 1 nơi) ──
+  const [pendingEditRequests, setPendingEditRequests] = useState<any[]>([]);
+  const [pendingOvertimes, setPendingOvertimes] = useState<any[]>([]);
+  const [approvalBusy, setApprovalBusy] = useState<string | null>(null);
+
   // ── Dữ liệu thật: báo cáo cuối ca hôm nay (staff_shift_reports) ──
   const [shiftReports, setShiftReports] = useState<any[]>([]);
 
@@ -441,7 +450,7 @@ export function BossOverviewV3Inner() {
     setLoading(true);
     setLoadError('');
     try {
-      const [rev, duTinh, claims, status, staffOptions, orders, posts, advances, leaves, reports, schedule] = await Promise.all([
+      const [rev, duTinh, claims, status, staffOptions, orders, posts, advances, leaves, reports, schedule, editRequests, overtimes] = await Promise.all([
         fetchRevenueByChannel(),
         fetchDoanhThuDuTinh(),
         fetchExpenseAndAdvanceLedgerToday(),
@@ -453,6 +462,8 @@ export function BossOverviewV3Inner() {
         fetchPendingLeaveRequests(),
         fetchTodayShiftReports(),
         fetchWeeklyScheduleAllStations(),
+        fetchPendingOrderEditRequests(),
+        fetchPendingOvertimeRequests(),
       ]);
 
       setRevenueStreams(rev.channels.map((c) => ({ id: c.key, channel: c.title, amount: c.amount, percentage: c.percentage, icon: c.icon, note: `${c.count} đơn hoàn thành`, orders: c.orders })));
@@ -477,6 +488,8 @@ export function BossOverviewV3Inner() {
       setFeedPosts(posts);
       setPendingAdvances(advances);
       setPendingLeaves(leaves);
+      setPendingEditRequests(editRequests);
+      setPendingOvertimes(overtimes);
       setShiftReports(reports);
       setWeeklySchedule(schedule);
     } catch (e: any) {
@@ -658,6 +671,37 @@ export function BossOverviewV3Inner() {
     }
   };
 
+  // ── Duyệt/Từ chối yêu cầu sửa đơn — cùng RPC approve_order_edit_request
+  // mà EditApprovalPanel.jsx đang dùng (đã hoạt động, không viết lại) ──
+  const handleReviewEditRequest = async (id: string, approve: boolean) => {
+    setApprovalBusy(id);
+    try {
+      await reviewOrderEditRequest(id, approve, profile?.id, profile?.full_name || profile?.email);
+      playConfirmSound();
+      showToast(approve ? '✓ Sếp đã DUYỆT yêu cầu sửa đơn' : '✕ Sếp đã từ chối yêu cầu sửa đơn');
+      setPendingEditRequests(await fetchPendingOrderEditRequests());
+    } catch (e: any) {
+      showToast(`⚠️ ${e.message || 'Không thao tác được'}`);
+    } finally {
+      setApprovalBusy(null);
+    }
+  };
+
+  // ── Duyệt/Từ chối yêu cầu tăng ca — ghi thật vào overtime_requests ──
+  const handleReviewOvertime = async (id: string, approve: boolean) => {
+    setApprovalBusy(id);
+    try {
+      await reviewOvertimeRequest(id, approve, profile?.id);
+      playConfirmSound();
+      showToast(approve ? '✓ Sếp đã DUYỆT tăng ca' : '✕ Sếp đã từ chối tăng ca');
+      setPendingOvertimes(await fetchPendingOvertimeRequests());
+    } catch (e: any) {
+      showToast(`⚠️ ${e.message || 'Không thao tác được'}`);
+    } finally {
+      setApprovalBusy(null);
+    }
+  };
+
   // ── Nhắc nhở / Bỏ qua phạt trễ — ghi thật qua RPC director-only ──
   const handleRemindStaff = async (staffId: string, name: string) => {
     try {
@@ -739,6 +783,12 @@ export function BossOverviewV3Inner() {
   if (!profile) {
     return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8a7a66', fontSize: 13 }}>Chưa đăng nhập.</div>;
   }
+
+  // Tổng mọi thứ đang chờ Sếp duyệt, gom về 1 con số — thay cho ô "Tổng Nhân
+  // Sự" trên banner KPI chính (yêu cầu 01/09/2026: đưa Yêu Cầu Duyệt lên giao
+  // diện chính, gộp luôn 2 ô Tạm ứng/Xin nghỉ trong lưới tiện ích vào đây).
+  const expensePendingCount = expenseStreams.filter((e: any) => e.status === 'pending_director').length;
+  const approvalCount = pendingEditRequests.length + pendingOvertimes.length + pendingAdvances.length + pendingLeaves.length + expensePendingCount;
 
   return (
     <>
@@ -878,12 +928,14 @@ export function BossOverviewV3Inner() {
           {/* 2. KHỐI THỐNG KÊ NHÂN SỰ & CHẤM CÔNG (GRID 2 CỘT) */}
           {/* ========================================================================= */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
-            {/* Thẻ 1: KPI Nhân sự 50 người */}
+            {/* Thẻ 1: Yêu Cầu Duyệt — gom mọi việc cần Sếp duyệt (sửa đơn, tăng ca,
+                tạm ứng, xin nghỉ, chi) làm 1 điểm vào duy nhất, thay cho ô
+                "Tổng Nhân Sự" cũ (chỉ số tĩnh, ít việc phải làm ngay). */}
             <div
-              onClick={() => setActiveSheet('staff_detail')}
+              onClick={() => setActiveSheet('approval_center')}
               style={{
-                background: '#fff',
-                border: '1.5px solid #eadcca',
+                background: approvalCount > 0 ? '#fff7ed' : '#fff',
+                border: approvalCount > 0 ? '1.5px solid #fdba74' : '1.5px solid #eadcca',
                 borderRadius: 18,
                 padding: 12,
                 cursor: 'pointer',
@@ -892,17 +944,23 @@ export function BossOverviewV3Inner() {
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                 <span style={{ fontSize: 11, fontWeight: 900, color: '#725f50', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <Users size={14} color="#b45309" /> TỔNG NHÂN SỰ
+                  <ClipboardList size={14} color="#b45309" /> YÊU CẦU DUYỆT
                 </span>
-                <ChevronRight size={12} style={{ color: '#a08060' }} />
+                {approvalCount > 0 ? (
+                  <span style={{ minWidth: 20, height: 20, borderRadius: 10, background: '#dc2626', color: '#fff', fontSize: 11, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }}>
+                    {approvalCount}
+                  </span>
+                ) : (
+                  <ChevronRight size={12} style={{ color: '#a08060' }} />
+                )}
               </div>
 
-              <div style={{ fontSize: 20, fontWeight: 900, color: '#2d1c10' }}>
-                {staffCounts.total} <span style={{ fontSize: 12, fontWeight: 800, color: '#725f50' }}>người</span>
+              <div style={{ fontSize: 20, fontWeight: 900, color: approvalCount > 0 ? '#c2410c' : '#2d1c10' }}>
+                {approvalCount} <span style={{ fontSize: 12, fontWeight: 800, color: '#725f50' }}>việc chờ</span>
               </div>
 
               <div style={{ marginTop: 4, fontSize: 11, fontWeight: 800, color: '#725f50' }}>
-                Đã duyệt &amp; đang hoạt động
+                {approvalCount > 0 ? 'Sửa đơn · Tăng ca · Tạm ứng · Nghỉ phép · Chi' : 'Không có việc nào đang chờ'}
               </div>
             </div>
 
@@ -947,7 +1005,7 @@ export function BossOverviewV3Inner() {
             <span style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10', display: 'flex', alignItems: 'center', gap: 6 }}>
               👤 TÔI (QUẢN TRỊ & TIỆN ÍCH ĐIỀU HÀNH)
             </span>
-            <span style={{ fontSize: 11, fontWeight: 800, color: '#c28c4e' }}>8 mục điều hành</span>
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#c28c4e' }}>6 mục điều hành</span>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
@@ -1004,59 +1062,8 @@ export function BossOverviewV3Inner() {
               </div>
             </div>
 
-            {/* Ô 3: Duyệt tạm ứng */}
-            <div
-              onClick={() => setActiveSheet('advance_sheet')}
-              style={{
-                background: '#ffffff',
-                border: '1.5px solid #eadcca',
-                borderRadius: 18,
-                padding: '12px 14px',
-                cursor: 'pointer',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                minHeight: 88,
-                boxSizing: 'border-box'
-              }}
-            >
-              <div>
-                <DollarSign size={22} color="#b87a48" strokeWidth={1.6} />
-              </div>
-              <div style={{ marginTop: 6 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>3. Tạm ứng</div>
-                <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>{pendingAdvances.length} đơn chờ duyệt</div>
-              </div>
-            </div>
-
-            {/* Ô 4: Duyệt nghỉ phép */}
-            <div
-              onClick={() => setActiveSheet('leave_sheet')}
-              style={{
-                background: '#ffffff',
-                border: '1.5px solid #eadcca',
-                borderRadius: 18,
-                padding: '12px 14px',
-                cursor: 'pointer',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                minHeight: 88,
-                boxSizing: 'border-box'
-              }}
-            >
-              <div>
-                <FileText size={22} color="#b87a48" strokeWidth={1.6} />
-              </div>
-              <div style={{ marginTop: 6 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>4. Xin nghỉ</div>
-                <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>Đơn nghỉ phép</div>
-              </div>
-            </div>
-
-            {/* Ô 5: Báo cáo ca ngày */}
+            {/* Ô 3: Báo cáo ca ngày (Tạm ứng/Xin nghỉ đã gom vào ô "Yêu Cầu Duyệt"
+                trên banner KPI chính — không còn là ô riêng ở đây nữa). */}
             <div
               onClick={() => setActiveSheet('report_sheet')}
               style={{
@@ -1077,7 +1084,7 @@ export function BossOverviewV3Inner() {
                 <ClipboardList size={22} color="#b87a48" strokeWidth={1.6} />
               </div>
               <div style={{ marginTop: 6 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>5. Báo cáo ngày</div>
+                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>3. Báo cáo ngày</div>
                 <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>{shiftReports.length} báo cáo hôm nay</div>
               </div>
             </div>
@@ -1103,7 +1110,7 @@ export function BossOverviewV3Inner() {
                 <Calendar size={22} color="#b87a48" strokeWidth={1.6} />
               </div>
               <div style={{ marginTop: 6 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>6. Lịch làm</div>
+                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>4. Lịch làm</div>
                 <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>{weeklySchedule.totalAssignments} lượt phân ca tuần này</div>
               </div>
             </div>
@@ -1131,7 +1138,7 @@ export function BossOverviewV3Inner() {
                 <Package size={22} color="#b87a48" strokeWidth={1.6} />
               </div>
               <div style={{ marginTop: 6 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>7. Kho Thành Phẩm</div>
+                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>5. Kho Thành Phẩm</div>
                 <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>Tồn kho, hạn dùng, nhập kho</div>
               </div>
             </div>
@@ -1158,7 +1165,7 @@ export function BossOverviewV3Inner() {
                 <Users size={22} color="#b45309" strokeWidth={1.6} />
               </div>
               <div style={{ marginTop: 6 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>8. Nhân viên</div>
+                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>6. Nhân viên</div>
                 <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>Duyệt tài khoản, vai trò, khâu</div>
               </div>
             </div>
@@ -2189,6 +2196,159 @@ export function BossOverviewV3Inner() {
             đánh giá Sao +/-). */}
         {activeSheet === 'staff_overview_v2' && (
           <DirectorStaffOverviewSheet hoSo={profile} onClose={() => setActiveSheet(null)} />
+        )}
+
+        {/* ========================================================================= */}
+        {/* ── BOTTOM SHEET: YÊU CẦU DUYỆT — gom Sửa đơn/Tăng ca/Tạm ứng/Xin nghỉ/Chi ── */}
+        {/* ========================================================================= */}
+        {activeSheet === 'approval_center' && (
+          <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
+            <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
+              <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
+                {SHEET_HANDLE}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 900, color: '#c2410c' }}>✅ Yêu Cầu Duyệt</div>
+                    <div style={{ fontSize: 11, color: '#725f50' }}>{approvalCount} việc đang chờ Sếp xử lý</div>
+                  </div>
+                  <button onClick={() => setActiveSheet(null)} aria-label="Quay lại" style={{ order: -1, flexShrink: 0, width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer' }}>‹</button>
+                </div>
+              </div>
+
+              <div style={sheetBodyStyle({ paddingTop: 12 })}>
+                {approvalCount === 0 && (
+                  <div style={{ textAlign: 'center', padding: '24px 0', color: '#725f50', fontSize: 13 }}>🎉 Không có việc nào đang chờ duyệt.</div>
+                )}
+
+                {/* 1. Sửa đơn */}
+                {pendingEditRequests.length > 0 && (
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 12, fontWeight: 900, color: '#2563eb', textTransform: 'uppercase', marginBottom: 8 }}>
+                      📝 Yêu cầu sửa đơn ({pendingEditRequests.length})
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {pendingEditRequests.map((r: any) => (
+                        <div key={r.id} style={{ background: '#eff6ff', border: '1.5px solid #bfdbfe', borderRadius: 14, padding: 12 }}>
+                          <div style={{ fontSize: 13.5, fontWeight: 900, color: '#2d1c10' }}>Đơn #{r.orders?.order_code || String(r.order_id).slice(0, 8)}</div>
+                          <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>
+                            👤 {r.requested_by_name}{r.reason ? ` · 💭 "${r.reason}"` : ''} · {new Date(r.created_at).toLocaleString('vi-VN')}
+                          </div>
+                          <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                            <button disabled={approvalBusy === r.id} onClick={() => handleReviewEditRequest(r.id, true)} style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
+                              ✓ Duyệt
+                            </button>
+                            <button disabled={approvalBusy === r.id} onClick={() => handleReviewEditRequest(r.id, false)} style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
+                              ✕ Từ chối
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. Tăng ca */}
+                {pendingOvertimes.length > 0 && (
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 12, fontWeight: 900, color: '#7c3aed', textTransform: 'uppercase', marginBottom: 8 }}>
+                      ⏱ Yêu cầu tăng ca ({pendingOvertimes.length})
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {pendingOvertimes.map((o: any) => (
+                        <div key={o.id} style={{ background: '#f5f3ff', border: '1.5px solid #ddd6fe', borderRadius: 14, padding: 12 }}>
+                          <div style={{ fontSize: 13.5, fontWeight: 900, color: '#2d1c10' }}>{o.employee?.full_name || 'Nhân viên'}</div>
+                          <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>
+                            {o.planned_minutes} phút · {o.reason}{o.related_order_code ? ` · ${o.related_order_code}` : ''} · Ngày {new Date(o.work_date).toLocaleDateString('vi-VN')}
+                          </div>
+                          <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                            <button disabled={approvalBusy === o.id} onClick={() => handleReviewOvertime(o.id, true)} style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
+                              ✓ Duyệt
+                            </button>
+                            <button disabled={approvalBusy === o.id} onClick={() => handleReviewOvertime(o.id, false)} style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
+                              ✕ Từ chối
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 3. Tạm ứng — gom từ ô tiện ích cũ */}
+                {pendingAdvances.length > 0 && (
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 12, fontWeight: 900, color: '#ca8a04', textTransform: 'uppercase', marginBottom: 8 }}>
+                      💵 Yêu cầu tạm ứng ({pendingAdvances.length})
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {pendingAdvances.map((a: any) => (
+                        <div key={a.id} style={{ background: '#fefce8', border: '1.5px solid #facc15', borderRadius: 14, padding: 12 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div>
+                              <div style={{ fontSize: 13.5, fontWeight: 900, color: '#2d1c10' }}>{a.employee_name}</div>
+                              <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>Lý do: {a.reason} · Nộp lúc {new Date(a.created_at).toLocaleString('vi-VN')}</div>
+                            </div>
+                            <span style={{ fontSize: 15, fontWeight: 900, color: '#b45309' }}>{formatVND(a.amount)}</span>
+                          </div>
+                          <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                            <button onClick={() => handleReviewAdvance(a.id, true)} style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
+                              ✓ Duyệt Chi Tiền
+                            </button>
+                            <button onClick={() => handleReviewAdvance(a.id, false)} style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
+                              ✕ Từ Chối
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 4. Xin nghỉ — gom từ ô tiện ích cũ */}
+                {pendingLeaves.length > 0 && (
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 12, fontWeight: 900, color: '#0f766e', textTransform: 'uppercase', marginBottom: 8 }}>
+                      🏖 Đơn xin nghỉ ({pendingLeaves.length})
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {pendingLeaves.map((l: any) => (
+                        <div key={l.id} style={{ background: '#f0fdfa', border: '1.5px solid #99f6e4', borderRadius: 14, padding: 12 }}>
+                          <div style={{ fontSize: 13.5, fontWeight: 900, color: '#2d1c10' }}>{l.requester_name}</div>
+                          <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>
+                            {l.reason}{l.leave_date ? ` · Ngày ${new Date(l.leave_date).toLocaleDateString('vi-VN')}` : ''}
+                          </div>
+                          <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                            <button onClick={() => handleReviewLeave(l.id, true)} style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
+                              ✓ Đồng Ý
+                            </button>
+                            <button onClick={() => handleReviewLeave(l.id, false)} style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
+                              ✕ Từ Chối
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 5. Duyệt Chi — mở sang Sổ Cái Khoản Chi có sẵn (giữ nguyên luồng duyệt Chi cũ) */}
+                {expensePendingCount > 0 && (
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 900, color: '#dc2626', textTransform: 'uppercase', marginBottom: 8 }}>
+                      💸 Yêu cầu duyệt Chi ({expensePendingCount})
+                    </div>
+                    <button
+                      onClick={() => { setActiveSheet('expense_detail'); setLedgerTab('expense'); }}
+                      style={{ width: '100%', textAlign: 'left', background: '#fef2f2', border: '1.5px solid #fecaca', borderRadius: 14, padding: 12, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                    >
+                      <span style={{ fontSize: 13, fontWeight: 800, color: '#2d1c10' }}>Xem &amp; duyệt {expensePendingCount} khoản chi đang chờ</span>
+                      <ChevronRight size={16} color="#a08060" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         )}
 
         {/* ========================================================================= */}

@@ -247,6 +247,48 @@ export async function reviewLeaveRequest(id, approved, note) {
   await resolveApprovalRequest(id, { status: approved ? 'approved' : 'rejected', note });
 }
 
+// ---- 3d. Yêu cầu sửa đơn đang chờ duyệt — cùng bảng/RPC với EditApprovalPanel
+// (src/components/EditApprovalPanel.jsx), gọi lại đúng cổng đó, không viết
+// luồng ghi thứ hai cho cùng một hành động. ----
+export async function fetchPendingOrderEditRequests() {
+  const { data, error } = await supabase
+    .from('order_edit_requests')
+    .select('*, orders(order_code)')
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function reviewOrderEditRequest(id, approve, directorId, directorName) {
+  const { data, error } = await supabase.rpc('approve_order_edit_request', {
+    p_request_id: id, p_director_id: directorId, p_director_name: directorName, p_approved: approve,
+  });
+  if (error) throw error;
+  if (!data?.success) throw new Error(data?.message || 'Không xử lý được yêu cầu sửa đơn.');
+}
+
+// ---- 3e. Yêu cầu tăng ca đang chờ duyệt (overtime_requests) — cùng bảng và
+// cách ghi trực tiếp mà CompensationScreen.jsx đang dùng, không qua RPC riêng
+// (RLS bảng này đã cho phép quản lý cập nhật thẳng). ----
+export async function fetchPendingOvertimeRequests() {
+  const { data, error } = await supabase
+    .from('overtime_requests')
+    .select('*, employee:profiles!employee_id(id,full_name,role,station)')
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function reviewOvertimeRequest(id, approve, directorId) {
+  const { error } = await supabase
+    .from('overtime_requests')
+    .update({ status: approve ? 'approved' : 'rejected', reviewed_by: directorId, reviewed_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw error;
+}
+
 // ---- 4. Giao việc nhanh cho 1 nhân viên ----
 export async function fetchAssignableStaff() {
   const { data, error } = await supabase
