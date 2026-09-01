@@ -20,6 +20,7 @@ import { IconCake, IconBakery, IconMacaron, IconSchool, IconTeabreak, IconMixed 
 import StarRateBar from './StarRateBar';
 import { PhotoField } from './PhotoField';
 import { CameraPhotoField } from './CameraPhotoField';
+import { CARRIER_OPTIONS, SHIPMENT_STATUS_OPTIONS, shipmentStatusMeta, carrierLabel, fetchActiveShipmentForOrder, handOffToCarrier, updateShipmentStatus } from '../lib/thirdPartyShipping';
 
 const ORDER_TYPE_ICONS = {
   cake: IconCake, bakery: IconBakery, macaron: IconMacaron, school: IconSchool, teabreak: IconTeabreak, mixed: IconMixed,
@@ -140,6 +141,16 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
   // SX/HSD theo đúng yêu cầu — dùng lại addFinishedGoodsEntryV2 đã có sẵn
   // (Khánh viết cho Nhập kho), không tạo đường ghi kho mới.
   const [showWarehouseForm, setShowWarehouseForm] = useState(false);
+  const [showThirdPartyModal, setShowThirdPartyModal] = useState(false);
+  const [showShipmentStatusModal, setShowShipmentStatusModal] = useState(false);
+  const [tpCarrier, setTpCarrier] = useState('ghn');
+  const [tpCarrierOther, setTpCarrierOther] = useState('');
+  const [tpTrackingId, setTpTrackingId] = useState('');
+  const [tpDriverName, setTpDriverName] = useState('');
+  const [tpDriverPhone, setTpDriverPhone] = useState('');
+  const [tpNotes, setTpNotes] = useState('');
+  const [tpBusy, setTpBusy] = useState(false);
+  const [tpError, setTpError] = useState('');
   const [whPhoto, setWhPhoto] = useState(null);
   const [whProductionDate, setWhProductionDate] = useState('');
   const [whExpiryDate, setWhExpiryDate] = useState('');
@@ -199,6 +210,13 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
 
     let currentPackages = p.data || [];
 
+    // Đội Vận Tải Ảo — chỉ có ý nghĩa khi đơn đã qua Kho Thành Phẩm; bỏ qua
+    // truy vấn cho các trạng thái sớm hơn để đỡ tốn round-trip.
+    let thirdPartyShipment = null;
+    if (['ready_for_fulfillment', 'in_delivery', 'completed'].includes(o.data?.status_v2)) {
+      try { thirdPartyShipment = await fetchActiveShipmentForOrder(orderId); } catch { /* không chặn load đơn nếu lỗi */ }
+    }
+
     setData({
       order: o.data,
       items: i.data || [],
@@ -207,6 +225,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       kpiLogs: kpi.data || [],
       operations: ops.data || {},
       shipper: (ship.data && ship.data[0]) || null,
+      thirdPartyShipment,
       changeHistory: (changes.data || []).map(c => ({
         ...c,
         editor_name: c.edited_by_name,
@@ -283,6 +302,48 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       setError(e.message);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const openThirdPartyModal = () => {
+    setTpCarrier('ghn'); setTpCarrierOther(''); setTpTrackingId('');
+    setTpDriverName(''); setTpDriverPhone(''); setTpNotes(''); setTpError('');
+    setShowThirdPartyModal(true);
+  };
+
+  const submitHandOffToCarrier = async () => {
+    setTpBusy(true); setTpError('');
+    try {
+      await handOffToCarrier(orderId, {
+        carrier: tpCarrier,
+        carrierOtherName: tpCarrier === 'other' ? tpCarrierOther : null,
+        trackingId: tpTrackingId,
+        driverName: tpDriverName,
+        driverPhone: tpDriverPhone,
+        notes: tpNotes,
+      });
+      setShowThirdPartyModal(false);
+      await load();
+      onChanged?.();
+    } catch (e) {
+      setTpError(e.message);
+    } finally {
+      setTpBusy(false);
+    }
+  };
+
+  const submitShipmentStatus = async (status) => {
+    if (!data?.thirdPartyShipment?.id) return;
+    setTpBusy(true); setTpError('');
+    try {
+      await updateShipmentStatus(data.thirdPartyShipment.id, status, tpNotes);
+      setShowShipmentStatusModal(false);
+      await load();
+      onChanged?.();
+    } catch (e) {
+      setTpError(e.message);
+    } finally {
+      setTpBusy(false);
     }
   };
 
@@ -1077,7 +1138,20 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                 🚚 Nhận Giao
               </button>
             )}
-            {o.status_v2 === 'in_delivery' && (
+            {o.status_v2 === 'ready_for_fulfillment' && hasAnyRole(profile, ['owner', 'admin']) && (
+              <button
+                disabled={busy}
+                onClick={openThirdPartyModal}
+                style={{
+                  minHeight: 40, border: 0, borderRadius: 12, padding: '0 14px', fontWeight: 900,
+                  background: '#1E88E5', color: 'white', fontSize: 14, cursor: busy ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 2px 0 #145a94', opacity: busy ? 0.6 : 1
+                }}
+              >
+                📦 Chuyển Giao ĐVVC
+              </button>
+            )}
+            {o.status_v2 === 'in_delivery' && !data.thirdPartyShipment && (
               <button
                 disabled={busy}
                 onClick={() => {
@@ -1096,6 +1170,45 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
               </button>
             )}
           </div>
+
+          {data.thirdPartyShipment && (
+            <div style={{
+              marginBottom: 10, padding: 14, borderRadius: 14, background: 'var(--surface-sunken)',
+              border: `1.5px solid ${shipmentStatusMeta(data.thirdPartyShipment.manual_status).color}55`,
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                <strong style={{ fontSize: 14, color: 'var(--text-primary)' }}>
+                  📦 Đơn vị vận chuyển: {carrierLabel(data.thirdPartyShipment.carrier, data.thirdPartyShipment.carrier_other_name)}
+                </strong>
+                <span style={{
+                  fontSize: 12, fontWeight: 800, padding: '3px 10px', borderRadius: 999, color: '#fff',
+                  background: shipmentStatusMeta(data.thirdPartyShipment.manual_status).color,
+                }}>
+                  {shipmentStatusMeta(data.thirdPartyShipment.manual_status).label}
+                </span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13.5, color: 'var(--text-secondary)' }}>
+                {data.thirdPartyShipment.tracking_id && <div><b>Mã vận đơn:</b> {data.thirdPartyShipment.tracking_id}</div>}
+                {(data.thirdPartyShipment.driver_name || data.thirdPartyShipment.driver_phone) && (
+                  <div><b>Tài xế:</b> {data.thirdPartyShipment.driver_name || '—'}{data.thirdPartyShipment.driver_phone ? ` · ${data.thirdPartyShipment.driver_phone}` : ''}</div>
+                )}
+                {data.thirdPartyShipment.notes && <div><b>Ghi chú:</b> {data.thirdPartyShipment.notes}</div>}
+                <div><b>Chuyển giao lúc:</b> {new Date(data.thirdPartyShipment.handed_off_at).toLocaleString('vi-VN')}{data.thirdPartyShipment.handed_off_by_name ? ` · ${data.thirdPartyShipment.handed_off_by_name}` : ''}</div>
+              </div>
+              {hasAnyRole(profile, ['owner', 'admin']) && o.status_v2 === 'in_delivery' && (
+                <button
+                  disabled={busy}
+                  onClick={() => { setTpNotes(''); setTpError(''); setShowShipmentStatusModal(true); }}
+                  style={{
+                    marginTop: 10, minHeight: 38, border: 0, borderRadius: 10, padding: '0 14px', fontWeight: 800,
+                    background: '#fff', color: '#1E88E5', border: '1.5px solid #1E88E5', fontSize: 13.5, cursor: 'pointer',
+                  }}
+                >
+                  Cập nhật trạng thái vận chuyển
+                </button>
+              )}
+            </div>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 15 }}>
             {o.customers && (o.customers.name || o.customers.phone) && (
               <div>
@@ -1552,6 +1665,117 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                 {busy ? '⏳ Đang xử lý...' : '✓ Xác nhận Nhận Giao'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Chuyển giao cho Đơn vị Vận chuyển (Đội Vận Tải Ảo) */}
+      {showThirdPartyModal && (
+        <div onClick={() => !tpBusy && setShowThirdPartyModal(false)} style={{
+          position: 'fixed', inset: 0, zIndex: 115, background: 'rgba(0,0,0,0.5)',
+          display: 'flex', justifyContent: 'center', alignItems: 'flex-end'
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            width: '100%', maxWidth: 600, background: 'var(--surface-app)', borderRadius: '20px 20px 0 0',
+            padding: 24, maxHeight: '85vh', overflowY: 'auto'
+          }}>
+            <h3 style={{ margin: '0 0 16px 0', fontSize: 18, color: 'var(--text-primary)', fontWeight: 900 }}>
+              📦 Chuyển Giao Đơn Vị Vận Chuyển
+            </h3>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 700, marginBottom: 6, color: 'var(--text-secondary)' }}>Đơn vị vận chuyển</label>
+                <select value={tpCarrier} onChange={(e) => setTpCarrier(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1.5px solid var(--border-default)', fontSize: 14, background: 'var(--surface-app)', color: 'var(--text-primary)' }}>
+                  {CARRIER_OPTIONS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </select>
+              </div>
+              {tpCarrier === 'other' && (
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 700, marginBottom: 6, color: 'var(--text-secondary)' }}>Tên đơn vị (khác)</label>
+                  <input value={tpCarrierOther} onChange={(e) => setTpCarrierOther(e.target.value)} placeholder="VD: J&T Express" style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1.5px solid var(--border-default)', fontSize: 14 }} />
+                </div>
+              )}
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 700, marginBottom: 6, color: 'var(--text-secondary)' }}>Mã vận đơn (Tracking ID)</label>
+                <input value={tpTrackingId} onChange={(e) => setTpTrackingId(e.target.value)} placeholder="VD: GHN123456789" style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1.5px solid var(--border-default)', fontSize: 14 }} />
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 700, marginBottom: 6, color: 'var(--text-secondary)' }}>Tên tài xế</label>
+                  <input value={tpDriverName} onChange={(e) => setTpDriverName(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1.5px solid var(--border-default)', fontSize: 14 }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 700, marginBottom: 6, color: 'var(--text-secondary)' }}>SĐT tài xế</label>
+                  <input value={tpDriverPhone} onChange={(e) => setTpDriverPhone(e.target.value)} type="tel" style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1.5px solid var(--border-default)', fontSize: 14 }} />
+                </div>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 700, marginBottom: 6, color: 'var(--text-secondary)' }}>Ghi chú</label>
+                <textarea value={tpNotes} onChange={(e) => setTpNotes(e.target.value)} rows={2} style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1.5px solid var(--border-default)', fontSize: 14, resize: 'vertical' }} />
+              </div>
+            </div>
+
+            {tpError && (
+              <div style={{ marginTop: 14, padding: 10, background: '#fee2e2', borderRadius: 10, color: '#b42318', fontWeight: 700, fontSize: 14 }}>
+                ⚠️ {tpError}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+              <button onClick={() => setShowThirdPartyModal(false)} disabled={tpBusy} style={{ flex: 1, padding: '12px 16px', background: 'var(--surface-sunken)', color: 'var(--text-primary)', border: 0, borderRadius: 10, fontWeight: 700, cursor: 'pointer', fontSize: 14 }}>
+                Huỷ
+              </button>
+              <button onClick={submitHandOffToCarrier} disabled={tpBusy} style={{ flex: 1, padding: '12px 16px', background: '#1E88E5', color: '#fff', border: 0, borderRadius: 10, fontWeight: 700, cursor: tpBusy ? 'not-allowed' : 'pointer', fontSize: 14, opacity: tpBusy ? 0.6 : 1 }}>
+                {tpBusy ? '⏳ Đang xử lý...' : '✓ Xác nhận chuyển giao'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Cập nhật trạng thái vận chuyển ĐVVC */}
+      {showShipmentStatusModal && (
+        <div onClick={() => !tpBusy && setShowShipmentStatusModal(false)} style={{
+          position: 'fixed', inset: 0, zIndex: 115, background: 'rgba(0,0,0,0.5)',
+          display: 'flex', justifyContent: 'center', alignItems: 'flex-end'
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            width: '100%', maxWidth: 600, background: 'var(--surface-app)', borderRadius: '20px 20px 0 0',
+            padding: 24, maxHeight: '85vh', overflowY: 'auto'
+          }}>
+            <h3 style={{ margin: '0 0 16px 0', fontSize: 18, color: 'var(--text-primary)', fontWeight: 900 }}>
+              🚚 Cập Nhật Trạng Thái Vận Chuyển
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
+              {SHIPMENT_STATUS_OPTIONS.map((s) => (
+                <button
+                  key={s.value}
+                  disabled={tpBusy}
+                  onClick={() => submitShipmentStatus(s.value)}
+                  style={{
+                    minHeight: 48, border: `1.5px solid ${s.color}`, borderRadius: 12, fontWeight: 800,
+                    background: data?.thirdPartyShipment?.manual_status === s.value ? s.color : '#fff',
+                    color: data?.thirdPartyShipment?.manual_status === s.value ? '#fff' : s.color,
+                    fontSize: 14, cursor: tpBusy ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {s.label}{s.value === 'that_bai' ? ' (đơn sẽ trả về "Chờ giao" để chuyển giao lại)' : ''}{s.value === 'da_hoan_thanh' ? ' (đơn sẽ đóng lại)' : ''}
+                </button>
+              ))}
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 700, marginBottom: 6, color: 'var(--text-secondary)' }}>Ghi chú (tuỳ chọn)</label>
+              <textarea value={tpNotes} onChange={(e) => setTpNotes(e.target.value)} rows={2} style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1.5px solid var(--border-default)', fontSize: 14, resize: 'vertical' }} />
+            </div>
+            {tpError && (
+              <div style={{ marginTop: 14, padding: 10, background: '#fee2e2', borderRadius: 10, color: '#b42318', fontWeight: 700, fontSize: 14 }}>
+                ⚠️ {tpError}
+              </div>
+            )}
+            <button onClick={() => setShowShipmentStatusModal(false)} disabled={tpBusy} style={{ marginTop: 14, width: '100%', padding: '12px 16px', background: 'var(--surface-sunken)', color: 'var(--text-primary)', border: 0, borderRadius: 10, fontWeight: 700, cursor: 'pointer', fontSize: 14 }}>
+              Đóng
+            </button>
           </div>
         </div>
       )}
