@@ -198,7 +198,7 @@ function DeliveryCard({ order, onPickup, onComplete, onSignedDoc, isDedicatedShi
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => window.dispatchEvent(new CustomEvent('sumi-open-order', { detail: { entityId: order.id } }))}
+            onClick={(e) => { e.stopPropagation(); if (!hidePhone) setShowDetail(true); }}
             style={{ marginTop: 6, width: '100%', fontWeight: 700 }}
           >
             🔍 Xem chi tiết đơn hàng & Mẫu bánh
