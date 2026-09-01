@@ -12,6 +12,7 @@ import FinishedGoodsInventoryV2 from '../components/warehouse/FinishedGoodsInven
 import { fetchOrderNoteCounts } from '../lib/queries';
 import { fetchOrderHearts, addOrderHeart } from '../lib/bossOverviewV3';
 import { IconInbox, IconKitchen, IconPackage, IconShipping, IconCheckCircle, IconWarning, IconWarehouse, IconCake, IconBakery, IconMacaron, IconSchool, IconTeabreak, IconMixed } from '../components/icons/FrogIcons';
+import { localDateStr } from '../lib/date';
 
 const LABELS = {
   awaiting_assignment: 'Đơn chờ làm', awaiting_acceptance: 'Đơn chờ làm', in_production: 'Bếp đang làm',
@@ -191,6 +192,108 @@ export default function OrdersV2Screen() {
 
   const stage = (s) => s === 'completed' ? 5 : s === 'in_delivery' ? 4 : s === 'ready_for_fulfillment' ? 3 : s === 'in_production' ? 2 : 1;
 
+  // Trong 1 luồng có thể có đơn khách đặt trước mấy ngày (bếp chưa cần làm
+  // ngay, đợi tới giờ phù hợp) trộn lẫn với đơn cần làm hôm nay — tách riêng
+  // để "Đơn Hôm Nay" luôn nổi bật lên đầu, không bị chìm giữa các đơn đặt
+  // trước. shownOrders đã sắp theo required_at tăng dần từ listOrdersV2()
+  // nên giữ nguyên thứ tự đó trong từng nhóm (gần giờ giao nhất lên trước).
+  const { todayOrders, otherOrders } = useMemo(() => {
+    const todayStr = localDateStr();
+    const today = [], other = [];
+    for (const o of shownOrders) {
+      if (o.required_at && localDateStr(new Date(o.required_at)) === todayStr) today.push(o);
+      else other.push(o);
+    }
+    return { todayOrders: today, otherOrders: other };
+  }, [shownOrders]);
+
+  const renderOrderCard = (o) => (
+    <button className="mock-order-card" key={o.id} onClick={() => setSelectedId(o.id)}>
+      <div className="mock-order-top">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <strong>#{o.order_code || 'CHƯA CÓ MÃ'}</strong>
+          {o.is_internal && (
+            <span style={{ background: '#7c3aed', color: '#fff', fontWeight: 900, fontSize: 11, padding: '2px 8px', borderRadius: 999, letterSpacing: 0.3 }}>
+              🏷️ NỘI BỘ
+            </span>
+          )}
+          {(() => {
+            const hearts = orderHearts[o.id] || [];
+            const iHearted = hearts.some((h) => h.staff_id === profile?.id);
+            return (
+              <span
+                onClick={(e) => handleHeartOrder(e, o.id)}
+                title={hearts.length ? `Đã xem: ${hearts.map((h) => h.staff_name).join(', ')}` : 'Thả tim = đánh dấu đã xem đơn này'}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 3, cursor: iHearted ? 'default' : 'pointer', fontSize: 14, color: iHearted ? '#e11d48' : '#8a7a66' }}
+              >
+                {iHearted ? '❤️' : '🤍'} {hearts.length > 0 && hearts.length}
+              </span>
+            );
+          })()}
+          {noteCounts[o.id] > 0 && (
+            <span style={{ fontSize: 14, color: '#8a7a66' }}>💬 {noteCounts[o.id]}</span>
+          )}
+        </div>
+        <span className={o.is_overdue ? 'is-overdue' : ''}>
+          {o.is_overdue ? '⚠️ Chưa thực hiện' : (LABELS[o.status_v2] || o.status_v2)}
+        </span>
+      </div>
+      {(orderHearts[o.id] || []).length > 0 && (
+        <p className="mock-order-metric" style={{ fontSize: 11, color: '#8a7a66' }}>
+          ❤️ Đã xem: {(orderHearts[o.id] || []).map((h) => h.staff_name).join(', ')}
+        </p>
+      )}
+      <h2>
+        {o.is_internal ? `Đơn nội bộ${o.target_store ? ` — ${o.target_store}` : ''}` : (o.customer_name || 'Khách chưa ghi tên')}
+        {o.created_by_name && <span style={{ fontSize: '0.7em', fontWeight: 400, color: '#8a7a66' }}> ({o.created_by_name})</span>}
+      </h2>
+      <p><b>{o.order_type_label || o.order_type || 'Đơn sản xuất'}</b> · {o.address || 'Nhận tại quầy'}</p>
+      {o.product_names && <p className="mock-order-metric">🍰 {o.product_names}</p>}
+      {o.kitchen_names && <p className="mock-order-metric">👨‍🍳 Bếp: {o.kitchen_names}</p>}
+      {o.was_late && <p className="mock-order-metric" style={{ background: '#fee2e2', color: '#b42318' }}>⚠️ Trễ{o.late_staff_names ? ` — ${o.late_staff_names}` : ''}</p>}
+      <p>Tạo lúc {new Date(o.created_at).toLocaleString('vi-VN')} · {o.total_quantity || 0} sản phẩm</p>
+      <div className="mock-track">
+        {[1, 2, 3, 4, 5].map(n => <i key={n} className={n <= stage(o.status_v2) ? 'done' : ''} />)}
+      </div>
+      <div className="mock-track-label">
+        <span>Chờ nhận</span>
+        <b>{LABELS[o.status_v2] || o.status_v2}</b>
+        <span>Hoàn thành</span>
+      </div>
+
+      {o.status_v2 === 'in_production' && o.production_started_at && (
+        <p className="mock-order-metric">
+          👨‍🍳 Bếp đã làm {minutesText(Math.max(0, Math.floor((Date.now() - new Date(o.production_started_at)) / 60000)))}
+        </p>
+      )}
+      {o.production_minutes !== null && o.production_minutes !== undefined && (
+        <p className="mock-order-metric">✅ Thời gian bếp: {minutesText(o.production_minutes)}</p>
+      )}
+      {o.status_v2 === 'in_delivery' && o.delivery_started_at && (
+        <p className="mock-order-metric">
+          🚚 Đang giao {minutesText(Math.max(0, Math.floor((Date.now() - new Date(o.delivery_started_at)) / 60000)))} · {o.driver_name || o.provider_label || 'Chưa rõ người giao'}
+        </p>
+      )}
+      {o.delivery_minutes !== null && o.delivery_minutes !== undefined && (
+        <p className="mock-order-metric">✅ Thời gian giao: {minutesText(o.delivery_minutes)}{o.driver_name || o.provider_label ? ` · ${o.driver_name || o.provider_label}` : ''}</p>
+      )}
+      {o.shipping_fee !== null && o.shipping_fee !== undefined && o.confidentiality !== 'school_restricted' && (
+        <p className="mock-order-metric">Phí giao: {Number(o.shipping_fee).toLocaleString('vi-VN')}đ</p>
+      )}
+      {o.production_started_at && <p className="mock-order-time">Nhận đơn: {new Date(o.production_started_at).toLocaleString('vi-VN')}</p>}
+      {o.production_completed_at && <p className="mock-order-time">Bếp hoàn thành: {new Date(o.production_completed_at).toLocaleString('vi-VN')}</p>}
+      {o.delivery_started_at && <p className="mock-order-time">Bắt đầu giao: {new Date(o.delivery_started_at).toLocaleString('vi-VN')}</p>}
+      {o.delivery_completed_at && <p className="mock-order-time">Giao xong: {new Date(o.delivery_completed_at).toLocaleString('vi-VN')}</p>}
+      {o.is_overdue && (
+        <div className="mock-order-overdue">
+          <b>Quá giờ {minutesText(o.overdue_minutes)}</b>
+          <span>{o.overdue_stage}</span>
+        </div>
+      )}
+      <time>{o.required_at ? `Cần giao ${new Date(o.required_at).toLocaleString('vi-VN')}` : 'Chưa đặt giờ giao'}</time>
+    </button>
+  );
+
   if (showCreate) return <CreateOrderV2Modal embedded resumeDraftId={resumeDraftId} onClose={() => { setShowCreate(false); setResumeDraftId(null); }} onCreated={load} />;
   // Kho Thành Phẩm: trang toàn màn hình (không phải modal/drawer co cụm) — cùng
   // kiểu chuyển màn với showCreate ở trên, khớp mockup "screen" riêng của nó.
@@ -349,32 +452,6 @@ export default function OrdersV2Screen() {
             </strong>
           </div>
 
-          {/* Thanh chuyển nhanh giữa các luồng */}
-          <div className="mock-flow-tabs">
-            <button
-              className={flowGroup === 'all' ? 'active' : ''}
-              onClick={() => setFlowGroup('all')}
-            >
-              <span>📋</span>
-              <span>Tất cả</span>
-              <b>{statusOrders.length}</b>
-            </button>
-            {availableFlowGroups.map(g => {
-              const count = statusOrders.filter(g.match).length;
-              return (
-                <button
-                  key={g.key}
-                  className={flowGroup === g.key ? 'active' : ''}
-                  onClick={() => setFlowGroup(g.key)}
-                >
-                  <span><g.Icon size={16} /></span>
-                  <span>{g.label}</span>
-                  <b>{count}</b>
-                </button>
-              );
-            })}
-          </div>
-
           {/* Ô tìm kiếm đơn */}
           <input
             className="mock-flow-search"
@@ -383,93 +460,21 @@ export default function OrdersV2Screen() {
             onChange={e => setSearchQuery(e.target.value)}
           />
 
-          {/* Danh sách đơn hàng */}
-          {shownOrders.map(o => (
-            <button className="mock-order-card" key={o.id} onClick={() => setSelectedId(o.id)}>
-              <div className="mock-order-top">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <strong>#{o.order_code || 'CHƯA CÓ MÃ'}</strong>
-                  {o.is_internal && (
-                    <span style={{ background: '#7c3aed', color: '#fff', fontWeight: 900, fontSize: 11, padding: '2px 8px', borderRadius: 999, letterSpacing: 0.3 }}>
-                      🏷️ NỘI BỘ
-                    </span>
-                  )}
-                  {(() => {
-                    const hearts = orderHearts[o.id] || [];
-                    const iHearted = hearts.some((h) => h.staff_id === profile?.id);
-                    return (
-                      <span
-                        onClick={(e) => handleHeartOrder(e, o.id)}
-                        title={hearts.length ? `Đã xem: ${hearts.map((h) => h.staff_name).join(', ')}` : 'Thả tim = đánh dấu đã xem đơn này'}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 3, cursor: iHearted ? 'default' : 'pointer', fontSize: 14, color: iHearted ? '#e11d48' : '#8a7a66' }}
-                      >
-                        {iHearted ? '❤️' : '🤍'} {hearts.length > 0 && hearts.length}
-                      </span>
-                    );
-                  })()}
-                  {noteCounts[o.id] > 0 && (
-                    <span style={{ fontSize: 14, color: '#8a7a66' }}>💬 {noteCounts[o.id]}</span>
-                  )}
-                </div>
-                <span className={o.is_overdue ? 'is-overdue' : ''}>
-                  {o.is_overdue ? '⚠️ Chưa thực hiện' : (LABELS[o.status_v2] || o.status_v2)}
-                </span>
-              </div>
-              {(orderHearts[o.id] || []).length > 0 && (
-                <p className="mock-order-metric" style={{ fontSize: 11, color: '#8a7a66' }}>
-                  ❤️ Đã xem: {(orderHearts[o.id] || []).map((h) => h.staff_name).join(', ')}
-                </p>
-              )}
-              <h2>
-                {o.is_internal ? `Đơn nội bộ${o.target_store ? ` — ${o.target_store}` : ''}` : (o.customer_name || 'Khách chưa ghi tên')}
-                {o.created_by_name && <span style={{ fontSize: '0.7em', fontWeight: 400, color: '#8a7a66' }}> ({o.created_by_name})</span>}
-              </h2>
-              <p><b>{o.order_type_label || o.order_type || 'Đơn sản xuất'}</b> · {o.address || 'Nhận tại quầy'}</p>
-              {o.product_names && <p className="mock-order-metric">🍰 {o.product_names}</p>}
-              {o.kitchen_names && <p className="mock-order-metric">👨‍🍳 Bếp: {o.kitchen_names}</p>}
-              {o.was_late && <p className="mock-order-metric" style={{ background: '#fee2e2', color: '#b42318' }}>⚠️ Trễ{o.late_staff_names ? ` — ${o.late_staff_names}` : ''}</p>}
-              <p>Tạo lúc {new Date(o.created_at).toLocaleString('vi-VN')} · {o.total_quantity || 0} sản phẩm</p>
-              <div className="mock-track">
-                {[1, 2, 3, 4, 5].map(n => <i key={n} className={n <= stage(o.status_v2) ? 'done' : ''} />)}
-              </div>
-              <div className="mock-track-label">
-                <span>Chờ nhận</span>
-                <b>{LABELS[o.status_v2] || o.status_v2}</b>
-                <span>Hoàn thành</span>
-              </div>
+          {/* Danh sách đơn hàng — tách riêng đơn cần làm HÔM NAY khỏi đơn đặt
+              trước cho ngày khác, để đơn gấp không bị chìm giữa danh sách. */}
+          {todayOrders.length > 0 && (
+            <div className="mock-list-head" style={{ marginTop: 4 }}>
+              <strong style={{ fontSize: 15 }}>🗓️ Đơn Hôm Nay ({todayOrders.length})</strong>
+            </div>
+          )}
+          {todayOrders.map(renderOrderCard)}
 
-              {o.status_v2 === 'in_production' && o.production_started_at && (
-                <p className="mock-order-metric">
-                  👨‍🍳 Bếp đã làm {minutesText(Math.max(0, Math.floor((Date.now() - new Date(o.production_started_at)) / 60000)))}
-                </p>
-              )}
-              {o.production_minutes !== null && o.production_minutes !== undefined && (
-                <p className="mock-order-metric">✅ Thời gian bếp: {minutesText(o.production_minutes)}</p>
-              )}
-              {o.status_v2 === 'in_delivery' && o.delivery_started_at && (
-                <p className="mock-order-metric">
-                  🚚 Đang giao {minutesText(Math.max(0, Math.floor((Date.now() - new Date(o.delivery_started_at)) / 60000)))} · {o.driver_name || o.provider_label || 'Chưa rõ người giao'}
-                </p>
-              )}
-              {o.delivery_minutes !== null && o.delivery_minutes !== undefined && (
-                <p className="mock-order-metric">✅ Thời gian giao: {minutesText(o.delivery_minutes)}{o.driver_name || o.provider_label ? ` · ${o.driver_name || o.provider_label}` : ''}</p>
-              )}
-              {o.shipping_fee !== null && o.shipping_fee !== undefined && o.confidentiality !== 'school_restricted' && (
-                <p className="mock-order-metric">Phí giao: {Number(o.shipping_fee).toLocaleString('vi-VN')}đ</p>
-              )}
-              {o.production_started_at && <p className="mock-order-time">Nhận đơn: {new Date(o.production_started_at).toLocaleString('vi-VN')}</p>}
-              {o.production_completed_at && <p className="mock-order-time">Bếp hoàn thành: {new Date(o.production_completed_at).toLocaleString('vi-VN')}</p>}
-              {o.delivery_started_at && <p className="mock-order-time">Bắt đầu giao: {new Date(o.delivery_started_at).toLocaleString('vi-VN')}</p>}
-              {o.delivery_completed_at && <p className="mock-order-time">Giao xong: {new Date(o.delivery_completed_at).toLocaleString('vi-VN')}</p>}
-              {o.is_overdue && (
-                <div className="mock-order-overdue">
-                  <b>Quá giờ {minutesText(o.overdue_minutes)}</b>
-                  <span>{o.overdue_stage}</span>
-                </div>
-              )}
-              <time>{o.required_at ? `Cần giao ${new Date(o.required_at).toLocaleString('vi-VN')}` : 'Chưa đặt giờ giao'}</time>
-            </button>
-          ))}
+          {otherOrders.length > 0 && (
+            <div className="mock-list-head" style={{ marginTop: todayOrders.length > 0 ? 18 : 4 }}>
+              <strong style={{ fontSize: 15 }}>📅 Đơn Ngày Khác ({otherOrders.length})</strong>
+            </div>
+          )}
+          {otherOrders.map(renderOrderCard)}
 
           {loading && (
             <div className="mock-empty">
