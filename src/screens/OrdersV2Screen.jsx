@@ -51,6 +51,11 @@ export default function OrdersV2Screen() {
   const [filter, setFilter] = useState(null);
   const [flowGroup, setFlowGroup] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  // Bộ lọc riêng cho tab "Giao thành công" (đúng nghĩa Lịch sử đơn hàng) —
+  // chỉ ảnh hưởng khối "Đơn Trước Đây", không đụng "Đơn Hôm Nay".
+  const [historyFrom, setHistoryFrom] = useState('');
+  const [historyTo, setHistoryTo] = useState('');
+  const [historyKeyword, setHistoryKeyword] = useState('');
   const [canCreate, setCanCreate] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [resumeDraftId, setResumeDraftId] = useState(null);
@@ -110,6 +115,7 @@ export default function OrdersV2Screen() {
       setFilter(event.detail?.filter || null);
       setFlowGroup(null);
       setSearchQuery('');
+      setHistoryFrom(''); setHistoryTo(''); setHistoryKeyword('');
     };
     window.addEventListener('sumi-order-filter', select);
     return () => window.removeEventListener('sumi-order-filter', select);
@@ -192,20 +198,37 @@ export default function OrdersV2Screen() {
 
   const stage = (s) => s === 'completed' ? 5 : s === 'in_delivery' ? 4 : s === 'ready_for_fulfillment' ? 3 : s === 'in_production' ? 2 : 1;
 
-  // Trong 1 luồng có thể có đơn khách đặt trước mấy ngày (bếp chưa cần làm
-  // ngay, đợi tới giờ phù hợp) trộn lẫn với đơn cần làm hôm nay — tách riêng
-  // để "Đơn Hôm Nay" luôn nổi bật lên đầu, không bị chìm giữa các đơn đặt
-  // trước. shownOrders đã sắp theo required_at tăng dần từ listOrdersV2()
-  // nên giữ nguyên thứ tự đó trong từng nhóm (gần giờ giao nhất lên trước).
+  // Tab "Giao thành công" = đúng nghĩa Lịch sử đơn hàng -> tách theo ngày
+  // HOÀN THÀNH thật (completed_at). Các tab vận hành khác (chờ làm/đang
+  // làm...) tách theo GIỜ CẦN GIAO (required_at) để bếp biết đơn nào làm
+  // trước — 2 mục đích khác nhau nên dùng field khác nhau.
+  const isHistoryTab = filter === 'completed';
   const { todayOrders, otherOrders } = useMemo(() => {
     const todayStr = localDateStr();
     const today = [], other = [];
     for (const o of shownOrders) {
-      if (o.required_at && localDateStr(new Date(o.required_at)) === todayStr) today.push(o);
+      const d = isHistoryTab ? o.completed_at : o.required_at;
+      if (d && localDateStr(new Date(d)) === todayStr) today.push(o);
       else other.push(o);
     }
     return { todayOrders: today, otherOrders: other };
-  }, [shownOrders]);
+  }, [shownOrders, isHistoryTab]);
+
+  // Bộ lọc khoảng ngày + tên khách CHỈ áp dụng cho khối "Đơn Trước Đây" của
+  // tab Lịch sử — "Đơn Hôm Nay" luôn hiện đủ, không bị ảnh hưởng (yêu cầu
+  // UX: lọc/tìm kiếm không được làm gián đoạn luồng hiển thị cố định của
+  // Hôm Nay).
+  const historyOrders = useMemo(() => {
+    if (!isHistoryTab) return otherOrders;
+    let list = otherOrders;
+    if (historyFrom) list = list.filter(o => o.completed_at && localDateStr(new Date(o.completed_at)) >= historyFrom);
+    if (historyTo) list = list.filter(o => o.completed_at && localDateStr(new Date(o.completed_at)) <= historyTo);
+    if (historyKeyword.trim()) {
+      const q = historyKeyword.toLowerCase().trim();
+      list = list.filter(o => (o.customer_name || '').toLowerCase().includes(q));
+    }
+    return list;
+  }, [otherOrders, isHistoryTab, historyFrom, historyTo, historyKeyword]);
 
   const renderOrderCard = (o) => (
     <button className="mock-order-card" key={o.id} onClick={() => setSelectedId(o.id)}>
@@ -368,7 +391,7 @@ export default function OrdersV2Screen() {
             <button
               className={filter === item.key ? 'active' : ''}
               key={item.key}
-              onClick={() => { setFilter(item.key); setFlowGroup(null); setSearchQuery(''); }}
+              onClick={() => { setFilter(item.key); setFlowGroup(null); setSearchQuery(''); setHistoryFrom(''); setHistoryTo(''); setHistoryKeyword(''); }}
             >
               <span><item.Icon size={22} /></span>
               <strong>{item.label}</strong>
@@ -452,16 +475,20 @@ export default function OrdersV2Screen() {
             </strong>
           </div>
 
-          {/* Ô tìm kiếm đơn */}
-          <input
-            className="mock-flow-search"
-            placeholder="🔍 Tìm nhanh mã đơn, tên khách, địa chỉ..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-          />
+          {/* Ô tìm kiếm chung — chỉ dùng cho các tab VẬN HÀNH (chờ làm/đang
+              làm...). Tab Lịch sử (Giao thành công) có bộ lọc riêng bên dưới,
+              không dùng ô này. */}
+          {!isHistoryTab && (
+            <input
+              className="mock-flow-search"
+              placeholder="🔍 Tìm nhanh mã đơn, tên khách, địa chỉ..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+            />
+          )}
 
-          {/* Danh sách đơn hàng — tách riêng đơn cần làm HÔM NAY khỏi đơn đặt
-              trước cho ngày khác, để đơn gấp không bị chìm giữa danh sách. */}
+          {/* Đơn Hôm Nay — LUÔN hiện đủ, không bao giờ bị bộ lọc lịch sử bên
+              dưới làm ảnh hưởng. */}
           {todayOrders.length > 0 && (
             <div className="mock-list-head" style={{ marginTop: 4 }}>
               <strong style={{ fontSize: 15 }}>🗓️ Đơn Hôm Nay ({todayOrders.length})</strong>
@@ -469,12 +496,35 @@ export default function OrdersV2Screen() {
           )}
           {todayOrders.map(renderOrderCard)}
 
-          {otherOrders.length > 0 && (
-            <div className="mock-list-head" style={{ marginTop: todayOrders.length > 0 ? 18 : 4 }}>
-              <strong style={{ fontSize: 15 }}>📅 Đơn Ngày Khác ({otherOrders.length})</strong>
+          {isHistoryTab && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 18, marginBottom: 4, alignItems: 'flex-end' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 700, color: '#725f50' }}>
+                Từ ngày
+                <input type="date" className="mock-flow-search" style={{ marginBottom: 0 }} value={historyFrom} onChange={e => setHistoryFrom(e.target.value)} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 700, color: '#725f50' }}>
+                Đến ngày
+                <input type="date" className="mock-flow-search" style={{ marginBottom: 0 }} value={historyTo} onChange={e => setHistoryTo(e.target.value)} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 700, color: '#725f50', flex: '1 1 200px' }}>
+                Tên khách hàng
+                <input placeholder="🔍 Gõ tên khách..." className="mock-flow-search" style={{ marginBottom: 0 }} value={historyKeyword} onChange={e => setHistoryKeyword(e.target.value)} />
+              </label>
             </div>
           )}
-          {otherOrders.map(renderOrderCard)}
+
+          {historyOrders.length > 0 && (
+            <div className="mock-list-head" style={{ marginTop: isHistoryTab ? 4 : (todayOrders.length > 0 ? 18 : 4) }}>
+              <strong style={{ fontSize: 15 }}>{isHistoryTab ? '📅 Đơn Trước Đây' : '📅 Đơn Ngày Khác'} ({historyOrders.length})</strong>
+            </div>
+          )}
+          {historyOrders.map(renderOrderCard)}
+          {isHistoryTab && otherOrders.length > 0 && historyOrders.length === 0 && (
+            <div className="mock-empty" style={{ padding: '20px 0' }}>
+              <span>🔍</span>
+              <p>Không có đơn nào khớp bộ lọc.</p>
+            </div>
+          )}
 
           {loading && (
             <div className="mock-empty">
