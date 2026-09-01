@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
 // Module đánh giá nhanh dùng chung — Duyệt việc / Đơn hàng / Chấm công.
@@ -6,6 +6,15 @@ import { supabase } from '../lib/supabaseClient';
 // cả hai đi qua RPC sumi_dieu_chinh_sao (quyền do DATABASE quyết, không phải
 // trình duyệt: chỉ quản lý cùng đơn vị hoặc quản lý lương mới ghi được, và
 // không ai tự đánh giá cho chính mình — chặn cứng dưới database).
+//
+// ⚠️ LUÔN hiện LỊCH SỬ ngay dưới form (view star_transactions, lọc đúng
+// staffId + linkType + linkId của công đoạn đang xem) — trước đây không có,
+// quản lý đánh giá xong không thấy lại nên bấm đánh giá trùng lần 2 mà không
+// biết. Sửa/Xóa cũng đi qua RPC riêng (sumi_sua_danh_gia_sao/sumi_xoa_danh_gia_sao),
+// dùng CHUNG cho cả 3 luồng — không tách riêng từng nơi.
+const formatVND = (n) => Number(n || 0).toLocaleString('vi-VN') + 'đ';
+const formatNgay = (iso) => iso ? new Date(iso).toLocaleDateString('vi-VN') : '';
+
 export default function StarRateBar({ staffId, staffName, linkType, linkId, mode = 'full', compact = false, onDone }) {
   const [loai, setLoai] = useState(null); // 'cong' | 'tru'
   const [soSao, setSoSao] = useState('');
@@ -13,6 +22,29 @@ export default function StarRateBar({ staffId, staffName, linkType, linkId, mode
   const [dangGui, setDangGui] = useState(false);
   const [loi, setLoi] = useState('');
   const [xong, setXong] = useState('');
+
+  const [lichSu, setLichSu] = useState(null); // null = đang tải
+  const [dangSua, setDangSua] = useState(null); // id đang sửa
+  const [suaSoSao, setSuaSoSao] = useState('');
+  const [suaGhiChu, setSuaGhiChu] = useState('');
+  const [dangXuLy, setDangXuLy] = useState('');
+
+  const taiLichSu = useCallback(async () => {
+    if (!staffId) return;
+    try {
+      let q = supabase.from('star_transactions').select('*').eq('staff_id', staffId)
+        .order('created_at', { ascending: false }).limit(15);
+      if (linkType) q = q.eq('link_type', linkType);
+      if (linkId) q = q.eq('link_id', linkId);
+      const { data, error } = await q;
+      if (error) throw error;
+      setLichSu(data || []);
+    } catch {
+      setLichSu([]);
+    }
+  }, [staffId, linkType, linkId]);
+
+  useEffect(() => { taiLichSu(); }, [taiLichSu]);
 
   if (!staffId) return null;
 
@@ -35,11 +67,54 @@ export default function StarRateBar({ staffId, staffName, linkType, linkId, mode
       if (data && data.thanh_cong === false) throw new Error(data.thong_bao || 'Không thực hiện được.');
       setXong(data?.thong_bao || 'Đã ghi nhận.');
       setSoSao(''); setGhiChu(''); setLoai(null);
+      await taiLichSu();
       await onDone?.();
     } catch (e) {
       setLoi(e?.message || 'Không thực hiện được. Thử lại giúp tôi.');
     } finally {
       setDangGui(false);
+    }
+  };
+
+  const batDauSua = (item) => {
+    setDangSua(item.id);
+    setSuaSoSao(String(item.so_sao || ''));
+    setSuaGhiChu(item.note || '');
+  };
+
+  const luuSua = async (item) => {
+    const n = Math.round(Number(suaSoSao));
+    if (!n || n < 1) { setLoi('Nhập số sao hợp lệ.'); return; }
+    setDangXuLy(item.id); setLoi('');
+    try {
+      const { data, error } = await supabase.rpc('sumi_sua_danh_gia_sao', {
+        p_id: item.id, p_loai: item.loai, p_so_sao: n, p_ghi_chu: suaGhiChu.trim() || null,
+      });
+      if (error) throw error;
+      if (data && data.thanh_cong === false) throw new Error(data.thong_bao || 'Không sửa được.');
+      setDangSua(null);
+      await taiLichSu();
+      await onDone?.();
+    } catch (e) {
+      setLoi(e?.message || 'Không sửa được. Thử lại giúp tôi.');
+    } finally {
+      setDangXuLy('');
+    }
+  };
+
+  const xoa = async (item) => {
+    if (!window.confirm(`Xoá đánh giá ${item.loai === 'cong' ? '+' : '-'}${item.so_sao} sao này?`)) return;
+    setDangXuLy(item.id); setLoi('');
+    try {
+      const { data, error } = await supabase.rpc('sumi_xoa_danh_gia_sao', { p_id: item.id, p_loai: item.loai });
+      if (error) throw error;
+      if (data && data.thanh_cong === false) throw new Error(data.thong_bao || 'Không xoá được.');
+      await taiLichSu();
+      await onDone?.();
+    } catch (e) {
+      setLoi(e?.message || 'Không xoá được. Thử lại giúp tôi.');
+    } finally {
+      setDangXuLy('');
     }
   };
 
@@ -97,6 +172,67 @@ export default function StarRateBar({ staffId, staffName, linkType, linkId, mode
           </button>
         </>
       )}
+
+      {!loai && loi && <div style={{ color: '#b42318', fontSize: 12.5, marginTop: 6 }}>⚠️ {loi}</div>}
+
+      {/* ── Lịch sử — luôn hiện ngay dưới form, kể cả khi chưa mở Cộng/Trừ ── */}
+      <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px dashed #E5D3B8' }}>
+        <div style={{ fontSize: 11.5, fontWeight: 800, color: '#8C5A3C', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+          Lịch sử đánh giá
+        </div>
+        {lichSu === null && <div style={{ fontSize: 12.5, color: '#8C5A3C' }}>Đang tải…</div>}
+        {lichSu && lichSu.length === 0 && <div style={{ fontSize: 12.5, color: '#8C5A3C' }}>Chưa có đánh giá nào.</div>}
+        {lichSu && lichSu.map((it) => (
+          <div key={it.id} style={{
+            display: 'flex', flexDirection: 'column', gap: 4, padding: '8px 0',
+            borderBottom: '1px solid #F0E4D0', fontSize: 12.5,
+          }}>
+            {dangSua === it.id ? (
+              <>
+                <input type="number" min={1} value={suaSoSao} onChange={(e) => setSuaSoSao(e.target.value)}
+                  style={{ minHeight: 34, padding: '0 8px', borderRadius: 8, border: '1px solid #ddd', fontFamily: 'inherit' }} />
+                <textarea value={suaGhiChu} onChange={(e) => setSuaGhiChu(e.target.value)} rows={2}
+                  style={{ padding: 8, borderRadius: 8, border: '1px solid #ddd', fontFamily: 'inherit', fontSize: 12.5, resize: 'vertical' }} />
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button type="button" disabled={dangXuLy === it.id} onClick={() => luuSua(it)}
+                    style={{ flex: 1, minHeight: 32, border: 0, borderRadius: 8, background: '#1e7e4c', color: '#fff', fontWeight: 800, cursor: 'pointer' }}>
+                    {dangXuLy === it.id ? 'Đang lưu…' : 'Lưu'}
+                  </button>
+                  <button type="button" onClick={() => setDangSua(null)}
+                    style={{ flex: 1, minHeight: 32, border: '1px solid #ddd', borderRadius: 8, background: '#fff', cursor: 'pointer' }}>
+                    Huỷ
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
+                  <span style={{ fontWeight: 800, color: it.loai === 'cong' ? '#1e7e4c' : '#b42318' }}>
+                    {it.loai === 'cong' ? '+' : '−'}{it.so_sao} sao ({formatVND(it.so_tien)})
+                  </span>
+                  <span style={{ color: '#8C5A3C', whiteSpace: 'nowrap' }}>{formatNgay(it.ngay || it.created_at)}</span>
+                </div>
+                {it.note && <div style={{ color: 'var(--text-secondary, #555)' }}>{it.note}</div>}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#a08a6f' }}>
+                  <span>{it.created_by_name ? `bởi ${it.created_by_name}` : ''}{it.auto_generated ? ' · Tự động' : ''}</span>
+                  {!it.auto_generated && (
+                    <span style={{ display: 'flex', gap: 10 }}>
+                      <button type="button" onClick={() => batDauSua(it)}
+                        style={{ border: 'none', background: 'none', color: '#8C5A3C', fontWeight: 700, cursor: 'pointer', padding: 0, fontSize: 12 }}>
+                        Sửa
+                      </button>
+                      <button type="button" disabled={dangXuLy === it.id} onClick={() => xoa(it)}
+                        style={{ border: 'none', background: 'none', color: '#b42318', fontWeight: 700, cursor: 'pointer', padding: 0, fontSize: 12 }}>
+                        {dangXuLy === it.id ? 'Đang xoá…' : 'Xoá'}
+                      </button>
+                    </span>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
