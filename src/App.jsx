@@ -375,7 +375,7 @@ function OpsApp({ onSignOut }) {
           style={{ position: 'static', left: 'auto', right: 'auto', bottom: 'auto', width: '100%', flexShrink: 0 }} />
       </div>
       {showMore && <MoreSheet onClose={() => setShowMore(false)} onSelect={setTab} badges={badgeCounts} items={moreItems} />}
-      <ChatLauncher profile={profile} />
+      <ChatLauncher profile={profile} hidden={tab === 'chat'} />
     </div>
   );
 }

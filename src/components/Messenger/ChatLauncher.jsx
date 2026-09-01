@@ -60,7 +60,7 @@ function loadSavedBubblePosition() {
 // Nút chat nổi (góc dưới phải) hiện xuyên suốt toàn app khi đã đăng nhập —
 // bấm vào mở cửa sổ Messenger toàn màn hình (trên mobile) / dạng cửa sổ nổi
 // (trên desktop, qua CSS max-width trong messenger-chat.css).
-export function ChatLauncher({ profile }) {
+export function ChatLauncher({ profile, hidden = false }) {
   const [open, setOpen] = useState(false);
   const [roomIds, setRoomIds] = useState([]);
   const [unreadCounts, setUnreadCounts] = useState({}); // room_id -> số tin chưa đọc
@@ -368,7 +368,9 @@ export function ChatLauncher({ profile }) {
       }
     : undefined;
 
-  if (!profile) return null;
+  // Ẩn hẳn bong bóng nổi khi đang ở tab Chat riêng (ChatScreen) — 2 giao diện
+  // chat chồng lên nhau từng che mất nút Gửi của ChatScreen trên mobile.
+  if (!profile || hidden) return null;
 
   return (
     <>

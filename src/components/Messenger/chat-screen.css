@@ -31,6 +31,10 @@
   font-size: 17px;
   color: #2d1c10;
 }
+.cs-header-actions {
+  display: flex;
+  gap: 8px;
+}
 .cs-new-chat-btn {
   width: 34px;
   height: 34px;
@@ -40,6 +44,9 @@
   color: #2d1c10;
   font-size: 16px;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .cs-search-bar {
@@ -104,6 +111,27 @@
 .cs-convo-item:hover,
 .cs-convo-item.active {
   background: #FAF1E6;
+}
+.cs-convo-item.pinned {
+  background: #FDF6EC;
+}
+
+.cs-pin-btn {
+  flex-shrink: 0;
+  font-size: 14px;
+  opacity: 0.25;
+  filter: grayscale(1);
+  padding: 4px;
+  border-radius: 6px;
+  align-self: center;
+}
+.cs-convo-item:hover .cs-pin-btn {
+  opacity: 0.6;
+  filter: none;
+}
+.cs-pin-btn.pinned {
+  opacity: 1;
+  filter: none;
 }
 
 .cs-convo-avatar {
@@ -500,6 +528,54 @@
 .cs-new-chat-item span {
   font-size: 11.5px;
   color: #8C7A6B;
+}
+
+.cs-create-group-sheet {
+  max-height: 80vh;
+}
+.cs-group-name-field {
+  padding: 10px 16px;
+  border-bottom: 1px solid #EFE6DC;
+}
+.cs-group-name-field input {
+  width: 100%;
+  border: 1px solid #EFE6DC;
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 13.5px;
+  font-family: inherit;
+  outline: none;
+}
+.cs-group-member-list {
+  flex: 1;
+  min-height: 0;
+}
+.cs-group-member-item.checked {
+  background: #FDECE3;
+}
+.cs-group-member-item.checked .cs-convo-avatar {
+  background: #C88A4B;
+  color: #fff;
+}
+.cs-create-group-footer {
+  padding: 12px 16px;
+  border-top: 1px solid #EFE6DC;
+}
+.cs-create-group-confirm {
+  width: 100%;
+  padding: 11px 0;
+  border-radius: 10px;
+  border: none;
+  background: #C88A4B;
+  color: #fff;
+  font-weight: 800;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+.cs-create-group-confirm:disabled {
+  background: #EFE6DC;
+  color: #8C7A6B;
+  cursor: not-allowed;
 }
 
 @media (min-width: 860px) {

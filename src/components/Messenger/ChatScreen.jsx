@@ -10,10 +10,12 @@ import {
   subscribeToRoomMessages,
   markRoomRead,
   extractOrderCode,
+  setConversationPinned,
+  createChatGroup,
 } from '../../lib/chat';
 import { uploadFile } from '../../lib/queries';
 import { toWebSafeImage } from '../../lib/imageConvert';
-import { IconChat, IconCamera, IconTag, IconUser } from '../icons/FrogIcons';
+import { IconChat, IconCamera, IconTag, IconUser, IconStaff } from '../icons/FrogIcons';
 
 // Trang Chat kiểu Zalo, gắn vào thanh điều hướng (tab riêng, khác với cửa sổ
 // chat nổi ChatWindowModal/ChatLauncher vẫn giữ nguyên song song). Desktop: 2
@@ -58,6 +60,10 @@ export default function ChatScreen({ profile }) {
   const [loadingList, setLoadingList] = useState(true);
   const [error, setError] = useState('');
   const [showNewChat, setShowNewChat] = useState(false);
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [groupName, setGroupName] = useState('');
+  const [groupMemberIds, setGroupMemberIds] = useState([]);
+  const [creatingGroup, setCreatingGroup] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -136,6 +142,56 @@ export default function ChatScreen({ profile }) {
       setRefreshTick((t) => t + 1);
     } catch (e) {
       setError(e.message);
+    }
+  };
+
+  // Ghim tại chỗ trước (lạc quan) rồi mới lưu DB — ghim chỉ ảnh hưởng cách
+  // CHÍNH MÌNH sắp xếp danh sách, không đụng gì tới người khác.
+  const togglePin = async (e, convo) => {
+    e.stopPropagation();
+    if (!profile?.id) return;
+    const nextPinned = !convo.pinned;
+    setConversations((prev) => {
+      const next = prev.map((c) => (c.roomId === convo.roomId ? { ...c, pinned: nextPinned } : c));
+      return next.sort((a, b) => {
+        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+        if (a.lastAt && b.lastAt) return new Date(b.lastAt) - new Date(a.lastAt);
+        if (a.lastAt) return -1;
+        if (b.lastAt) return 1;
+        return a.title.localeCompare(b.title);
+      });
+    });
+    try {
+      await setConversationPinned(convo.roomId, profile.id, nextPinned);
+    } catch (err) {
+      setConversations((prev) => prev.map((c) => (c.roomId === convo.roomId ? { ...c, pinned: convo.pinned } : c)));
+      setError(err.message);
+    }
+  };
+
+  const toggleGroupMember = (userId) => {
+    setGroupMemberIds((prev) => (prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]));
+  };
+
+  const handleCreateGroup = async () => {
+    if (!groupMemberIds.length) { setError('Chọn ít nhất 1 thành viên cho nhóm'); return; }
+    setCreatingGroup(true);
+    setError('');
+    try {
+      const roomId = await createChatGroup(groupName, groupMemberIds);
+      setShowCreateGroup(false);
+      setActiveConvo({
+        roomId, roomType: 'group', peerId: null,
+        title: groupName.trim() || 'Nhóm chat mới', subtitle: '', avatarEmoji: '👥',
+      });
+      setActiveRoomId(roomId);
+      setGroupName('');
+      setGroupMemberIds([]);
+      setRefreshTick((t) => t + 1);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setCreatingGroup(false);
     }
   };
 
@@ -262,7 +318,10 @@ export default function ChatScreen({ profile }) {
         <div className="cs-list-pane">
           <div className="cs-list-header">
             <h3><IconChat size={20} /> Tin Nhắn</h3>
-            <button className="cs-new-chat-btn" onClick={() => setShowNewChat(true)} title="Nhắn tin mới">✎</button>
+            <div className="cs-header-actions">
+              <button className="cs-new-chat-btn" onClick={() => setShowCreateGroup(true)} title="Tạo nhóm chat"><IconStaff size={16} /></button>
+              <button className="cs-new-chat-btn" onClick={() => setShowNewChat(true)} title="Nhắn tin mới">✎</button>
+            </div>
           </div>
           <div className="cs-search-bar">
             <span className="cs-search-icon">🔍</span>
@@ -281,7 +340,7 @@ export default function ChatScreen({ profile }) {
               <div className="cs-list-empty">Không tìm thấy hội thoại nào khớp "{searchQuery}"</div>
             )}
             {!loadingList && visibleConversations.map((c) => (
-              <button key={c.roomId} className={`cs-convo-item ${activeRoomId === c.roomId ? 'active' : ''}`} onClick={() => openConversation(c)}>
+              <button key={c.roomId} className={`cs-convo-item ${activeRoomId === c.roomId ? 'active' : ''} ${c.pinned ? 'pinned' : ''}`} onClick={() => openConversation(c)}>
                 <div className="cs-convo-avatar">{c.avatarEmoji}</div>
                 <div className="cs-convo-info">
                   <div className="cs-convo-row-top">
@@ -290,6 +349,12 @@ export default function ChatScreen({ profile }) {
                   </div>
                   <div className="cs-convo-preview">{c.lastMessage || c.subtitle || 'Bấm để xem hội thoại'}</div>
                 </div>
+                <span
+                  className={`cs-pin-btn ${c.pinned ? 'pinned' : ''}`}
+                  onClick={(e) => togglePin(e, c)}
+                  title={c.pinned ? 'Bỏ ghim' : 'Ghim hội thoại'}
+                  role="button"
+                >📌</span>
               </button>
             ))}
           </div>
@@ -404,6 +469,41 @@ export default function ChatScreen({ profile }) {
                   <div><strong>{u.full_name}</strong><span>{u.role}</span></div>
                 </button>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCreateGroup && (
+        <div className="cs-new-chat-overlay" onClick={() => setShowCreateGroup(false)}>
+          <div className="cs-new-chat-sheet cs-create-group-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="cs-new-chat-head">
+              <strong>Tạo nhóm chat</strong>
+              <button onClick={() => setShowCreateGroup(false)}>✕</button>
+            </div>
+            <div className="cs-group-name-field">
+              <input
+                type="text" placeholder="Tên nhóm (không bắt buộc)"
+                value={groupName} onChange={(e) => setGroupName(e.target.value)}
+              />
+            </div>
+            <div className="cs-new-chat-list cs-group-member-list">
+              {directory.map((u) => {
+                const checked = groupMemberIds.includes(u.id);
+                return (
+                  <button key={u.id} className={`cs-new-chat-item cs-group-member-item ${checked ? 'checked' : ''}`} onClick={() => toggleGroupMember(u.id)}>
+                    <div className="cs-convo-avatar">{checked ? '✓' : '👤'}</div>
+                    <div><strong>{u.full_name}</strong><span>{u.role}</span></div>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="cs-create-group-footer">
+              <button
+                className="cs-create-group-confirm" onClick={handleCreateGroup} disabled={creatingGroup || !groupMemberIds.length}
+              >
+                {creatingGroup ? 'Đang tạo...' : `Tạo nhóm${groupMemberIds.length ? ` (${groupMemberIds.length} người)` : ''}`}
+              </button>
             </div>
           </div>
         </div>

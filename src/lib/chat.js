@@ -135,9 +135,10 @@ export async function fetchDirectConversations(myId) {
 export async function fetchAllConversations(myId) {
   const { data: parts, error } = await supabase
     .from('chat_participants')
-    .select('room_id, chat_rooms(id, name, room_type, topic, avatar_emoji)')
+    .select('room_id, pinned, chat_rooms(id, name, room_type, topic, avatar_emoji)')
     .eq('profile_id', myId);
   if (error) throw error;
+  const pinnedByRoom = Object.fromEntries((parts || []).map((p) => [p.room_id, !!p.pinned]));
   const rooms = (parts || []).map((p) => p.chat_rooms).filter(Boolean);
   const roomIds = rooms.map((r) => r.id);
   if (!roomIds.length) return [];
@@ -177,15 +178,36 @@ export async function fetchAllConversations(myId) {
         avatarEmoji: isDirect ? '👤' : (r.avatar_emoji || '💬'),
         lastMessage: last ? (last.content || (last.attachment_url ? '📷 Đã gửi ảnh' : '')) : '',
         lastAt: last?.created_at || null,
+        pinned: !!pinnedByRoom[r.id],
       };
     })
     .filter((c) => c.roomType !== 'direct' || c.peerId)
     .sort((a, b) => {
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
       if (a.lastAt && b.lastAt) return new Date(b.lastAt) - new Date(a.lastAt);
       if (a.lastAt) return -1;
       if (b.lastAt) return 1;
       return a.title.localeCompare(b.title);
     });
+}
+
+// Ghim/bỏ ghim 1 phòng chat — CHỈ ảnh hưởng cách chính mình sắp xếp danh
+// sách, không đụng gì tới người khác (mỗi người có 1 dòng chat_participants
+// riêng, RLS chỉ cho tự sửa dòng của mình — xem migration 202609010100).
+export async function setConversationPinned(roomId, myId, pinned) {
+  const { error } = await supabase
+    .from('chat_participants')
+    .update({ pinned })
+    .eq('room_id', roomId)
+    .eq('profile_id', myId);
+  if (error) throw error;
+}
+
+// Tự tạo nhóm chat mới với người mình chọn (khác 4 nhóm mặc định cố định).
+export async function createChatGroup(name, memberIds) {
+  const { data, error } = await supabase.rpc('create_chat_group', { p_name: name, p_member_ids: memberIds });
+  if (error) throw error;
+  return data;
 }
 
 // Số tin nhắn chưa đọc theo từng phòng, dựa trên chat_participants.last_read_at.
