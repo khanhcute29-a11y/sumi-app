@@ -77,6 +77,10 @@ export default function TheViecNhanVien({ viec, hoSo, tenTheoId = {}, onDoi, onB
   }, [mo, viec.id]);
 
   const laCuaToi = viec.assignee_id === hoSo?.id;
+  // Trước đây chỉ thợ (laCuaToi) mới có ô nhắn — người giao việc/quản lý xem
+  // được luồng báo cáo nhưng không trả lời được từ đây. Giờ ai liên quan tới
+  // việc (thợ HOẶC người giao việc) đều nhắn được, RPC tự xác định vai trò.
+  const coQuyenNhan = laCuaToi || viec.created_by === hoSo?.id;
   const tt = TRANG_THAI[quaHan(viec) ? 'qua_han' : viec.status] || TRANG_THAI.open;
   const daNhan = !!viec.accepted_at;
   const choDuyet = viec.status === 'pending_approval';
@@ -104,8 +108,8 @@ export default function TheViecNhanVien({ viec, hoSo, tenTheoId = {}, onDoi, onB
     if (!noiDung || !hoSo?.id) return;
     setDangGuiTin(true); setLoiThe('');
     try {
-      const { error } = await supabase.from('task_progress_reports').insert({
-        task_id: viec.id, staff_id: hoSo.id, note: noiDung, percent: null, author_role: 'tho',
+      const { error } = await supabase.rpc('sumi_gui_tin_nhan_viec', {
+        p_task_id: viec.id, p_noi_dung: noiDung,
       });
       if (error) throw error;
       setTinNhan('');
@@ -271,12 +275,13 @@ export default function TheViecNhanVien({ viec, hoSo, tenTheoId = {}, onDoi, onB
             );
           })}
 
-          {/* Khung chat — thợ gõ trực tiếp, không cần mở modal khác */}
-          {laCuaToi && (
+          {/* Khung chat 2 chiều — thợ và người giao việc đều gõ trực tiếp ở
+              đây, không cần mở modal khác */}
+          {coQuyenNhan && (
             <div style={{ display: 'flex', gap: 8, marginTop: 8, marginBottom: 4 }}>
               <input value={tinNhan} onChange={(e) => setTinNhan(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !dangGuiTin) { e.preventDefault(); guiTinNhan(); } }}
-                placeholder="Nhắn cho quản lý về việc này…"
+                placeholder={laCuaToi ? 'Nhắn cho quản lý về việc này…' : 'Nhắn cho thợ về việc này…'}
                 style={{ flex: 1, minHeight: 44, padding: '0 12px', borderRadius: 12, border: '1px solid var(--cv-border)', fontSize: 14, fontFamily: 'inherit' }} />
               <button className="cv-btn primary" disabled={dangGuiTin || !tinNhan.trim()} onClick={guiTinNhan} style={{ flex: '0 0 auto' }}>
                 {dangGuiTin ? '…' : 'Gửi'}

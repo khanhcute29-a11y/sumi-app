@@ -6,6 +6,7 @@ import {
   getOrCreateDmRoom,
   fetchRoomMessages,
   sendChatMessage,
+  notifyChatMentions,
   subscribeToRoomMessages,
   markRoomRead,
   extractOrderCode,
@@ -38,6 +39,10 @@ export default function ChatWindowModal({ onClose, profile, initialRoomId = null
   const [showMentionPopup, setShowMentionPopup] = useState(false);
   const [mentionFilter, setMentionFilter] = useState('');
   const [selectedMentionIds, setSelectedMentionIds] = useState([]);
+  // Người đã được "@" chèn vào ô soạn tin nhưng CHƯA gửi — khác selectedMentionIds
+  // (chỉ dùng lúc đang tick chọn trong popup). Giữ tới khi gửi tin thật mới báo,
+  // để 1 người có thể được "@" nhiều lần trong 1 tin mà chỉ nhắn 1 lần.
+  const [pendingMentionIds, setPendingMentionIds] = useState([]);
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -221,6 +226,7 @@ export default function ChatWindowModal({ onClose, profile, initialRoomId = null
       .map((u) => `@${(u.full_name || '').replace(/\s+/g, '')}`)
       .join(' ');
     setInputText(`${prefix}${tags} `);
+    setPendingMentionIds((prev) => [...new Set([...prev, ...selectedMentionIds])]);
     setSelectedMentionIds([]);
     setShowMentionPopup(false);
     inputRef.current?.focus();
@@ -252,6 +258,7 @@ export default function ChatWindowModal({ onClose, profile, initialRoomId = null
     // upload xong thật (không có ảnh giả để hiện lạc quan).
     const tempId = `temp-${Date.now()}`;
     const roomIdAtSend = currentRoomId;
+    const mentionIdsAtSend = pendingMentionIds;
     let attachmentUrl = null;
     try {
       if (pendingPhoto) {
@@ -267,6 +274,7 @@ export default function ChatWindowModal({ onClose, profile, initialRoomId = null
       setPendingPhoto(null);
       setShowMentionPopup(false);
       setSelectedMentionIds([]);
+      setPendingMentionIds([]);
 
       const saved = await sendChatMessage({
         roomId: roomIdAtSend,
@@ -279,6 +287,9 @@ export default function ChatWindowModal({ onClose, profile, initialRoomId = null
       // dedup theo id nhận ra đã có sẵn, không hiện trùng 2 lần.
       setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...saved } : m)));
       if (navTab === 'direct') setDirectListRefreshTick((t) => t + 1);
+      if (mentionIdsAtSend.length) {
+        notifyChatMentions({ roomId: roomIdAtSend, messageId: saved.id, mentionedProfileIds: mentionIdsAtSend, preview: text }).catch(() => {});
+      }
     } catch (e) {
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       setInputText(text);

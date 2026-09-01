@@ -51,6 +51,16 @@ export async function sendChatMessage({ roomId, senderId, content, attachmentUrl
   return data;
 }
 
+// Báo riêng cho từng người bị "@Tên" trong tin nhắn — best-effort, không
+// chặn luồng gửi tin nếu lỗi (mention chỉ là phần thêm, không phải cốt lõi).
+export async function notifyChatMentions({ roomId, messageId, mentionedProfileIds, preview }) {
+  if (!mentionedProfileIds?.length) return;
+  const { error } = await supabase.rpc('notify_chat_mentions', {
+    p_room_id: roomId, p_message_id: messageId, p_mentioned_profile_ids: mentionedProfileIds, p_preview: preview || null,
+  });
+  if (error) console.error('[chat] notify_chat_mentions lỗi:', error.message);
+}
+
 export function subscribeToRoomMessages(roomId, onInsert) {
   const channel = supabase
     .channel(`chat-room-${roomId}`)

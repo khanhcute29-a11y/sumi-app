@@ -156,6 +156,13 @@ export const NOTIFY_KINDS = {
     tone: 'info',
     tab: 'financeRequests',
   },
+  // 12. Bị "@" nhắc tên trong Chat Messenger nội bộ -> mở thẳng phòng chat đó
+  chat_mention: {
+    icon: '📣',
+    title: 'Bạn được nhắc đến',
+    tone: 'warning',
+    tab: 'messenger',
+  },
 };
 
 /**

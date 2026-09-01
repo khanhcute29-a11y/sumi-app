@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { fetchOrderNotes, addOrderNote, deleteOrderNote, uploadPhoto, uploadFile } from '../lib/queries';
+import { fetchChatDirectory } from '../lib/chat';
 import { supabase } from '../lib/supabaseClient';
 import { toWebSafeImage } from '../lib/imageConvert';
 import { Input } from './forms/Input';
@@ -41,6 +42,14 @@ export function CommentSection({ order, profile }) {
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const lastCommentCountRef = useRef(0);
+  // @mention thật — chọn người từ danh sách (không đoán tên bằng regex, dễ
+  // sai chính tả/dấu tiếng Việt), giữ id đến lúc gửi để RPC add_order_comment
+  // báo đúng người (đã có sẵn tham số p_mentioned_profile_ids, trước đây
+  // không UI nào gọi tới nên tính năng "chết").
+  const [showMentionPicker, setShowMentionPicker] = useState(false);
+  const [mentionDirectory, setMentionDirectory] = useState([]);
+  const [mentionFilter, setMentionFilter] = useState('');
+  const [mentionIds, setMentionIds] = useState([]);
 
   const loadComments = async () => {
     const data = await fetchOrderNotes(order.id);
@@ -101,12 +110,14 @@ export function CommentSection({ order, profile }) {
       const saved = await addOrderNote({
         orderId: order.id, orderCode: order.order_code, authorId: profile?.id,
         authorName: profile?.full_name, authorRole: profile?.role, message, attachments, noteType,
+        mentionedProfileIds: mentionIds,
       });
       setComments((prev) => prev.some((x) => x.id === saved?.id) ? prev : [...prev, saved]);
       playNotificationSound();
       setDraft('');
       setPhotos([]);
       setNoteType('normal');
+      setMentionIds([]);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -216,8 +227,58 @@ export function CommentSection({ order, profile }) {
         {[['normal','Trao đổi'],['customer_update','Khách cập nhật'],['urgent','Gấp']].map(([key,label]) => <button key={key} className={noteType === key ? 'active' : ''} onClick={() => setNoteType(key)}>{label}</button>)}
       </div>
 
+      {mentionIds.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {mentionIds.map((id) => {
+            const u = mentionDirectory.find((x) => x.id === id);
+            return (
+              <span key={id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px', borderRadius: 999, background: 'var(--surface-primary-soft)', color: 'var(--primary-700)', font: 'var(--text-caption)', fontWeight: 700 }}>
+                @{u?.full_name || '...'}
+                <button onClick={() => setMentionIds((prev) => prev.filter((x) => x !== id))} style={{ border: 0, background: 'none', cursor: 'pointer', color: 'inherit', fontWeight: 900 }}>✕</button>
+              </span>
+            );
+          })}
+        </div>
+      )}
+
+      {showMentionPicker && (
+        <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', background: 'var(--surface-card)', padding: 8, display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220 }}>
+          <Input placeholder="Gõ tên để tìm..." value={mentionFilter} onChange={(e) => setMentionFilter(e.target.value)} />
+          <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {mentionDirectory
+              .filter((u) => (u.full_name || '').toLowerCase().includes(mentionFilter.trim().toLowerCase()))
+              .map((u) => {
+                const checked = mentionIds.includes(u.id);
+                return (
+                  <button key={u.id} onClick={() => setMentionIds((prev) => (checked ? prev.filter((x) => x !== u.id) : [...prev, u.id]))}
+                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderRadius: 'var(--radius-sm)', border: 0, background: checked ? 'var(--surface-primary-soft)' : 'transparent', cursor: 'pointer', textAlign: 'left', font: 'var(--text-body-sm)', color: 'var(--text-primary)' }}>
+                    <span>{u.full_name}{u.role ? ` · ${u.role}` : ''}</span>
+                    {checked && <span>✓</span>}
+                  </button>
+                );
+              })}
+          </div>
+          <Button variant="secondary" size="sm" onClick={() => setShowMentionPicker(false)}>Xong ({mentionIds.length})</Button>
+        </div>
+      )}
+
       {/* Photo upload buttons */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <button
+          onClick={async () => {
+            if (!showMentionPicker && mentionDirectory.length === 0) {
+              try { setMentionDirectory(await fetchChatDirectory()); } catch { /* im lặng — không chặn bình luận nếu tải danh sách lỗi */ }
+            }
+            setShowMentionPicker((v) => !v);
+          }}
+          style={{
+            flexShrink: 0, padding: '8px 10px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)',
+            background: showMentionPicker ? 'var(--surface-primary-soft)' : 'var(--surface-sunken)', cursor: 'pointer',
+            font: 'var(--text-body-sm)', color: 'var(--text-primary)', fontWeight: 800,
+          }}
+        >
+          @
+        </button>
         <button
           onClick={() => cameraInputRef.current?.click()}
           disabled={uploading || sending}
