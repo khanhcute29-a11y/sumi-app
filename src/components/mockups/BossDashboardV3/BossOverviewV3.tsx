@@ -53,7 +53,7 @@ import { fetchShiftLogsRange } from '../../../lib/queries';
 // — tomTatThang() đã tự nhóm log theo work_date, không phụ thuộc khoảng thời
 // gian truyền vào là 7 ngày/tháng/tùy chỉnh gì, nên tái dùng thẳng chứ không
 // viết công thức cộng giờ riêng ở đây (tránh lệch số như đã từng xảy ra).
-import { boPhanCuaHoSo, chuanHoaCa, tomTatThang } from '../../../lib/chamCong';
+import { boPhanCuaHoSo, chuanHoaCa, tomTatThang, TEN_BO_PHAN } from '../../../lib/chamCong';
 import { WeeklyScheduleSection } from '../../WeeklyScheduleSection';
 import DirectorStaffOverviewSheet from '../../shifts/v2/DirectorStaffOverviewSheet';
 import {
@@ -79,6 +79,7 @@ import {
   reviewOvertimeRequest,
   fetchApprovalHistory,
   fetchTodayShiftReports,
+  fetchCompletedTasksReport,
   fetchWeeklyScheduleAllStations,
   fetchOrderHearts,
   addOrderHeart,
@@ -496,6 +497,48 @@ export function BossOverviewV3Inner() {
 
   // ── Dữ liệu thật: báo cáo cuối ca hôm nay (staff_shift_reports) ──
   const [shiftReports, setShiftReports] = useState<any[]>([]);
+  const [completedTasksToday, setCompletedTasksToday] = useState<any[]>([]);
+
+  // Tab "Hôm nay" / "Lịch sử" của sheet Báo Cáo Ngày + chi tiết 1 mục
+  const [reportTab, setReportTab] = useState<'today' | 'history'>('today');
+  const [reportHistoryFrom, setReportHistoryFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10); });
+  const [reportHistoryTo, setReportHistoryTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [historyShiftReports, setHistoryShiftReports] = useState<any[]>([]);
+  const [historyCompletedTasks, setHistoryCompletedTasks] = useState<any[]>([]);
+  const [reportHistoryLoading, setReportHistoryLoading] = useState(false);
+  const [reportHistoryError, setReportHistoryError] = useState('');
+  const [selectedReportItem, setSelectedReportItem] = useState<{ kind: 'task' | 'shift_report'; item: any } | null>(null);
+
+  const loadReportHistory = async () => {
+    if (!reportHistoryFrom || !reportHistoryTo) return;
+    setReportHistoryLoading(true); setReportHistoryError('');
+    try {
+      const [tasks, reports] = await Promise.all([
+        fetchCompletedTasksReport({ from: `${reportHistoryFrom}T00:00:00`, to: `${reportHistoryTo}T23:59:59.999` }),
+        fetchTodayShiftReports({ from: reportHistoryFrom, to: reportHistoryTo }),
+      ]);
+      setHistoryCompletedTasks(tasks);
+      setHistoryShiftReports(reports);
+    } catch (e: any) {
+      setReportHistoryError(e.message || 'Không tải được lịch sử báo cáo.');
+    } finally {
+      setReportHistoryLoading(false);
+    }
+  };
+
+  // Nhóm 1 danh sách (việc hoàn thành HOẶC báo cáo cuối ca) theo bộ phận —
+  // dùng ĐÚNG boPhanCuaHoSo() của màn Chấm công, để luồng ở đây khớp với
+  // luồng "Bakery / Xưởng 41 / Xưởng 42 / Vận tải" toàn hệ thống đang dùng.
+  const groupByBoPhan = (rows: any[], hoSoOf: (r: any) => any) => {
+    const groups: Record<string, any[]> = {};
+    rows.forEach((r) => {
+      const bp = boPhanCuaHoSo(hoSoOf(r)) || '_khac';
+      if (!groups[bp]) groups[bp] = [];
+      groups[bp].push(r);
+    });
+    return groups;
+  };
+  const tenBoPhan = (key: string) => (key === '_khac' ? 'Khác' : (TEN_BO_PHAN as any)[key] || key);
 
   // ── Dữ liệu thật: lịch phân ca tuần toàn công ty (shift_schedule, 5 khu vực) ──
   const [weeklySchedule, setWeeklySchedule] = useState<{ from: string; to: string; days: any[]; totalAssignments: number }>({ from: '', to: '', days: [], totalAssignments: 0 });
@@ -504,7 +547,7 @@ export function BossOverviewV3Inner() {
     setLoading(true);
     setLoadError('');
     try {
-      const [rev, duTinh, claims, status, staffOptions, orders, posts, advances, leaves, reports, schedule, editRequests, overtimes] = await Promise.all([
+      const [rev, duTinh, claims, status, staffOptions, orders, posts, advances, leaves, reports, schedule, editRequests, overtimes, completedTasks] = await Promise.all([
         fetchRevenueByChannel(),
         fetchDoanhThuDuTinh(),
         fetchExpenseAndAdvanceLedgerToday(),
@@ -518,6 +561,7 @@ export function BossOverviewV3Inner() {
         fetchWeeklyScheduleAllStations(),
         fetchPendingOrderEditRequests(),
         fetchPendingOvertimeRequests(),
+        fetchCompletedTasksReport(),
       ]);
 
       setRevenueStreams(rev.channels.map((c) => ({ id: c.key, channel: c.title, amount: c.amount, percentage: c.percentage, icon: c.icon, note: `${c.count} đơn hoàn thành`, orders: c.orders })));
@@ -544,6 +588,7 @@ export function BossOverviewV3Inner() {
       setPendingLeaves(leaves);
       setPendingEditRequests(editRequests);
       setPendingOvertimes(overtimes);
+      setCompletedTasksToday(completedTasks);
       setShiftReports(reports);
       setWeeklySchedule(schedule);
     } catch (e: any) {
@@ -1139,7 +1184,7 @@ export function BossOverviewV3Inner() {
               </div>
               <div style={{ marginTop: 6 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>3. Báo cáo ngày</div>
-                <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>{shiftReports.length} báo cáo hôm nay</div>
+                <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>{completedTasksToday.length} việc xong · {shiftReports.length} báo cáo ca</div>
               </div>
             </div>
 
@@ -2010,39 +2055,185 @@ export function BossOverviewV3Inner() {
         {/* ========================================================================= */}
         {/* ── BOTTOM SHEET: 7. BÁO CÁO CA NGÀY ── */}
         {/* ========================================================================= */}
-        {activeSheet === 'report_sheet' && (
-          <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
-            <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
-              <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
-                {SHEET_HANDLE}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
-                  <div>
-                    <div style={{ fontSize: 15, fontWeight: 900, color: '#db2777' }}>📋 Tổng Hợp Báo Cáo Ca Ngày</div>
-                    <div style={{ fontSize: 11, color: '#725f50' }}>{shiftReports.length} báo cáo cuối ca đã nộp hôm nay</div>
+        {activeSheet === 'report_sheet' && (() => {
+          const tasksShown = reportTab === 'history' ? historyCompletedTasks : completedTasksToday;
+          const reportsShown = reportTab === 'history' ? historyShiftReports : shiftReports;
+          const taskGroups = groupByBoPhan(tasksShown, (t: any) => t.assignee);
+          const reportGroups = groupByBoPhan(reportsShown, (r: any) => ({ station: r.station, role: r.staff_role }));
+          const boPhanOrder = ['bakery', 'xuong41', 'xuong42', 'van_tai', '_khac'];
+          return (
+            <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
+              <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
+                <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
+                  {SHEET_HANDLE}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
+                    <div>
+                      <div style={{ fontSize: 15, fontWeight: 900, color: '#db2777' }}>📋 Báo Cáo Ngày</div>
+                      <div style={{ fontSize: 11, color: '#725f50' }}>{tasksShown.length} việc xong · {reportsShown.length} báo cáo ca</div>
+                    </div>
+                    <button onClick={() => setActiveSheet(null)} aria-label="Quay lại" style={{ order: -1, flexShrink: 0, width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer' }}>‹</button>
                   </div>
-                  <button onClick={() => setActiveSheet(null)} aria-label="Quay lại" style={{ order: -1, flexShrink: 0, width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer' }}>‹</button>
+
+                  {/* 2 module: Hôm nay / Lịch sử */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, padding: '10px 14px 0' }}>
+                    <button onClick={() => setReportTab('today')} style={{
+                      padding: '8px 4px', borderRadius: 12, border: reportTab === 'today' ? '2px solid #db2777' : '1px solid #eadcca',
+                      background: reportTab === 'today' ? '#fdf2f8' : '#fff', color: reportTab === 'today' ? '#db2777' : '#725f50',
+                      fontSize: 11.5, fontWeight: 900, cursor: 'pointer',
+                    }}>
+                      📅 Hôm nay
+                    </button>
+                    <button onClick={() => { setReportTab('history'); if (!historyCompletedTasks.length && !historyShiftReports.length && !reportHistoryLoading) loadReportHistory(); }} style={{
+                      padding: '8px 4px', borderRadius: 12, border: reportTab === 'history' ? '2px solid #db2777' : '1px solid #eadcca',
+                      background: reportTab === 'history' ? '#fdf2f8' : '#fff', color: reportTab === 'history' ? '#db2777' : '#725f50',
+                      fontSize: 11.5, fontWeight: 900, cursor: 'pointer',
+                    }}>
+                      🕘 Lịch sử
+                    </button>
+                  </div>
+
+                  {reportTab === 'history' && (
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', padding: '10px 14px 0' }}>
+                      <label style={{ flex: 1, fontSize: 11, fontWeight: 800, color: '#725f50' }}>
+                        Từ ngày
+                        <input type="date" value={reportHistoryFrom} max={reportHistoryTo} onChange={e => setReportHistoryFrom(e.target.value)}
+                          style={{ display: 'block', width: '100%', marginTop: 4, minHeight: 38, borderRadius: 10, border: '1px solid #eadcca', padding: '0 8px', fontSize: 12.5, fontFamily: 'inherit' }} />
+                      </label>
+                      <label style={{ flex: 1, fontSize: 11, fontWeight: 800, color: '#725f50' }}>
+                        Đến ngày
+                        <input type="date" value={reportHistoryTo} min={reportHistoryFrom} max={new Date().toISOString().slice(0, 10)} onChange={e => setReportHistoryTo(e.target.value)}
+                          style={{ display: 'block', width: '100%', marginTop: 4, minHeight: 38, borderRadius: 10, border: '1px solid #eadcca', padding: '0 8px', fontSize: 12.5, fontFamily: 'inherit' }} />
+                      </label>
+                      <button onClick={loadReportHistory} disabled={reportHistoryLoading} style={{ minHeight: 38, padding: '0 14px', borderRadius: 10, border: 'none', background: '#db2777', color: '#fff', fontWeight: 900, fontSize: 12.5, cursor: 'pointer' }}>
+                        {reportHistoryLoading ? '…' : 'Xem'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div style={sheetBodyStyle({ paddingTop: 12 })}>
+                  {reportTab === 'history' && reportHistoryError && (
+                    <div style={{ color: '#dc2626', fontSize: 12.5, fontWeight: 700, marginBottom: 10 }}>⚠️ {reportHistoryError}</div>
+                  )}
+                  {reportTab === 'history' && reportHistoryLoading && (
+                    <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Đang tải…</div>
+                  )}
+
+                  {!(reportTab === 'history' && reportHistoryLoading) && (
+                    <>
+                      {/* 1. Việc hoàn thành — phân luồng theo bộ phận */}
+                      <div style={{ marginBottom: 18 }}>
+                        <div style={{ fontSize: 12, fontWeight: 900, color: '#15803d', textTransform: 'uppercase', marginBottom: 8 }}>
+                          ✅ Việc hoàn thành ({tasksShown.length})
+                        </div>
+                        {tasksShown.length === 0 && (
+                          <div style={{ textAlign: 'center', padding: '12px 0', color: '#725f50', fontSize: 12.5 }}>Chưa có việc nào hoàn thành trong khoảng này.</div>
+                        )}
+                        {boPhanOrder.filter((bp) => taskGroups[bp]?.length).map((bp) => (
+                          <div key={bp} style={{ marginBottom: 12 }}>
+                            <div style={{ fontSize: 11, fontWeight: 800, color: '#a08060', marginBottom: 6 }}>{tenBoPhan(bp)} ({taskGroups[bp].length})</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              {taskGroups[bp].map((t: any) => (
+                                <button key={t.id} onClick={() => setSelectedReportItem({ kind: 'task', item: t })}
+                                  style={{ textAlign: 'left', width: '100%', background: '#f0fdf4', border: '1.5px solid #bbf7d0', borderRadius: 12, padding: 10, cursor: 'pointer' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                    <div style={{ minWidth: 0 }}>
+                                      <div style={{ fontSize: 12.5, fontWeight: 900, color: '#2d1c10' }}>{t.title}</div>
+                                      <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>
+                                        👤 {t.assignee?.full_name || 'Nhân viên'}{t.order_code ? ` · Đơn ${t.order_code}` : ''} · {new Date(t.completed_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                                      </div>
+                                    </div>
+                                    <ChevronRight size={16} color="#a08060" />
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* 2. Báo cáo cuối ca — cũng phân luồng theo bộ phận */}
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 900, color: '#db2777', textTransform: 'uppercase', marginBottom: 8 }}>
+                          📋 Báo cáo cuối ca ({reportsShown.length})
+                        </div>
+                        {reportsShown.length === 0 && (
+                          <div style={{ textAlign: 'center', padding: '12px 0', color: '#725f50', fontSize: 12.5 }}>Chưa có báo cáo cuối ca nào trong khoảng này.</div>
+                        )}
+                        {boPhanOrder.filter((bp) => reportGroups[bp]?.length).map((bp) => (
+                          <div key={bp} style={{ marginBottom: 12 }}>
+                            <div style={{ fontSize: 11, fontWeight: 800, color: '#a08060', marginBottom: 6 }}>{tenBoPhan(bp)} ({reportGroups[bp].length})</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              {reportGroups[bp].map((r: any) => (
+                                <button key={r.id} onClick={() => setSelectedReportItem({ kind: 'shift_report', item: r })}
+                                  style={{ textAlign: 'left', width: '100%', background: '#faf6f0', border: '1.5px solid #eadcca', borderRadius: 12, padding: 10, cursor: 'pointer' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                    <div style={{ minWidth: 0 }}>
+                                      <div style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>👤 {r.staff_name}</div>
+                                      <div style={{ fontSize: 11, color: '#493526', marginTop: 2 }}>
+                                        Doanh thu: <strong>{formatVND(r.revenue)}</strong> · Tiền mặt: <strong>{formatVND(r.cash_handover)}</strong>
+                                      </div>
+                                    </div>
+                                    <ChevronRight size={16} color="#a08060" />
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Chi tiết 1 mục Báo Cáo Ngày — bấm 1 việc hoàn thành hoặc 1 báo cáo
+            cuối ca đều mở ra đây, xem đầy đủ trước khi đóng lại. */}
+        {selectedReportItem && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 2000, background: '#fdf9f2', overflowY: 'auto' }} onClick={() => setSelectedReportItem(null)}>
+            <div onClick={e => e.stopPropagation()}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 14, borderBottom: '1.5px solid #eadcca', position: 'sticky', top: 0, background: '#fdf9f2', zIndex: 1 }}>
+                <button onClick={() => setSelectedReportItem(null)} aria-label="Quay lại" style={{ width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer', flexShrink: 0 }}>‹</button>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 1, color: '#b8692f', textTransform: 'uppercase' }}>
+                    {selectedReportItem.kind === 'task' ? 'Việc hoàn thành' : 'Báo cáo cuối ca'}
+                  </div>
+                  <div style={{ fontSize: 15, fontWeight: 900, color: '#2d1b10' }}>Chi tiết</div>
                 </div>
               </div>
 
-              <div style={sheetBodyStyle({ paddingTop: 12 })}>
-                {shiftReports.length === 0 && (
-                  <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Chưa có báo cáo cuối ca nào hôm nay.</div>
-                )}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {shiftReports.map((r: any) => (
-                    <div key={r.id} style={{ background: '#faf6f0', border: '1.5px solid #eadcca', borderRadius: 12, padding: 10 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>👤 {r.staff_name}{r.station ? ` · ${r.station}` : ''}</div>
-                        <div style={{ fontSize: 10.5, color: '#725f50' }}>{new Date(r.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</div>
-                      </div>
-                      <div style={{ fontSize: 11.5, color: '#493526', marginTop: 2 }}>
-                        Doanh thu ca: <strong>{formatVND(r.revenue)}</strong> · Tiền mặt bàn giao: <strong>{formatVND(r.cash_handover)}</strong>
-                        {r.stock_remaining != null && <> · Tồn kho: <strong>{r.stock_remaining}</strong></>}
-                      </div>
-                      {r.note && <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>Ghi chú: {r.note}</div>}
-                    </div>
-                  ))}
-                </div>
+              <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {selectedReportItem.kind === 'task' ? (() => {
+                  const t = selectedReportItem.item;
+                  return (
+                    <>
+                      <DetailRow label="Tên việc" value={t.title} />
+                      <DetailRow label="Người làm" value={t.assignee?.full_name || 'Nhân viên'} />
+                      <DetailRow label="Bộ phận" value={tenBoPhan(boPhanCuaHoSo(t.assignee) || '_khac')} />
+                      {t.description && <DetailRow label="Mô tả" value={t.description} />}
+                      {t.order_code && <DetailRow label="Đơn liên quan" value={t.order_code} />}
+                      <DetailRow label="Tạo lúc" value={new Date(t.created_at).toLocaleString('vi-VN')} />
+                      {t.deadline && <DetailRow label="Hạn chót" value={new Date(t.deadline).toLocaleString('vi-VN')} />}
+                      <DetailRow label="Hoàn thành lúc" value={new Date(t.completed_at).toLocaleString('vi-VN')} />
+                    </>
+                  );
+                })() : (() => {
+                  const r = selectedReportItem.item;
+                  return (
+                    <>
+                      <DetailRow label="Nhân viên" value={r.staff_name} />
+                      {r.station && <DetailRow label="Bộ phận" value={r.station} />}
+                      <DetailRow label="Doanh thu ca" value={formatVND(r.revenue)} />
+                      <DetailRow label="Tiền mặt bàn giao" value={formatVND(r.cash_handover)} />
+                      {r.stock_remaining != null && <DetailRow label="Tồn kho" value={String(r.stock_remaining)} />}
+                      <DetailRow label="Nộp lúc" value={new Date(r.created_at).toLocaleString('vi-VN')} />
+                      {r.note && <DetailRow label="Ghi chú" value={r.note} />}
+                    </>
+                  );
+                })()}
               </div>
             </div>
           </div>

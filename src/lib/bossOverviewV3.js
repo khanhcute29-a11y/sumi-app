@@ -377,21 +377,53 @@ export function sortOrdersByPriority(orders) {
   });
 }
 
-// ---- 7. Báo cáo cuối ca hôm nay (staff_shift_reports) ----
-export async function fetchTodayShiftReports() {
+// ---- 7. Báo cáo cuối ca (staff_shift_reports) — mặc định hôm nay, nhận
+// {from,to} dạng 'YYYY-MM-DD' để dùng cho tab Lịch sử. Đính kèm cả `role`
+// (không chỉ `station`) vì boPhanCuaHoSo() cần cả hai để suy bộ phận cho
+// nhân sự chưa gán khâu — dùng ĐÚNG hàm phân bộ phận của màn Chấm công,
+// không tự chế cách nhóm luồng riêng ở đây. ----
+export async function fetchTodayShiftReports({ from, to } = {}) {
+  const fromDate = from || todayStr();
+  const toDate = to || todayStr();
   const [reportsRes, profilesRes] = await Promise.all([
     supabase
       .from('staff_shift_reports')
       .select('*')
-      .eq('work_date', todayStr())
+      .gte('work_date', fromDate)
+      .lte('work_date', toDate)
       .order('created_at', { ascending: false }),
-    supabase.from('profiles').select('id, station'),
+    supabase.from('profiles').select('id, station, role'),
   ]);
   if (reportsRes.error) throw reportsRes.error;
   if (profilesRes.error) throw profilesRes.error;
-  const stationById = {};
-  (profilesRes.data || []).forEach((p) => { stationById[p.id] = p.station; });
-  return (reportsRes.data || []).map((r) => ({ ...r, station: stationById[r.staff_id] || null }));
+  const profileById = {};
+  (profilesRes.data || []).forEach((p) => { profileById[p.id] = p; });
+  return (reportsRes.data || []).map((r) => ({
+    ...r,
+    station: profileById[r.staff_id]?.station || null,
+    staff_role: profileById[r.staff_id]?.role || null,
+  }));
+}
+
+// ---- 7b. Việc đã hoàn thành trong ngày/khoảng — nhóm theo bộ phận
+// (boPhanCuaHoSo, dùng ở phía component) để trả lời "hôm nay từng bộ phận đã
+// làm xong việc gì". Cùng phạm vi lọc với nhomViecNhanVien()/CongViecV2.jsx
+// (category assigned/adhoc, deleted_at null, bỏ việc bị loại trừ) — không tự
+// chế bộ lọc riêng gây lệch số với màn Việc. ----
+export async function fetchCompletedTasksReport({ from, to } = {}) {
+  const fromIso = from || `${todayStr()}T00:00:00`;
+  const toIso = to || new Date().toISOString();
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('id,title,description,order_code,assignee_id,category,status,completed_at,created_at,deadline,exclusion_reason_code,assignee:profiles!assignee_id(id,full_name,role,station)')
+    .in('category', ['assigned', 'adhoc'])
+    .is('deleted_at', null)
+    .eq('status', 'done')
+    .gte('completed_at', fromIso)
+    .lte('completed_at', toIso)
+    .order('completed_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).filter((t) => !t.exclusion_reason_code);
 }
 
 // ---- 8. Lịch phân ca tuần — toàn công ty (5 khu vực gộp lại) ----
