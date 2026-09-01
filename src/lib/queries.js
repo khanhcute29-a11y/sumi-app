@@ -935,6 +935,20 @@ export async function updateStaffWorkInfo(id, { responsibilities, startDate }) {
   if (error) throw error;
 }
 
+// Giờ quy định ca làm việc (sumi_quy_dinh_ca) — ghi thẳng, RLS chỉ cho
+// is_business_director() (owner/admin) qua policy thêm ở migration
+// 202609022200. Sửa ở đây ảnh hưởng NGAY tới toàn bộ nhân sự bộ phận đó
+// (Chấm công, làm tròn giờ trễ, Audio Push nhắc trễ đều đọc lại bảng này).
+export async function updateShiftRule(id, { gioBatDau, soGioChuan, phutDenSomToiThieu }) {
+  const { error } = await supabase.from('sumi_quy_dinh_ca').update({
+    gio_bat_dau: gioBatDau,
+    so_gio_chuan: soGioChuan,
+    phut_den_som_toi_thieu: phutDenSomToiThieu,
+    updated_at: new Date().toISOString(),
+  }).eq('id', id);
+  if (error) throw error;
+}
+
 // ---- Chia công đoạn bếp (gán nhân viên đang trực vào công đoạn của đơn) ----
 
 export async function createOrderStages(rows) {

@@ -3,7 +3,7 @@ import { Card } from '../components/data/Card';
 import { Badge } from '../components/feedback/Badge';
 import { Button } from '../components/forms/Button';
 import { Select } from '../components/forms/Select';
-import { fetchMyProfile, fetchAllProfiles, updateProfileRole, updateProfileExtraRoles, updateProfileStation, updateStaffPermissions, updateStaffWorkInfo, updateProfileActive, approveStaff } from '../lib/queries';
+import { fetchMyProfile, fetchAllProfiles, updateProfileRole, updateProfileExtraRoles, updateProfileStation, updateStaffPermissions, updateStaffWorkInfo, updateShiftRule, updateProfileActive, approveStaff } from '../lib/queries';
 import { ROLE_META, ROLE_OPTIONS, ROLE_PERMISSIONS, hasRole, hasAnyRole, resolveRoleAndStation, getRoleMeta, getUiRole, normalizeStationForDb } from '../lib/roles';
 import { boPhanCuaHoSo, chuanHoaCa, caCuaBoPhan, TEN_BO_PHAN } from '../lib/chamCong';
 import { fetchUpcomingShiftOverrides, setStaffShiftOverride, cancelStaffShiftOverride } from '../lib/staffShiftOverride';
@@ -59,6 +59,92 @@ function CaQuyDinh({ hoSo, danhSachCa }) {
       {ca.map((c) => `${c.icon} ${c.batDau}–${c.ketThuc}`).join(' · ')}
       <small style={{ color: 'var(--text-muted)' }}> (tới sớm {ca[0].phutSom} phút)</small>
     </span>
+  );
+}
+
+// Sửa giờ QUY ĐỊNH (áp dụng cho CẢ bộ phận, không phải riêng 1 người) — mở từ
+// đầu mỗi thẻ phòng ban. Ghi thẳng vào sumi_quy_dinh_ca (RLS chỉ owner/admin,
+// migration 202609022200) — Chấm công, làm tròn giờ trễ, Audio Push nhắc trễ
+// đều đọc lại bảng này nên sửa xong áp dụng ngay, không cần đụng gì thêm.
+function SuaQuyDinhCaPanel({ caRowsBoPhan, onSaved, onClose }) {
+  const [dangSuaId, setDangSuaId] = useState(null);
+  const [gioBatDau, setGioBatDau] = useState('');
+  const [soGioChuan, setSoGioChuan] = useState('');
+  const [phutSom, setPhutSom] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [loi, setLoi] = useState('');
+
+  const batDauSua = (row) => {
+    setDangSuaId(row.id);
+    setGioBatDau((row.gio_bat_dau || '').slice(0, 5));
+    setSoGioChuan(String(row.so_gio_chuan ?? 9));
+    setPhutSom(String(row.phut_den_som_toi_thieu ?? 10));
+    setLoi('');
+  };
+
+  const luu = async () => {
+    if (!gioBatDau) { setLoi('Chọn giờ vào ca.'); return; }
+    setSaving(true); setLoi('');
+    try {
+      await updateShiftRule(dangSuaId, {
+        gioBatDau, soGioChuan: Number(soGioChuan) || 9, phutDenSomToiThieu: Number(phutSom) || 10,
+      });
+      setDangSuaId(null);
+      await onSaved?.();
+    } catch (e) {
+      setLoi(e?.message || 'Không lưu được giờ quy định.');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div style={{ background: 'var(--surface-sunken)', border: '1px solid var(--border-default)', borderRadius: 12, padding: 12, marginBottom: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <span style={{ font: 'var(--text-caption)', fontWeight: 800, color: 'var(--text-primary)' }}>✏️ Sửa giờ quy định (áp dụng cho cả bộ phận)</span>
+        <button type="button" onClick={onClose} style={{ border: 'none', background: 'none', color: 'var(--text-muted)', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>Đóng</button>
+      </div>
+      {caRowsBoPhan.map((row) => (
+        <div key={row.id} style={{ background: 'var(--surface-card)', borderRadius: 10, padding: 10, marginBottom: 6 }}>
+          {dangSuaId === row.id ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>{row.ten_ca}</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  Giờ vào ca
+                  <input type="time" value={gioBatDau} onChange={(e) => setGioBatDau(e.target.value)}
+                    style={{ display: 'block', minHeight: 36, borderRadius: 8, border: '1px solid var(--border-default)', padding: '0 8px', fontFamily: 'inherit' }} />
+                </label>
+                <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  Số giờ có mặt
+                  <input type="number" min={1} max={16} value={soGioChuan} onChange={(e) => setSoGioChuan(e.target.value)}
+                    style={{ display: 'block', width: 72, minHeight: 36, borderRadius: 8, border: '1px solid var(--border-default)', padding: '0 8px', fontFamily: 'inherit' }} />
+                </label>
+                <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  Tới sớm tối thiểu (phút)
+                  <input type="number" min={0} max={60} value={phutSom} onChange={(e) => setPhutSom(e.target.value)}
+                    style={{ display: 'block', width: 90, minHeight: 36, borderRadius: 8, border: '1px solid var(--border-default)', padding: '0 8px', fontFamily: 'inherit' }} />
+                </label>
+              </div>
+              {loi && <div style={{ color: 'var(--status-danger)', fontSize: 12 }}>⚠️ {loi}</div>}
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button type="button" disabled={saving} onClick={luu} style={{ minHeight: 36, padding: '0 14px', borderRadius: 8, border: 'none', background: 'var(--brand-primary)', color: '#fff', fontWeight: 800, fontSize: 12.5, cursor: 'pointer' }}>
+                  {saving ? 'Đang lưu…' : 'Lưu'}
+                </button>
+                <button type="button" disabled={saving} onClick={() => setDangSuaId(null)} style={{ minHeight: 36, padding: '0 14px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', fontSize: 12.5 }}>
+                  Huỷ
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 12.5 }}>
+                <strong>{row.ten_ca}</strong> — {row.gio_bat_dau?.slice(0, 5)}, {row.so_gio_chuan}h có mặt, tới sớm {row.phut_den_som_toi_thieu} phút
+              </span>
+              <button type="button" onClick={() => batDauSua(row)} style={{ border: 'none', background: 'none', color: 'var(--brand-primary)', fontWeight: 700, cursor: 'pointer', fontSize: 12.5 }}>Sửa</button>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -490,7 +576,9 @@ const BO_PHAN_ORDER = ['bakery', 'xuong41', 'xuong42', 'van_tai', '_khac'];
 export default function StaffScreen() {
   const [me, setMe] = useState(null);
   const [staff, setStaff] = useState([]);
-  const [danhSachCa, setDanhSachCa] = useState([]);
+  const [danhSachCa, setDanhSachCa] = useState([]); // đã chuẩn hoá (hiển thị)
+  const [caRows, setCaRows] = useState([]); // thô — giữ nguyên `id` để sửa
+  const [caEditOpenFor, setCaEditOpenFor] = useState(null); // bộ phận đang mở sửa giờ
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [expandedId, setExpandedId] = useState(null);
@@ -507,11 +595,15 @@ export default function StaffScreen() {
       .finally(() => setLoading(false));
   };
 
+  const loadCa = () => {
+    supabase.from('sumi_quy_dinh_ca').select('*').eq('active', true)
+      .then(({ data }) => { setCaRows(data || []); setDanhSachCa(chuanHoaCa(data || [])); })
+      .catch(() => { setCaRows([]); setDanhSachCa([]); });
+  };
+
   useEffect(() => {
     load();
-    supabase.from('sumi_quy_dinh_ca').select('*').eq('active', true)
-      .then(({ data }) => setDanhSachCa(chuanHoaCa(data || [])))
-      .catch(() => setDanhSachCa([]));
+    loadCa();
     const channel = supabase
       .channel('staff-screen-live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
@@ -601,6 +693,24 @@ export default function StaffScreen() {
                   </span>
                   <span style={{ color: 'var(--text-muted)', fontSize: 13, fontWeight: 700 }}>{isOpen ? '▾ Thu gọn' : '▸ Xem danh sách'}</span>
                 </button>
+
+                {canDeactivate && bp !== '_khac' && (
+                  <div>
+                    {caEditOpenFor !== bp ? (
+                      <button type="button" onClick={() => setCaEditOpenFor(bp)}
+                        style={{ border: 'none', background: 'none', color: 'var(--brand-primary)', fontWeight: 700, fontSize: 12.5, cursor: 'pointer', padding: 0 }}>
+                        ✏️ Sửa giờ quy định
+                      </button>
+                    ) : (
+                      <SuaQuyDinhCaPanel
+                        caRowsBoPhan={caRows.filter((r) => r.bo_phan === bp)}
+                        onSaved={loadCa}
+                        onClose={() => setCaEditOpenFor(null)}
+                      />
+                    )}
+                  </div>
+                )}
+
                 {isOpen && (
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     {approvedByBoPhan[bp].map((s) => (
