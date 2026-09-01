@@ -66,6 +66,7 @@ export default function ChatScreen({ profile }) {
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
+  const [pendingOpenRoomId, setPendingOpenRoomId] = useState(null);
 
   const [activeRoomId, setActiveRoomId] = useState(null);
   const [activeConvo, setActiveConvo] = useState(null); // metadata hiển thị header (title/avatar) — không phải lúc nào cũng có sẵn trong `conversations` (vd DM vừa tạo lần đầu)
@@ -99,6 +100,20 @@ export default function ChatScreen({ profile }) {
       .finally(() => { if (!cancelled) setLoadingList(false); });
     return () => { cancelled = true; };
   }, [profile?.id, refreshTick]);
+
+  // Bấm vào toast "Tin nhắn nội bộ mới" / "Bạn được nhắc đến" -> App.jsx đổi
+  // tab sang 'chat' rồi bắn sự kiện này để mở thẳng đúng phòng (xem App.jsx).
+  useEffect(() => {
+    const onOpenRoom = (e) => { if (e.detail?.roomId) setPendingOpenRoomId(e.detail.roomId); };
+    window.addEventListener('sumi-open-chat-room', onOpenRoom);
+    return () => window.removeEventListener('sumi-open-chat-room', onOpenRoom);
+  }, []);
+
+  useEffect(() => {
+    if (!pendingOpenRoomId || loadingList) return;
+    const match = conversations.find((c) => c.roomId === pendingOpenRoomId);
+    if (match) { openConversation(match); setPendingOpenRoomId(null); }
+  }, [pendingOpenRoomId, conversations, loadingList]);
 
   useEffect(() => {
     if (!activeRoomId) return;

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Sidebar } from './components/navigation/Sidebar';
 import { BottomNav } from './components/navigation/BottomNav';
-import { ChatLauncher } from './components/Messenger/ChatLauncher';
 import ChatScreen from './components/Messenger/ChatScreen';
 import { fetchUnreadCounts } from './lib/chat';
 import { supabase } from './lib/supabaseClient';
@@ -284,15 +283,13 @@ function OpsApp({ onSignOut }) {
   useEffect(() => { loadFeatureFlags().then(setFeatureFlags).catch(() => {}); }, [profile?.id]);
   useEffect(() => {
     const go = (e) => {
-      const nextTab = e.detail?.tab || 'orders';
-      // Tin nhắn Messenger nội bộ mở bằng cửa sổ nổi (ChatLauncher), không
-      // phải một trang trong sidebar — không đổi `tab` kẻo màn hình chính
-      // trống trơn vì 'messenger' không nằm trong danh sách SCREENS.
-      if (nextTab === 'messenger') {
-        window.dispatchEvent(new CustomEvent('sumi-open-messenger', { detail: { roomId: e.detail?.entityId } }));
-        return;
-      }
+      // Tin nhắn Messenger nội bộ trỏ về tab Chat thật trong nav (trước đây
+      // là cửa sổ nổi ChatLauncher riêng — đã bỏ, gộp hẳn vào ChatScreen).
+      const nextTab = e.detail?.tab === 'messenger' ? 'chat' : (e.detail?.tab || 'orders');
       setTab(nextTab);
+      if (nextTab === 'chat' && e.detail?.entityId) {
+        setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-chat-room', { detail: { roomId: e.detail.entityId } })), 0);
+      }
       if (nextTab === 'orders' && e.detail?.entityId) {
         setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-order', { detail: { entityId: e.detail.entityId } })), 0);
       }
@@ -375,7 +372,6 @@ function OpsApp({ onSignOut }) {
           style={{ position: 'static', left: 'auto', right: 'auto', bottom: 'auto', width: '100%', flexShrink: 0 }} />
       </div>
       {showMore && <MoreSheet onClose={() => setShowMore(false)} onSelect={setTab} badges={badgeCounts} items={moreItems} />}
-      <ChatLauncher profile={profile} hidden={tab === 'chat'} />
     </div>
   );
 }
