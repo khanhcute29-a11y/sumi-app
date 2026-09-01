@@ -30,6 +30,11 @@ function formatListTime(iso) {
     : d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
 }
 
+// Bỏ dấu tiếng Việt để tìm kiếm không cần gõ dấu (vd "nghia" vẫn ra "Nghĩa").
+function stripDiacritics(text) {
+  return (text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, (m) => (m === 'đ' ? 'd' : 'D')).toLowerCase();
+}
+
 function renderFormattedMessage(text) {
   if (!text) return null;
   const parts = text.split(/(@\S+|#[A-Z]+-[A-Z0-9-]+)/g);
@@ -54,6 +59,7 @@ export default function ChatScreen({ profile }) {
   const [error, setError] = useState('');
   const [showNewChat, setShowNewChat] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const [activeRoomId, setActiveRoomId] = useState(null);
   const [activeConvo, setActiveConvo] = useState(null); // metadata hiển thị header (title/avatar) — không phải lúc nào cũng có sẵn trong `conversations` (vd DM vừa tạo lần đầu)
@@ -132,6 +138,12 @@ export default function ChatScreen({ profile }) {
       setError(e.message);
     }
   };
+
+  const visibleConversations = useMemo(() => {
+    const q = stripDiacritics(searchQuery.trim());
+    if (!q) return conversations;
+    return conversations.filter((c) => stripDiacritics(c.title).includes(q) || stripDiacritics(c.lastMessage).includes(q));
+  }, [conversations, searchQuery]);
 
   const nameFor = (senderId) => {
     if (senderId === profile?.id) return profile?.full_name || 'Tôi';
@@ -252,12 +264,23 @@ export default function ChatScreen({ profile }) {
             <h3><IconChat size={20} /> Tin Nhắn</h3>
             <button className="cs-new-chat-btn" onClick={() => setShowNewChat(true)} title="Nhắn tin mới">✎</button>
           </div>
+          <div className="cs-search-bar">
+            <span className="cs-search-icon">🔍</span>
+            <input
+              type="text" placeholder="Tìm kiếm hội thoại..." value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && <button className="cs-search-clear" onClick={() => setSearchQuery('')} title="Xoá tìm kiếm">✕</button>}
+          </div>
           <div className="cs-list-scroll">
             {loadingList && <div className="cs-list-empty">Đang tải...</div>}
             {!loadingList && conversations.length === 0 && (
               <div className="cs-list-empty">Chưa có hội thoại nào — bấm ✎ để bắt đầu chat với đồng nghiệp.</div>
             )}
-            {!loadingList && conversations.map((c) => (
+            {!loadingList && conversations.length > 0 && visibleConversations.length === 0 && (
+              <div className="cs-list-empty">Không tìm thấy hội thoại nào khớp "{searchQuery}"</div>
+            )}
+            {!loadingList && visibleConversations.map((c) => (
               <button key={c.roomId} className={`cs-convo-item ${activeRoomId === c.roomId ? 'active' : ''}`} onClick={() => openConversation(c)}>
                 <div className="cs-convo-avatar">{c.avatarEmoji}</div>
                 <div className="cs-convo-info">
