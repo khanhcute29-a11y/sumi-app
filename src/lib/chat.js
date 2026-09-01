@@ -127,6 +127,67 @@ export async function fetchDirectConversations(myId) {
     .filter((c) => c.peer);
 }
 
+// Danh sách hội thoại HỢP NHẤT (nhóm + riêng) kèm tin nhắn gần nhất, sắp xếp
+// theo thời gian mới nhất — dùng cho trang Chat kiểu Zalo (ChatScreen), KHÁC
+// với fetchMyChatRooms/fetchDirectConversations ở trên vốn tách riêng 2 tab
+// "Nhóm Chat"/"Chat Riêng" cho ChatWindowModal (cửa sổ chat nổi, giữ nguyên
+// không đổi để tránh ảnh hưởng tính năng đang chạy).
+export async function fetchAllConversations(myId) {
+  const { data: parts, error } = await supabase
+    .from('chat_participants')
+    .select('room_id, chat_rooms(id, name, room_type, topic, avatar_emoji)')
+    .eq('profile_id', myId);
+  if (error) throw error;
+  const rooms = (parts || []).map((p) => p.chat_rooms).filter(Boolean);
+  const roomIds = rooms.map((r) => r.id);
+  if (!roomIds.length) return [];
+
+  const directRoomIds = rooms.filter((r) => r.room_type === 'direct').map((r) => r.id);
+  const peerByRoom = {};
+  if (directRoomIds.length) {
+    const { data: peers, error: peerErr } = await supabase
+      .from('chat_participants')
+      .select('room_id, profiles(id, full_name, role, station)')
+      .in('room_id', directRoomIds)
+      .neq('profile_id', myId);
+    if (peerErr) throw peerErr;
+    for (const p of peers || []) peerByRoom[p.room_id] = p.profiles;
+  }
+
+  const { data: msgs, error: msgErr } = await supabase
+    .from('chat_messages')
+    .select('room_id, content, attachment_url, created_at')
+    .in('room_id', roomIds)
+    .order('created_at', { ascending: false });
+  if (msgErr) throw msgErr;
+  const lastByRoom = {};
+  for (const m of msgs || []) { if (!lastByRoom[m.room_id]) lastByRoom[m.room_id] = m; }
+
+  return rooms
+    .map((r) => {
+      const last = lastByRoom[r.id];
+      const peer = peerByRoom[r.id];
+      const isDirect = r.room_type === 'direct';
+      return {
+        roomId: r.id,
+        roomType: r.room_type,
+        peerId: peer?.id || null,
+        title: isDirect ? (peer?.full_name || 'Người dùng') : (r.name || 'Nhóm chat'),
+        subtitle: isDirect ? (peer?.role || '') : (r.topic || ''),
+        avatarEmoji: isDirect ? '👤' : (r.avatar_emoji || '💬'),
+        lastMessage: last ? (last.content || (last.attachment_url ? '📷 Đã gửi ảnh' : '')) : '',
+        lastAt: last?.created_at || null,
+      };
+    })
+    .filter((c) => c.roomType !== 'direct' || c.peerId)
+    .sort((a, b) => {
+      if (a.lastAt && b.lastAt) return new Date(b.lastAt) - new Date(a.lastAt);
+      if (a.lastAt) return -1;
+      if (b.lastAt) return 1;
+      return a.title.localeCompare(b.title);
+    });
+}
+
 // Số tin nhắn chưa đọc theo từng phòng, dựa trên chat_participants.last_read_at.
 export async function fetchUnreadCounts(myId) {
   const { data: parts, error: pErr } = await supabase

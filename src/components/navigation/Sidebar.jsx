@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import {
   IconDashboard, IconOrders, IconKitchen, IconWarehouse, IconCashbook,
   IconShipping, IconProducts, IconShifts, IconReports, IconClipboard, IconCustomers, IconStaff,
-  IconSettings, IconStationHot, IconStationCold, IconStationWorkshop, IconStationSparkle, IconCheck, IconWarning, IconMoney,
+  IconSettings, IconStationHot, IconStationCold, IconStationWorkshop, IconStationSparkle, IconCheck, IconWarning, IconMoney, IconChat,
 } from '../icons/FrogIcons';
 import { NavBadge } from './NavBadge';
 
 const items = [
   { key: 'dashboard', label: 'Tổng Quan', Icon: IconDashboard },
+  { key: 'chat', label: 'Tin Nhắn', Icon: IconChat },
   { key: 'orders', label: 'Đơn Hàng', Icon: IconOrders },
   { key: 'kds', label: 'Bếp KDS', Icon: IconKitchen },
   { key: 'warehouse', label: 'Kho Hàng', Icon: IconWarehouse },

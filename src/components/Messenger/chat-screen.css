@@ -1,0 +1,483 @@
+.sumi-chat-page {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  background: #FAF6F0;
+  overflow: hidden;
+}
+
+/* ── Cột danh sách hội thoại ── */
+.cs-list-pane {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+  border-right: 1px solid #EFE6DC;
+  background: #fff;
+}
+
+.cs-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid #EFE6DC;
+}
+.cs-list-header h3 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 17px;
+  color: #2d1c10;
+}
+.cs-new-chat-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: none;
+  background: #F5EBE1;
+  color: #2d1c10;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.cs-list-scroll {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.cs-list-empty {
+  padding: 20px 16px;
+  text-align: center;
+  color: #8C7A6B;
+  font-size: 13px;
+}
+
+.cs-convo-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  border-bottom: 1px solid #F5F0E9;
+}
+.cs-convo-item:hover,
+.cs-convo-item.active {
+  background: #FAF1E6;
+}
+
+.cs-convo-avatar {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border-radius: 999px;
+  background: #F5EBE1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+
+.cs-convo-info {
+  flex: 1;
+  min-width: 0;
+}
+.cs-convo-row-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cs-convo-row-top strong {
+  font-size: 14.5px;
+  color: #2d1c10;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cs-convo-time {
+  font-size: 11px;
+  color: #8C7A6B;
+  flex-shrink: 0;
+}
+.cs-convo-preview {
+  font-size: 12.5px;
+  color: #8C7A6B;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Cột luồng tin nhắn ── */
+.cs-thread-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  background: #FAF6F0;
+}
+
+.cs-thread-placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8C7A6B;
+  font-size: 13.5px;
+}
+
+.cs-thread-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #EFE6DC;
+  background: #fff;
+}
+.cs-back-btn {
+  border: none;
+  background: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: #2d1c10;
+  padding: 0 4px 0 0;
+}
+.cs-thread-title h4 {
+  margin: 0;
+  font-size: 15px;
+  color: #2d1c10;
+}
+.cs-thread-title p {
+  margin: 0;
+  font-size: 12px;
+  color: #8C7A6B;
+}
+
+.cs-thread-feed {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cs-msg-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+.cs-msg-row.me {
+  flex-direction: row-reverse;
+}
+.cs-msg-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: #F5EBE1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.cs-msg-body {
+  display: flex;
+  flex-direction: column;
+  max-width: 62%;
+}
+.cs-msg-row.me .cs-msg-body {
+  align-items: flex-end;
+}
+.cs-sender-label {
+  font-size: 11px;
+  color: #8C7A6B;
+  margin-bottom: 2px;
+}
+.cs-msg-bubble {
+  background: #fff;
+  border-radius: 14px;
+  padding: 8px 12px;
+  font-size: 14px;
+  color: #2d1c10;
+  word-break: break-word;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+}
+.cs-msg-row.me .cs-msg-bubble {
+  background: #C88A4B;
+  color: #fff;
+}
+.cs-order-chip {
+  display: inline-block;
+  background: #E0F2FE;
+  color: #0369A1;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+.cs-msg-img {
+  max-width: 220px;
+  border-radius: 10px;
+  margin-top: 6px;
+  cursor: pointer;
+  display: block;
+}
+.cs-msg-timestamp {
+  font-size: 10.5px;
+  color: #8C7A6B;
+  margin-top: 2px;
+}
+.cs-mention-tag {
+  color: #C88A4B;
+  font-weight: 700;
+}
+
+.cs-input-bar {
+  border-top: 1px solid #EFE6DC;
+  background: #fff;
+  padding: 10px 16px 14px;
+}
+.cs-input-form {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+.cs-input-form textarea {
+  flex: 1;
+  resize: none;
+  border: 1px solid #EFE6DC;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  max-height: 100px;
+}
+.cs-input-form button {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: none;
+  background: #C88A4B;
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.cs-input-form button:disabled {
+  background: #EFE6DC;
+  color: #8C7A6B;
+  cursor: not-allowed;
+}
+
+.cs-tool-chips {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.cs-tool-chips button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid #EFE6DC;
+  background: #FAF6F0;
+  color: #4A3B2C;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.cs-error {
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: #B42318;
+}
+
+.cs-pending-photo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: #FAF6F0;
+  border-radius: 10px;
+  margin-bottom: 6px;
+}
+.cs-pending-photo img {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+.cs-pending-photo span {
+  font-size: 11px;
+  color: #4A3B2C;
+  flex: 1;
+}
+.cs-pending-photo button {
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.cs-mention-menu {
+  background: #fff;
+  border: 1px solid #EFE6DC;
+  border-radius: 12px;
+  padding: 8px;
+  margin-bottom: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.cs-mention-menu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #8C7A6B;
+}
+.cs-mention-menu-head button {
+  border: none;
+  background: none;
+  color: #C88A4B;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cs-mention-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.cs-mention-item.checked {
+  background: #FDECE3;
+}
+.cs-mention-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: #F5EBE1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+.cs-mention-item.checked .cs-mention-avatar {
+  background: #C88A4B;
+  color: #fff;
+}
+.cs-mention-info {
+  display: flex;
+  flex-direction: column;
+  font-size: 12.5px;
+}
+.cs-mention-info span {
+  font-size: 11px;
+  color: #8C7A6B;
+}
+.cs-mention-confirm {
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 0;
+  border-radius: 8px;
+  border: none;
+  background: #C88A4B;
+  color: #fff;
+  font-weight: 800;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.cs-mention-confirm:disabled {
+  background: #EFE6DC;
+  color: #8C7A6B;
+  cursor: not-allowed;
+}
+
+/* ── Sheet "Nhắn tin mới" ── */
+.cs-new-chat-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.cs-new-chat-sheet {
+  background: #fff;
+  width: 100%;
+  max-width: 420px;
+  max-height: 70vh;
+  border-radius: 20px 20px 0 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.cs-new-chat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid #EFE6DC;
+}
+.cs-new-chat-head button {
+  border: none;
+  background: none;
+  font-size: 16px;
+  cursor: pointer;
+}
+.cs-new-chat-list {
+  overflow-y: auto;
+  padding: 6px 0;
+}
+.cs-new-chat-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+}
+.cs-new-chat-item:hover {
+  background: #FAF1E6;
+}
+.cs-new-chat-item div:last-child {
+  display: flex;
+  flex-direction: column;
+  font-size: 13.5px;
+}
+.cs-new-chat-item span {
+  font-size: 11.5px;
+  color: #8C7A6B;
+}
+
+@media (min-width: 860px) {
+  .cs-new-chat-overlay {
+    align-items: center;
+  }
+  .cs-new-chat-sheet {
+    border-radius: 16px;
+    max-height: 60vh;
+  }
+  .cs-list-pane {
+    width: 320px;
+    flex-shrink: 0;
+  }
+}

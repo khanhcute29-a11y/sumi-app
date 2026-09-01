@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Sidebar } from './components/navigation/Sidebar';
 import { BottomNav } from './components/navigation/BottomNav';
 import { ChatLauncher } from './components/Messenger/ChatLauncher';
+import ChatScreen from './components/Messenger/ChatScreen';
 import { supabase } from './lib/supabaseClient';
 import { initOfflineSync } from './lib/offlineQueue';
 import {
@@ -340,11 +341,11 @@ function OpsApp({ onSignOut }) {
   }, [profile?.role, (profile?.extra_roles || []).join(',')]);
 
   const screens = {
-    home: <MobileHomeScreen onNavigate={setTab} />, feed: <CompanyFeedScreen />,
+    home: <MobileHomeScreen onNavigate={setTab} />, feed: <CompanyFeedScreen />, chat: <ChatScreen profile={profile} />,
     dashboard: <DashboardScreen />, orders: <OrdersV2Screen />, kds: <KdsScreen initialStation={kdsStation} />, warehouse: <WarehouseScreen branch={warehouseBranch} onBranchChange={setWarehouseBranch} />, cashbook: <CashbookScreen />,
     shipping: featureFlags.delivery_v2 ? <ShippingV2Screen /> : <ShippingScreen />, products: <ProductsScreen />, shifts: <ShiftsScreen />, compensation: <CompensationScreen />, financeRequests: <FinanceRequestsScreen />, accountantOverview: <AccountantOverviewV1Inner />, approvals: <ApprovalRequestsScreen />, tasks: <TasksScreen />, incidents: <IncidentsScreen />, reports: <ReportsScreen />, kpi: featureFlags.kpi_v2 ? <KpiV2Screen /> : <KpiScreen />, inbox: <InboxV2Screen />, crm: <CustomersScreen />, staff: <StaffScreen />, settings: <SettingsScreen onSignOut={onSignOut} />, visualGuides: <VisualGuidesScreen />, staffTasks: <StaffTasksAssignedScreen />, kpiDashboard: <KpiDashboardScreen />, schoolRevenue: <SchoolRevenueScreen />, customerDebt: <CustomerDebtScreen />, profile: <MobileProfileScreen onSignOut={onSignOut} onNavigate={setTab} />,
   };
-  const isBottomKey = (k) => ['home', 'feed', 'orders', 'tasks', 'profile'].includes(k);
+  const isBottomKey = (k) => ['home', 'feed', 'orders', 'tasks', 'chat', 'profile'].includes(k);
   // Chỉ Kế toán/Thu ngân/Quản lý/Giám đốc thấy mục "Kế Toán Tổng Quan" — khớp
   // is_finance_operator() chặn ở RPC phía database.
   const isFinanceRole = hasAnyRole(profile, FINANCE_ROLES);

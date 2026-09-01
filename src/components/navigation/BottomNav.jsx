@@ -1,12 +1,13 @@
 import React from 'react';
 import { NavBadge } from './NavBadge';
-import { IconHome, IconMegaphone, IconReceipt, IconCheck, IconUser } from '../icons/FrogIcons';
+import { IconHome, IconMegaphone, IconReceipt, IconCheck, IconUser, IconChat } from '../icons/FrogIcons';
 
 const items = [
   { key: 'home', label: 'Hôm nay', Icon: IconHome },
   { key: 'feed', label: 'Bảng tin', Icon: IconMegaphone },
   { key: 'orders', label: 'Đơn hàng', Icon: IconReceipt },
   { key: 'tasks', label: 'Việc', Icon: IconCheck },
+  { key: 'chat', label: 'Chat', Icon: IconChat },
   { key: 'profile', label: 'Của tôi', Icon: IconUser },
 ];
 
