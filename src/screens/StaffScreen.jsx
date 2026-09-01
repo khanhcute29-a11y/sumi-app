@@ -309,7 +309,7 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, danhSachCa, onSavePermissio
             </div>
           )}
 
-          {isOwner && (
+          {(isOwner || canDeactivate) && (
             <React.Fragment>
               {/* Chọn vai trò chính & Khâu làm việc */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10 }}>
@@ -494,6 +494,10 @@ export default function StaffScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [expandedId, setExpandedId] = useState(null);
+  // Phân luồng phòng ban: THU GỌN mặc định (chỉ hiện tên + số người), bấm vào
+  // mới xổ ra danh sách — trước đây hiện hết luôn nên cả list dài dằng dặc dù
+  // đã nhóm theo bộ phận.
+  const [openBoPhan, setOpenBoPhan] = useState(() => new Set());
 
   const load = () => {
     setLoading(true);
@@ -576,29 +580,48 @@ export default function StaffScreen() {
             </Card>
           )}
 
-          {BO_PHAN_ORDER.filter((bp) => approvedByBoPhan[bp]?.length).map((bp) => (
-            <Card key={bp} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>
-                {bp === '_khac' ? 'Khác (không theo ca cố định)' : TEN_BO_PHAN[bp] || bp} ({approvedByBoPhan[bp].length})
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {approvedByBoPhan[bp].map((s) => (
-                  <StaffRow
-                    key={s.id}
-                    s={s}
-                    isOwner={isOwner}
-                    isMe={s.id === me?.id}
-                    canDeactivate={canDeactivate}
-                    danhSachCa={danhSachCa}
-                    onSavePermissions={handleSavePermissions}
-                    onDeactivate={handleDeactivate}
-                    expanded={expandedId === s.id}
-                    onToggle={() => setExpandedId(expandedId === s.id ? null : s.id)}
-                  />
-                ))}
-              </div>
-            </Card>
-          ))}
+          {BO_PHAN_ORDER.filter((bp) => approvedByBoPhan[bp]?.length).map((bp) => {
+            const isOpen = openBoPhan.has(bp);
+            return (
+              <Card key={bp} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setOpenBoPhan((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(bp)) next.delete(bp); else next.add(bp);
+                    return next;
+                  })}
+                  style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    border: 'none', background: 'none', padding: 0, cursor: 'pointer', width: '100%', textAlign: 'left',
+                  }}
+                >
+                  <span style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>
+                    {bp === '_khac' ? 'Khác (không theo ca cố định)' : TEN_BO_PHAN[bp] || bp} ({approvedByBoPhan[bp].length})
+                  </span>
+                  <span style={{ color: 'var(--text-muted)', fontSize: 13, fontWeight: 700 }}>{isOpen ? '▾ Thu gọn' : '▸ Xem danh sách'}</span>
+                </button>
+                {isOpen && (
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    {approvedByBoPhan[bp].map((s) => (
+                      <StaffRow
+                        key={s.id}
+                        s={s}
+                        isOwner={isOwner}
+                        isMe={s.id === me?.id}
+                        canDeactivate={canDeactivate}
+                        danhSachCa={danhSachCa}
+                        onSavePermissions={handleSavePermissions}
+                        onDeactivate={handleDeactivate}
+                        expanded={expandedId === s.id}
+                        onToggle={() => setExpandedId(expandedId === s.id ? null : s.id)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </Card>
+            );
+          })}
           {approved.length === 0 && (
             <Card><div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Chưa có nhân viên nào.</div></Card>
           )}
