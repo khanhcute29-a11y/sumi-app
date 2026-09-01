@@ -15,25 +15,34 @@ const DOW_LABELS = ['Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ S
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const monthStart = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`; };
 
-// ---- 1. Doanh thu theo 5 kênh (orders.order_type khớp ORDER_FLOWS) ----
+// ---- 1. Doanh thu THUẦN theo 5 kênh (orders.order_type khớp ORDER_FLOWS) ----
+// CHỈ tính đơn ĐÃ HOÀN THÀNH VÀ ĐÃ XÁC MINH THANH TOÁN (payment_verified=true,
+// bật qua RPC verify_order_payment sau bước chụp ảnh/chuyển khoản — xem
+// OrderV2DetailModal.jsx). Đơn đã giao nhưng chưa xác minh KHÔNG nằm ở đây,
+// dù status_v2 đã là 'completed' — nó thuộc "Doanh thu dự tính" bên dưới.
 export async function fetchRevenueByChannel({ from, to } = {}) {
   const fromIso = from || `${todayStr()}T00:00:00`;
   const toIso = to || new Date().toISOString();
   const { data, error } = await supabase
     .from('orders')
-    .select('order_type, total')
+    .select('id, order_code, order_type, total, completed_at, target_store, customers(name)')
     .eq('status_v2', 'completed')
+    .eq('payment_verified', true)
     .gte('completed_at', fromIso)
     .lte('completed_at', toIso);
   if (error) throw error;
   const rows = data || [];
   const byKey = {};
-  ORDER_FLOWS.forEach((f) => { byKey[f.key] = { ...f, amount: 0, count: 0 }; });
-  byKey.other = { key: 'other', icon: '🧺', title: 'Khác', amount: 0, count: 0 };
+  ORDER_FLOWS.forEach((f) => { byKey[f.key] = { ...f, amount: 0, count: 0, orders: [] }; });
+  byKey.other = { key: 'other', icon: '🧺', title: 'Khác', amount: 0, count: 0, orders: [] };
   rows.forEach((o) => {
     const bucket = byKey[o.order_type] || byKey.other;
     bucket.amount += Number(o.total) || 0;
     bucket.count += 1;
+    bucket.orders.push({
+      id: o.id, orderCode: o.order_code, customerName: o.customers?.name || '—',
+      amount: Number(o.total) || 0, branch: o.target_store || null, when: o.completed_at,
+    });
   });
   const total = rows.reduce((s, o) => s + (Number(o.total) || 0), 0);
   const channels = [...ORDER_FLOWS.map((f) => byKey[f.key]), byKey.other]
@@ -41,6 +50,64 @@ export async function fetchRevenueByChannel({ from, to } = {}) {
     .map((b) => ({ ...b, percentage: total > 0 ? `${((b.amount / total) * 100).toFixed(1)}%` : '0%' }))
     .sort((a, b) => b.amount - a.amount);
   return { channels, total };
+}
+
+// ---- 1b. Doanh thu DỰ TÍNH — snapshot HIỆN TẠI (không lọc theo ngày, vì đây
+// là tiền còn "treo", không phải khoản đã chốt sổ theo ngày):
+//   • Đặt cọc của khách cho đơn CHƯA tính vào doanh thu thuần.
+//   • Công nợ đơn sỉ (trường học) chưa thu — customer_debt_balances.balance>0.
+//   • Đơn đang trong quá trình giao (status_v2='in_delivery'), tính theo total.
+// 3 luồng độc lập, có thể chồng một phần lên nhau (VD: đặt cọc của 1 đơn đang
+// giao) — đây là con số ƯỚC TÍNH tổng quan, không phải sổ kế toán đối soát.
+export async function fetchDoanhThuDuTinh() {
+  const [depositRes, debtRes, deliveryRes] = await Promise.all([
+    supabase.from('orders')
+      .select('id, order_code, order_type, deposit, target_store, customers(name)')
+      .gt('deposit', 0)
+      .or('status_v2.neq.completed,payment_verified.eq.false'),
+    supabase.from('customer_debt_balances').select('customer_id, name, balance').gt('balance', 0),
+    supabase.from('orders')
+      .select('id, order_code, order_type, total, target_store, customers(name)')
+      .eq('status_v2', 'in_delivery'),
+  ]);
+  if (depositRes.error) throw depositRes.error;
+  if (debtRes.error) throw debtRes.error;
+  if (deliveryRes.error) throw deliveryRes.error;
+
+  const deposit = {
+    id: 'deposit', icon: '💰', title: 'Tiền đặt cọc',
+    note: 'Đơn chưa hoàn thành hoặc chưa xác minh thanh toán',
+    amount: (depositRes.data || []).reduce((s, o) => s + (Number(o.deposit) || 0), 0),
+    count: (depositRes.data || []).length,
+    orders: (depositRes.data || []).map((o) => ({
+      id: o.id, orderCode: o.order_code, customerName: o.customers?.name || '—',
+      amount: Number(o.deposit) || 0, branch: o.target_store || null,
+    })),
+  };
+  const debt = {
+    id: 'debt', icon: '📒', title: 'Công nợ đơn sỉ chưa thu',
+    note: 'Công nợ trường học còn dư nợ',
+    amount: (debtRes.data || []).reduce((s, d) => s + (Number(d.balance) || 0), 0),
+    count: (debtRes.data || []).length,
+    orders: (debtRes.data || []).map((d) => ({
+      id: d.customer_id, orderCode: null, customerName: d.name,
+      amount: Number(d.balance) || 0, branch: 'Trường học', isDebtCustomer: true,
+    })),
+  };
+  const delivery = {
+    id: 'in_delivery', icon: '🛵', title: 'Đơn đang giao',
+    note: 'Chưa hoàn thành — tính theo tổng giá trị đơn',
+    amount: (deliveryRes.data || []).reduce((s, o) => s + (Number(o.total) || 0), 0),
+    count: (deliveryRes.data || []).length,
+    orders: (deliveryRes.data || []).map((o) => ({
+      id: o.id, orderCode: o.order_code, customerName: o.customers?.name || '—',
+      amount: Number(o.total) || 0, branch: o.target_store || null,
+    })),
+  };
+
+  const buckets = [deposit, debt, delivery];
+  const total = buckets.reduce((s, b) => s + b.amount, 0);
+  return { buckets, total };
 }
 
 // ---- 2. Sổ cái khoản chi (expense_claims) ----

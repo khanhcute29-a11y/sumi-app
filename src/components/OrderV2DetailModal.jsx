@@ -18,6 +18,8 @@ import { addFinishedGoodsEntryV2 } from '../lib/queries';
 import { branchForOrderType } from '../lib/internalOrders';
 import { IconCake, IconBakery, IconMacaron, IconSchool, IconTeabreak, IconMixed } from './icons/FrogIcons';
 import StarRateBar from './StarRateBar';
+import { PhotoField } from './PhotoField';
+import { CameraPhotoField } from './CameraPhotoField';
 
 const ORDER_TYPE_ICONS = {
   cake: IconCake, bakery: IconBakery, macaron: IconMacaron, school: IconSchool, teabreak: IconTeabreak, mixed: IconMixed,
@@ -125,6 +127,14 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
   const cameraInputRef = React.useRef(null);
+  // Chốt chặn Xác Minh Thanh Toán — mở ra NGAY SAU khi "Hoàn Thành Giao"
+  // thành công, trước khi rời màn hình. Đơn đã completed nhưng chưa xác minh
+  // thì KHÔNG tính vào Doanh thu thuần (xem fetchRevenueByChannel).
+  const [showPaymentVerifyModal, setShowPaymentVerifyModal] = useState(false);
+  const [verifyMethod, setVerifyMethod] = useState(null); // 'bank_transfer' | 'cod'
+  const [verifyProofUrl, setVerifyProofUrl] = useState('');
+  const [verifyBusy, setVerifyBusy] = useState(false);
+  const [verifyError, setVerifyError] = useState('');
   const [showEditModal, setShowEditModal] = useState(false);
   // Hoàn thành đơn nội bộ -> đẩy thẳng lên Kho Thành Phẩm. Bắt buộc ảnh/ngày
   // SX/HSD theo đúng yêu cầu — dùng lại addFinishedGoodsEntryV2 đã có sẵn
@@ -153,7 +163,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
 
   const load = async () => {
     const [o, i, p, u, e, kpi, ops, att, changes, qs, ship] = await Promise.all([
-      supabase.from('orders').select('id,order_code,order_type,status_v2,required_at,fulfillment_method_v2,address,note,created_by,created_by_name,created_at,confidentiality,version,ship_fee,deposit,payment_method,total,is_internal,target_store,discount_amount,promotion_note,tax_code,vat_amount,customers(name,phone)').eq('id', orderId).single(),
+      supabase.from('orders').select('id,order_code,order_type,status_v2,required_at,fulfillment_method_v2,address,note,created_by,created_by_name,created_at,confidentiality,version,ship_fee,deposit,payment_method,total,is_internal,target_store,discount_amount,promotion_note,tax_code,vat_amount,payment_verified,payment_verified_at,payment_proof_url,customers(name,phone)').eq('id', orderId).single(),
       supabase.from('order_items').select('id,name_snapshot,quantity,unit,specification,unit_price,display_order').eq('order_id', orderId).order('display_order'),
       supabase.from('order_work_packages_readable').select('id,unit_id,status,due_at,accepted_at,completed_at,version,organization_units(name,code),work_package_items(order_item_id,quantity)').eq('order_id', orderId),
       supabase.from('organization_units').select('id,name,code').eq('unit_type', 'kitchen').eq('active', true),
@@ -747,12 +757,47 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       setPhotoFile(null);
       setPhotoPreview(null);
 
-      // Về danh sách "Giao thành công" để xem lại đơn vừa giao xong
-      hoanTatVaChuyenTrang('completed');
+      // ĐƠN CHƯA TÍNH DOANH THU THUẦN cho tới khi xác minh thanh toán — mở
+      // ngay bước tiếp theo thay vì rời màn hình, để không tạo ra một đơn
+      // "đã giao" mà không ai quay lại xác minh.
+      await load();
+      setShowPaymentVerifyModal(true);
     } catch (e) {
       setError(e.message);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const verifyPayment = async () => {
+    if (!verifyMethod) { setVerifyError('Chọn hình thức thanh toán trước.'); return; }
+    if (!verifyProofUrl) {
+      setVerifyError(verifyMethod === 'bank_transfer'
+        ? 'Cần ảnh chụp màn hình chuyển khoản.'
+        : 'Cần chụp ảnh nhận tiền mặt.');
+      return;
+    }
+    setVerifyBusy(true); setVerifyError('');
+    try {
+      const { data: rpcData, error } = await supabase.rpc('verify_order_payment', {
+        p_order_id: orderId,
+        p_payment_method: verifyMethod,
+        p_proof_url: verifyProofUrl,
+      });
+      if (error) throw error;
+      if (!rpcData?.thanh_cong) throw new Error(rpcData?.thong_bao || 'Không xác minh được thanh toán.');
+
+      setShowPaymentVerifyModal(false);
+      setVerifyMethod(null);
+      setVerifyProofUrl('');
+      await load();
+      onChanged?.();
+      // Về danh sách "Giao thành công" — đơn giờ đã tính vào Doanh thu thuần.
+      hoanTatVaChuyenTrang('completed');
+    } catch (e) {
+      setVerifyError(e.message || 'Không xác minh được thanh toán. Thử lại giúp tôi.');
+    } finally {
+      setVerifyBusy(false);
     }
   };
 
@@ -1068,6 +1113,25 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
             {data.operations?.was_late && (
               <div style={{ marginTop: 4, padding: '8px 10px', background: '#fee2e2', borderRadius: 8, color: '#b42318', fontWeight: 700 }}>
                 ⚠️ Đơn này trễ giờ hẹn{data.operations?.late_staff_names ? ` — nhân viên: ${data.operations.late_staff_names}` : ''}
+              </div>
+            )}
+            {o.status_v2 === 'completed' && !o.payment_verified && (
+              <button
+                onClick={() => { setVerifyMethod(null); setVerifyProofUrl(''); setVerifyError(''); setShowPaymentVerifyModal(true); }}
+                style={{
+                  marginTop: 4, padding: '10px 12px', background: '#fff3cd', border: '1px solid #f2d488', borderRadius: 10,
+                  color: '#7a5a00', fontWeight: 800, fontSize: 13, cursor: 'pointer', textAlign: 'left',
+                }}
+              >
+                ⚠️ Đã giao nhưng CHƯA xác minh thanh toán — chưa tính vào Doanh thu thuần. Bấm để xác minh ngay.
+              </button>
+            )}
+            {o.status_v2 === 'completed' && o.payment_verified && o.payment_proof_url && (
+              <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--text-secondary)' }}>
+                ✅ Đã xác minh thanh toán ({PAYMENT_METHOD_LABELS[o.payment_method] || o.payment_method})
+                {o.payment_verified_at ? ` · ${new Date(o.payment_verified_at).toLocaleString('vi-VN')}` : ''}
+                {' · '}
+                <a href={o.payment_proof_url} target="_blank" rel="noreferrer" style={{ color: '#d96b43', fontWeight: 700 }}>Xem ảnh chứng từ</a>
               </div>
             )}
             <div>
@@ -1614,6 +1678,102 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                 }}
               >
                 {busy ? '⏳ Đang xử lý...' : '✅ Hoàn Thành Giao'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Xác Minh Thanh Toán — bắt buộc SAU khi Hoàn Thành Giao, trước
+          khi đơn được tính vào Doanh thu thuần. Chuyển khoản: tải ảnh chụp
+          màn hình có sẵn. Tiền mặt: bắt buộc chụp trực tiếp qua camera thiết
+          bị (CameraPhotoField, không cho chọn ảnh cũ từ thư viện). */}
+      {showPaymentVerifyModal && (
+        <div onClick={() => !verifyBusy && setShowPaymentVerifyModal(false)} style={{
+          position: 'fixed', inset: 0, zIndex: 116, background: 'rgba(0,0,0,0.5)',
+          display: 'flex', justifyContent: 'center', alignItems: 'flex-end'
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            width: '100%', maxWidth: 600, background: 'var(--surface-app)', borderRadius: '20px 20px 0 0',
+            padding: 24, maxHeight: '85vh', overflowY: 'auto'
+          }}>
+            <h3 style={{ margin: '0 0 6px 0', fontSize: 18, color: 'var(--text-primary)', fontWeight: 900 }}>
+              💳 Xác Minh Thanh Toán
+            </h3>
+            <p style={{ margin: '0 0 18px', fontSize: 13, color: 'var(--text-secondary)' }}>
+              Đơn đã giao xong — chỉ tính vào Doanh thu thuần sau khi xác minh đã thu tiền.
+            </p>
+
+            <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
+              <button
+                onClick={() => { setVerifyMethod('bank_transfer'); setVerifyProofUrl(''); setVerifyError(''); }}
+                style={{
+                  flex: 1, padding: '14px 10px', borderRadius: 14, fontWeight: 800, fontSize: 14, cursor: 'pointer',
+                  border: verifyMethod === 'bank_transfer' ? '2px solid #d96b43' : '1px solid var(--border-subtle)',
+                  background: verifyMethod === 'bank_transfer' ? '#fde8de' : 'var(--surface-sunken)',
+                  color: verifyMethod === 'bank_transfer' ? '#d96b43' : 'var(--text-primary)',
+                }}
+              >
+                🏦 Chuyển khoản
+              </button>
+              <button
+                onClick={() => { setVerifyMethod('cod'); setVerifyProofUrl(''); setVerifyError(''); }}
+                style={{
+                  flex: 1, padding: '14px 10px', borderRadius: 14, fontWeight: 800, fontSize: 14, cursor: 'pointer',
+                  border: verifyMethod === 'cod' ? '2px solid #d96b43' : '1px solid var(--border-subtle)',
+                  background: verifyMethod === 'cod' ? '#fde8de' : 'var(--surface-sunken)',
+                  color: verifyMethod === 'cod' ? '#d96b43' : 'var(--text-primary)',
+                }}
+              >
+                💵 Tiền mặt
+              </button>
+            </div>
+
+            {verifyMethod === 'bank_transfer' && (
+              <div style={{ marginBottom: 18, padding: 14, background: 'var(--surface-sunken)', borderRadius: 14 }}>
+                <PhotoField
+                  url={verifyProofUrl}
+                  onChange={setVerifyProofUrl}
+                  label="Ảnh chụp màn hình chuyển khoản"
+                  prefix={`orders/${orderId}/payment-proof`}
+                />
+              </div>
+            )}
+            {verifyMethod === 'cod' && (
+              <div style={{ marginBottom: 18, padding: 14, background: 'var(--surface-sunken)', borderRadius: 14 }}>
+                <CameraPhotoField
+                  url={verifyProofUrl}
+                  onChange={setVerifyProofUrl}
+                  label="Chụp ảnh nhận tiền mặt trực tiếp"
+                  prefix={`orders/${orderId}/payment-proof`}
+                />
+              </div>
+            )}
+
+            {verifyError && (
+              <div style={{ marginBottom: 14, padding: 10, background: '#fee2e2', borderRadius: 10, color: '#b42318', fontWeight: 700, fontSize: 14 }}>
+                ⚠️ {verifyError}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={() => setShowPaymentVerifyModal(false)}
+                disabled={verifyBusy}
+                style={{ flex: 1, padding: '12px 16px', background: 'var(--surface-sunken)', color: 'var(--text-primary)', border: 0, borderRadius: 10, fontWeight: 700, cursor: 'pointer', fontSize: 14 }}
+              >
+                Để sau
+              </button>
+              <button
+                onClick={verifyPayment}
+                disabled={verifyBusy || !verifyMethod || !verifyProofUrl}
+                style={{
+                  flex: 1, padding: '12px 16px', background: '#28a745', color: '#fff', border: 0, borderRadius: 10, fontWeight: 700,
+                  cursor: (verifyBusy || !verifyMethod || !verifyProofUrl) ? 'not-allowed' : 'pointer', fontSize: 14,
+                  opacity: (verifyBusy || !verifyMethod || !verifyProofUrl) ? 0.5 : 1,
+                }}
+              >
+                {verifyBusy ? '⏳ Đang xác minh...' : '✅ Xác Minh Thanh Toán'}
               </button>
             </div>
           </div>

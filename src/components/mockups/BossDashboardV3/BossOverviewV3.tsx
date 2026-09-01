@@ -58,6 +58,7 @@ import { WeeklyScheduleSection } from '../../WeeklyScheduleSection';
 import DirectorStaffOverviewSheet from '../../shifts/v2/DirectorStaffOverviewSheet';
 import {
   fetchRevenueByChannel,
+  fetchDoanhThuDuTinh,
   fetchExpenseAndAdvanceLedgerToday,
   reviewExpenseClaim,
   fetchTodayStaffStatus,
@@ -394,9 +395,26 @@ export function BossOverviewV3Inner() {
     flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '0 14px 30px', boxSizing: 'border-box', ...extra,
   });
 
-  // ── Dữ liệu thật: doanh thu 5 kênh ──
+  // ── Dữ liệu thật: doanh thu THUẦN 5 kênh hôm nay (đã hoàn thành + đã xác
+  // minh thanh toán) ──
   const [revenueStreams, setRevenueStreams] = useState<any[]>([]);
   const [totalRevenue, setTotalRevenue] = useState(0);
+
+  // ── Dữ liệu thật: doanh thu DỰ TÍNH (đặt cọc + công nợ sỉ + đơn đang giao) ──
+  const [duTinhBuckets, setDuTinhBuckets] = useState<any[]>([]);
+  const [duTinhTotal, setDuTinhTotal] = useState(0);
+
+  // ── Tab "Hôm nay" / "Lịch sử" trong sheet Doanh Thu ──
+  const [revenueTab, setRevenueTab] = useState<'today' | 'history'>('today');
+  const [historyFrom, setHistoryFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10); });
+  const [historyTo, setHistoryTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [historyChannels, setHistoryChannels] = useState<any[]>([]);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState('');
+
+  // Danh sách đơn khi bấm vào 1 luồng doanh thu (dự tính hoặc thuần)
+  const [revenueDrill, setRevenueDrill] = useState<{ title: string; amount: number; orders: any[] } | null>(null);
 
   // ── Dữ liệu thật: sổ cái khoản chi (expense_claims) ──
   const [expenseStreams, setExpenseStreams] = useState<any[]>([]);
@@ -423,8 +441,9 @@ export function BossOverviewV3Inner() {
     setLoading(true);
     setLoadError('');
     try {
-      const [rev, claims, status, staffOptions, orders, posts, advances, leaves, reports, schedule] = await Promise.all([
+      const [rev, duTinh, claims, status, staffOptions, orders, posts, advances, leaves, reports, schedule] = await Promise.all([
         fetchRevenueByChannel(),
+        fetchDoanhThuDuTinh(),
         fetchExpenseAndAdvanceLedgerToday(),
         fetchTodayStaffStatus(),
         fetchAssignableStaff(),
@@ -436,8 +455,10 @@ export function BossOverviewV3Inner() {
         fetchWeeklyScheduleAllStations(),
       ]);
 
-      setRevenueStreams(rev.channels.map((c) => ({ id: c.key, channel: c.title, amount: c.amount, percentage: c.percentage, icon: c.icon, note: `${c.count} đơn hoàn thành` })));
+      setRevenueStreams(rev.channels.map((c) => ({ id: c.key, channel: c.title, amount: c.amount, percentage: c.percentage, icon: c.icon, note: `${c.count} đơn hoàn thành`, orders: c.orders })));
       setTotalRevenue(rev.total);
+      setDuTinhBuckets(duTinh.buckets);
+      setDuTinhTotal(duTinh.total);
 
       setExpenseStreams(claims.map(mapLedgerRow));
       setTotalExpense(claims.reduce((s: number, c: any) => s + (Number(c.amount) || 0), 0));
@@ -566,6 +587,26 @@ export function BossOverviewV3Inner() {
   const handleOpenOrderDrawer = (filterKey: string = 'all') => {
     setSelectedOrderFilter(filterKey);
     setActiveSheet('order_drawer');
+  };
+
+  // Tab "Lịch sử" của sheet Doanh Thu — Doanh thu THUẦN trong khoảng Từ ngày/
+  // Đến ngày tự chọn. Dùng lại đúng fetchRevenueByChannel({from,to}) của tab
+  // "Hôm nay" (đã hỗ trợ sẵn from/to), không viết truy vấn doanh thu thứ hai.
+  const loadRevenueHistory = async () => {
+    if (!historyFrom || !historyTo) return;
+    setHistoryLoading(true); setHistoryError('');
+    try {
+      const rev = await fetchRevenueByChannel({
+        from: `${historyFrom}T00:00:00`,
+        to: `${historyTo}T23:59:59.999`,
+      });
+      setHistoryChannels(rev.channels.map((c: any) => ({ id: c.key, channel: c.title, amount: c.amount, percentage: c.percentage, icon: c.icon, note: `${c.count} đơn hoàn thành`, orders: c.orders })));
+      setHistoryTotal(rev.total);
+    } catch (e: any) {
+      setHistoryError(e.message || 'Không tải được lịch sử doanh thu.');
+    } finally {
+      setHistoryLoading(false);
+    }
   };
 
   // ── Duyệt/Từ chối khoản chi hoặc tạm ứng lương từ Sổ Cái — ghi thật vào
@@ -1348,34 +1389,173 @@ export function BossOverviewV3Inner() {
                 {SHEET_HANDLE}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
                   <div>
-                    <div style={{ fontSize: 15, fontWeight: 900, color: '#166534' }}>📊 Chi Tiết Nguồn Thu Hôm Nay</div>
-                    <div style={{ fontSize: 11, color: '#725f50' }}>Tổng cộng: {formatVND(totalRevenue)}</div>
+                    <div style={{ fontSize: 15, fontWeight: 900, color: '#166534' }}>📊 Tổng Hợp Doanh Thu</div>
+                    <div style={{ fontSize: 11, color: '#725f50' }}>
+                      {revenueTab === 'today' ? `Thuần hôm nay: ${formatVND(totalRevenue)} · Dự tính: ${formatVND(duTinhTotal)}` : `Thuần trong khoảng đã chọn: ${formatVND(historyTotal)}`}
+                    </div>
                   </div>
                   <button onClick={() => setActiveSheet(null)} aria-label="Quay lại" style={{ order: -1, flexShrink: 0, width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer' }}>‹</button>
+                </div>
+
+                {/* 2 module: Doanh thu hôm nay / Lịch sử */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, padding: '10px 14px 0' }}>
+                  <button onClick={() => setRevenueTab('today')} style={{
+                    padding: '8px 4px', borderRadius: 12, border: revenueTab === 'today' ? '2px solid #15803d' : '1px solid #eadcca',
+                    background: revenueTab === 'today' ? '#f0fdf4' : '#fff', color: revenueTab === 'today' ? '#15803d' : '#725f50',
+                    fontSize: 11.5, fontWeight: 900, cursor: 'pointer',
+                  }}>
+                    📅 Doanh thu hôm nay
+                  </button>
+                  <button onClick={() => { setRevenueTab('history'); if (!historyChannels.length && !historyLoading) loadRevenueHistory(); }} style={{
+                    padding: '8px 4px', borderRadius: 12, border: revenueTab === 'history' ? '2px solid #15803d' : '1px solid #eadcca',
+                    background: revenueTab === 'history' ? '#f0fdf4' : '#fff', color: revenueTab === 'history' ? '#15803d' : '#725f50',
+                    fontSize: 11.5, fontWeight: 900, cursor: 'pointer',
+                  }}>
+                    🕘 Lịch sử
+                  </button>
                 </div>
               </div>
 
               <div style={sheetBodyStyle({ paddingTop: 12 })}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {revenueStreams.map(rev => (
-                    <div key={rev.id} style={{ background: '#faf6f0', border: '1.5px solid #eadcca', borderRadius: 14, padding: 12 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontSize: 22 }}>{rev.icon}</span>
-                          <div>
-                            <div style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>{rev.channel}</div>
-                            <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>{rev.note}</div>
-                          </div>
-                        </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: 14, fontWeight: 900, color: '#15803d' }}>{formatVND(rev.amount)}</div>
-                          <div style={{ fontSize: 10.5, fontWeight: 800, color: '#a08060' }}>{rev.percentage} tổng thu</div>
-                        </div>
+                {revenueTab === 'today' ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 900, color: '#b45309', textTransform: 'uppercase', marginBottom: 8 }}>
+                        🔮 Doanh thu dự tính — {formatVND(duTinhTotal)}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {duTinhBuckets.map((b: any) => (
+                          <button key={b.id} onClick={() => b.orders.length && setRevenueDrill({ title: b.title, amount: b.amount, orders: b.orders })}
+                            style={{ textAlign: 'left', width: '100%', background: '#fffbeb', border: '1.5px solid #fde68a', borderRadius: 14, padding: 12, cursor: b.orders.length ? 'pointer' : 'default' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ fontSize: 22 }}>{b.icon}</span>
+                                <div>
+                                  <div style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>{b.title}</div>
+                                  <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>{b.note} · {b.count} khoản</div>
+                                </div>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <div style={{ fontSize: 14, fontWeight: 900, color: '#b45309' }}>{formatVND(b.amount)}</div>
+                                {b.orders.length > 0 && <ChevronRight size={16} color="#a08060" />}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
                       </div>
                     </div>
-                  ))}
-                </div>
+
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 900, color: '#166534', textTransform: 'uppercase', marginBottom: 8 }}>
+                        ✅ Doanh thu thuần (đã xác minh) — {formatVND(totalRevenue)}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {revenueStreams.length === 0 && (
+                          <div style={{ textAlign: 'center', padding: '16px 0', color: '#725f50', fontSize: 13 }}>Chưa có đơn nào đã xác minh thanh toán hôm nay.</div>
+                        )}
+                        {revenueStreams.map(rev => (
+                          <button key={rev.id} onClick={() => rev.orders?.length && setRevenueDrill({ title: rev.channel, amount: rev.amount, orders: rev.orders })}
+                            style={{ textAlign: 'left', width: '100%', background: '#faf6f0', border: '1.5px solid #eadcca', borderRadius: 14, padding: 12, cursor: rev.orders?.length ? 'pointer' : 'default' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ fontSize: 22 }}>{rev.icon}</span>
+                                <div>
+                                  <div style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>{rev.channel}</div>
+                                  <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>{rev.note}</div>
+                                </div>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <div style={{ textAlign: 'right' }}>
+                                  <div style={{ fontSize: 14, fontWeight: 900, color: '#15803d' }}>{formatVND(rev.amount)}</div>
+                                  <div style={{ fontSize: 10.5, fontWeight: 800, color: '#a08060' }}>{rev.percentage} tổng thu</div>
+                                </div>
+                                {rev.orders?.length > 0 && <ChevronRight size={16} color="#a08060" />}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                      <label style={{ flex: 1, fontSize: 11, fontWeight: 800, color: '#725f50' }}>
+                        Từ ngày
+                        <input type="date" value={historyFrom} max={historyTo} onChange={e => setHistoryFrom(e.target.value)}
+                          style={{ display: 'block', width: '100%', marginTop: 4, minHeight: 40, borderRadius: 10, border: '1px solid #eadcca', padding: '0 8px', fontSize: 13, fontFamily: 'inherit' }} />
+                      </label>
+                      <label style={{ flex: 1, fontSize: 11, fontWeight: 800, color: '#725f50' }}>
+                        Đến ngày
+                        <input type="date" value={historyTo} min={historyFrom} max={new Date().toISOString().slice(0, 10)} onChange={e => setHistoryTo(e.target.value)}
+                          style={{ display: 'block', width: '100%', marginTop: 4, minHeight: 40, borderRadius: 10, border: '1px solid #eadcca', padding: '0 8px', fontSize: 13, fontFamily: 'inherit' }} />
+                      </label>
+                      <button onClick={loadRevenueHistory} disabled={historyLoading} style={{ minHeight: 40, padding: '0 16px', borderRadius: 10, border: 'none', background: '#15803d', color: '#fff', fontWeight: 900, fontSize: 13, cursor: 'pointer' }}>
+                        {historyLoading ? '…' : 'Xem'}
+                      </button>
+                    </div>
+
+                    {historyError && <div style={{ color: '#dc2626', fontSize: 12.5, fontWeight: 700 }}>⚠️ {historyError}</div>}
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {!historyLoading && historyChannels.length === 0 && (
+                        <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Không có doanh thu đã xác minh trong khoảng này.</div>
+                      )}
+                      {historyChannels.map((rev: any) => (
+                        <button key={rev.id} onClick={() => rev.orders?.length && setRevenueDrill({ title: rev.channel, amount: rev.amount, orders: rev.orders })}
+                          style={{ textAlign: 'left', width: '100%', background: '#faf6f0', border: '1.5px solid #eadcca', borderRadius: 14, padding: 12, cursor: rev.orders?.length ? 'pointer' : 'default' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontSize: 22 }}>{rev.icon}</span>
+                              <div>
+                                <div style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>{rev.channel}</div>
+                                <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>{rev.note}</div>
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontSize: 14, fontWeight: 900, color: '#15803d' }}>{formatVND(rev.amount)}</div>
+                                <div style={{ fontSize: 10.5, fontWeight: 800, color: '#a08060' }}>{rev.percentage} tổng thu</div>
+                              </div>
+                              {rev.orders?.length > 0 && <ChevronRight size={16} color="#a08060" />}
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Danh sách chi tiết đơn của 1 luồng doanh thu (dự tính hoặc thuần) —
+            bấm 1 dòng mở thẳng OrderV2DetailModal qua selectedOrderId có sẵn. */}
+        {revenueDrill && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 2000, background: '#fdf9f2', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 14, borderBottom: '1.5px solid #eadcca', position: 'sticky', top: 0, background: '#fdf9f2', zIndex: 1 }}>
+              <button onClick={() => setRevenueDrill(null)} aria-label="Quay lại" style={{ width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer', flexShrink: 0 }}>‹</button>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 1, color: '#b8692f', textTransform: 'uppercase' }}>{revenueDrill.title}</div>
+                <div style={{ fontSize: 15, fontWeight: 900, color: '#2d1b10' }}>{formatVND(revenueDrill.amount)} · {revenueDrill.orders.length} khoản</div>
+              </div>
+            </div>
+            <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {revenueDrill.orders.map((o: any) => (
+                <button key={o.id} onClick={() => { if (!o.isDebtCustomer) { setSelectedOrderId(o.id); setRevenueDrill(null); } }}
+                  style={{ textAlign: 'left', width: '100%', background: '#fff', border: '1.5px solid #eadcca', borderRadius: 14, padding: 12, cursor: o.isDebtCustomer ? 'default' : 'pointer' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>{o.orderCode || o.customerName}</div>
+                      <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>
+                        {o.orderCode ? o.customerName : 'Công nợ trường học'}{o.branch ? ` · ${o.branch}` : ''}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 13.5, fontWeight: 900, color: '#15803d' }}>{formatVND(o.amount)}</div>
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
         )}
