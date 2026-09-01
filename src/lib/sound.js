@@ -345,6 +345,7 @@ export function playNotificationSound(soundKey) {
   } else if (soundKey === 'cash_complete') playDeliveredSound();
   else if (soundKey === 'ting') playTingSound();
   else if (soundKey === 'task_progress') playTaskProgressSound();
+  else if (soundKey === 'task_deadline') playDeadlineAlertSound();
 }
 
 // GIAO VIỆC — 3 nốt nảy Mi-La-Đô, tươi và gấp gáp, khác hẳn tiếng bếp/shipper
@@ -367,6 +368,16 @@ export function playTaskProgressSound() {
   withRunningCtx(() => {
     beep({ freq: 698, duration: 0.13, type: 'sine' });          // Fa5
     beep({ freq: 880, duration: 0.2, delay: 0.15, type: 'sine' }); // La5
+  });
+}
+
+// SẮP/ĐÃ QUÁ HẠN VIỆC — 2 tiếng "tít tít" gấp gáp, cao và ngắn, khẩn hơn hẳn
+// mọi tiếng khác trong app vì đây là cảnh báo LẶP LẠI mỗi 10 phút cho tới
+// khi thợ xử lý xong — cố ý không êm tai để không bị lờ đi.
+export function playDeadlineAlertSound() {
+  withRunningCtx(() => {
+    beep({ freq: 1568, duration: 0.1, type: 'square', volume: 0.7 });
+    beep({ freq: 1568, duration: 0.1, delay: 0.14, type: 'square', volume: 0.7 });
   });
 }
 

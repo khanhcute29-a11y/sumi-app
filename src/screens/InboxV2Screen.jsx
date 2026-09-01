@@ -6,7 +6,7 @@ import { playNotificationSound } from '../lib/sound';
 // không cần mở Hộp thư) — tránh kêu chồng bằng cách không phát lại ở đây.
 const HANDLED_GLOBALLY = new Set([
   'company_announcement', 'task_assigned', 'task_reminder',
-  'task_progress', 'expense_claim', 'salary_advance', 'chat_mention',
+  'task_progress', 'expense_claim', 'salary_advance', 'chat_mention', 'task_deadline_alert',
 ]);
 
 const LABELS = {
@@ -25,6 +25,7 @@ const LABELS = {
   incident: 'Sự cố',
   task_progress: 'Cập nhật công việc',
   chat_mention: 'Được nhắc đến',
+  task_deadline_alert: 'Sắp/đã tới hạn việc',
 };
 
 // Loại tin nào thì mở trang nào

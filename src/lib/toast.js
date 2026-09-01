@@ -163,6 +163,14 @@ export const NOTIFY_KINDS = {
     tone: 'warning',
     tab: 'messenger',
   },
+  // 13. Việc sắp/đã tới hạn mà chưa xong -> Trang công việc. Lặp lại mỗi 10
+  // phút (xem process_task_deadline_alerts) cho tới khi thợ báo xong.
+  task_deadline_alert: {
+    icon: '🚨',
+    title: 'Việc sắp/đã tới hạn',
+    tone: 'warning',
+    tab: 'tasks',
+  },
 };
 
 /**
