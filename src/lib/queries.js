@@ -925,6 +925,16 @@ export async function updateStaffPermissions(id, { role, station, extraRoles }) 
   if (error) throw error;
 }
 
+// Trách nhiệm + Ngày bắt đầu làm việc — cùng cách ghi trực tiếp như
+// updateStaffPermissions ở trên (RLS profiles đã cho phép quản lý ghi thẳng).
+export async function updateStaffWorkInfo(id, { responsibilities, startDate }) {
+  const { error } = await supabase.from('profiles').update({
+    responsibilities: responsibilities?.trim() || null,
+    start_date: startDate || null,
+  }).eq('id', id);
+  if (error) throw error;
+}
+
 // ---- Chia công đoạn bếp (gán nhân viên đang trực vào công đoạn của đơn) ----
 
 export async function createOrderStages(rows) {
