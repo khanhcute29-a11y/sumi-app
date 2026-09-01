@@ -55,6 +55,7 @@ import { fetchShiftLogsRange } from '../../../lib/queries';
 // viết công thức cộng giờ riêng ở đây (tránh lệch số như đã từng xảy ra).
 import { boPhanCuaHoSo, chuanHoaCa, tomTatThang } from '../../../lib/chamCong';
 import { WeeklyScheduleSection } from '../../WeeklyScheduleSection';
+import DirectorStaffOverviewSheet from '../../shifts/v2/DirectorStaffOverviewSheet';
 import {
   fetchRevenueByChannel,
   fetchExpenseAndAdvanceLedgerToday,
@@ -337,7 +338,7 @@ export function BossOverviewV3Inner() {
 
   // ── States Quản Lý Bottom Sheets & Bộ Lọc Đơn Hàng ──
   const [activeSheet, setActiveSheet] = useState<
-    'revenue_detail' | 'expense_detail' | 'order_drawer' | 'staff_detail' | 'feed_sheet' | 'advance_sheet' | 'leave_sheet' | 'report_sheet' | 'schedule_sheet' | 'warehouse_sheet' | 'staff_screen_sheet' | null
+    'revenue_detail' | 'expense_detail' | 'order_drawer' | 'staff_detail' | 'staff_overview_v2' | 'feed_sheet' | 'advance_sheet' | 'leave_sheet' | 'report_sheet' | 'schedule_sheet' | 'warehouse_sheet' | 'staff_screen_sheet' | null
   >(null);
   const [selectedOrderFilter, setSelectedOrderFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
@@ -864,9 +865,11 @@ export function BossOverviewV3Inner() {
               </div>
             </div>
 
-            {/* Thẻ 2: Trạng thái làm việc (45 Đang làm, 3 Trễ, 2 Nghỉ) */}
+            {/* Thẻ 2: Trạng thái làm việc (45 Đang làm, 3 Trễ, 2 Nghỉ) — liên kết
+                sang "Tổng Quan Nhân Sự Hôm Nay", tái dùng cấu trúc chi tiết của
+                Chấm công cá nhân (nhóm theo bộ phận, giữ nguyên đánh giá Sao). */}
             <div
-              onClick={() => { setSelectedStaffTab('working'); setActiveSheet('staff_detail'); }}
+              onClick={() => setActiveSheet('staff_overview_v2')}
               style={{
                 background: '#fff',
                 border: '1.5px solid #eadcca',
@@ -1999,6 +2002,13 @@ export function BossOverviewV3Inner() {
             (Đang làm/Đi trễ/Nghỉ ca) đang xem, không mất trạng thái. */}
         {selectedStaff && (
           <StaffProfileSheet staffBasic={selectedStaff} onBack={() => setSelectedStaff(null)} />
+        )}
+
+        {/* Tổng Quan Nhân Sự Hôm Nay — mở từ ô "ĐANG LÀM VIỆC", tái dùng cấu
+            trúc chi tiết của Chấm công cá nhân (nhóm theo bộ phận, giữ nguyên
+            đánh giá Sao +/-). */}
+        {activeSheet === 'staff_overview_v2' && (
+          <DirectorStaffOverviewSheet hoSo={profile} onClose={() => setActiveSheet(null)} />
         )}
 
         {/* ========================================================================= */}
