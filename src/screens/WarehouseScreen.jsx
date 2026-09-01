@@ -14,6 +14,7 @@ import { enqueue, getQueue } from '../lib/offlineQueue';
 import { IconCamera, IconWarning, IconAdd, IconDownload } from '../components/icons/FrogIcons';
 import { Tabs } from '../components/navigation/Tabs';
 import FinishedGoodsPanel from '../components/warehouse/FinishedGoodsPanel';
+import { OrderCodePicker } from '../components/OrderCodePicker';
 
 const UNITS = ['g', 'kg', 'ml', 'lít', 'quả', 'cái', 'gói'];
 const BRANCHES = [
@@ -153,7 +154,7 @@ function StockOutForm({ stock, staffName, onDone, onClose }) {
             options={filteredStock.map((s) => ({ value: s.id, label: `${s.name} (còn ${s.qty_label})` }))} />
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <Input label={`Số lượng xuất (${item?.unit || ''})`} type="number" placeholder="VD: 2" value={qty} onChange={(e) => setQty(e.target.value)} style={{ flex: '1 1 140px' }} />
-            <Input label="Mã đơn hàng (nếu có)" placeholder="VD: DH-0231" value={orderCode} onChange={(e) => setOrderCode(e.target.value)} style={{ flex: '1 1 160px' }} />
+            <OrderCodePicker label="Mã đơn hàng (nếu có)" placeholder="VD: DH-0231" value={orderCode} onChange={setOrderCode} style={{ flex: '1 1 160px' }} />
           </div>
           <Input label="Ghi chú (nếu có)" placeholder="VD: Làm bánh kem sinh nhật" value={note} onChange={(e) => setNote(e.target.value)} />
         </React.Fragment>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '../forms/Button';
 import { Input } from '../forms/Input';
+import { OrderCodePicker } from '../OrderCodePicker';
 import { createAdhocTask } from '../../lib/queries';
 
 export function AdhocReportModal({ profile, onClose, onSaved }) {
@@ -26,7 +27,7 @@ export function AdhocReportModal({ profile, onClose, onSaved }) {
         <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>Báo việc phát sinh</div>
         <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Ghi nhận ngay, không cần chờ duyệt.</div>
         <Input label="Tên việc" placeholder="VD: Phụ ship đơn quá tải" value={title} onChange={(e) => setTitle(e.target.value)} />
-        <Input label="Mã đơn liên quan (không bắt buộc)" value={orderCode} onChange={(e) => setOrderCode(e.target.value)} />
+        <OrderCodePicker label="Mã đơn liên quan (không bắt buộc)" value={orderCode} onChange={setOrderCode} />
         <Input label="Mô tả (không bắt buộc)" value={description} onChange={(e) => setDescription(e.target.value)} />
         {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>

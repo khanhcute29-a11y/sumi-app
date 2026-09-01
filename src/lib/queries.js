@@ -218,6 +218,23 @@ export async function fetchOrders({ statuses, from, to, dateField = 'created_at'
   return data;
 }
 
+// Tìm nhanh đơn hàng theo mã đơn HOẶC tên khách — trả về danh sách gọn để
+// hiện dropdown gợi ý (mã đơn, khách, bánh, địa chỉ), dùng chung cho mọi ô
+// "Mã đơn liên quan" đang gõ tay tự do (giao việc, báo chi, tăng ca, xuất
+// kho...). Không lấy full order (ORDER_SELECT quá nặng cho việc gõ-là-tìm).
+export async function searchOrdersForPicker(keyword, limit = 15) {
+  const q = (keyword || '').trim();
+  if (!q) return [];
+  const { data, error } = await supabase
+    .from('order_operations_list')
+    .select('id,order_code,customer_name,product_names,address,required_at')
+    .or(`order_code.ilike.%${q}%,customer_name.ilike.%${q}%`)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
 export async function fetchOrderById(id) {
   const { data, error } = await supabase.from('orders').select(ORDER_SELECT).eq('id', id).maybeSingle();
   if (error) throw error;

@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { createAssignedTasks } from '../../../lib/queries';
 import { VoiceMicButton } from '../../VoiceMicButton';
 import { parseVoiceByContext } from '../../../lib/parseVoiceContext';
+import { OrderCodePicker } from '../../OrderCodePicker';
 
 // Form GIAO VIỆC của giao diện mới.
 //
@@ -104,9 +105,9 @@ export default function GiaoViecModal({ hoSo, danhSachTho = [], khauMacDinh, onC
           onChange={(e) => setMoTa(e.target.value)}
           placeholder="Yêu cầu cụ thể, lưu ý khi làm…" />
 
-        <label style={o.nhan}>Mã đơn liên quan</label>
-        <input style={{ ...o.o, marginBottom: 12 }} value={maDon}
-          onChange={(e) => setMaDon(e.target.value)} placeholder="VD: SUMI-20260826-001" />
+        <div style={{ marginBottom: 12 }}>
+          <OrderCodePicker label="Mã đơn liên quan" value={maDon} onChange={setMaDon} placeholder="VD: SUMI-20260826-001" />
+        </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
           <div>

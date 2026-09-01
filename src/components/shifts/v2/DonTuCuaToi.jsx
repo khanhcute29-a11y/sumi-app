@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchApprovalRequests, guiDeXuat } from '../../../lib/queries';
+import { OrderCodePicker } from '../../OrderCodePicker';
 import TheDeXuat, { LOAI_DON, PHAM_VI_NGHI, LOAI_NGHI } from './TheDeXuat';
 
 // Màn hình "ĐƠN TỪ" của nhân viên — dựng theo ảnh mẫu anh Nghĩa gửi.
@@ -128,9 +129,7 @@ function FormGuiDon({ onClose, onXong }) {
 
         {laDonHang && (
           <div style={{ marginTop: 12 }}>
-            <label style={o.nhan}>Mã đơn hàng</label>
-            <input style={o.o} value={maDon} onChange={(e) => setMaDon(e.target.value)}
-              placeholder="VD: SUMI-20260826-014" />
+            <OrderCodePicker label="Mã đơn hàng" value={maDon} onChange={setMaDon} placeholder="VD: SUMI-20260826-014" />
           </div>
         )}
 
