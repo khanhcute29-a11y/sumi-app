@@ -2398,7 +2398,8 @@ export function BossOverviewV3Inner() {
                         </span>
                       </div>
 
-                      <div style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>{flow ? `${flow.icon} ${flow.title}` : ord.order_type} · {ord.total_quantity} sản phẩm</div>
+                      <div style={{ fontSize: 14, fontWeight: 900, color: '#2d1c10' }}>👤 {ord.customer_name || 'Khách chưa ghi tên'}</div>
+                      <div style={{ fontSize: 12, color: '#725f50', margin: '2px 0' }}>{flow ? `${flow.icon} ${flow.title}` : ord.order_type} · {ord.total_quantity} sản phẩm</div>
                       <div style={{ fontSize: 11.5, color: '#493526', margin: '2px 0' }}>• Người tạo: {ord.created_by_name || 'Không rõ'}</div>
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, paddingTop: 4, borderTop: '1px solid #f2e9de' }}>

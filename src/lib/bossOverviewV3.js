@@ -12,7 +12,11 @@ const STATIONS = [
 ];
 const DOW_LABELS = ['Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy', 'Chủ Nhật'];
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
+// Dùng giờ ĐỊA PHƯƠNG (localDateStr), KHÔNG dùng toISOString().slice(0,10) —
+// cách cũ lấy theo giờ UTC nên ở VN (UTC+7), khung 00:00-06:59 sáng bị tính
+// nhầm là "hôm qua" (chưa qua nửa đêm theo UTC), khiến doanh thu/số liệu
+// chấm công không reset về 0 đúng lúc 00:00 giờ VN như mong đợi.
+const todayStr = () => localDateStr();
 const monthStart = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`; };
 
 // ---- 1. Doanh thu THUẦN theo 5 kênh (orders.order_type khớp ORDER_FLOWS) ----
