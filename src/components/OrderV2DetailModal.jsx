@@ -834,7 +834,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                 type="button"
                 disabled={busy || deletingOrder}
                 onClick={handleDeleteOrder}
-                title="Chỉ Giám đốc mới xóa được đơn hàng — xóa hẳn, không khôi phục"
+                title="Chỉ Giám đốc/Quản lý mới xóa được đơn hàng — xóa hẳn ở bất kỳ giai đoạn nào, không khôi phục"
                 style={{
                   minHeight: 38, padding: '0 10px', borderRadius: 10, border: '1.5px solid #dc2626',
                   background: '#fef2f2', color: '#dc2626', fontWeight: 800, fontSize: 13, cursor: 'pointer',
