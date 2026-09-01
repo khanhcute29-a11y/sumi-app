@@ -14,6 +14,11 @@ export default function DonKiemNhiem({ hoSo, onDaNhan }) {
   const [ds, setDs] = useState([]);
   const [dangTai, setDangTai] = useState(true);
   const [dangXem, setDangXem] = useState(null);
+  // Trước đây khối này LUÔN xổ hết đơn ra, nằm ngay trên cùng — đẩy "Việc
+  // được giao"/"Việc phát sinh" xuống dưới, phải cuộn mới thấy. Giờ gom
+  // thành 1 khối thu gọn, mặc định ĐÓNG (chỉ hiện tổng số), bấm vào mới xổ
+  // đủ danh sách — đơn vẫn sắp theo required_at tăng dần như cũ.
+  const [mo, setMo] = useState(false);
 
   const tai = useCallback(async () => {
     setDangTai(true);
@@ -51,7 +56,25 @@ export default function DonKiemNhiem({ hoSo, onDaNhan }) {
 
   return (
     <>
-      <div className="cv-divider"><span>🛵 Đơn cần giao — ai rảnh nhận</span></div>
+      <button
+        onClick={() => setMo((v) => !v)}
+        aria-expanded={mo}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+          width: '100%', minHeight: 48, padding: '10px 14px', marginBottom: mo ? 8 : 14,
+          borderRadius: 14, border: '1.5px solid var(--cv-success)', background: '#f4fff8',
+          cursor: 'pointer', font: 'inherit', textAlign: 'left',
+        }}
+      >
+        <span style={{ fontWeight: 800, color: '#315c48' }}>🛵 Đơn cần giao — ai rảnh nhận</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ minWidth: 26, textAlign: 'center', padding: '2px 8px', borderRadius: 999, background: 'var(--cv-success)', color: '#fff', fontWeight: 800, fontSize: 13 }}>
+            {ds.length}
+          </span>
+          <span style={{ color: '#315c48' }}>{mo ? '▴' : '▾'}</span>
+        </span>
+      </button>
+      {mo && (
       <div className="cv-list">
         {ds.map((don) => (
           <div className="cv-card" key={don.id} style={{ borderColor: 'var(--cv-success)', background: '#f4fff8' }}>
@@ -77,6 +100,7 @@ export default function DonKiemNhiem({ hoSo, onDaNhan }) {
           </div>
         ))}
       </div>
+      )}
 
       {dangXem && (
         <NhanGiaoKiemNhiemModal
