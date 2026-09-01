@@ -289,6 +289,28 @@ export async function reviewOvertimeRequest(id, approve, directorId) {
   if (error) throw error;
 }
 
+// ---- 3f. Lịch sử ĐÃ XỬ LÝ của cả 5 luồng — dùng cho tab "Lịch sử" của Yêu
+// Cầu Duyệt. Mỗi luồng tự lấy tối đa `limit` dòng gần nhất, đã duyệt HOẶC từ
+// chối (không lẫn dòng đang chờ, vẫn nằm ở fetchPending*). Một luồng lỗi
+// (VD bảng chưa migrate ở máy chủ nào đó) không được kéo sập cả 4 luồng kia.
+export async function fetchApprovalHistory(limit = 20) {
+  const safe = async (p) => { try { const r = await p; return r; } catch { return { data: [] }; } };
+  const [editRes, overtimeRes, advanceRes, leaveRes, expenseRes] = await Promise.all([
+    safe(supabase.from('order_edit_requests').select('*, orders(order_code)').neq('status', 'pending').order('created_at', { ascending: false }).limit(limit)),
+    safe(supabase.from('overtime_requests').select('*, employee:profiles!employee_id(id,full_name,role,station)').neq('status', 'pending').order('created_at', { ascending: false }).limit(limit)),
+    safe(supabase.from('salary_advance_requests').select('*').neq('status', 'pending_director').order('created_at', { ascending: false }).limit(limit)),
+    safe(supabase.from('approval_requests').select('*').eq('type', 'leave_request').neq('status', 'pending').order('created_at', { ascending: false }).limit(limit)),
+    safe(supabase.from('expense_claims').select('*').neq('status', 'pending_director').order('created_at', { ascending: false }).limit(limit)),
+  ]);
+  return {
+    editRequests: editRes.data || [],
+    overtimes: overtimeRes.data || [],
+    advances: advanceRes.data || [],
+    leaves: leaveRes.data || [],
+    expenses: expenseRes.data || [],
+  };
+}
+
 // ---- 4. Giao việc nhanh cho 1 nhân viên ----
 export async function fetchAssignableStaff() {
   const { data, error } = await supabase

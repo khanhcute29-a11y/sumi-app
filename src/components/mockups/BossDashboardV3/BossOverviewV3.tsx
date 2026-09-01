@@ -77,6 +77,7 @@ import {
   reviewOrderEditRequest,
   fetchPendingOvertimeRequests,
   reviewOvertimeRequest,
+  fetchApprovalHistory,
   fetchTodayShiftReports,
   fetchWeeklyScheduleAllStations,
   fetchOrderHearts,
@@ -121,6 +122,17 @@ const mapLedgerRow = (c: any) => ({
   receiptUrl: c.disbursed_receipt_url || c.receipt_attachments?.[0]?.url || null,
   reasonText: c.source === 'advance' ? (c.reason || '—') : (c.note || c.description || '—'),
 });
+
+// Một dòng nhãn/giá trị trong màn chi tiết yêu cầu duyệt — dùng chung cho cả
+// 5 loại (sửa đơn/tăng ca/tạm ứng/xin nghỉ/chi), tránh lặp style 5 lần.
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ background: '#fff', border: '1px solid #eadcca', borderRadius: 12, padding: '10px 14px' }}>
+      <div style={{ fontSize: 10.5, fontWeight: 800, color: '#a08060', textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: '#2d1c10' }}>{value}</div>
+    </div>
+  );
+}
 
 // Hồ sơ 1 nhân viên — lớp "thông tin cuối" khi bấm vào 1 người trong Chi Tiết
 // Trạng Thái Nhân Sự. Không có sẵn component nào để dùng lại (khác với Đơn
@@ -439,6 +451,22 @@ export function BossOverviewV3Inner() {
   const [pendingEditRequests, setPendingEditRequests] = useState<any[]>([]);
   const [pendingOvertimes, setPendingOvertimes] = useState<any[]>([]);
   const [approvalBusy, setApprovalBusy] = useState<string | null>(null);
+  // Tab "Đang chờ" / "Lịch sử" trong sheet Yêu Cầu Duyệt + chi tiết 1 yêu cầu
+  const [approvalTab, setApprovalTab] = useState<'pending' | 'history'>('pending');
+  const [approvalHistory, setApprovalHistory] = useState<{ editRequests: any[]; overtimes: any[]; advances: any[]; leaves: any[]; expenses: any[] } | null>(null);
+  const [approvalHistoryLoading, setApprovalHistoryLoading] = useState(false);
+  const [selectedApprovalItem, setSelectedApprovalItem] = useState<{ kind: 'edit' | 'overtime' | 'advance' | 'leave' | 'expense'; item: any; canReview: boolean } | null>(null);
+
+  const loadApprovalHistory = async () => {
+    setApprovalHistoryLoading(true);
+    try {
+      setApprovalHistory(await fetchApprovalHistory());
+    } catch {
+      setApprovalHistory({ editRequests: [], overtimes: [], advances: [], leaves: [], expenses: [] });
+    } finally {
+      setApprovalHistoryLoading(false);
+    }
+  };
 
   // ── Dữ liệu thật: báo cáo cuối ca hôm nay (staff_shift_reports) ──
   const [shiftReports, setShiftReports] = useState<any[]>([]);
@@ -2209,140 +2237,425 @@ export function BossOverviewV3Inner() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 900, color: '#c2410c' }}>✅ Yêu Cầu Duyệt</div>
-                    <div style={{ fontSize: 11, color: '#725f50' }}>{approvalCount} việc đang chờ Sếp xử lý</div>
+                    <div style={{ fontSize: 11, color: '#725f50' }}>
+                      {approvalTab === 'pending' ? `${approvalCount} việc đang chờ Sếp xử lý` : 'Các yêu cầu đã xử lý gần đây'}
+                    </div>
                   </div>
                   <button onClick={() => setActiveSheet(null)} aria-label="Quay lại" style={{ order: -1, flexShrink: 0, width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer' }}>‹</button>
+                </div>
+
+                {/* 2 module: Đang chờ / Lịch sử đã duyệt */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, padding: '10px 14px 0' }}>
+                  <button onClick={() => setApprovalTab('pending')} style={{
+                    padding: '8px 4px', borderRadius: 12, border: approvalTab === 'pending' ? '2px solid #c2410c' : '1px solid #eadcca',
+                    background: approvalTab === 'pending' ? '#fff7ed' : '#fff', color: approvalTab === 'pending' ? '#c2410c' : '#725f50',
+                    fontSize: 11.5, fontWeight: 900, cursor: 'pointer',
+                  }}>
+                    ⏳ Đang chờ ({approvalCount})
+                  </button>
+                  <button onClick={() => { setApprovalTab('history'); if (!approvalHistory && !approvalHistoryLoading) loadApprovalHistory(); }} style={{
+                    padding: '8px 4px', borderRadius: 12, border: approvalTab === 'history' ? '2px solid #c2410c' : '1px solid #eadcca',
+                    background: approvalTab === 'history' ? '#fff7ed' : '#fff', color: approvalTab === 'history' ? '#c2410c' : '#725f50',
+                    fontSize: 11.5, fontWeight: 900, cursor: 'pointer',
+                  }}>
+                    🕘 Lịch sử đã duyệt
+                  </button>
                 </div>
               </div>
 
               <div style={sheetBodyStyle({ paddingTop: 12 })}>
-                {approvalCount === 0 && (
-                  <div style={{ textAlign: 'center', padding: '24px 0', color: '#725f50', fontSize: 13 }}>🎉 Không có việc nào đang chờ duyệt.</div>
-                )}
+                {approvalTab === 'pending' ? (
+                  <>
+                    {approvalCount === 0 && (
+                      <div style={{ textAlign: 'center', padding: '24px 0', color: '#725f50', fontSize: 13 }}>🎉 Không có việc nào đang chờ duyệt.</div>
+                    )}
 
-                {/* 1. Sửa đơn */}
-                {pendingEditRequests.length > 0 && (
-                  <div style={{ marginBottom: 16 }}>
-                    <div style={{ fontSize: 12, fontWeight: 900, color: '#2563eb', textTransform: 'uppercase', marginBottom: 8 }}>
-                      📝 Yêu cầu sửa đơn ({pendingEditRequests.length})
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {pendingEditRequests.map((r: any) => (
-                        <div key={r.id} style={{ background: '#eff6ff', border: '1.5px solid #bfdbfe', borderRadius: 14, padding: 12 }}>
-                          <div style={{ fontSize: 13.5, fontWeight: 900, color: '#2d1c10' }}>Đơn #{r.orders?.order_code || String(r.order_id).slice(0, 8)}</div>
-                          <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>
-                            👤 {r.requested_by_name}{r.reason ? ` · 💭 "${r.reason}"` : ''} · {new Date(r.created_at).toLocaleString('vi-VN')}
-                          </div>
-                          <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
-                            <button disabled={approvalBusy === r.id} onClick={() => handleReviewEditRequest(r.id, true)} style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
-                              ✓ Duyệt
-                            </button>
-                            <button disabled={approvalBusy === r.id} onClick={() => handleReviewEditRequest(r.id, false)} style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
-                              ✕ Từ chối
-                            </button>
-                          </div>
+                    {/* 1. Sửa đơn */}
+                    {pendingEditRequests.length > 0 && (
+                      <div style={{ marginBottom: 16 }}>
+                        <div style={{ fontSize: 12, fontWeight: 900, color: '#2563eb', textTransform: 'uppercase', marginBottom: 8 }}>
+                          📝 Yêu cầu sửa đơn ({pendingEditRequests.length})
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* 2. Tăng ca */}
-                {pendingOvertimes.length > 0 && (
-                  <div style={{ marginBottom: 16 }}>
-                    <div style={{ fontSize: 12, fontWeight: 900, color: '#7c3aed', textTransform: 'uppercase', marginBottom: 8 }}>
-                      ⏱ Yêu cầu tăng ca ({pendingOvertimes.length})
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {pendingOvertimes.map((o: any) => (
-                        <div key={o.id} style={{ background: '#f5f3ff', border: '1.5px solid #ddd6fe', borderRadius: 14, padding: 12 }}>
-                          <div style={{ fontSize: 13.5, fontWeight: 900, color: '#2d1c10' }}>{o.employee?.full_name || 'Nhân viên'}</div>
-                          <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>
-                            {o.planned_minutes} phút · {o.reason}{o.related_order_code ? ` · ${o.related_order_code}` : ''} · Ngày {new Date(o.work_date).toLocaleDateString('vi-VN')}
-                          </div>
-                          <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
-                            <button disabled={approvalBusy === o.id} onClick={() => handleReviewOvertime(o.id, true)} style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
-                              ✓ Duyệt
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {pendingEditRequests.map((r: any) => (
+                            <button key={r.id} onClick={() => setSelectedApprovalItem({ kind: 'edit', item: r, canReview: true })}
+                              style={{ textAlign: 'left', width: '100%', background: '#eff6ff', border: '1.5px solid #bfdbfe', borderRadius: 14, padding: 12, cursor: 'pointer' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                <div style={{ minWidth: 0 }}>
+                                  <div style={{ fontSize: 13.5, fontWeight: 900, color: '#2d1c10' }}>Đơn #{r.orders?.order_code || String(r.order_id).slice(0, 8)}</div>
+                                  <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>
+                                    👤 {r.requested_by_name}{r.reason ? ` · 💭 "${r.reason}"` : ''} · {new Date(r.created_at).toLocaleString('vi-VN')}
+                                  </div>
+                                </div>
+                                <ChevronRight size={16} color="#a08060" />
+                              </div>
+                              <div style={{ display: 'flex', gap: 6, marginTop: 10 }} onClick={e => e.stopPropagation()}>
+                                <button disabled={approvalBusy === r.id} onClick={() => handleReviewEditRequest(r.id, true)} style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
+                                  ✓ Duyệt
+                                </button>
+                                <button disabled={approvalBusy === r.id} onClick={() => handleReviewEditRequest(r.id, false)} style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
+                                  ✕ Từ chối
+                                </button>
+                              </div>
                             </button>
-                            <button disabled={approvalBusy === o.id} onClick={() => handleReviewOvertime(o.id, false)} style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
-                              ✕ Từ chối
-                            </button>
-                          </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                      </div>
+                    )}
 
-                {/* 3. Tạm ứng — gom từ ô tiện ích cũ */}
-                {pendingAdvances.length > 0 && (
-                  <div style={{ marginBottom: 16 }}>
-                    <div style={{ fontSize: 12, fontWeight: 900, color: '#ca8a04', textTransform: 'uppercase', marginBottom: 8 }}>
-                      💵 Yêu cầu tạm ứng ({pendingAdvances.length})
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {pendingAdvances.map((a: any) => (
-                        <div key={a.id} style={{ background: '#fefce8', border: '1.5px solid #facc15', borderRadius: 14, padding: 12 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <div>
-                              <div style={{ fontSize: 13.5, fontWeight: 900, color: '#2d1c10' }}>{a.employee_name}</div>
-                              <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>Lý do: {a.reason} · Nộp lúc {new Date(a.created_at).toLocaleString('vi-VN')}</div>
+                    {/* 2. Tăng ca */}
+                    {pendingOvertimes.length > 0 && (
+                      <div style={{ marginBottom: 16 }}>
+                        <div style={{ fontSize: 12, fontWeight: 900, color: '#7c3aed', textTransform: 'uppercase', marginBottom: 8 }}>
+                          ⏱ Yêu cầu tăng ca ({pendingOvertimes.length})
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {pendingOvertimes.map((o: any) => (
+                            <button key={o.id} onClick={() => setSelectedApprovalItem({ kind: 'overtime', item: o, canReview: true })}
+                              style={{ textAlign: 'left', width: '100%', background: '#f5f3ff', border: '1.5px solid #ddd6fe', borderRadius: 14, padding: 12, cursor: 'pointer' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                <div style={{ minWidth: 0 }}>
+                                  <div style={{ fontSize: 13.5, fontWeight: 900, color: '#2d1c10' }}>{o.employee?.full_name || 'Nhân viên'}</div>
+                                  <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>
+                                    {o.planned_minutes} phút · {o.reason}{o.related_order_code ? ` · ${o.related_order_code}` : ''} · Ngày {new Date(o.work_date).toLocaleDateString('vi-VN')}
+                                  </div>
+                                </div>
+                                <ChevronRight size={16} color="#a08060" />
+                              </div>
+                              <div style={{ display: 'flex', gap: 6, marginTop: 10 }} onClick={e => e.stopPropagation()}>
+                                <button disabled={approvalBusy === o.id} onClick={() => handleReviewOvertime(o.id, true)} style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
+                                  ✓ Duyệt
+                                </button>
+                                <button disabled={approvalBusy === o.id} onClick={() => handleReviewOvertime(o.id, false)} style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
+                                  ✕ Từ chối
+                                </button>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 3. Tạm ứng — gom từ ô tiện ích cũ */}
+                    {pendingAdvances.length > 0 && (
+                      <div style={{ marginBottom: 16 }}>
+                        <div style={{ fontSize: 12, fontWeight: 900, color: '#ca8a04', textTransform: 'uppercase', marginBottom: 8 }}>
+                          💵 Yêu cầu tạm ứng ({pendingAdvances.length})
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {pendingAdvances.map((a: any) => (
+                            <button key={a.id} onClick={() => setSelectedApprovalItem({ kind: 'advance', item: a, canReview: true })}
+                              style={{ textAlign: 'left', width: '100%', background: '#fefce8', border: '1.5px solid #facc15', borderRadius: 14, padding: 12, cursor: 'pointer' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                <div style={{ minWidth: 0 }}>
+                                  <div style={{ fontSize: 13.5, fontWeight: 900, color: '#2d1c10' }}>{a.employee_name}</div>
+                                  <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>Lý do: {a.reason} · Nộp lúc {new Date(a.created_at).toLocaleString('vi-VN')}</div>
+                                </div>
+                                <span style={{ fontSize: 15, fontWeight: 900, color: '#b45309', whiteSpace: 'nowrap' }}>{formatVND(a.amount)}</span>
+                              </div>
+                              <div style={{ display: 'flex', gap: 6, marginTop: 10 }} onClick={e => e.stopPropagation()}>
+                                <button onClick={() => handleReviewAdvance(a.id, true)} style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
+                                  ✓ Duyệt Chi Tiền
+                                </button>
+                                <button onClick={() => handleReviewAdvance(a.id, false)} style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
+                                  ✕ Từ Chối
+                                </button>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 4. Xin nghỉ — gom từ ô tiện ích cũ */}
+                    {pendingLeaves.length > 0 && (
+                      <div style={{ marginBottom: 16 }}>
+                        <div style={{ fontSize: 12, fontWeight: 900, color: '#0f766e', textTransform: 'uppercase', marginBottom: 8 }}>
+                          🏖 Đơn xin nghỉ ({pendingLeaves.length})
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {pendingLeaves.map((l: any) => (
+                            <button key={l.id} onClick={() => setSelectedApprovalItem({ kind: 'leave', item: l, canReview: true })}
+                              style={{ textAlign: 'left', width: '100%', background: '#f0fdfa', border: '1.5px solid #99f6e4', borderRadius: 14, padding: 12, cursor: 'pointer' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                <div style={{ minWidth: 0 }}>
+                                  <div style={{ fontSize: 13.5, fontWeight: 900, color: '#2d1c10' }}>{l.requester_name}</div>
+                                  <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>
+                                    {l.reason}{l.leave_date ? ` · Ngày ${new Date(l.leave_date).toLocaleDateString('vi-VN')}` : ''}
+                                  </div>
+                                </div>
+                                <ChevronRight size={16} color="#a08060" />
+                              </div>
+                              <div style={{ display: 'flex', gap: 6, marginTop: 10 }} onClick={e => e.stopPropagation()}>
+                                <button onClick={() => handleReviewLeave(l.id, true)} style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
+                                  ✓ Đồng Ý
+                                </button>
+                                <button onClick={() => handleReviewLeave(l.id, false)} style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
+                                  ✕ Từ Chối
+                                </button>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 5. Duyệt Chi — mở sang Sổ Cái Khoản Chi có sẵn (giữ nguyên luồng duyệt Chi cũ) */}
+                    {expensePendingCount > 0 && (
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 900, color: '#dc2626', textTransform: 'uppercase', marginBottom: 8 }}>
+                          💸 Yêu cầu duyệt Chi ({expensePendingCount})
+                        </div>
+                        <button
+                          onClick={() => { setActiveSheet('expense_detail'); setLedgerTab('expense'); }}
+                          style={{ width: '100%', textAlign: 'left', background: '#fef2f2', border: '1.5px solid #fecaca', borderRadius: 14, padding: 12, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                        >
+                          <span style={{ fontSize: 13, fontWeight: 800, color: '#2d1c10' }}>Xem &amp; duyệt {expensePendingCount} khoản chi đang chờ</span>
+                          <ChevronRight size={16} color="#a08060" />
+                        </button>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {approvalHistoryLoading && (
+                      <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Đang tải…</div>
+                    )}
+                    {!approvalHistoryLoading && approvalHistory && (
+                      <>
+                        {(approvalHistory.editRequests.length + approvalHistory.overtimes.length + approvalHistory.advances.length + approvalHistory.leaves.length + approvalHistory.expenses.length) === 0 && (
+                          <div style={{ textAlign: 'center', padding: '24px 0', color: '#725f50', fontSize: 13 }}>Chưa có yêu cầu nào đã xử lý.</div>
+                        )}
+
+                        {approvalHistory.editRequests.length > 0 && (
+                          <div style={{ marginBottom: 16 }}>
+                            <div style={{ fontSize: 12, fontWeight: 900, color: '#2563eb', textTransform: 'uppercase', marginBottom: 8 }}>📝 Sửa đơn</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              {approvalHistory.editRequests.map((r: any) => (
+                                <button key={r.id} onClick={() => setSelectedApprovalItem({ kind: 'edit', item: r, canReview: false })}
+                                  style={{ textAlign: 'left', width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 14, padding: 12, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <div style={{ minWidth: 0 }}>
+                                    <div style={{ fontSize: 13, fontWeight: 800, color: '#2d1c10' }}>Đơn #{r.orders?.order_code || String(r.order_id).slice(0, 8)}</div>
+                                    <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>{r.requested_by_name} · {new Date(r.created_at).toLocaleDateString('vi-VN')}</div>
+                                  </div>
+                                  <span style={{ fontSize: 11, fontWeight: 900, color: r.status === 'approved' ? '#15803d' : '#dc2626', whiteSpace: 'nowrap' }}>
+                                    {r.status === 'approved' ? '✓ Đã duyệt' : '✕ Từ chối'}
+                                  </span>
+                                </button>
+                              ))}
                             </div>
-                            <span style={{ fontSize: 15, fontWeight: 900, color: '#b45309' }}>{formatVND(a.amount)}</span>
                           </div>
-                          <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
-                            <button onClick={() => handleReviewAdvance(a.id, true)} style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
-                              ✓ Duyệt Chi Tiền
-                            </button>
-                            <button onClick={() => handleReviewAdvance(a.id, false)} style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
-                              ✕ Từ Chối
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                        )}
 
-                {/* 4. Xin nghỉ — gom từ ô tiện ích cũ */}
-                {pendingLeaves.length > 0 && (
-                  <div style={{ marginBottom: 16 }}>
-                    <div style={{ fontSize: 12, fontWeight: 900, color: '#0f766e', textTransform: 'uppercase', marginBottom: 8 }}>
-                      🏖 Đơn xin nghỉ ({pendingLeaves.length})
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {pendingLeaves.map((l: any) => (
-                        <div key={l.id} style={{ background: '#f0fdfa', border: '1.5px solid #99f6e4', borderRadius: 14, padding: 12 }}>
-                          <div style={{ fontSize: 13.5, fontWeight: 900, color: '#2d1c10' }}>{l.requester_name}</div>
-                          <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>
-                            {l.reason}{l.leave_date ? ` · Ngày ${new Date(l.leave_date).toLocaleDateString('vi-VN')}` : ''}
+                        {approvalHistory.overtimes.length > 0 && (
+                          <div style={{ marginBottom: 16 }}>
+                            <div style={{ fontSize: 12, fontWeight: 900, color: '#7c3aed', textTransform: 'uppercase', marginBottom: 8 }}>⏱ Tăng ca</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              {approvalHistory.overtimes.map((o: any) => (
+                                <button key={o.id} onClick={() => setSelectedApprovalItem({ kind: 'overtime', item: o, canReview: false })}
+                                  style={{ textAlign: 'left', width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 14, padding: 12, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <div style={{ minWidth: 0 }}>
+                                    <div style={{ fontSize: 13, fontWeight: 800, color: '#2d1c10' }}>{o.employee?.full_name || 'Nhân viên'}</div>
+                                    <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>{o.planned_minutes} phút · {new Date(o.work_date).toLocaleDateString('vi-VN')}</div>
+                                  </div>
+                                  <span style={{ fontSize: 11, fontWeight: 900, color: o.status === 'approved' ? '#15803d' : '#dc2626', whiteSpace: 'nowrap' }}>
+                                    {o.status === 'approved' ? '✓ Đã duyệt' : '✕ Từ chối'}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
                           </div>
-                          <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
-                            <button onClick={() => handleReviewLeave(l.id, true)} style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
-                              ✓ Đồng Ý
-                            </button>
-                            <button onClick={() => handleReviewLeave(l.id, false)} style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
-                              ✕ Từ Chối
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                        )}
 
-                {/* 5. Duyệt Chi — mở sang Sổ Cái Khoản Chi có sẵn (giữ nguyên luồng duyệt Chi cũ) */}
-                {expensePendingCount > 0 && (
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 900, color: '#dc2626', textTransform: 'uppercase', marginBottom: 8 }}>
-                      💸 Yêu cầu duyệt Chi ({expensePendingCount})
-                    </div>
+                        {approvalHistory.advances.length > 0 && (
+                          <div style={{ marginBottom: 16 }}>
+                            <div style={{ fontSize: 12, fontWeight: 900, color: '#ca8a04', textTransform: 'uppercase', marginBottom: 8 }}>💵 Tạm ứng</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              {approvalHistory.advances.map((a: any) => (
+                                <button key={a.id} onClick={() => setSelectedApprovalItem({ kind: 'advance', item: a, canReview: false })}
+                                  style={{ textAlign: 'left', width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 14, padding: 12, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <div style={{ minWidth: 0 }}>
+                                    <div style={{ fontSize: 13, fontWeight: 800, color: '#2d1c10' }}>{a.employee_name} · {formatVND(a.amount)}</div>
+                                    <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>{new Date(a.created_at).toLocaleDateString('vi-VN')}</div>
+                                  </div>
+                                  <span style={{ fontSize: 11, fontWeight: 900, color: a.status === 'rejected' ? '#dc2626' : '#15803d', whiteSpace: 'nowrap' }}>
+                                    {a.status === 'rejected' ? '✕ Từ chối' : a.status === 'paid' ? '✓ Đã chi' : '✓ Đã duyệt'}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {approvalHistory.leaves.length > 0 && (
+                          <div style={{ marginBottom: 16 }}>
+                            <div style={{ fontSize: 12, fontWeight: 900, color: '#0f766e', textTransform: 'uppercase', marginBottom: 8 }}>🏖 Xin nghỉ</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              {approvalHistory.leaves.map((l: any) => (
+                                <button key={l.id} onClick={() => setSelectedApprovalItem({ kind: 'leave', item: l, canReview: false })}
+                                  style={{ textAlign: 'left', width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 14, padding: 12, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <div style={{ minWidth: 0 }}>
+                                    <div style={{ fontSize: 13, fontWeight: 800, color: '#2d1c10' }}>{l.requester_name}</div>
+                                    <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>{new Date(l.created_at).toLocaleDateString('vi-VN')}</div>
+                                  </div>
+                                  <span style={{ fontSize: 11, fontWeight: 900, color: l.status === 'approved' ? '#15803d' : '#dc2626', whiteSpace: 'nowrap' }}>
+                                    {l.status === 'approved' ? '✓ Đã duyệt' : '✕ Từ chối'}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {approvalHistory.expenses.length > 0 && (
+                          <div>
+                            <div style={{ fontSize: 12, fontWeight: 900, color: '#dc2626', textTransform: 'uppercase', marginBottom: 8 }}>💸 Duyệt Chi</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              {approvalHistory.expenses.map((e: any) => (
+                                <button key={e.id} onClick={() => setSelectedApprovalItem({ kind: 'expense', item: e, canReview: false })}
+                                  style={{ textAlign: 'left', width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 14, padding: 12, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <div style={{ minWidth: 0 }}>
+                                    <div style={{ fontSize: 13, fontWeight: 800, color: '#2d1c10' }}>{e.claimant_name} · {formatVND(e.amount)}</div>
+                                    <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>{e.description} · {new Date(e.created_at).toLocaleDateString('vi-VN')}</div>
+                                  </div>
+                                  <span style={{ fontSize: 11, fontWeight: 900, color: e.status === 'rejected' ? '#dc2626' : '#15803d', whiteSpace: 'nowrap' }}>
+                                    {e.status === 'rejected' ? '✕ Từ chối' : e.status === 'recorded' ? '✓ Đã ghi sổ' : '✓ Đã duyệt'}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Chi tiết 1 yêu cầu duyệt — bấm bất kỳ dòng nào (đang chờ hoặc lịch
+            sử) đều mở ra đây, biết rõ nội dung yêu cầu là gì trước khi quyết
+            định. Vẫn còn Duyệt/Từ chối nếu `canReview` (đang chờ xử lý). */}
+        {selectedApprovalItem && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 2000, background: '#fdf9f2', overflowY: 'auto' }} onClick={() => setSelectedApprovalItem(null)}>
+            <div onClick={e => e.stopPropagation()}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 14, borderBottom: '1.5px solid #eadcca', position: 'sticky', top: 0, background: '#fdf9f2', zIndex: 1 }}>
+                <button onClick={() => setSelectedApprovalItem(null)} aria-label="Quay lại" style={{ width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer', flexShrink: 0 }}>‹</button>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 1, color: '#b8692f', textTransform: 'uppercase' }}>
+                    {{ edit: 'Yêu cầu sửa đơn', overtime: 'Yêu cầu tăng ca', advance: 'Yêu cầu tạm ứng', leave: 'Đơn xin nghỉ', expense: 'Khoản chi' }[selectedApprovalItem.kind]}
+                  </div>
+                  <div style={{ fontSize: 15, fontWeight: 900, color: '#2d1b10' }}>Chi tiết yêu cầu</div>
+                </div>
+              </div>
+
+              <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {selectedApprovalItem.kind === 'edit' && (() => {
+                  const r = selectedApprovalItem.item;
+                  return (
+                    <>
+                      <DetailRow label="Đơn hàng" value={`#${r.orders?.order_code || String(r.order_id).slice(0, 8)}`} />
+                      <DetailRow label="Người yêu cầu" value={r.requested_by_name} />
+                      <DetailRow label="Lý do" value={r.reason || '—'} />
+                      <DetailRow label="Nộp lúc" value={new Date(r.created_at).toLocaleString('vi-VN')} />
+                      {r.approved_by_name && <DetailRow label={r.status === 'approved' ? 'Đã duyệt bởi' : 'Xử lý bởi'} value={`${r.approved_by_name}${r.approved_at ? ' · ' + new Date(r.approved_at).toLocaleString('vi-VN') : ''}`} />}
+                      <DetailRow label="Trạng thái" value={r.status === 'pending' ? 'Đang chờ' : r.status === 'approved' ? '✓ Đã duyệt' : '✕ Từ chối'} />
+                    </>
+                  );
+                })()}
+
+                {selectedApprovalItem.kind === 'overtime' && (() => {
+                  const o = selectedApprovalItem.item;
+                  return (
+                    <>
+                      <DetailRow label="Nhân viên" value={o.employee?.full_name || 'Nhân viên'} />
+                      <DetailRow label="Vị trí" value={o.employee?.station || o.employee?.role || '—'} />
+                      <DetailRow label="Thời gian dự kiến" value={`${o.planned_minutes} phút`} />
+                      <DetailRow label="Lý do" value={o.reason || '—'} />
+                      {o.related_order_code && <DetailRow label="Mã đơn liên quan" value={o.related_order_code} />}
+                      <DetailRow label="Ngày làm" value={new Date(o.work_date).toLocaleDateString('vi-VN')} />
+                      <DetailRow label="Trạng thái" value={o.status === 'pending' ? 'Đang chờ' : o.status === 'approved' ? '✓ Đã duyệt' : '✕ Từ chối'} />
+                    </>
+                  );
+                })()}
+
+                {selectedApprovalItem.kind === 'advance' && (() => {
+                  const a = selectedApprovalItem.item;
+                  return (
+                    <>
+                      <DetailRow label="Nhân viên" value={a.employee_name} />
+                      <DetailRow label="Số tiền" value={formatVND(a.amount)} />
+                      <DetailRow label="Lý do" value={a.reason} />
+                      <DetailRow label="Cần trước ngày" value={new Date(a.needed_on).toLocaleDateString('vi-VN')} />
+                      <DetailRow label="Hình thức nhận" value={a.payment_method === 'bank_transfer' ? 'Chuyển khoản' : 'Tiền mặt'} />
+                      <DetailRow label="Nộp lúc" value={new Date(a.created_at).toLocaleString('vi-VN')} />
+                      {a.director_note && <DetailRow label="Ghi chú Giám đốc" value={a.director_note} />}
+                      <DetailRow label="Trạng thái" value={a.status === 'pending_director' ? 'Đang chờ' : a.status === 'rejected' ? '✕ Từ chối' : a.status === 'paid' ? '✓ Đã chi' : '✓ Đã duyệt, chờ kế toán chi'} />
+                    </>
+                  );
+                })()}
+
+                {selectedApprovalItem.kind === 'leave' && (() => {
+                  const l = selectedApprovalItem.item;
+                  return (
+                    <>
+                      <DetailRow label="Người xin nghỉ" value={l.requester_name} />
+                      <DetailRow label="Vai trò" value={l.requester_role || '—'} />
+                      <DetailRow label="Lý do" value={l.reason || '—'} />
+                      {l.leave_date && <DetailRow label="Ngày nghỉ" value={new Date(l.leave_date).toLocaleDateString('vi-VN')} />}
+                      <DetailRow label="Nộp lúc" value={new Date(l.created_at).toLocaleString('vi-VN')} />
+                      <DetailRow label="Trạng thái" value={l.status === 'pending' ? 'Đang chờ' : l.status === 'approved' ? '✓ Đã duyệt' : '✕ Từ chối'} />
+                    </>
+                  );
+                })()}
+
+                {selectedApprovalItem.kind === 'expense' && (() => {
+                  const e = selectedApprovalItem.item;
+                  return (
+                    <>
+                      <DetailRow label="Người chi" value={e.claimant_name} />
+                      <DetailRow label="Số tiền" value={formatVND(e.amount)} />
+                      <DetailRow label="Nội dung" value={e.description} />
+                      {e.note && <DetailRow label="Ghi chú" value={e.note} />}
+                      {e.related_order_code && <DetailRow label="Mã đơn liên quan" value={e.related_order_code} />}
+                      <DetailRow label="Thời điểm chi" value={new Date(e.occurred_at).toLocaleString('vi-VN')} />
+                      {e.director_note && <DetailRow label="Ghi chú Giám đốc" value={e.director_note} />}
+                      <DetailRow label="Trạng thái" value={e.status === 'pending_director' ? 'Đang chờ' : e.status === 'rejected' ? '✕ Từ chối' : e.status === 'recorded' ? '✓ Đã ghi sổ' : '✓ Đã duyệt, chờ kế toán ghi sổ'} />
+                    </>
+                  );
+                })()}
+
+                {selectedApprovalItem.canReview && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                     <button
-                      onClick={() => { setActiveSheet('expense_detail'); setLedgerTab('expense'); }}
-                      style={{ width: '100%', textAlign: 'left', background: '#fef2f2', border: '1.5px solid #fecaca', borderRadius: 14, padding: 12, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                      onClick={() => {
+                        const it = selectedApprovalItem.item;
+                        const k = selectedApprovalItem.kind;
+                        setSelectedApprovalItem(null);
+                        if (k === 'edit') handleReviewEditRequest(it.id, true);
+                        else if (k === 'overtime') handleReviewOvertime(it.id, true);
+                        else if (k === 'advance') handleReviewAdvance(it.id, true);
+                        else if (k === 'leave') handleReviewLeave(it.id, true);
+                      }}
+                      style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 10, padding: '12px 0', fontWeight: 900, fontSize: 13, cursor: 'pointer' }}
                     >
-                      <span style={{ fontSize: 13, fontWeight: 800, color: '#2d1c10' }}>Xem &amp; duyệt {expensePendingCount} khoản chi đang chờ</span>
-                      <ChevronRight size={16} color="#a08060" />
+                      ✓ Duyệt
+                    </button>
+                    <button
+                      onClick={() => {
+                        const it = selectedApprovalItem.item;
+                        const k = selectedApprovalItem.kind;
+                        setSelectedApprovalItem(null);
+                        if (k === 'edit') handleReviewEditRequest(it.id, false);
+                        else if (k === 'overtime') handleReviewOvertime(it.id, false);
+                        else if (k === 'advance') handleReviewAdvance(it.id, false);
+                        else if (k === 'leave') handleReviewLeave(it.id, false);
+                      }}
+                      style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 10, padding: '12px 0', fontWeight: 900, fontSize: 13, cursor: 'pointer' }}
+                    >
+                      ✕ Từ chối
                     </button>
                   </div>
                 )}
