@@ -40,10 +40,19 @@ export const ROLE_META = {
   kho_xuong42: { label: 'Nhân Viên Kho Xưởng 42', shortLabel: 'Kho X42', tone: 'info', level: 2 },
 };
 
-export const ROLE_OPTIONS = Object.entries(ROLE_META).map(([value, m]) => ({
-  value,
-  label: m.label
-}));
+// 3 vai trò "chung" (kitchen_lead / kitchen_deputy / bakery) chỉ còn giữ lại
+// trong ROLE_META vì resolveRoleAndStation()/ROLE_PERMISSIONS bên dưới vẫn
+// dùng làm giá trị DB nội bộ (kết hợp với cột station) — không hiện trong
+// dropdown chọn vai trò nữa vì đã có bản phân luồng theo bộ phận riêng
+// (kitchen_lead_cold/_hot/_macaron/_x42...), giữ cả 2 gây trùng lặp/nhầm lẫn.
+const HIDDEN_FROM_DROPDOWN = new Set(['kitchen_lead', 'kitchen_deputy', 'bakery']);
+
+export const ROLE_OPTIONS = Object.entries(ROLE_META)
+  .filter(([value]) => !HIDDEN_FROM_DROPDOWN.has(value))
+  .map(([value, m]) => ({
+    value,
+    label: m.label
+  }));
 
 export const KITCHEN_LEAD_ROLES = [
   'kitchen_lead', 'kitchen_lead_cold', 'kitchen_lead_hot', 'kitchen_lead_macaron', 'kitchen_lead_x42',
