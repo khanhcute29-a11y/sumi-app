@@ -595,7 +595,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       });
 
       if (error) throw error;
-      if (!result.success) throw new Error(result.message || 'Failed to accept work package');
+      if (!result.success) throw new Error(result.error || result.message || 'Failed to accept work package');
 
       // RPC accept_work_package_self CHỈ sửa bảng công việc bếp, không đụng
       // vào bảng `orders` — mà chỉ `orders` mới được phát realtime. Nên phải
