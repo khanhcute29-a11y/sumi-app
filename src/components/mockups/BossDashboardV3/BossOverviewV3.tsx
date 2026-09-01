@@ -361,13 +361,6 @@ export function BossOverviewV3Inner() {
     'revenue_detail' | 'expense_detail' | 'order_drawer' | 'staff_detail' | 'staff_overview_v2' | 'approval_center' | 'feed_sheet' | 'advance_sheet' | 'leave_sheet' | 'report_sheet' | 'schedule_sheet' | 'warehouse_sheet' | 'staff_screen_sheet' | null
   >(null);
   const [selectedOrderFilter, setSelectedOrderFilter] = useState<string>('all');
-  // Mở Danh Sách Đơn Hàng theo LUỒNG (Bánh kem, Macaron...) thay vì theo
-  // trạng thái — khác hẳn selectedOrderFilter ở trên. Khi có giá trị, sheet
-  // ẩn thanh lọc trạng thái con và hiện ô tìm kiếm thay vào đó (yêu cầu
-  // Hồ Hoàng Diễm 01/09/2026: "phân luồng ... bỏ phần chọn tình trạng ...
-  // thêm mục tìm kiếm").
-  const [selectedOrderFlow, setSelectedOrderFlow] = useState<string | null>(null);
-  const [orderSearchQuery, setOrderSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   // Khoan sâu: bấm 1 đơn trong Danh Sách Đơn Hàng -> mở chi tiết đơn đó (lớp
@@ -691,11 +684,8 @@ export function BossOverviewV3Inner() {
   // Lọc và sắp xếp đơn hàng theo thứ tự ưu tiên giảm dần từ trên xuống
   const filteredOrders = useMemo(() => {
     let list = allOrders;
-    if (selectedOrderFlow) {
-      list = list.filter((o: any) => o.order_type === selectedOrderFlow);
-    }
     if (selectedOrderFilter === 'overdue') {
-      list = list.filter((o: any) => o.is_overdue);
+      list = allOrders.filter((o: any) => o.is_overdue);
     } else if (selectedOrderFilter !== 'all') {
       const statusMap: Record<string, string[]> = {
         awaiting_assignment: ['awaiting_assignment', 'awaiting_acceptance'],
@@ -705,38 +695,14 @@ export function BossOverviewV3Inner() {
         completed: ['completed'],
       };
       const wanted = statusMap[selectedOrderFilter] || [selectedOrderFilter];
-      list = list.filter((o: any) => wanted.includes(o.status_v2) && (selectedOrderFilter === 'completed' || !o.is_overdue));
+      list = allOrders.filter((o: any) => wanted.includes(o.status_v2) && (selectedOrderFilter === 'completed' || !o.is_overdue));
     }
     return list;
-  }, [allOrders, selectedOrderFilter, selectedOrderFlow]);
+  }, [allOrders, selectedOrderFilter]);
 
-  // Ô tìm kiếm CHỈ hiện khi mở theo luồng (selectedOrderFlow) — lọc thêm
-  // theo mã đơn / tên khách hàng trên nền filteredOrders ở trên, không bỏ
-  // dấu tiếng Việt (đủ dùng cho tìm nhanh, không cần phức tạp như tab Chat).
-  const visibleOrders = useMemo(() => {
-    const q = orderSearchQuery.trim().toLowerCase();
-    if (!q) return filteredOrders;
-    return filteredOrders.filter((o: any) =>
-      (o.order_code || '').toLowerCase().includes(q) || (o.customer_name || '').toLowerCase().includes(q)
-    );
-  }, [filteredOrders, orderSearchQuery]);
-
-  // Mở Drawer lọc đơn theo từng ô TRẠNG THÁI (7 ô gạch cũ) — luôn thoát khỏi
-  // chế độ xem theo luồng nếu đang mở dở, tránh 2 bộ lọc chồng nhau.
+  // Mở Drawer lọc đơn theo từng ô
   const handleOpenOrderDrawer = (filterKey: string = 'all') => {
-    setSelectedOrderFlow(null);
-    setOrderSearchQuery('');
     setSelectedOrderFilter(filterKey);
-    setActiveSheet('order_drawer');
-  };
-
-  // Mở Drawer lọc đơn theo LUỒNG (Bánh kem, Macaron...) — sheet vẫn dùng
-  // chung 'order_drawer', chỉ khác ở chỗ selectedOrderFlow có giá trị nên
-  // phần render bên dưới tự ẩn thanh lọc trạng thái + hiện ô tìm kiếm.
-  const handleOpenOrderFlowDrawer = (flowKey: string) => {
-    setSelectedOrderFilter('all');
-    setOrderSearchQuery('');
-    setSelectedOrderFlow(flowKey);
     setActiveSheet('order_drawer');
   };
 
@@ -1525,41 +1491,6 @@ export function BossOverviewV3Inner() {
                 {orderCounts.overdue}
               </span>
             </div>
-          </div>
-
-          {/* Phân luồng theo loại đơn (yêu cầu Hồ Hoàng Diễm 01/09/2026) — bấm
-              vào 1 luồng mở đúng Danh Sách Đơn Hàng của luồng đó, KHÔNG kèm
-              thanh lọc trạng thái (bỏ theo yêu cầu), thay bằng ô tìm kiếm. */}
-          <div style={{ fontSize: 12.5, fontWeight: 900, color: '#2d1c10', margin: '4px 2px 8px' }}>
-            📂 Phân luồng theo loại đơn
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
-            {ORDER_FLOWS.map((flow) => {
-              const count = allOrders.filter((o: any) => o.order_type === flow.key).length;
-              return (
-                <div
-                  key={flow.key}
-                  onClick={() => handleOpenOrderFlowDrawer(flow.key)}
-                  style={{
-                    background: '#ffffff',
-                    border: '1.5px solid #eadcca',
-                    borderRadius: 16,
-                    padding: '10px 12px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                    <span style={{ fontSize: 18, flexShrink: 0 }}>{flow.icon}</span>
-                    <span style={{ fontSize: 12, fontWeight: 900, color: '#2d1c10', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{flow.title}</span>
-                  </div>
-                  <span style={{ fontSize: 16, fontWeight: 900, color: '#2d1c10', flexShrink: 0 }}>{count}</span>
-                </div>
-              );
-            })}
           </div>
 
         </div>
@@ -2374,7 +2305,7 @@ export function BossOverviewV3Inner() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 900, color: '#2d1c10' }}>
-                      {selectedOrderFlow ? `${ORDER_FLOWS.find((f) => f.key === selectedOrderFlow)?.icon || '📂'} ${ORDER_FLOWS.find((f) => f.key === selectedOrderFlow)?.title || 'Luồng'}` : '🧾 Danh Sách Đơn Hàng'} ({visibleOrders.length} đơn)
+                      🧾 Danh Sách Đơn Hàng ({filteredOrders.length} đơn)
                     </div>
                     <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 800 }}>
                       ⬇️ Sắp xếp ưu tiên giảm dần từ trên xuống dưới
@@ -2383,21 +2314,7 @@ export function BossOverviewV3Inner() {
                   <button onClick={() => setActiveSheet(null)} aria-label="Quay lại" style={{ order: -1, flexShrink: 0, width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer' }}>‹</button>
                 </div>
 
-                {selectedOrderFlow ? (
-                  /* Mở theo LUỒNG — bỏ thanh lọc trạng thái, thay bằng ô tìm
-                     kiếm (yêu cầu Hồ Hoàng Diễm 01/09/2026). */
-                  <div style={{ padding: '8px 14px' }}>
-                    <input
-                      type="text"
-                      value={orderSearchQuery}
-                      onChange={(e) => setOrderSearchQuery(e.target.value)}
-                      placeholder="🔍 Tìm theo mã đơn hoặc tên khách hàng..."
-                      style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: '1.5px solid #eadcca', fontSize: 13, boxSizing: 'border-box' }}
-                    />
-                  </div>
-                ) : (
-                /* Thanh lọc trạng thái con bên trong Drawer — chỉ hiện khi mở
-                   theo 7 ô trạng thái, KHÔNG hiện khi mở theo luồng ở trên. */
+                {/* Thanh lọc trạng thái con bên trong Drawer */}
                 <div style={{ display: 'flex', gap: 4, overflowX: 'auto', padding: '8px 14px' }}>
                 <button
                   onClick={() => setSelectedOrderFilter('all')}
@@ -2464,13 +2381,12 @@ export function BossOverviewV3Inner() {
                   ⚠️ Trễ hạn ({orderCounts.overdue})
                 </button>
                 </div>
-                )}
               </div>
 
               {/* Danh sách đơn hàng ưu tiên */}
               <div style={sheetBodyStyle({ paddingTop: 8 })}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {visibleOrders.map((ord: any, idx: number) => {
+                {filteredOrders.map((ord: any, idx: number) => {
                   const flow = ORDER_FLOWS.find((f) => f.key === ord.order_type);
                   const statusLabelMap: Record<string, string> = {
                     awaiting_assignment: 'Đơn chờ làm 📥', awaiting_acceptance: 'Đơn chờ làm 📥',
@@ -2539,9 +2455,9 @@ export function BossOverviewV3Inner() {
                   );
                 })}
 
-                {visibleOrders.length === 0 && (
+                {filteredOrders.length === 0 && (
                   <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>
-                    {orderSearchQuery ? `Không tìm thấy đơn nào khớp "${orderSearchQuery}".` : 'Không có đơn hàng nào ở trạng thái này.'}
+                    Không có đơn hàng nào ở trạng thái này.
                   </div>
                 )}
               </div>
