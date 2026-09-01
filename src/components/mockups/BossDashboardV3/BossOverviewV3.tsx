@@ -78,6 +78,8 @@ import {
   fetchPendingOvertimeRequests,
   reviewOvertimeRequest,
   fetchApprovalHistory,
+  fetchPendingTaskExemptions,
+  reviewTaskExemption,
   fetchTodayShiftReports,
   fetchCompletedTasksReport,
   fetchWeeklyScheduleAllStations,
@@ -477,19 +479,20 @@ export function BossOverviewV3Inner() {
   // ── Dữ liệu thật: Yêu Cầu Duyệt (gom mọi thứ chờ Sếp duyệt vào 1 nơi) ──
   const [pendingEditRequests, setPendingEditRequests] = useState<any[]>([]);
   const [pendingOvertimes, setPendingOvertimes] = useState<any[]>([]);
+  const [pendingTaskExemptions, setPendingTaskExemptions] = useState<any[]>([]);
   const [approvalBusy, setApprovalBusy] = useState<string | null>(null);
   // Tab "Đang chờ" / "Lịch sử" trong sheet Yêu Cầu Duyệt + chi tiết 1 yêu cầu
   const [approvalTab, setApprovalTab] = useState<'pending' | 'history'>('pending');
-  const [approvalHistory, setApprovalHistory] = useState<{ editRequests: any[]; overtimes: any[]; advances: any[]; leaves: any[]; expenses: any[] } | null>(null);
+  const [approvalHistory, setApprovalHistory] = useState<{ editRequests: any[]; overtimes: any[]; advances: any[]; leaves: any[]; expenses: any[]; taskExemptions: any[] } | null>(null);
   const [approvalHistoryLoading, setApprovalHistoryLoading] = useState(false);
-  const [selectedApprovalItem, setSelectedApprovalItem] = useState<{ kind: 'edit' | 'overtime' | 'advance' | 'leave' | 'expense'; item: any; canReview: boolean } | null>(null);
+  const [selectedApprovalItem, setSelectedApprovalItem] = useState<{ kind: 'edit' | 'overtime' | 'advance' | 'leave' | 'expense' | 'exemption'; item: any; canReview: boolean } | null>(null);
 
   const loadApprovalHistory = async () => {
     setApprovalHistoryLoading(true);
     try {
       setApprovalHistory(await fetchApprovalHistory());
     } catch {
-      setApprovalHistory({ editRequests: [], overtimes: [], advances: [], leaves: [], expenses: [] });
+      setApprovalHistory({ editRequests: [], overtimes: [], advances: [], leaves: [], expenses: [], taskExemptions: [] });
     } finally {
       setApprovalHistoryLoading(false);
     }
@@ -547,7 +550,7 @@ export function BossOverviewV3Inner() {
     setLoading(true);
     setLoadError('');
     try {
-      const [rev, duTinh, claims, status, staffOptions, orders, posts, advances, leaves, reports, schedule, editRequests, overtimes, completedTasks] = await Promise.all([
+      const [rev, duTinh, claims, status, staffOptions, orders, posts, advances, leaves, reports, schedule, editRequests, overtimes, completedTasks, taskExemptions] = await Promise.all([
         fetchRevenueByChannel(),
         fetchDoanhThuDuTinh(),
         fetchExpenseAndAdvanceLedgerToday(),
@@ -562,6 +565,7 @@ export function BossOverviewV3Inner() {
         fetchPendingOrderEditRequests(),
         fetchPendingOvertimeRequests(),
         fetchCompletedTasksReport(),
+        fetchPendingTaskExemptions(),
       ]);
 
       setRevenueStreams(rev.channels.map((c) => ({ id: c.key, channel: c.title, amount: c.amount, percentage: c.percentage, icon: c.icon, note: `${c.count} đơn hoàn thành`, orders: c.orders })));
@@ -589,6 +593,7 @@ export function BossOverviewV3Inner() {
       setPendingEditRequests(editRequests);
       setPendingOvertimes(overtimes);
       setCompletedTasksToday(completedTasks);
+      setPendingTaskExemptions(taskExemptions);
       setShiftReports(reports);
       setWeeklySchedule(schedule);
     } catch (e: any) {
@@ -770,6 +775,19 @@ export function BossOverviewV3Inner() {
     }
   };
 
+  // ── Duyệt/Từ chối yêu cầu miễn trừ công việc — gộp từ màn "Yêu Cầu Duyệt"
+  // cũ (ApprovalRequestsScreen) vào đây, vẫn dùng đúng exemptTask() + RPC ──
+  const handleReviewTaskExemption = async (id: string, approve: boolean, taskId: string) => {
+    try {
+      await reviewTaskExemption(id, approve, taskId);
+      playConfirmSound();
+      showToast(approve ? '✓ Sếp đã ĐỒNG Ý miễn trừ công việc' : '✕ Sếp đã từ chối miễn trừ');
+      setPendingTaskExemptions(await fetchPendingTaskExemptions());
+    } catch (e: any) {
+      showToast(`⚠️ ${e.message || 'Không thao tác được'}`);
+    }
+  };
+
   // ── Duyệt/Từ chối yêu cầu sửa đơn — cùng RPC approve_order_edit_request
   // mà EditApprovalPanel.jsx đang dùng (đã hoạt động, không viết lại) ──
   const handleReviewEditRequest = async (id: string, approve: boolean) => {
@@ -887,7 +905,7 @@ export function BossOverviewV3Inner() {
   // Sự" trên banner KPI chính (yêu cầu 01/09/2026: đưa Yêu Cầu Duyệt lên giao
   // diện chính, gộp luôn 2 ô Tạm ứng/Xin nghỉ trong lưới tiện ích vào đây).
   const expensePendingCount = expenseStreams.filter((e: any) => e.status === 'pending_director').length;
-  const approvalCount = pendingEditRequests.length + pendingOvertimes.length + pendingAdvances.length + pendingLeaves.length + expensePendingCount;
+  const approvalCount = pendingEditRequests.length + pendingOvertimes.length + pendingAdvances.length + pendingLeaves.length + expensePendingCount + pendingTaskExemptions.length;
 
   return (
     <>
@@ -2671,6 +2689,39 @@ export function BossOverviewV3Inner() {
                       </div>
                     )}
 
+                    {/* Miễn trừ công việc — gộp từ màn "Yêu Cầu Duyệt" cũ (ApprovalRequestsScreen) */}
+                    {pendingTaskExemptions.length > 0 && (
+                      <div style={{ marginBottom: 16 }}>
+                        <div style={{ fontSize: 12, fontWeight: 900, color: '#0891b2', textTransform: 'uppercase', marginBottom: 8 }}>
+                          🙅 Miễn trừ công việc ({pendingTaskExemptions.length})
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {pendingTaskExemptions.map((r: any) => (
+                            <button key={r.id} onClick={() => setSelectedApprovalItem({ kind: 'exemption', item: r, canReview: true })}
+                              style={{ textAlign: 'left', width: '100%', background: '#ecfeff', border: '1.5px solid #a5f3fc', borderRadius: 14, padding: 12, cursor: 'pointer' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                <div style={{ minWidth: 0 }}>
+                                  <div style={{ fontSize: 13.5, fontWeight: 900, color: '#2d1c10' }}>{r.requester_name || 'Nhân viên'}</div>
+                                  <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>
+                                    {r.reason ? `💭 "${r.reason}"` : 'Không ghi lý do'} · {new Date(r.created_at).toLocaleString('vi-VN')}
+                                  </div>
+                                </div>
+                                <ChevronRight size={16} color="#a08060" />
+                              </div>
+                              <div style={{ display: 'flex', gap: 6, marginTop: 10 }} onClick={e => e.stopPropagation()}>
+                                <button disabled={approvalBusy === r.id} onClick={() => handleReviewTaskExemption(r.id, true, r.task_id)} style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
+                                  ✓ Đồng Ý
+                                </button>
+                                <button disabled={approvalBusy === r.id} onClick={() => handleReviewTaskExemption(r.id, false, r.task_id)} style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, padding: '8px 0', fontWeight: 900, fontSize: 12, cursor: 'pointer' }}>
+                                  ✕ Từ chối
+                                </button>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {/* 5. Duyệt Chi — mở sang Sổ Cái Khoản Chi có sẵn (giữ nguyên luồng duyệt Chi cũ) */}
                     {expensePendingCount > 0 && (
                       <div>
@@ -2694,7 +2745,7 @@ export function BossOverviewV3Inner() {
                     )}
                     {!approvalHistoryLoading && approvalHistory && (
                       <>
-                        {(approvalHistory.editRequests.length + approvalHistory.overtimes.length + approvalHistory.advances.length + approvalHistory.leaves.length + approvalHistory.expenses.length) === 0 && (
+                        {(approvalHistory.editRequests.length + approvalHistory.overtimes.length + approvalHistory.advances.length + approvalHistory.leaves.length + approvalHistory.expenses.length + approvalHistory.taskExemptions.length) === 0 && (
                           <div style={{ textAlign: 'center', padding: '24px 0', color: '#725f50', fontSize: 13 }}>Chưa có yêu cầu nào đã xử lý.</div>
                         )}
 
@@ -2778,6 +2829,26 @@ export function BossOverviewV3Inner() {
                           </div>
                         )}
 
+                        {approvalHistory.taskExemptions.length > 0 && (
+                          <div style={{ marginBottom: 16 }}>
+                            <div style={{ fontSize: 12, fontWeight: 900, color: '#0891b2', textTransform: 'uppercase', marginBottom: 8 }}>🙅 Miễn trừ công việc</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              {approvalHistory.taskExemptions.map((r: any) => (
+                                <button key={r.id} onClick={() => setSelectedApprovalItem({ kind: 'exemption', item: r, canReview: false })}
+                                  style={{ textAlign: 'left', width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 14, padding: 12, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <div style={{ minWidth: 0 }}>
+                                    <div style={{ fontSize: 13, fontWeight: 800, color: '#2d1c10' }}>{r.requester_name || 'Nhân viên'}</div>
+                                    <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>{new Date(r.created_at).toLocaleDateString('vi-VN')}</div>
+                                  </div>
+                                  <span style={{ fontSize: 11, fontWeight: 900, color: r.status === 'approved' ? '#15803d' : '#dc2626', whiteSpace: 'nowrap' }}>
+                                    {r.status === 'approved' ? '✓ Đã duyệt' : '✕ Từ chối'}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         {approvalHistory.expenses.length > 0 && (
                           <div>
                             <div style={{ fontSize: 12, fontWeight: 900, color: '#dc2626', textTransform: 'uppercase', marginBottom: 8 }}>💸 Duyệt Chi</div>
@@ -2816,7 +2887,7 @@ export function BossOverviewV3Inner() {
                 <button onClick={() => setSelectedApprovalItem(null)} aria-label="Quay lại" style={{ width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer', flexShrink: 0 }}>‹</button>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 1, color: '#b8692f', textTransform: 'uppercase' }}>
-                    {{ edit: 'Yêu cầu sửa đơn', overtime: 'Yêu cầu tăng ca', advance: 'Yêu cầu tạm ứng', leave: 'Đơn xin nghỉ', expense: 'Khoản chi' }[selectedApprovalItem.kind]}
+                    {{ edit: 'Yêu cầu sửa đơn', overtime: 'Yêu cầu tăng ca', advance: 'Yêu cầu tạm ứng', leave: 'Đơn xin nghỉ', expense: 'Khoản chi', exemption: 'Miễn trừ công việc' }[selectedApprovalItem.kind]}
                   </div>
                   <div style={{ fontSize: 15, fontWeight: 900, color: '#2d1b10' }}>Chi tiết yêu cầu</div>
                 </div>
@@ -2898,6 +2969,19 @@ export function BossOverviewV3Inner() {
                   );
                 })()}
 
+                {selectedApprovalItem.kind === 'exemption' && (() => {
+                  const r = selectedApprovalItem.item;
+                  return (
+                    <>
+                      <DetailRow label="Người yêu cầu" value={r.requester_name || 'Nhân viên'} />
+                      <DetailRow label="Vai trò" value={r.requester_role || '—'} />
+                      <DetailRow label="Lý do" value={r.reason || '—'} />
+                      <DetailRow label="Nộp lúc" value={new Date(r.created_at).toLocaleString('vi-VN')} />
+                      <DetailRow label="Trạng thái" value={r.status === 'pending' ? 'Đang chờ' : r.status === 'approved' ? '✓ Đã duyệt (việc đã miễn trừ)' : '✕ Từ chối'} />
+                    </>
+                  );
+                })()}
+
                 {selectedApprovalItem.canReview && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                     <button
@@ -2909,6 +2993,7 @@ export function BossOverviewV3Inner() {
                         else if (k === 'overtime') handleReviewOvertime(it.id, true);
                         else if (k === 'advance') handleReviewAdvance(it.id, true);
                         else if (k === 'leave') handleReviewLeave(it.id, true);
+                        else if (k === 'exemption') handleReviewTaskExemption(it.id, true, it.task_id);
                       }}
                       style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 10, padding: '12px 0', fontWeight: 900, fontSize: 13, cursor: 'pointer' }}
                     >
@@ -2923,6 +3008,7 @@ export function BossOverviewV3Inner() {
                         else if (k === 'overtime') handleReviewOvertime(it.id, false);
                         else if (k === 'advance') handleReviewAdvance(it.id, false);
                         else if (k === 'leave') handleReviewLeave(it.id, false);
+                        else if (k === 'exemption') handleReviewTaskExemption(it.id, false, it.task_id);
                       }}
                       style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 10, padding: '12px 0', fontWeight: 900, fontSize: 13, cursor: 'pointer' }}
                     >

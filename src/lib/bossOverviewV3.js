@@ -1,6 +1,6 @@
 import { supabase } from './supabaseClient';
 import { ORDER_FLOWS } from '../data/orderCatalogs';
-import { createAssignedTasks, fetchApprovalRequests, resolveApprovalRequest, fetchShiftSchedule, fetchShiftConfigs } from './queries';
+import { createAssignedTasks, fetchApprovalRequests, resolveApprovalRequest, exemptTask, fetchShiftSchedule, fetchShiftConfigs } from './queries';
 import { localDateStr, mondayOf, weekDates } from './date';
 
 const STATIONS = [
@@ -252,6 +252,21 @@ export async function reviewLeaveRequest(id, approved, note) {
   await resolveApprovalRequest(id, { status: approved ? 'approved' : 'rejected', note });
 }
 
+// ---- 3c-2. Yêu cầu MIỄN TRỪ CÔNG VIỆC (task_exemption) — vẫn đang được gửi
+// thật qua TheDeXuat.jsx (màn Chấm công), nên gộp vào đây thay vì bỏ hẳn khi
+// dẹp màn "Yêu Cầu Duyệt" cũ (ApprovalRequestsScreen). 3 loại còn lại của
+// approval_requests (order_cancel/order_delete/shift_recheck) đã kiểm tra
+// KHÔNG còn nơi nào tạo mới (màn gửi cũ OrdersScreen.jsx không nằm trong
+// App.jsx nữa) nên không mang theo, tránh vác thêm luồng chết.
+export async function fetchPendingTaskExemptions() {
+  return fetchApprovalRequests({ status: 'pending', type: 'task_exemption' });
+}
+
+export async function reviewTaskExemption(id, approved, taskId, note) {
+  if (approved && taskId) await exemptTask(taskId);
+  await resolveApprovalRequest(id, { status: approved ? 'approved' : 'rejected', note });
+}
+
 // ---- 3d. Yêu cầu sửa đơn đang chờ duyệt — cùng bảng/RPC với EditApprovalPanel
 // (src/components/EditApprovalPanel.jsx), gọi lại đúng cổng đó, không viết
 // luồng ghi thứ hai cho cùng một hành động. ----
@@ -300,12 +315,13 @@ export async function reviewOvertimeRequest(id, approve, directorId) {
 // (VD bảng chưa migrate ở máy chủ nào đó) không được kéo sập cả 4 luồng kia.
 export async function fetchApprovalHistory(limit = 20) {
   const safe = async (p) => { try { const r = await p; return r; } catch { return { data: [] }; } };
-  const [editRes, overtimeRes, advanceRes, leaveRes, expenseRes] = await Promise.all([
+  const [editRes, overtimeRes, advanceRes, leaveRes, expenseRes, exemptionRes] = await Promise.all([
     safe(supabase.from('order_edit_requests').select('*, orders(order_code)').neq('status', 'pending').order('created_at', { ascending: false }).limit(limit)),
     safe(supabase.from('overtime_requests').select('*, employee:profiles!employee_id(id,full_name,role,station)').neq('status', 'pending').order('created_at', { ascending: false }).limit(limit)),
     safe(supabase.from('salary_advance_requests').select('*').neq('status', 'pending_director').order('created_at', { ascending: false }).limit(limit)),
     safe(supabase.from('approval_requests').select('*').eq('type', 'leave_request').neq('status', 'pending').order('created_at', { ascending: false }).limit(limit)),
     safe(supabase.from('expense_claims').select('*').neq('status', 'pending_director').order('created_at', { ascending: false }).limit(limit)),
+    safe(supabase.from('approval_requests').select('*').eq('type', 'task_exemption').neq('status', 'pending').order('created_at', { ascending: false }).limit(limit)),
   ]);
   return {
     editRequests: editRes.data || [],
@@ -313,6 +329,7 @@ export async function fetchApprovalHistory(limit = 20) {
     advances: advanceRes.data || [],
     leaves: leaveRes.data || [],
     expenses: expenseRes.data || [],
+    taskExemptions: exemptionRes.data || [],
   };
 }
 
