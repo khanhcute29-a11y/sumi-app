@@ -152,7 +152,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
   const [quyenSua, setQuyenSua] = useState(null);
 
   const load = async () => {
-    const [o, i, p, u, e, kpi, ops, att, changes, qs] = await Promise.all([
+    const [o, i, p, u, e, kpi, ops, att, changes, qs, ship] = await Promise.all([
       supabase.from('orders').select('id,order_code,order_type,status_v2,required_at,fulfillment_method_v2,address,note,created_by,created_by_name,created_at,confidentiality,version,ship_fee,deposit,payment_method,total,is_internal,target_store,discount_amount,promotion_note,tax_code,vat_amount,customers(name,phone)').eq('id', orderId).single(),
       supabase.from('order_items').select('id,name_snapshot,quantity,unit,specification,unit_price,display_order').eq('order_id', orderId).order('display_order'),
       supabase.from('order_work_packages_readable').select('id,unit_id,status,due_at,accepted_at,completed_at,version,organization_units(name,code),work_package_items(order_item_id,quantity)').eq('order_id', orderId),
@@ -162,7 +162,11 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       supabase.from('order_operations_list').select('production_started_at,production_completed_at,production_minutes,delivery_started_at,delivery_completed_at,delivery_minutes,delivery_provider,provider_label,shipping_fee,driver_name,is_overdue,overdue_stage,overdue_minutes,was_late,late_staff_names').eq('id', orderId).single(),
       supabase.from('order_attachments').select('id,attachment_type,storage_path,mime_type,created_at').eq('order_id', orderId).order('created_at', { ascending: false }),
       supabase.from('order_change_logs').select('id,field_name,old_value,new_value,edited_by_name,created_at').eq('order_id', orderId).order('created_at', { ascending: false }),
-      supabase.rpc('sumi_quyen_sua_don', { p_order_id: orderId })
+      supabase.rpc('sumi_quyen_sua_don', { p_order_id: orderId }),
+      // Người giao hàng thật (staff_id) để Giám đốc đánh giá — order_operations_list
+      // chỉ có driver_name (text), không có id. Có thể ra nhiều dòng nếu đơn có
+      // nhiều mẻ bếp, nhưng thông tin shipper là như nhau ở mọi dòng nên lấy dòng đầu.
+      supabase.from('order_lateness_detail').select('shipper_staff_id,shipper_staff_name,shipper_delivered_at').eq('order_id', orderId).limit(1),
     ]);
 
     setQuyenSua(qs?.data || null);
@@ -192,6 +196,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       events: e.data || [],
       kpiLogs: kpi.data || [],
       operations: ops.data || {},
+      shipper: (ship.data && ship.data[0]) || null,
       changeHistory: (changes.data || []).map(c => ({
         ...c,
         editor_name: c.edited_by_name,
@@ -1146,6 +1151,28 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
           </div>
         </div>
 
+        {/* Đánh giá nhanh theo từng công đoạn — chỉ Giám đốc/Quản lý */}
+        {director && o.created_by && (
+          <StarRateBar
+            staffId={o.created_by}
+            staffName={`Chốt đơn: ${o.created_by_name || 'Nhân viên'}`}
+            linkType="order_created"
+            linkId={orderId}
+            compact
+            onDone={load}
+          />
+        )}
+        {director && data.shipper?.shipper_staff_id && (
+          <StarRateBar
+            staffId={data.shipper.shipper_staff_id}
+            staffName={`Giao hàng: ${data.shipper.shipper_staff_name || 'Nhân viên'}`}
+            linkType="order_delivery"
+            linkId={orderId}
+            compact
+            onDone={load}
+          />
+        )}
+
         {/* Ảnh chụp lúc hoàn thành hoặc giao hàng */}
         {proofPhotos.length > 0 && (
           <div style={box}>
@@ -1286,7 +1313,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                 {director && p.assigned_to_staff_id && (
                   <StarRateBar
                     staffId={p.assigned_to_staff_id}
-                    staffName={p.assigned_to_staff_name}
+                    staffName={`Sản xuất: ${p.assigned_to_staff_name || 'Nhân viên'}`}
                     linkType="order_work_package"
                     linkId={p.id}
                     compact
