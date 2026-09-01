@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
 import { LichSuCham, chuCaiDau, gioThanhChu } from './dungChung';
+import StarRateBar from '../../StarRateBar';
 
 // Hộp chi tiết một nhân sự — Quản lý bấm vào người trong danh sách thì mở ra.
 // Gồm: giờ vào/ra hôm nay, khu vực TẶNG SAO, và lịch sử chấm công của người đó.
@@ -143,6 +144,19 @@ export default function ChiTietNhanSuModal({
                   : 'CHỌN SỐ SAO Ở TRÊN'}
             </button>
           </div>
+        )}
+
+        {/* Trừ sao (nhắc nhở/kỷ luật nhanh) — cùng cổng RPC sumi_dieu_chinh_sao,
+            KHÔNG đụng vào sumi_tang_sao_ca (khối tặng sao ở trên) đang chạy tốt. */}
+        {coTheTangSao && !laChinhToi && (
+          <StarRateBar
+            staffId={nhanSu?.id}
+            staffName={nhanSu?.full_name}
+            linkType="cham_cong"
+            mode="tru"
+            compact
+            onDone={onXong}
+          />
         )}
 
         {laChinhToi && coTheTangSao && (

@@ -17,6 +17,7 @@ import { showToast } from '../lib/toast';
 import { addFinishedGoodsEntryV2 } from '../lib/queries';
 import { branchForOrderType } from '../lib/internalOrders';
 import { IconCake, IconBakery, IconMacaron, IconSchool, IconTeabreak, IconMixed } from './icons/FrogIcons';
+import StarRateBar from './StarRateBar';
 
 const ORDER_TYPE_ICONS = {
   cake: IconCake, bakery: IconBakery, macaron: IconMacaron, school: IconSchool, teabreak: IconTeabreak, mixed: IconMixed,
@@ -1279,6 +1280,18 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                       </button>
                     )}
                   </div>
+                )}
+
+                {/* Đánh giá nhanh +/- sao cho người được giao mẻ này (chỉ Quản lý/Giám đốc) */}
+                {director && p.assigned_to_staff_id && (
+                  <StarRateBar
+                    staffId={p.assigned_to_staff_id}
+                    staffName={p.assigned_to_staff_name}
+                    linkType="order_work_package"
+                    linkId={p.id}
+                    compact
+                    onDone={load}
+                  />
                 )}
 
                 {/* Bếp trưởng giao việc cho thợ bếp tuyến dưới */}

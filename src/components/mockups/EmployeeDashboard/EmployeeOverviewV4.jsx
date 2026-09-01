@@ -37,6 +37,7 @@ import {
   fetchMyViolations,
   fetchMyRewards,
   fetchMyRewardsTotalThisMonth,
+  fetchMyRewardStarsThisMonth,
   fetchMyOrders,
   fetchCompanyFeed,
 } from '../../../lib/employeeOverviewV4';
@@ -118,6 +119,7 @@ export function EmployeeOverviewV4Inner({ onNavigate } = {}) {
   const [violations, setViolations] = useState(null);
   const [rewards, setRewards] = useState(null);
   const [rewardsTotal, setRewardsTotal] = useState(null);
+  const [rewardStars, setRewardStars] = useState(null);
   const [orders, setOrders] = useState(null);
   const [feed, setFeed] = useState(null);
   const [todayAtt, setTodayAtt] = useState(null);   // null = đang tải
@@ -145,6 +147,7 @@ export function EmployeeOverviewV4Inner({ onNavigate } = {}) {
     fetchMyHoursThisMonth(profile.id).then(setHours).catch((e) => setError(e.message));
     fetchMyRevenueThisMonth(profile.id).then(setRevenue).catch((e) => setError(e.message));
     fetchMyRewardsTotalThisMonth(profile.id).then(setRewardsTotal).catch(() => {});
+    fetchMyRewardStarsThisMonth(profile.id).then(setRewardStars).catch(() => {});
     fetchMyOrders(profile.full_name).then(setOrders).catch((e) => setError(e.message));
     fetchCompanyFeed().then(setFeed).catch(() => {});
   }, [profile?.id]);
@@ -359,7 +362,9 @@ export function EmployeeOverviewV4Inner({ onNavigate } = {}) {
         </button>
         <button className="eov4-kpi-card eov4-kpi-amber" onClick={() => openSheet('reward')}>
           <div className="eov4-kpi-value">{rewardsTotal === null ? '…' : formatVND(rewardsTotal)}</div>
-          <div className="eov4-kpi-label">Tiền Thưởng ›</div>
+          <div className="eov4-kpi-label">
+            Tiền Thưởng{rewardStars ? ` · ⭐${rewardStars}` : ''} ›
+          </div>
         </button>
       </div>
 

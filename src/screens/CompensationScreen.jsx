@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../lib/AuthContext';
 import { hasAnyRole } from '../lib/roles';
 import { OrderCodePicker } from '../components/OrderCodePicker';
+import { fetchMyStarsSummary } from '../lib/employeeOverviewV4';
 
 const money=n=>Number(n||0).toLocaleString('vi-VN')+'đ';
 const monthKey=()=>new Date().toISOString().slice(0,7);
@@ -15,10 +16,12 @@ export default function CompensationScreen(){
  const {profile}=useAuth(); const manager=hasAnyRole(profile,['owner','admin','accountant']);
  const [month,setMonth]=useState(monthKey()); const [period,setPeriod]=useState(null); const [entries,setEntries]=useState([]); const [overtime,setOvertime]=useState([]);
  const [minutes,setMinutes]=useState(60); const [reason,setReason]=useState(''); const [orderCode,setOrderCode]=useState(''); const [error,setError]=useState(''); const [busy,setBusy]=useState(false);
+ const [starsSummary,setStarsSummary]=useState(null);
  const load=async()=>{setError('');try{
   const p=await supabase.from('payroll_periods').select('*').eq('period_month',`${month}-01`).maybeSingle();if(p.error)throw p.error;setPeriod(p.data||null);
   if(p.data){const q=await supabase.from('payroll_entries').select('*,employee:profiles!employee_id(id,full_name,role,station)').eq('period_id',p.data.id).order('employee_id');if(q.error)throw q.error;setEntries(q.data||[])}else setEntries([]);
   const o=await supabase.from('overtime_requests').select('*,employee:profiles!employee_id(id,full_name,role,station)').gte('work_date',`${month}-01`).lt('work_date',nextMonthStart(month)).order('created_at',{ascending:false});if(o.error)throw o.error;setOvertime(o.data||[]);
+  if(profile?.id){fetchMyStarsSummary(profile.id,`${month}-01`,nextMonthStart(month)).then(setStarsSummary).catch(()=>{})}
  }catch(e){setError(e.message||'Không thể tải dữ liệu lương và tăng ca');}};
  useEffect(()=>{load()},[month,profile?.id]);
  const requestOvertime=async()=>{if(!reason.trim())return setError('Cần nhập lý do tăng ca.');setBusy(true);setError('');try{const r=await supabase.from('overtime_requests').insert({employee_id:profile.id,work_date:localDate(),planned_minutes:Number(minutes),reason:reason.trim(),related_order_code:orderCode.trim()||null});if(r.error)throw r.error;setReason('');setOrderCode('');await load()}catch(e){setError(e.message)}finally{setBusy(false)}};
@@ -35,11 +38,16 @@ export default function CompensationScreen(){
   <section className="sumi-comp-section"><div className="sumi-comp-title"><h2>Bảng lương tháng</h2><b>{period?statusLabel[period.status]:'Chưa lập'}</b></div>
    {!period&&manager&&<button className="sumi-create-payroll" disabled={busy} onClick={createPeriod}>＋ LẬP BẢNG LƯƠNG THÁNG NÀY</button>}
    {!period&&!manager&&<p className="sumi-comp-empty">Kế toán chưa chốt bảng lương tháng này.</p>}
-   {period&&!manager&&myEntry&&<PayrollSummary entry={myEntry}/>} {period&&!manager&&!myEntry&&<p className="sumi-comp-empty">Bảng lương của bạn chưa được công bố.</p>}
+   {period&&!manager&&myEntry&&<PayrollSummary entry={myEntry} stars={starsSummary}/>} {period&&!manager&&!myEntry&&<p className="sumi-comp-empty">Bảng lương của bạn chưa được công bố.</p>}
    {manager&&period&&<><div className="sumi-payroll-actions"><button onClick={()=>setPeriodStatus('draft')}>Nháp</button><button onClick={()=>setPeriodStatus('review')}>Chờ duyệt</button><button className="lock" onClick={()=>setPeriodStatus('locked')}>Khóa & công bố</button></div>{entries.map(row=><PayrollEditor key={row.id} row={row} onChange={change} onSave={save} busy={busy}/>)}</>}
   </section>{error&&<div className="sumi-comp-error">{error.includes('does not exist')||error.includes('schema cache')||error.includes('payroll_')||error.includes('overtime_requests')?'Chức năng đang chờ kích hoạt dữ liệu nhân sự trên Supabase.':error}</div>}
  </div>;
 }
 
-function PayrollSummary({entry}){return <div className="sumi-pay-slip"><div><small>THỰC NHẬN</small><strong>{money(total(entry))}</strong></div><dl><dt>Lương cơ bản</dt><dd>{money(entry.base_pay)}</dd><dt>Tăng ca</dt><dd>{money(entry.overtime_pay)}</dd><dt>Phụ cấp + thưởng</dt><dd>{money(Number(entry.allowance)+Number(entry.kpi_bonus)+Number(entry.output_bonus)+Number(entry.delegation_bonus)+Number(entry.other_bonus))}</dd><dt>Tạm ứng + giảm trừ</dt><dd>-{money(Number(entry.advance_amount)+Number(entry.deduction_amount))}</dd></dl>{entry.note&&<p>Ghi chú: {entry.note}</p>}</div>}
+function PayrollSummary({entry,stars}){return <div className="sumi-pay-slip">
+ {stars&&(stars.thuong?.sao>0||stars.phat?.sao>0)&&<div style={{margin:'0 0 10px',padding:'10px 12px',borderRadius:12,background:'#FFF8F0',border:'1px solid #F0DFC8',fontSize:13,lineHeight:1.7}}>
+  <div style={{color:'#1e7e4c',fontWeight:800}}>Thưởng: Tổng cộng {stars.thuong.sao}⭐ = {money(stars.thuong.tien)}</div>
+  <div style={{color:'#b42318',fontWeight:800}}>Phạt: Tổng cộng {stars.phat.sao}⭐ = {money(stars.phat.tien)}</div>
+ </div>}
+ <div><small>THỰC NHẬN</small><strong>{money(total(entry))}</strong></div><dl><dt>Lương cơ bản</dt><dd>{money(entry.base_pay)}</dd><dt>Tăng ca</dt><dd>{money(entry.overtime_pay)}</dd><dt>Phụ cấp + thưởng</dt><dd>{money(Number(entry.allowance)+Number(entry.kpi_bonus)+Number(entry.output_bonus)+Number(entry.delegation_bonus)+Number(entry.other_bonus))}</dd><dt>Tạm ứng + giảm trừ</dt><dd>-{money(Number(entry.advance_amount)+Number(entry.deduction_amount))}</dd></dl>{entry.note&&<p>Ghi chú: {entry.note}</p>}</div>}
 function PayrollEditor({row,onChange,onSave,busy}){const fields=[['base_pay','Lương cơ bản'],['overtime_pay','Tiền tăng ca'],['allowance','Phụ cấp'],['kpi_bonus','Thưởng KPI'],['output_bonus','Thưởng sản lượng'],['delegation_bonus','Thưởng kiêm nhiệm'],['other_bonus','Thưởng khác'],['advance_amount','Tạm ứng'],['deduction_amount','Giảm trừ']];return <article className="sumi-payroll-editor"><div className="head"><span><strong>{row.employee?.full_name||'Nhân viên'}</strong><small>{row.employee?.station||row.employee?.role}</small></span><b>{money(total(row))}</b></div><div className="fields">{fields.map(([key,label])=><label key={key}>{label}<input type="number" inputMode="numeric" value={row[key]||0} onChange={e=>onChange(row.id,key,e.target.value)}/></label>)}</div><button disabled={busy} onClick={()=>onSave(row)}>LƯU NHÂN VIÊN NÀY</button></article>}

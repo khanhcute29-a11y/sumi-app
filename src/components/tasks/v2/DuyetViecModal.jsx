@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
 import { gioNgan, ngayGio, nhanKpiHoanThanh, nhanKpiNhanViec, diemDuKien, docBuocCon, duocCanThiepQuaHan, quaHan, treBaoNhieu, doDaiThoiGian } from '../../../lib/congViec';
+import StarRateBar from '../../StarRateBar';
 
 // Hộp thoại duyệt nghiệm thu của quản lý.
 //   • chiXem = true  -> chỉ xem báo cáo của thợ, không có nút duyệt
@@ -264,6 +265,18 @@ export default function DuyetViecModal({ viec, tenTho, chiXem, hoSo, vaiTro, onC
               {dangGuiTin ? '…' : 'Gửi'}
             </button>
           </div>
+        )}
+
+        {/* Đánh giá nhanh +/- sao cho thợ làm việc này (chỉ Quản lý/Giám đốc) */}
+        {(vaiTro === 'quan_ly' || vaiTro === 'giam_doc') && viec.assignee_id && viec.assignee_id !== hoSo?.id && (
+          <StarRateBar
+            staffId={viec.assignee_id}
+            staffName={tenTho}
+            linkType="task"
+            linkId={viec.id}
+            compact
+            onDone={onXong}
+          />
         )}
 
         {loi && <div className="cv-error" style={{ marginTop: 12 }}>⚠️ {loi}</div>}

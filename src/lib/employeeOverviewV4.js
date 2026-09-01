@@ -170,6 +170,39 @@ export async function fetchMyRewardsTotalThisMonth(profileId) {
   return (data || []).reduce((s, r) => s + Number(r.amount || 0), 0);
 }
 
+// Trang Dashboard "Hiệu suất cá nhân" CHỈ hiển thị Sao Thưởng — tuyệt đối
+// không lộ Sao Phạt ở đây (tránh ảnh hưởng tâm lý), số sao phạt chỉ minh
+// bạch riêng ở Bảng Lương Tháng (fetchMyStarsSummaryThisMonth bên dưới).
+export async function fetchMyRewardStarsThisMonth(profileId) {
+  const { from, to } = monthRange();
+  const { data, error } = await supabase
+    .from('staff_rewards').select('amount,so_sao').eq('staff_id', profileId)
+    .gte('awarded_on', from).lte('awarded_on', to);
+  if (error) throw error;
+  return (data || []).reduce((s, r) => s + (r.so_sao || Math.round((r.amount || 0) / 1000)), 0);
+}
+
+// ---- Tổng Thưởng/Phạt Sao trong khoảng ngày [from, to] — dùng cho dòng đầu
+// Bảng Lương Tháng, khớp đúng kỳ lương (payroll_periods.period_month), KHÔNG
+// phải tháng dương lịch hiện tại như các hàm "ThisMonth" phía trên. ----
+export async function fetchMyStarsSummary(profileId, fromDate, toDate) {
+  const [rewardsRes, violationsRes] = await Promise.all([
+    supabase.from('staff_rewards').select('amount,so_sao').eq('staff_id', profileId)
+      .gte('awarded_on', fromDate).lt('awarded_on', toDate),
+    supabase.from('staff_violations').select('penalty_amount,so_sao').eq('staff_id', profileId)
+      .gte('occurred_on', fromDate).lt('occurred_on', toDate),
+  ]);
+  if (rewardsRes.error) throw rewardsRes.error;
+  if (violationsRes.error) throw violationsRes.error;
+  const thuong = (rewardsRes.data || []).reduce((acc, r) => ({
+    sao: acc.sao + (r.so_sao || Math.round((r.amount || 0) / 1000)), tien: acc.tien + Number(r.amount || 0),
+  }), { sao: 0, tien: 0 });
+  const phat = (violationsRes.data || []).reduce((acc, r) => ({
+    sao: acc.sao + (r.so_sao || Math.round((r.penalty_amount || 0) / 1000)), tien: acc.tien + Number(r.penalty_amount || 0),
+  }), { sao: 0, tien: 0 });
+  return { thuong, phat };
+}
+
 // ---- Bảng tin công ty (dùng bảng thật company_feed_posts, chỉ đọc, không
 // composer/comment/react — nằm ngoài phạm vi trang tổng quan này) ----
 export async function fetchCompanyFeed(limit = 5) {
