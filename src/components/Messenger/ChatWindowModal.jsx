@@ -81,13 +81,13 @@ export default function ChatWindowModal({ onClose, profile, initialRoomId = null
     // xoá tại chỗ huy hiệu chưa đọc của đúng phòng này (không quét lại DB).
     onActiveRoomChange?.(currentRoomId);
     if (profile?.id) {
-      markRoomRead(currentRoomId, profile.id).then(() => onRoomRead?.(currentRoomId)).catch(() => {});
+      markRoomRead(currentRoomId, profile.id).then(() => { onRoomRead?.(currentRoomId); window.dispatchEvent(new CustomEvent('sumi-badges-changed')); }).catch(() => {});
     }
 
     const unsubscribe = subscribeToRoomMessages(currentRoomId, (msg) => {
       setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
       if (msg.sender_id !== profile?.id && profile?.id) {
-        markRoomRead(currentRoomId, profile.id).then(() => onRoomRead?.(currentRoomId)).catch(() => {});
+        markRoomRead(currentRoomId, profile.id).then(() => { onRoomRead?.(currentRoomId); window.dispatchEvent(new CustomEvent('sumi-badges-changed')); }).catch(() => {});
       }
     });
     return () => { cancelled = true; unsubscribe(); };

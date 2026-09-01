@@ -3,6 +3,7 @@ import { Sidebar } from './components/navigation/Sidebar';
 import { BottomNav } from './components/navigation/BottomNav';
 import { ChatLauncher } from './components/Messenger/ChatLauncher';
 import ChatScreen from './components/Messenger/ChatScreen';
+import { fetchUnreadCounts } from './lib/chat';
 import { supabase } from './lib/supabaseClient';
 import { initOfflineSync } from './lib/offlineQueue';
 import {
@@ -125,7 +126,7 @@ function OpsApp({ onSignOut }) {
   const [showMore, setShowMore] = useState(false);
   const [kdsStation, setKdsStation] = useState('all');
   const [warehouseBranch, setWarehouseBranch] = useState('all');
-  const [badgeCounts, setBadgeCounts] = useState({ orders: 0, kds: 0, approvals: 0, incidents: 0 });
+  const [badgeCounts, setBadgeCounts] = useState({ orders: 0, kds: 0, approvals: 0, incidents: 0, chat: 0 });
   const [featureFlags, setFeatureFlags] = useState({ orders_v2_read: false, delivery_v2: false, kpi_v2: false });
 
   useOrderNotifications();
@@ -326,7 +327,11 @@ function OpsApp({ onSignOut }) {
         vis.kds ? countKitchenActiveOrders() : 0,
         vis.approvals ? countPendingApprovals() : 0,
         vis.incidents ? countOpenIncidents(vis.incidentCategories ? { categories: vis.incidentCategories } : {}) : 0,
-      ]).then(([orders, kds, approvals, incidents]) => setBadgeCounts({ orders, kds, approvals, incidents })).catch(() => {});
+        profile?.id ? fetchUnreadCounts(profile.id) : {},
+      ]).then(([orders, kds, approvals, incidents, chatUnread]) => setBadgeCounts({
+        orders, kds, approvals, incidents,
+        chat: Object.values(chatUnread || {}).reduce((s, n) => s + n, 0),
+      })).catch(() => {});
     };
     loadBadges();
     window.addEventListener('sumi-badges-changed', loadBadges);
@@ -335,10 +340,11 @@ function OpsApp({ onSignOut }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, loadBadges)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'approval_requests' }, loadBadges)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'incident_reports' }, loadBadges)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, loadBadges)
       .subscribe();
     return () => { window.removeEventListener('sumi-badges-changed', loadBadges); supabase.removeChannel(channel); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile?.role, (profile?.extra_roles || []).join(',')]);
+  }, [profile?.id, profile?.role, (profile?.extra_roles || []).join(',')]);
 
   const screens = {
     home: <MobileHomeScreen onNavigate={setTab} />, feed: <CompanyFeedScreen />, chat: <ChatScreen profile={profile} />,

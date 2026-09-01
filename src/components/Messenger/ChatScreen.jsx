@@ -98,11 +98,15 @@ export default function ChatScreen({ profile }) {
       .catch((e) => setError(e.message))
       .finally(() => { if (!cancelled) setLoadingMessages(false); });
 
-    if (profile?.id) markRoomRead(activeRoomId, profile.id).catch(() => {});
+    if (profile?.id) {
+      markRoomRead(activeRoomId, profile.id).then(() => window.dispatchEvent(new CustomEvent('sumi-badges-changed'))).catch(() => {});
+    }
 
     const unsubscribe = subscribeToRoomMessages(activeRoomId, (msg) => {
       setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
-      if (msg.sender_id !== profile?.id && profile?.id) markRoomRead(activeRoomId, profile.id).catch(() => {});
+      if (msg.sender_id !== profile?.id && profile?.id) {
+        markRoomRead(activeRoomId, profile.id).then(() => window.dispatchEvent(new CustomEvent('sumi-badges-changed'))).catch(() => {});
+      }
     });
     return () => { cancelled = true; unsubscribe(); };
   }, [activeRoomId]);
