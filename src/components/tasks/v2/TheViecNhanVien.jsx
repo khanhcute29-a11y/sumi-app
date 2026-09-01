@@ -13,6 +13,17 @@ import VongDoiViec from './VongDoiViec';
 // sumi_bao_xong_viec, sumi_luu_buoc_con). Màn hình KHÔNG tự cập nhật bảng
 // tasks, để trạng thái và điểm KPI chỉ có một nơi quyết.
 
+// "2026-08-30T07:36" cho input datetime-local — theo giờ ĐỊA PHƯƠNG trình
+// duyệt (khớp cách GiaoViecModal/AssignTaskModal đang làm: gõ giờ VN, lúc
+// lưu convert new Date(x).toISOString()), không phải cắt chuỗi ISO (sẽ lệch
+// múi giờ UTC/VN 7 tiếng).
+function chuoiDatetimeLocal(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function HuyHieuKpi({ viec }) {
   const nhan = viec.status === 'open' && !viec.accepted_at
     ? { loai: 'cho', chu: '⏳ Yêu cầu xác nhận nhận việc' }
@@ -36,6 +47,12 @@ export default function TheViecNhanVien({ viec, hoSo, tenTheoId = {}, onDoi, onB
   const [loiThe, setLoiThe] = useState('');
   const [tinNhan, setTinNhan] = useState('');
   const [dangGuiTin, setDangGuiTin] = useState(false);
+  // Sửa "Nhắc nhở tôi" / "Hạn chót" — 2 ô này trước đây chỉ hiện chữ tĩnh,
+  // không sửa lại được sau khi tạo việc.
+  const [suaNhacHan, setSuaNhacHan] = useState(false);
+  const [nhacMoi, setNhacMoi] = useState('');
+  const [hanMoi, setHanMoi] = useState('');
+  const [dangLuuNhacHan, setDangLuuNhacHan] = useState(false);
 
   useEffect(() => { setBuoc(docBuocCon(viec)); }, [viec.id, viec.version]);
 
@@ -116,6 +133,24 @@ export default function TheViecNhanVien({ viec, hoSo, tenTheoId = {}, onDoi, onB
     } catch (e) {
       setLoiThe(e?.message || 'Không gửi được tin nhắn.');
     } finally { setDangGuiTin(false); }
+  };
+
+  const luuNhacHan = async () => {
+    setDangLuuNhacHan(true); setLoiThe('');
+    try {
+      const { error } = await supabase.rpc('sumi_dat_nhac_han', {
+        p_task_id: viec.id,
+        p_reminder_at: nhacMoi ? new Date(nhacMoi).toISOString() : null,
+        p_deadline: hanMoi ? new Date(hanMoi).toISOString() : null,
+        p_xoa_nhac: !nhacMoi,
+        p_xoa_han: !hanMoi,
+      });
+      if (error) throw error;
+      setSuaNhacHan(false);
+      await onDoi?.();
+    } catch (e) {
+      setLoiThe(e?.message || 'Không lưu được nhắc nhở/hạn chót.');
+    } finally { setDangLuuNhacHan(false); }
   };
 
   const luuBuoc = async (ds) => {
@@ -206,16 +241,48 @@ export default function TheViecNhanVien({ viec, hoSo, tenTheoId = {}, onDoi, onB
         <div className="cv-detail">
           {viec.description && <p className="cv-desc">{viec.description}</p>}
 
-          <div className="cv-detail-grid">
-            <div className="cv-detail-box">
-              <strong>⏰ Nhắc nhở tôi</strong>
-              {viec.reminder_at ? `${ngayGio(viec.reminder_at)} (Chuông báo)` : 'Không đặt nhắc'}
+          {!suaNhacHan ? (
+            <div
+              className="cv-detail-grid"
+              style={coQuyenNhan ? { cursor: 'pointer' } : undefined}
+              onClick={() => {
+                if (!coQuyenNhan) return;
+                setNhacMoi(chuoiDatetimeLocal(viec.reminder_at));
+                setHanMoi(chuoiDatetimeLocal(viec.deadline));
+                setSuaNhacHan(true);
+              }}
+            >
+              <div className="cv-detail-box">
+                <strong>⏰ Nhắc nhở tôi</strong>
+                {viec.reminder_at ? `${ngayGio(viec.reminder_at)} (Chuông báo)` : 'Không đặt nhắc'}
+                {coQuyenNhan && <span style={{ marginLeft: 6, color: 'var(--cv-primary)' }}>✏️</span>}
+              </div>
+              <div className="cv-detail-box">
+                <strong>🎯 Hạn chót</strong>
+                {viec.deadline ? ngayGio(viec.deadline) : 'Không đặt hạn'}
+                {coQuyenNhan && <span style={{ marginLeft: 6, color: 'var(--cv-primary)' }}>✏️</span>}
+              </div>
             </div>
-            <div className="cv-detail-box">
-              <strong>🎯 Hạn chót</strong>
-              {viec.deadline ? ngayGio(viec.deadline) : 'Không đặt hạn'}
+          ) : (
+            <div className="cv-detail-grid" style={{ gap: 10 }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13, fontWeight: 700 }}>
+                ⏰ Nhắc nhở tôi
+                <input type="datetime-local" value={nhacMoi} onChange={(e) => setNhacMoi(e.target.value)}
+                  style={{ minHeight: 42, padding: '0 10px', borderRadius: 10, border: '1px solid var(--cv-border)', fontFamily: 'inherit' }} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13, fontWeight: 700 }}>
+                🎯 Hạn chót
+                <input type="datetime-local" value={hanMoi} onChange={(e) => setHanMoi(e.target.value)}
+                  style={{ minHeight: 42, padding: '0 10px', borderRadius: 10, border: '1px solid var(--cv-border)', fontFamily: 'inherit' }} />
+              </label>
+              <div style={{ display: 'flex', gap: 8, gridColumn: '1 / -1' }}>
+                <button className="cv-btn outline" style={{ flex: 1 }} disabled={dangLuuNhacHan} onClick={() => setSuaNhacHan(false)}>Huỷ</button>
+                <button className="cv-btn primary" style={{ flex: 1 }} disabled={dangLuuNhacHan} onClick={luuNhacHan}>
+                  {dangLuuNhacHan ? 'Đang lưu…' : '✓ Lưu'}
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* ── Các bước con ── */}
           <div className="cv-sub-title">Các bước thực hiện</div>
