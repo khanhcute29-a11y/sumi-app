@@ -141,7 +141,7 @@ function GioLamRiengPanel({ hoSo, onDone }) {
   );
 }
 
-function StaffRow({ s, isOwner, isMe, canDeactivate, danhSachCa, onSavePermissions, onDeactivate, onManageWork, expanded, onToggle }) {
+function StaffRow({ s, isOwner, isMe, canDeactivate, danhSachCa, onSavePermissions, onDeactivate, expanded, onToggle }) {
   const staffMeta = getRoleMeta(s.role, s.station);
   const perm = ROLE_PERMISSIONS.find((p) => p.role === s.role);
   const initialUiRole = getUiRole(s.role, s.station);
@@ -227,14 +227,15 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, danhSachCa, onSavePermissio
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap'
       }}>
-        {/* Bấm vào nhân viên để mở ngay mục Quản lý công việc & Giao việc */}
+        {/* Bấm vào nhân viên để mở/đóng hồ sơ & phân quyền — Giao việc đã có
+            mục riêng ("1. Giao việc" trên Dashboard), không lặp lại ở đây. */}
         <button
-          onClick={() => onManageWork(s)}
+          onClick={onToggle}
           style={{
             display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 200,
             border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left', padding: 0
           }}
-          title="Bấm để giao việc, theo dõi tiến độ và xem báo cáo"
+          title="Bấm để xem/chỉnh hồ sơ & phân quyền"
         >
           <div style={{
             width: 40, height: 40, borderRadius: '50%', background: 'var(--surface-sunken)',
@@ -264,9 +265,6 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, danhSachCa, onSavePermissio
         </button>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Button variant="primary" size="sm" onClick={() => onManageWork(s)} style={{ fontWeight: 700 }}>
-            📋 Xem & Giao việc
-          </Button>
           {(isOwner || canDeactivate) && (
             <Button
               variant="ghost"
@@ -311,7 +309,7 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, danhSachCa, onSavePermissio
             </div>
           )}
 
-          {isOwner && !isMe && (
+          {isOwner && (
             <React.Fragment>
               {/* Chọn vai trò chính & Khâu làm việc */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10 }}>
@@ -556,16 +554,11 @@ export default function StaffScreen() {
     load();
   };
 
-  const handleManageWork = (s) => {
-    sessionStorage.setItem('sumi_managed_staff_id', s.id);
-    window.dispatchEvent(new CustomEvent('sumi-navigate', { detail: { tab: 'tasks' } }));
-  };
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 720 }}>
       <div>
         <div style={{ font: 'var(--text-display-md)', color: 'var(--text-primary)' }}>Nhân Viên</div>
-        <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Bấm nhân viên để giao việc, theo dõi tiến độ và báo cáo công việc</div>
+        <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Bấm nhân viên để xem/chỉnh hồ sơ, trách nhiệm và phân quyền</div>
       </div>
 
       {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>Lỗi tải nhân viên: {error}</div>}
@@ -599,7 +592,6 @@ export default function StaffScreen() {
                     danhSachCa={danhSachCa}
                     onSavePermissions={handleSavePermissions}
                     onDeactivate={handleDeactivate}
-                    onManageWork={handleManageWork}
                     expanded={expandedId === s.id}
                     onToggle={() => setExpandedId(expandedId === s.id ? null : s.id)}
                   />
