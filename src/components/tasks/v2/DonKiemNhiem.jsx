@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
 import NhanGiaoKiemNhiemModal from './NhanGiaoKiemNhiemModal';
+import OrderV2DetailModal from '../../OrderV2DetailModal';
 import { showToast } from '../../../lib/toast';
 
 // Thẻ "Đơn Bakery cần giao ngay — Ai rảnh nhận" — mockup task-lifecycle-v2.
@@ -14,6 +15,7 @@ export default function DonKiemNhiem({ hoSo, onDaNhan }) {
   const [ds, setDs] = useState([]);
   const [dangTai, setDangTai] = useState(true);
   const [dangXem, setDangXem] = useState(null);
+  const [xemChiTiet, setXemChiTiet] = useState(null); // order id — mở OrderV2DetailModal ngay tại chỗ
   // Trước đây khối này LUÔN xổ hết đơn ra, nằm ngay trên cùng — đẩy "Việc
   // được giao"/"Việc phát sinh" xuống dưới, phải cuộn mới thấy. Giờ gom
   // thành 1 khối thu gọn, mặc định ĐÓNG (chỉ hiện tổng số), bấm vào mới xổ
@@ -25,7 +27,7 @@ export default function DonKiemNhiem({ hoSo, onDaNhan }) {
     try {
       const { data, error } = await supabase
         .from('order_operations_list')
-        .select('id,order_code,address,required_at,status_v2')
+        .select('id,order_code,address,required_at,status_v2,product_names,customer_name,total_quantity')
         .eq('status_v2', 'ready_for_fulfillment')
         .order('required_at', { ascending: true })
         .limit(10);
@@ -87,6 +89,16 @@ export default function DonKiemNhiem({ hoSo, onDaNhan }) {
                 </span>
               )}
             </div>
+            {/* Bánh gì + giao ở đâu — để thợ biết trước có tiện đường không,
+                thay vì phải bấm nhận rồi mới biết. */}
+            {don.customer_name && (
+              <div className="cv-meta-item" style={{ marginTop: 6 }}>👤 Khách: {don.customer_name}</div>
+            )}
+            {don.product_names && (
+              <div className="cv-meta-item" style={{ marginTop: 4 }}>🍰 Bánh: {don.product_names}{don.total_quantity ? ` (${don.total_quantity} sản phẩm)` : ''}</div>
+            )}
+            <div className="cv-meta-item" style={{ marginTop: 4 }}>📍 Địa chỉ: {don.address || 'Nhận tại quầy'}</div>
+
             <div style={{
               marginTop: 10, padding: '9px 12px', borderRadius: 12,
               background: '#fff', color: '#315c48', fontSize: 12, fontWeight: 700, lineHeight: 1.4,
@@ -94,7 +106,14 @@ export default function DonKiemNhiem({ hoSo, onDaNhan }) {
               💡 Bất kỳ ai rảnh đều nhận được — không cần chờ vận tải. Bấm nhận sẽ tạo việc
               phát sinh để tính KPI, bắt buộc ảnh nhận bánh + GPS.
             </div>
-            <button className="cv-btn success full" style={{ marginTop: 10 }} onClick={() => setDangXem(don)}>
+            <button
+              className="cv-btn outline full"
+              style={{ marginTop: 10 }}
+              onClick={() => setXemChiTiet(don.id)}
+            >
+              🔍 Xem chi tiết đơn hàng & Mẫu bánh
+            </button>
+            <button className="cv-btn success full" style={{ marginTop: 8 }} onClick={() => setDangXem(don)}>
               🛵 Nhận giao ngay
             </button>
           </div>
@@ -117,6 +136,10 @@ export default function DonKiemNhiem({ hoSo, onDaNhan }) {
           }}
           onXong={async () => { await tai(); await onDaNhan?.(); }}
         />
+      )}
+
+      {xemChiTiet && (
+        <OrderV2DetailModal orderId={xemChiTiet} onClose={() => setXemChiTiet(null)} onChanged={tai} />
       )}
     </>
   );
