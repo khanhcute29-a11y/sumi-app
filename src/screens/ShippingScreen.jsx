@@ -15,7 +15,7 @@ import { getCurrentPosition, haversineKm, estimateTrip } from '../lib/geo';
 import { IconOrders, IconHome, IconTruck, IconWarning, IconCamera, IconEdit, IconMapPin, IconClock, IconPhone, IconClipboard, IconMoney } from '../components/icons/FrogIcons';
 import { supabase } from '../lib/supabaseClient';
 import { formatOrderItemLine } from '../lib/cakePricing';
-import { formatDeliveryDateTime } from '../lib/date';
+import { formatDeliveryDateTime, deliveryDateTimeValue } from '../lib/date';
 
 function Thumb({ url, label }) {
   if (!url) return null;
@@ -308,6 +308,46 @@ function DeliveryCard({ order, onPickup, onComplete, onSignedDoc, isDedicatedShi
   );
 }
 
+// Trước đây cả 3 trạng thái (chờ xuất bến/đang giao/đã xong) đổ chung 1 lưới
+// dài, sắp theo created_at — đơn mới GÁN cho ai đó (vd tự nhận giao hộ) bị
+// chôn lẫn giữa hàng chục đơn cũ, phải cuộn rất xa mới thấy. Gom lại thành
+// từng khối riêng, mặc định thu gọn (chỉ hiện tổng số), bấm vào mới xổ đủ
+// danh sách ra — và sắp theo giờ CẦN GIAO CHO KHÁCH (không phải giờ tạo đơn).
+function GroupSection({ title, tone, orders, defaultOpen = false, renderCard }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+          width: '100%', minHeight: 52, padding: '10px 14px', borderRadius: 'var(--radius-md)',
+          border: `1.5px solid ${tone}`, background: 'var(--surface-card)', cursor: 'pointer',
+          font: 'var(--text-label)', color: 'var(--text-primary)', textAlign: 'left',
+        }}
+      >
+        <span>{title}</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ minWidth: 28, textAlign: 'center', padding: '2px 8px', borderRadius: 999, background: tone, color: '#fff', fontWeight: 800, fontSize: 13 }}>
+            {orders.length}
+          </span>
+          <span style={{ color: 'var(--text-muted)' }}>{open ? '▴' : '▾'}</span>
+        </span>
+      </button>
+      {open && (
+        orders.length === 0 ? (
+          <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)', padding: '4px 4px 8px' }}>Không có đơn nào ở mục này.</div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 12 }}>
+            {orders.map((o) => renderCard(o))}
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
 export default function ShippingScreen() {
   const { profile } = useAuth();
   const isDedicatedShipper = hasAnyRole(profile, ['shipper', 'owner', 'admin']);
@@ -424,11 +464,25 @@ export default function ShippingScreen() {
         <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Đang tải...</div>
       ) : orders.length === 0 ? (
         <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Chưa có đơn nào cần giao.</div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 12 }}>
-          {orders.map((o) => <DeliveryCard key={o.id} order={o} onPickup={handlePickup} onComplete={handleComplete} onSignedDoc={handleSignedDoc} isDedicatedShipper={isDedicatedShipper} profile={profile} shopSettings={shopSettings} />)}
-        </div>
-      )}
+      ) : (() => {
+        // Sắp theo giờ CẦN GIAO CHO KHÁCH tăng dần (gần nhất lên đầu) —
+        // không phải created_at như trước.
+        const byDeliveryTime = (a, b) =>
+          deliveryDateTimeValue(a.delivery_date, a.delivery_time) - deliveryDateTimeValue(b.delivery_date, b.delivery_time);
+        const choGiao = orders.filter((o) => o.status === 'cho_giao').sort(byDeliveryTime);
+        const dangGiao = orders.filter((o) => o.status === 'dang_giao').sort(byDeliveryTime);
+        const hoanThanh = orders.filter((o) => o.status === 'hoan_thanh').sort(byDeliveryTime);
+        const renderCard = (o) => (
+          <DeliveryCard key={o.id} order={o} onPickup={handlePickup} onComplete={handleComplete} onSignedDoc={handleSignedDoc} isDedicatedShipper={isDedicatedShipper} profile={profile} shopSettings={shopSettings} />
+        );
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <GroupSection title="🟡 Cần giao — ai rảnh nhận" tone="#d96b43" orders={choGiao} defaultOpen={false} renderCard={renderCard} />
+            <GroupSection title="🚚 Đang giao" tone="#087f5b" orders={dangGiao} defaultOpen={true} renderCard={renderCard} />
+            <GroupSection title="✅ Đã hoàn thành" tone="#8c5a3c" orders={hoanThanh} defaultOpen={false} renderCard={renderCard} />
+          </div>
+        );
+      })()}
     </div>
   );
 }

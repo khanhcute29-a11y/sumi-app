@@ -11,6 +11,18 @@ export function localDateStr(d = new Date()) {
 // Format ngày giao (YYYY-MM-DD) + giờ giao (HH:mm) thành "dd/mm/yyyy · HH:mm" theo giờ VN —
 // dùng chung cho OrdersScreen/KdsScreen/ShippingScreen/KanbanCard thay vì lặp lại
 // new Date(...).toLocaleDateString(...) ở từng nơi.
+// Giá trị SO SÁNH ĐƯỢC (mili-giây) của ngày+giờ giao — dùng để SẮP XẾP danh
+// sách đơn theo đúng thứ tự cần giao cho khách (khác hẳn created_at). Đơn
+// chưa có ngày giao (delivery_date rỗng) bị đẩy xuống CUỐI (Infinity) thay vì
+// lẫn lộn ở giữa — hợp lý hơn vì chưa biết bao giờ cần giao thì không thể
+// xếp trước đơn đã có giờ hẹn cụ thể.
+export function deliveryDateTimeValue(deliveryDate, deliveryTime) {
+  if (!deliveryDate) return Infinity;
+  const time = /^\d{2}:\d{2}$/.test(deliveryTime || '') ? deliveryTime : '00:00';
+  const ms = new Date(`${deliveryDate}T${time}:00+07:00`).getTime();
+  return Number.isNaN(ms) ? Infinity : ms;
+}
+
 export function formatDeliveryDateTime(deliveryDate, deliveryTime) {
   const datePart = deliveryDate
     ? new Date(`${deliveryDate}T00:00:00+07:00`).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
