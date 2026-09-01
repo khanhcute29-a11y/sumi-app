@@ -1,6 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { LichSuCham, chuCaiDau, gioThanhChu } from './dungChung';
 import StarRateBar from '../../StarRateBar';
+import { fetchLatestPing, googleMapsLink } from '../../../lib/liveTracking';
+import { fetchWorkLocations } from '../../../lib/workLocations';
+import { haversineKm } from '../../../lib/geo';
+import { boPhanCuaHoSo } from '../../../lib/chamCong';
 
 // Hộp chi tiết một nhân sự — Quản lý bấm vào người trong danh sách thì mở ra.
 // Gồm: giờ vào/ra hôm nay, khu vực ĐÁNH GIÁ SAO, và lịch sử chấm công.
@@ -21,8 +25,25 @@ export default function ChiTietNhanSuModal({
   const tongSao = (thuong || []).reduce(
     (s, t) => s + (t.so_sao || Math.round((t.amount || 0) / 1000)), 0);
 
+  // Vị trí gần nhất trong ca — đối chiếu trực quan, KHÔNG phải bằng chứng
+  // chống gian lận tuyệt đối (điện thoại để 1 chỗ vẫn tiếp tục ping được).
+  const [ping, setPing] = useState(undefined); // undefined = đang tải, null = chưa có
+  const [viTriChuan, setViTriChuan] = useState(null);
+  useEffect(() => {
+    if (!nhanSu?.id) return;
+    let huy = false;
+    Promise.all([fetchLatestPing(nhanSu.id), fetchWorkLocations()]).then(([p, locs]) => {
+      if (huy) return;
+      setPing(p);
+      const bp = boPhanCuaHoSo(nhanSu);
+      const loc = locs.find((l) => l.bo_phan === bp && l.lat != null);
+      setViTriChuan(loc || null);
+    }).catch(() => { if (!huy) setPing(null); });
+    return () => { huy = true; };
+  }, [nhanSu?.id]);
+
   return (
-    <div className="cc2 cc2-sheet-backdrop" onClick={() => !dangGui && onClose?.()}>
+    <div className="cc2 cc2-sheet-backdrop" onClick={() => onClose?.()}>
       <div className="cc2-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="cc2-sheet-head">
           <h2>Chấm công cá nhân</h2>
@@ -58,6 +79,36 @@ export default function ChiTietNhanSuModal({
             <strong>{tongSao ? `${tongSao}⭐` : '—'}</strong>
           </div>
         </div>
+
+        {/* Vị trí hiện tại trong ca — đối chiếu trực quan với Camera an ninh.
+            KHÔNG phải bằng chứng chống gian lận tuyệt đối: điện thoại để
+            1 chỗ vẫn tiếp tục gửi được ping mỗi ~5 phút. */}
+        {ping !== undefined && (
+          <div className="cc2-detail-box" style={{ marginTop: 10 }}>
+            <strong>📍 Vị trí gần nhất trong ca</strong>
+            {ping ? (
+              <>
+                <div>
+                  Cập nhật lúc {new Date(ping.recorded_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                  {viTriChuan?.lat != null && (() => {
+                    const km = haversineKm(ping.lat, ping.lng, viTriChuan.lat, viTriChuan.lng);
+                    const m = km != null ? Math.round(km * 1000) : null;
+                    return m != null ? (
+                      <span style={{ color: m <= viTriChuan.radius_m ? '#1e7e4c' : '#b42318', fontWeight: 800 }}>
+                        {' '}· cách {viTriChuan.name} {m}m {m <= viTriChuan.radius_m ? '✓ đúng vị trí' : '⚠️'}
+                      </span>
+                    ) : null;
+                  })()}
+                </div>
+                <a href={googleMapsLink(ping.lat, ping.lng)} target="_blank" rel="noreferrer" style={{ color: 'var(--cc2-navy)', fontWeight: 700 }}>
+                  Mở bản đồ →
+                </a>
+              </>
+            ) : (
+              <div style={{ color: 'var(--cc2-muted)' }}>Chưa có tín hiệu vị trí trong ca hôm nay.</div>
+            )}
+          </div>
+        )}
 
         {/* Đánh giá Sao — số sao tự nhập + ghi chú, cùng chuẩn với Duyệt việc/Đơn hàng */}
         {coTheTangSao && !laChinhToi && (

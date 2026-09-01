@@ -22,6 +22,7 @@ import AudioUnlockBanner from './components/AudioUnlockBanner';
 import UpdateRequiredModal from './components/UpdateRequiredModal';
 import { notify, showToast, NOTIFY_KINDS } from './lib/toast';
 import { autoEnablePush } from './lib/push';
+import { startLiveTracking } from './lib/liveTracking';
 import { initDeepLinkFromPush } from './lib/deepLink';
 import { AuthProvider, useAuth } from './lib/AuthContext';
 import LoginScreen from './screens/LoginScreen';
@@ -278,6 +279,14 @@ function OpsApp({ onSignOut }) {
   useEffect(() => {
     if (!profile?.id) return;
     autoEnablePush(profile.id).then((kq) => console.log('[Push] Trạng thái đăng ký:', kq));
+  }, [profile?.id]);
+
+  // Giám sát vị trí thời gian thực trong ca — ping mỗi ~5 phút, tự bỏ qua nếu
+  // không thuộc bộ phận theo ca cố định hoặc không đang trong ca (xem
+  // src/lib/liveTracking.js). Dừng lại khi đổi tài khoản/đăng xuất.
+  useEffect(() => {
+    if (!profile?.id) return;
+    return startLiveTracking(profile);
   }, [profile?.id]);
 
   useEffect(() => { loadFeatureFlags().then(setFeatureFlags).catch(() => {}); }, [profile?.id]);

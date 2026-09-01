@@ -13,7 +13,8 @@ import {
 } from '../lib/queries';
 import { useAuth } from '../lib/AuthContext';
 import { hasAnyRole } from '../lib/roles';
-import { getCurrentPositionSmart } from '../lib/geo';
+import { getCurrentPositionSmart, haversineKm } from '../lib/geo';
+import { fetchWorkLocations } from '../lib/workLocations';
 import { enqueue } from '../lib/offlineQueue';
 import { localDateStr } from '../lib/date';
 import { IconClipboard, IconCheck, IconClock, IconQuestion } from '../components/icons/FrogIcons';
@@ -85,6 +86,17 @@ function CheckinModal({ staffName, staffId, defaultBranch, danhSachCa = [], boPh
   const [gpsStatus, setGpsStatus] = useState('dang_lay'); // dang_lay | ok | loi
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  // Cảnh báo khoảng cách TRƯỚC khi bấm — chỉ để nhân viên biết sớm, chặn
+  // THẬT vẫn do trigger sumi_kiem_tra_geofence dưới database quyết (server
+  // luôn là nguồn sự thật cuối cùng, không tin riêng số tính ở đây).
+  const [viTriChuan, setViTriChuan] = useState(null);
+  useEffect(() => {
+    if (!boPhan) return;
+    fetchWorkLocations().then((locs) => {
+      const loc = locs.find((l) => l.bo_phan === boPhan && l.lat != null);
+      setViTriChuan(loc || null);
+    }).catch(() => {});
+  }, [boPhan]);
 
   // Bắt buộc định vị khi vào ca — tự lấy ngay lúc mở popup (giống Kết thúc ca).
   const captureGps = async () => {
@@ -209,6 +221,18 @@ function CheckinModal({ staffName, staffId, defaultBranch, danhSachCa = [], boPh
               ✓ Đã lấy: {gpsCoords}{gpsAccuracy ? ` · sai số ${gpsAccuracy}m` : ''}
             </div>
           )}
+          {gpsStatus === 'ok' && viTriChuan && gpsCoords && (() => {
+            const [lat, lng] = gpsCoords.split(',').map(Number);
+            const km = haversineKm(lat, lng, viTriChuan.lat, viTriChuan.lng);
+            const m = km != null ? Math.round(km * 1000) : null;
+            if (m == null) return null;
+            const trongVung = m <= viTriChuan.radius_m;
+            return (
+              <div style={{ fontSize: 12, fontWeight: 700, marginTop: 4, color: trongVung ? '#09663d' : '#d32f2f' }}>
+                {trongVung ? '✓' : '⚠️'} Cách {viTriChuan.name} khoảng {m}m {trongVung ? '' : `(cho phép tối đa ${viTriChuan.radius_m}m — hệ thống sẽ từ chối chấm công)`}
+              </div>
+            );
+          })()}
           {gpsStatus === 'loi' && (
             <button
               onClick={captureGps}

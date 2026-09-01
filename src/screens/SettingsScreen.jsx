@@ -12,6 +12,7 @@ import { fetchMyProfile, updateMyProfile, fetchShopSettings, updateShopSettings,
 import { translateAuthError } from '../lib/authErrors';
 import { hasAnyRole } from '../lib/roles';
 import { getCurrentPosition } from '../lib/geo';
+import { fetchWorkLocations, setWorkLocationCoords } from '../lib/workLocations';
 import { IconMapPin, IconSettings, IconBell, IconDownload } from '../components/icons/FrogIcons';
 import { localDateStr } from '../lib/date';
 import { ROLE_META, ROLE_OPTIONS, ROLE_PERMISSIONS } from '../lib/roles';
@@ -241,6 +242,7 @@ function AuditLogSection() {
 
 const ADMIN_TABS = [
   { key: 'location', label: 'Vị trí & chi phí giao hàng' },
+  { key: 'geofence', label: 'Vị trí chấm công' },
   { key: 'audit', label: 'Nhật ký hoạt động' },
   { key: 'backup', label: 'Sao lưu dữ liệu' },
 ];
@@ -284,12 +286,84 @@ function BackupSection() {
   );
 }
 
+// Hiệu chuẩn toạ độ chuẩn cho Geofencing chấm công — đứng TẠI ĐÚNG địa điểm
+// rồi bấm "Lấy vị trí hiện tại", vì đây sẽ là mốc để chặn/cho phép chấm công
+// của cả bộ phận đó (xem migration 202609030000, trigger sumi_kiem_tra_geofence
+// fail-open khi chưa hiệu chuẩn — chưa bấm gì thì không ai bị chặn cả).
+function WorkLocationRow({ loc, onSaved }) {
+  const [radiusM, setRadiusM] = useState(String(loc.radius_m));
+  const [pendingCoords, setPendingCoords] = useState(loc.lat != null ? { lat: loc.lat, lng: loc.lng } : null);
+  const [locating, setLocating] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [saved, setSaved] = useState(false);
+
+  const handleLocate = async () => {
+    setLocating(true); setError('');
+    const pos = await getCurrentPosition();
+    setLocating(false);
+    if (!pos) { setError('Không lấy được vị trí — kiểm tra đã cho phép GPS chưa.'); return; }
+    setPendingCoords(pos);
+  };
+
+  const handleSave = async () => {
+    if (!pendingCoords) { setError('Bấm "Lấy vị trí hiện tại" trước khi lưu.'); return; }
+    setSaving(true); setError(''); setSaved(false);
+    try {
+      await setWorkLocationCoords(loc.id, { lat: pendingCoords.lat, lng: pendingCoords.lng, radiusM: Number(radiusM) || 20 });
+      setSaved(true);
+      onSaved?.();
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '10px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+      <div style={{ font: 'var(--text-body)', fontWeight: 700, color: 'var(--text-primary)' }}>{loc.name}</div>
+      <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>
+        {pendingCoords ? `${pendingCoords.lat.toFixed(5)}, ${pendingCoords.lng.toFixed(5)}` : 'Chưa hiệu chuẩn — chưa chặn ai chấm công sai chỗ'}
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <Button variant="secondary" size="sm" onClick={handleLocate} disabled={locating}>
+          {locating ? 'Đang lấy vị trí...' : <><IconMapPin size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Lấy vị trí hiện tại</>}
+        </Button>
+        <Input label="Bán kính cho phép (m)" type="number" value={radiusM} onChange={(e) => setRadiusM(e.target.value)} style={{ width: 140 }} />
+        <Button variant="primary" size="sm" onClick={handleSave} disabled={saving || !pendingCoords}>{saving ? 'Đang lưu...' : 'Lưu toạ độ chuẩn'}</Button>
+      </div>
+      {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
+      {saved && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-success)' }}>Đã lưu!</div>}
+    </div>
+  );
+}
+
+function WorkLocationsSection() {
+  const [locs, setLocs] = useState(null);
+  const [error, setError] = useState('');
+  const load = () => { fetchWorkLocations().then(setLocs).catch((e) => setError(e.message)); };
+  useEffect(load, []);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>
+        Toạ độ chuẩn để chặn chấm công sai vị trí (Geofencing) — sai lệch quá bán kính cho phép sẽ bị từ chối. Đứng tại đúng địa điểm rồi bấm "Lấy vị trí hiện tại".
+      </div>
+      {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
+      {!locs && !error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Đang tải...</div>}
+      {locs?.map((loc) => <WorkLocationRow key={loc.id} loc={loc} onSaved={load} />)}
+    </div>
+  );
+}
+
 function AdminSection() {
   const [tab, setTab] = useState('location');
   return (
     <Section title="Quản trị (Chủ sở hữu)">
       <Tabs tabs={ADMIN_TABS} active={tab} onChange={setTab} />
       {tab === 'location' && <ShopLocationSection />}
+      {tab === 'geofence' && <WorkLocationsSection />}
       {tab === 'audit' && <AuditLogSection />}
       {tab === 'backup' && <BackupSection />}
     </Section>
