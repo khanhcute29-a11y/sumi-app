@@ -12,7 +12,7 @@ import { fetchMyProfile, updateMyProfile, fetchShopSettings, updateShopSettings,
 import { translateAuthError } from '../lib/authErrors';
 import { hasAnyRole } from '../lib/roles';
 import { getCurrentPosition } from '../lib/geo';
-import { fetchWorkLocations, setWorkLocationCoords } from '../lib/workLocations';
+import { fetchWorkLocations, setWorkLocationCoords, addWorkLocation, removeWorkLocation, parseTextToaDo, BO_PHAN_OPTIONS } from '../lib/workLocations';
 import { IconMapPin, IconSettings, IconBell, IconDownload } from '../components/icons/FrogIcons';
 import { localDateStr } from '../lib/date';
 import { ROLE_META, ROLE_OPTIONS, ROLE_PERMISSIONS } from '../lib/roles';
@@ -286,15 +286,24 @@ function BackupSection() {
   );
 }
 
-// Hiệu chuẩn toạ độ chuẩn cho Geofencing chấm công — đứng TẠI ĐÚNG địa điểm
-// rồi bấm "Lấy vị trí hiện tại", vì đây sẽ là mốc để chặn/cho phép chấm công
-// của cả bộ phận đó (xem migration 202609030000, trigger sumi_kiem_tra_geofence
-// fail-open khi chưa hiệu chuẩn — chưa bấm gì thì không ai bị chặn cả).
+// Hiệu chuẩn toạ độ chuẩn cho Geofencing chấm công — 3 cách:
+//   1) Đứng TẠI ĐÚNG địa điểm, bấm "Lấy vị trí hiện tại" (chuẩn nhất).
+//   2) DÁN toạ độ nhân sự gửi trực tiếp tại hiện trường (Zalo/tin nhắn) —
+//      không bắt buộc Giám đốc phải tự có mặt.
+//   3) Nhập tay 2 ô Vĩ độ/Kinh độ nếu đã biết số chính xác.
+// Đây là mốc để chặn/cho phép chấm công của cả bộ phận đó (xem migration
+// 202609030000, trigger sumi_kiem_tra_geofence fail-open khi chưa hiệu chuẩn
+// — chưa bấm gì thì không ai bị chặn cả).
 function WorkLocationRow({ loc, onSaved }) {
+  const [name, setName] = useState(loc.name);
   const [radiusM, setRadiusM] = useState(String(loc.radius_m));
-  const [pendingCoords, setPendingCoords] = useState(loc.lat != null ? { lat: loc.lat, lng: loc.lng } : null);
+  const [lat, setLat] = useState(loc.lat != null ? String(loc.lat) : '');
+  const [lng, setLng] = useState(loc.lng != null ? String(loc.lng) : '');
+  const [pasteText, setPasteText] = useState('');
+  const [pasteErr, setPasteErr] = useState('');
   const [locating, setLocating] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
 
@@ -303,14 +312,25 @@ function WorkLocationRow({ loc, onSaved }) {
     const pos = await getCurrentPosition();
     setLocating(false);
     if (!pos) { setError('Không lấy được vị trí — kiểm tra đã cho phép GPS chưa.'); return; }
-    setPendingCoords(pos);
+    setLat(String(pos.lat)); setLng(String(pos.lng));
+  };
+
+  const handleApplyPaste = () => {
+    setPasteErr('');
+    const parsed = parseTextToaDo(pasteText);
+    if (!parsed) { setPasteErr('Không đọc được toạ độ — dán dạng "10.912345,106.735432" hoặc link Google Maps.'); return; }
+    setLat(String(parsed.lat)); setLng(String(parsed.lng));
+    setPasteText('');
   };
 
   const handleSave = async () => {
-    if (!pendingCoords) { setError('Bấm "Lấy vị trí hiện tại" trước khi lưu.'); return; }
+    const latN = Number(lat), lngN = Number(lng);
+    if (!lat || !lng || !Number.isFinite(latN) || !Number.isFinite(lngN)) {
+      setError('Chưa có toạ độ hợp lệ — lấy vị trí hiện tại, dán toạ độ, hoặc nhập tay.'); return;
+    }
     setSaving(true); setError(''); setSaved(false);
     try {
-      await setWorkLocationCoords(loc.id, { lat: pendingCoords.lat, lng: pendingCoords.lng, radiusM: Number(radiusM) || 20 });
+      await setWorkLocationCoords(loc.id, { lat: latN, lng: lngN, radiusM: Number(radiusM) || 20, name });
       setSaved(true);
       onSaved?.();
       setTimeout(() => setSaved(false), 2000);
@@ -321,21 +341,129 @@ function WorkLocationRow({ loc, onSaved }) {
     }
   };
 
+  const handleDelete = async () => {
+    if (!window.confirm(`Xoá địa điểm "${loc.name}"? Nhân sự bộ phận này sẽ không còn bị chặn theo điểm này nữa.`)) return;
+    setDeleting(true); setError('');
+    try {
+      await removeWorkLocation(loc.id);
+      onSaved?.();
+    } catch (err) {
+      setError(err.message);
+      setDeleting(false);
+    }
+  };
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '10px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-      <div style={{ font: 'var(--text-body)', fontWeight: 700, color: 'var(--text-primary)' }}>{loc.name}</div>
-      <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>
-        {pendingCoords ? `${pendingCoords.lat.toFixed(5)}, ${pendingCoords.lng.toFixed(5)}` : 'Chưa hiệu chuẩn — chưa chặn ai chấm công sai chỗ'}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '12px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <Input label="Tên địa điểm" value={name} onChange={(e) => setName(e.target.value)} style={{ flex: 1, minWidth: 160 }} />
+        <span style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', paddingBottom: 10 }}>{BO_PHAN_OPTIONS.find((o) => o.value === loc.bo_phan)?.label || loc.bo_phan}</span>
       </div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <Input label="Vĩ độ (lat)" type="number" value={lat} onChange={(e) => setLat(e.target.value)} style={{ width: 150 }} />
+        <Input label="Kinh độ (lng)" type="number" value={lng} onChange={(e) => setLng(e.target.value)} style={{ width: 150 }} />
+        <Input label="Bán kính cho phép (m)" type="number" value={radiusM} onChange={(e) => setRadiusM(e.target.value)} style={{ width: 140 }} />
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <Button variant="secondary" size="sm" onClick={handleLocate} disabled={locating}>
           {locating ? 'Đang lấy vị trí...' : <><IconMapPin size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Lấy vị trí hiện tại</>}
         </Button>
-        <Input label="Bán kính cho phép (m)" type="number" value={radiusM} onChange={(e) => setRadiusM(e.target.value)} style={{ width: 140 }} />
-        <Button variant="primary" size="sm" onClick={handleSave} disabled={saving || !pendingCoords}>{saving ? 'Đang lưu...' : 'Lưu toạ độ chuẩn'}</Button>
+        <span style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>hoặc</span>
+        <Input placeholder="Dán toạ độ nhân sự gửi (VD: 10.912345,106.735432)" value={pasteText} onChange={(e) => setPasteText(e.target.value)} style={{ flex: 1, minWidth: 220 }} />
+        <Button variant="secondary" size="sm" onClick={handleApplyPaste} disabled={!pasteText.trim()}>Áp dụng</Button>
+      </div>
+      {pasteErr && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{pasteErr}</div>}
+
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <Button variant="primary" size="sm" onClick={handleSave} disabled={saving}>{saving ? 'Đang lưu...' : 'Lưu địa điểm'}</Button>
+        <Button variant="ghost" size="sm" onClick={handleDelete} disabled={deleting} style={{ color: 'var(--status-danger)' }}>{deleting ? 'Đang xoá...' : 'Xoá địa điểm'}</Button>
       </div>
       {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
       {saved && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-success)' }}>Đã lưu!</div>}
+    </div>
+  );
+}
+
+function AddWorkLocationForm({ onAdded }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [boPhan, setBoPhan] = useState(BO_PHAN_OPTIONS[0].value);
+  const [lat, setLat] = useState('');
+  const [lng, setLng] = useState('');
+  const [pasteText, setPasteText] = useState('');
+  const [radiusM, setRadiusM] = useState('20');
+  const [locating, setLocating] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleLocate = async () => {
+    setLocating(true); setError('');
+    const pos = await getCurrentPosition();
+    setLocating(false);
+    if (!pos) { setError('Không lấy được vị trí.'); return; }
+    setLat(String(pos.lat)); setLng(String(pos.lng));
+  };
+
+  const handleApplyPaste = () => {
+    const parsed = parseTextToaDo(pasteText);
+    if (!parsed) { setError('Không đọc được toạ độ đã dán.'); return; }
+    setLat(String(parsed.lat)); setLng(String(parsed.lng)); setPasteText(''); setError('');
+  };
+
+  const handleAdd = async () => {
+    if (!name.trim()) { setError('Nhập tên địa điểm.'); return; }
+    setSaving(true); setError('');
+    try {
+      await addWorkLocation({
+        name: name.trim(), boPhan,
+        lat: lat ? Number(lat) : null, lng: lng ? Number(lng) : null,
+        radiusM: Number(radiusM) || 20,
+      });
+      setName(''); setLat(''); setLng(''); setOpen(false);
+      onAdded?.();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <Button variant="secondary" size="sm" onClick={() => setOpen(true)} style={{ alignSelf: 'flex-start', marginTop: 6 }}>
+        + Thêm địa điểm mới
+      </Button>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '12px 0', borderTop: '1px dashed var(--border-default)', marginTop: 6 }}>
+      <div style={{ font: 'var(--text-body)', fontWeight: 700, color: 'var(--text-primary)' }}>Thêm địa điểm mới</div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <Input label="Tên địa điểm" value={name} onChange={(e) => setName(e.target.value)} placeholder="VD: Cửa hàng Dĩ An" style={{ flex: 1, minWidth: 180 }} />
+        <Select label="Bộ phận" value={boPhan} onChange={(e) => setBoPhan(e.target.value)} options={BO_PHAN_OPTIONS} style={{ width: 160 }} />
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <Input label="Vĩ độ (lat)" type="number" value={lat} onChange={(e) => setLat(e.target.value)} style={{ width: 150 }} />
+        <Input label="Kinh độ (lng)" type="number" value={lng} onChange={(e) => setLng(e.target.value)} style={{ width: 150 }} />
+        <Input label="Bán kính (m)" type="number" value={radiusM} onChange={(e) => setRadiusM(e.target.value)} style={{ width: 120 }} />
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <Button variant="secondary" size="sm" onClick={handleLocate} disabled={locating}>
+          {locating ? 'Đang lấy...' : <><IconMapPin size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Vị trí hiện tại</>}
+        </Button>
+        <span style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>hoặc</span>
+        <Input placeholder="Dán toạ độ nhân sự gửi" value={pasteText} onChange={(e) => setPasteText(e.target.value)} style={{ flex: 1, minWidth: 200 }} />
+        <Button variant="secondary" size="sm" onClick={handleApplyPaste} disabled={!pasteText.trim()}>Áp dụng</Button>
+      </div>
+      <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Có thể để trống toạ độ, thêm địa điểm trước rồi hiệu chuẩn sau cũng được.</div>
+      {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <Button variant="primary" size="sm" onClick={handleAdd} disabled={saving}>{saving ? 'Đang thêm...' : 'Thêm địa điểm'}</Button>
+        <Button variant="ghost" size="sm" onClick={() => setOpen(false)} disabled={saving}>Huỷ</Button>
+      </div>
     </div>
   );
 }
@@ -348,11 +476,12 @@ function WorkLocationsSection() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>
-        Toạ độ chuẩn để chặn chấm công sai vị trí (Geofencing) — sai lệch quá bán kính cho phép sẽ bị từ chối. Đứng tại đúng địa điểm rồi bấm "Lấy vị trí hiện tại".
+        Toạ độ chuẩn để chặn chấm công sai vị trí (Geofencing) — sai lệch quá bán kính cho phép sẽ bị từ chối. Đứng tại đúng địa điểm bấm "Lấy vị trí hiện tại", hoặc nhờ nhân sự đang có mặt tại đó gửi định vị (Zalo/tin nhắn) rồi dán vào đây.
       </div>
       {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
       {!locs && !error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Đang tải...</div>}
       {locs?.map((loc) => <WorkLocationRow key={loc.id} loc={loc} onSaved={load} />)}
+      <AddWorkLocationForm onAdded={load} />
     </div>
   );
 }
