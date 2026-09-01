@@ -43,16 +43,38 @@ export async function removeWorkLocation(locationId) {
 }
 
 // Dán 1 chuỗi toạ độ nhân sự gửi tại hiện trường — chấp nhận vài định dạng
-// hay gặp: "10.912345,106.735432" hoặc có khoảng trắng, hoặc dán cả link
-// Google Maps dạng ".../@10.912345,106.735432,17z" hoặc "?q=10.9,106.7".
+// hay gặp: "10.912345,106.735432", có khoảng trắng, dán cả link Google Maps
+// dạng ".../@10.912345,106.735432,17z" hoặc "?q=10.9,106.7", HOẶC kiểu Việt
+// Nam dùng dấu PHẨY làm dấu thập phân — đúng như khi copy dòng toạ độ hiển
+// thị trong mục "Giới thiệu" của app Google Maps: "10,8859880, 106,6989270".
+// LƯU Ý: link rút gọn (goo.gl/maps/..., maps.app.goo.gl/...) KHÔNG chứa toạ
+// độ — phải mở link đó ra rồi copy dòng toạ độ, không dán thẳng link rút gọn.
 export function parseTextToaDo(text) {
   if (!text) return null;
-  const m = String(text).match(/(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/);
-  if (!m) return null;
-  const lat = Number(m[1]);
-  const lng = Number(m[2]);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
-  return { lat, lng };
+  const s = String(text);
+
+  // Kiểu chuẩn quốc tế: dấu chấm thập phân.
+  let m = s.match(/(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/);
+  if (m) {
+    const lat = Number(m[1]);
+    const lng = Number(m[2]);
+    if (Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
+      return { lat, lng };
+    }
+  }
+
+  // Kiểu Việt Nam: dấu phẩy thập phân — chỉ nhận khi có từ 3 chữ số trở lên
+  // sau dấu phẩy (phân biệt với dấu phẩy ngăn cách nghìn, luôn đúng 3 số).
+  m = s.match(/(-?\d{1,3}),(\d{3,8})\s*,?\s+(-?\d{1,3}),(\d{3,8})/);
+  if (m) {
+    const lat = Number(`${m[1]}.${m[2]}`);
+    const lng = Number(`${m[3]}.${m[4]}`);
+    if (Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
+      return { lat, lng };
+    }
+  }
+
+  return null;
 }
 
 export const BO_PHAN_OPTIONS = [

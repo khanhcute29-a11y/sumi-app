@@ -318,7 +318,7 @@ function WorkLocationRow({ loc, onSaved }) {
   const handleApplyPaste = () => {
     setPasteErr('');
     const parsed = parseTextToaDo(pasteText);
-    if (!parsed) { setPasteErr('Không đọc được toạ độ — dán dạng "10.912345,106.735432" hoặc link Google Maps.'); return; }
+    if (!parsed) { setPasteErr('Không đọc được toạ độ — dán dòng số dạng "10.912345,106.735432" (không dán link rút gọn goo.gl/maps).'); return; }
     setLat(String(parsed.lat)); setLng(String(parsed.lng));
     setPasteText('');
   };
@@ -371,7 +371,7 @@ function WorkLocationRow({ loc, onSaved }) {
           {locating ? 'Đang lấy vị trí...' : <><IconMapPin size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Lấy vị trí hiện tại</>}
         </Button>
         <span style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>hoặc</span>
-        <Input placeholder="Dán toạ độ nhân sự gửi (VD: 10.912345,106.735432)" value={pasteText} onChange={(e) => setPasteText(e.target.value)} style={{ flex: 1, minWidth: 220 }} />
+        <Input placeholder="Dán dòng toạ độ (VD: 10.912345,106.735432) — không dán link rút gọn" value={pasteText} onChange={(e) => setPasteText(e.target.value)} style={{ flex: 1, minWidth: 220 }} />
         <Button variant="secondary" size="sm" onClick={handleApplyPaste} disabled={!pasteText.trim()}>Áp dụng</Button>
       </div>
       {pasteErr && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{pasteErr}</div>}
@@ -455,7 +455,7 @@ function AddWorkLocationForm({ onAdded }) {
           {locating ? 'Đang lấy...' : <><IconMapPin size={14} style={{ verticalAlign: '-2px', marginRight: 4 }} />Vị trí hiện tại</>}
         </Button>
         <span style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>hoặc</span>
-        <Input placeholder="Dán toạ độ nhân sự gửi" value={pasteText} onChange={(e) => setPasteText(e.target.value)} style={{ flex: 1, minWidth: 200 }} />
+        <Input placeholder="Dán dòng toạ độ — không dán link rút gọn" value={pasteText} onChange={(e) => setPasteText(e.target.value)} style={{ flex: 1, minWidth: 200 }} />
         <Button variant="secondary" size="sm" onClick={handleApplyPaste} disabled={!pasteText.trim()}>Áp dụng</Button>
       </div>
       <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Có thể để trống toạ độ, thêm địa điểm trước rồi hiệu chuẩn sau cũng được.</div>
@@ -476,7 +476,7 @@ function WorkLocationsSection() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>
-        Toạ độ chuẩn để chặn chấm công sai vị trí (Geofencing) — sai lệch quá bán kính cho phép sẽ bị từ chối. Đứng tại đúng địa điểm bấm "Lấy vị trí hiện tại", hoặc nhờ nhân sự đang có mặt tại đó gửi định vị (Zalo/tin nhắn) rồi dán vào đây.
+        Toạ độ chuẩn để chặn chấm công sai vị trí (Geofencing) — sai lệch quá bán kính cho phép sẽ bị từ chối. Đứng tại đúng địa điểm bấm "Lấy vị trí hiện tại", hoặc nhờ nhân sự đang có mặt tại đó gửi định vị (Zalo/tin nhắn) rồi dán vào đây. Lưu ý: dán ĐÚNG dòng số toạ độ (VD từ mục "Giới thiệu" trong Google Maps, dạng có dấu chấm hoặc dấu phẩy đều được) — không dán link "Chia sẻ" dạng rút gọn (goo.gl/maps/..., maps.app.goo.gl/...) vì link đó không mang theo toạ độ.
       </div>
       {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
       {!locs && !error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Đang tải...</div>}
