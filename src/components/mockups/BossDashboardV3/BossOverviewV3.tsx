@@ -372,6 +372,32 @@ export function BossOverviewV3Inner() {
   const [ledgerTab, setLedgerTab] = useState<'expense' | 'advance'>('expense');
   const [selectedLedgerItem, setSelectedLedgerItem] = useState<any>(null);
 
+  // Tab "Chi hôm nay" / "Lịch sử" của sheet Sổ Cái — tương tự sheet Doanh Thu
+  const [expensePeriodTab, setExpensePeriodTab] = useState<'today' | 'history'>('today');
+  const [expenseHistoryFrom, setExpenseHistoryFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10); });
+  const [expenseHistoryTo, setExpenseHistoryTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [expenseHistoryStreams, setExpenseHistoryStreams] = useState<any[]>([]);
+  const [expenseHistoryTotal, setExpenseHistoryTotal] = useState(0);
+  const [expenseHistoryLoading, setExpenseHistoryLoading] = useState(false);
+  const [expenseHistoryError, setExpenseHistoryError] = useState('');
+
+  const loadExpenseHistory = async () => {
+    if (!expenseHistoryFrom || !expenseHistoryTo) return;
+    setExpenseHistoryLoading(true); setExpenseHistoryError('');
+    try {
+      const claims = await fetchExpenseAndAdvanceLedgerToday({
+        from: `${expenseHistoryFrom}T00:00:00`,
+        to: `${expenseHistoryTo}T23:59:59.999`,
+      });
+      setExpenseHistoryStreams(claims.map(mapLedgerRow));
+      setExpenseHistoryTotal(claims.reduce((s: number, c: any) => s + (Number(c.amount) || 0), 0));
+    } catch (e: any) {
+      setExpenseHistoryError(e.message || 'Không tải được lịch sử chi.');
+    } finally {
+      setExpenseHistoryLoading(false);
+    }
+  };
+
   // ── Khoá cuộn nền + vuốt kéo xuống để đóng Bottom Sheet (dùng chung cho mọi sheet) ──
   const [dragY, setDragY] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -1598,77 +1624,130 @@ export function BossOverviewV3Inner() {
         {/* ========================================================================= */}
         {/* ── BOTTOM SHEET: 2. SỔ CÁI KHOẢN CHI THỰC TẾ ── */}
         {/* ========================================================================= */}
-        {activeSheet === 'expense_detail' && (
-          <div className="sheet-overlay" onClick={() => { setActiveSheet(null); setSelectedLedgerItem(null); }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
-            <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
-              <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
-                {SHEET_HANDLE}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
-                  <div>
-                    <div style={{ fontSize: 15, fontWeight: 900, color: '#dc2626' }}>📑 Sổ Cái Khoản Chi Tiêu Hôm Nay</div>
-                    <div style={{ fontSize: 11, color: '#725f50' }}>Tổng chi: {formatVND(totalExpense)}</div>
+        {activeSheet === 'expense_detail' && (() => {
+          const activeStreams = expensePeriodTab === 'history' ? expenseHistoryStreams : expenseStreams;
+          const activeTotal = expensePeriodTab === 'history' ? expenseHistoryTotal : totalExpense;
+          const opStreams = activeStreams.filter((e: any) => e.source !== 'advance');
+          const advStreams = activeStreams.filter((e: any) => e.source === 'advance');
+          const opTotal = opStreams.reduce((s: number, e: any) => s + e.amount, 0);
+          const advTotal = advStreams.reduce((s: number, e: any) => s + e.amount, 0);
+          const shown = activeStreams.filter((e: any) => (ledgerTab === 'advance' ? e.source === 'advance' : e.source !== 'advance'));
+          return (
+            <div className="sheet-overlay" onClick={() => { setActiveSheet(null); setSelectedLedgerItem(null); }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
+              <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
+                <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
+                  {SHEET_HANDLE}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
+                    <div>
+                      <div style={{ fontSize: 15, fontWeight: 900, color: '#dc2626' }}>📑 Sổ Cái Khoản Chi</div>
+                      <div style={{ fontSize: 11, color: '#725f50' }}>Tổng chi: {formatVND(activeTotal)}</div>
+                    </div>
+                    <button onClick={() => { setActiveSheet(null); setSelectedLedgerItem(null); }} aria-label="Quay lại" style={{ order: -1, flexShrink: 0, width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer' }}>‹</button>
                   </div>
-                  <button onClick={() => { setActiveSheet(null); setSelectedLedgerItem(null); }} aria-label="Quay lại" style={{ order: -1, flexShrink: 0, width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer' }}>‹</button>
-                </div>
 
-                {/* 2 luồng: Chi hoạt động kinh doanh / Tạm ứng lương */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, padding: '10px 14px 0' }}>
-                  <button onClick={() => setLedgerTab('expense')} style={{
-                    padding: '8px 4px', borderRadius: 12, border: ledgerTab === 'expense' ? '2px solid #dc2626' : '1px solid #eadcca',
-                    background: ledgerTab === 'expense' ? '#fef2f2' : '#fff', color: ledgerTab === 'expense' ? '#dc2626' : '#725f50',
-                    fontSize: 11.5, fontWeight: 900, cursor: 'pointer',
-                  }}>
-                    💸 Chi hoạt động ({expenseStreams.filter((e: any) => e.source !== 'advance').length})
-                  </button>
-                  <button onClick={() => setLedgerTab('advance')} style={{
-                    padding: '8px 4px', borderRadius: 12, border: ledgerTab === 'advance' ? '2px solid #b45309' : '1px solid #eadcca',
-                    background: ledgerTab === 'advance' ? '#fff7ed' : '#fff', color: ledgerTab === 'advance' ? '#b45309' : '#725f50',
-                    fontSize: 11.5, fontWeight: 900, cursor: 'pointer',
-                  }}>
-                    🏦 Tạm ứng ({expenseStreams.filter((e: any) => e.source === 'advance').length})
-                  </button>
-                </div>
-              </div>
+                  {/* 2 module: Chi hôm nay / Lịch sử */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, padding: '10px 14px 0' }}>
+                    <button onClick={() => setExpensePeriodTab('today')} style={{
+                      padding: '8px 4px', borderRadius: 12, border: expensePeriodTab === 'today' ? '2px solid #dc2626' : '1px solid #eadcca',
+                      background: expensePeriodTab === 'today' ? '#fef2f2' : '#fff', color: expensePeriodTab === 'today' ? '#dc2626' : '#725f50',
+                      fontSize: 11.5, fontWeight: 900, cursor: 'pointer',
+                    }}>
+                      📅 Chi hôm nay
+                    </button>
+                    <button onClick={() => { setExpensePeriodTab('history'); if (!expenseHistoryStreams.length && !expenseHistoryLoading) loadExpenseHistory(); }} style={{
+                      padding: '8px 4px', borderRadius: 12, border: expensePeriodTab === 'history' ? '2px solid #dc2626' : '1px solid #eadcca',
+                      background: expensePeriodTab === 'history' ? '#fef2f2' : '#fff', color: expensePeriodTab === 'history' ? '#dc2626' : '#725f50',
+                      fontSize: 11.5, fontWeight: 900, cursor: 'pointer',
+                    }}>
+                      🕘 Lịch sử
+                    </button>
+                  </div>
 
-              <div style={sheetBodyStyle({ paddingTop: 12 })}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {expenseStreams.filter((e: any) => (ledgerTab === 'advance' ? e.source === 'advance' : e.source !== 'advance')).length === 0 && (
-                    <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>
-                      {ledgerTab === 'advance' ? 'Chưa có tạm ứng nào hôm nay.' : 'Chưa có khoản chi hoạt động nào hôm nay.'}
+                  {expensePeriodTab === 'history' && (
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', padding: '10px 14px 0' }}>
+                      <label style={{ flex: 1, fontSize: 11, fontWeight: 800, color: '#725f50' }}>
+                        Từ ngày
+                        <input type="date" value={expenseHistoryFrom} max={expenseHistoryTo} onChange={e => setExpenseHistoryFrom(e.target.value)}
+                          style={{ display: 'block', width: '100%', marginTop: 4, minHeight: 38, borderRadius: 10, border: '1px solid #eadcca', padding: '0 8px', fontSize: 12.5, fontFamily: 'inherit' }} />
+                      </label>
+                      <label style={{ flex: 1, fontSize: 11, fontWeight: 800, color: '#725f50' }}>
+                        Đến ngày
+                        <input type="date" value={expenseHistoryTo} min={expenseHistoryFrom} max={new Date().toISOString().slice(0, 10)} onChange={e => setExpenseHistoryTo(e.target.value)}
+                          style={{ display: 'block', width: '100%', marginTop: 4, minHeight: 38, borderRadius: 10, border: '1px solid #eadcca', padding: '0 8px', fontSize: 12.5, fontFamily: 'inherit' }} />
+                      </label>
+                      <button onClick={loadExpenseHistory} disabled={expenseHistoryLoading} style={{ minHeight: 38, padding: '0 14px', borderRadius: 10, border: 'none', background: '#dc2626', color: '#fff', fontWeight: 900, fontSize: 12.5, cursor: 'pointer' }}>
+                        {expenseHistoryLoading ? '…' : 'Xem'}
+                      </button>
                     </div>
                   )}
-                  {expenseStreams.filter((e: any) => (ledgerTab === 'advance' ? e.source === 'advance' : e.source !== 'advance')).map((exp: any) => (
-                    <div key={exp.id} onClick={() => setSelectedLedgerItem(exp)} style={{ background: '#fff', border: '1.5px solid #fecaca', borderRadius: 14, padding: 12, cursor: 'pointer' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <UserAvatar profile={exp.claimantProfile} size={34} />
-                          <div>
-                            <div style={{ fontSize: 12.5, fontWeight: 900, color: '#2d1c10' }}>{exp.title}</div>
-                            <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>{exp.claimantName} · <strong>{exp.category}</strong> · {exp.time}</div>
+
+                  {/* Phân luồng: 2 khối tổng tiền + số lượng, bấm để lọc danh sách bên dưới */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, padding: '10px 14px 0' }}>
+                    <button onClick={() => setLedgerTab('expense')} style={{
+                      padding: '8px 4px', borderRadius: 12, border: ledgerTab === 'expense' ? '2px solid #dc2626' : '1px solid #eadcca',
+                      background: ledgerTab === 'expense' ? '#fef2f2' : '#fff', color: ledgerTab === 'expense' ? '#dc2626' : '#725f50',
+                      fontSize: 11.5, fontWeight: 900, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 2,
+                    }}>
+                      <span>💸 Chi hoạt động ({opStreams.length})</span>
+                      <span style={{ fontSize: 13, fontWeight: 900 }}>{formatVND(opTotal)}</span>
+                    </button>
+                    <button onClick={() => setLedgerTab('advance')} style={{
+                      padding: '8px 4px', borderRadius: 12, border: ledgerTab === 'advance' ? '2px solid #b45309' : '1px solid #eadcca',
+                      background: ledgerTab === 'advance' ? '#fff7ed' : '#fff', color: ledgerTab === 'advance' ? '#b45309' : '#725f50',
+                      fontSize: 11.5, fontWeight: 900, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 2,
+                    }}>
+                      <span>🏦 Tạm ứng ({advStreams.length})</span>
+                      <span style={{ fontSize: 13, fontWeight: 900 }}>{formatVND(advTotal)}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div style={sheetBodyStyle({ paddingTop: 12 })}>
+                  {expensePeriodTab === 'history' && expenseHistoryError && (
+                    <div style={{ color: '#dc2626', fontSize: 12.5, fontWeight: 700, marginBottom: 10 }}>⚠️ {expenseHistoryError}</div>
+                  )}
+                  {expensePeriodTab === 'history' && expenseHistoryLoading && (
+                    <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Đang tải…</div>
+                  )}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {!(expensePeriodTab === 'history' && expenseHistoryLoading) && shown.length === 0 && (
+                      <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>
+                        {ledgerTab === 'advance' ? 'Không có tạm ứng nào trong khoảng này.' : 'Không có khoản chi hoạt động nào trong khoảng này.'}
+                      </div>
+                    )}
+                    {shown.map((exp: any) => (
+                      <div key={exp.id} onClick={() => setSelectedLedgerItem(exp)} style={{ background: '#fff', border: '1.5px solid #fecaca', borderRadius: 14, padding: 12, cursor: 'pointer' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <UserAvatar profile={exp.claimantProfile} size={34} />
+                            <div>
+                              <div style={{ fontSize: 12.5, fontWeight: 900, color: '#2d1c10' }}>{exp.title}</div>
+                              <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>{exp.claimantName} · <strong>{exp.category}</strong> · {exp.time}</div>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <div style={{ fontSize: 13.5, fontWeight: 900, color: '#dc2626' }}>-{formatVND(exp.amount)}</div>
+                            <ChevronRight size={16} color="#a08060" />
                           </div>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <div style={{ fontSize: 13.5, fontWeight: 900, color: '#dc2626' }}>-{formatVND(exp.amount)}</div>
-                          <ChevronRight size={16} color="#a08060" />
-                        </div>
+                        {exp.status === 'pending_director' && (
+                          <div style={{ display: 'flex', gap: 6, marginTop: 8 }} onClick={(e) => e.stopPropagation()}>
+                            <button onClick={() => handleReviewExpense(exp.id, true, exp.source)} style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 8, padding: '7px 0', fontWeight: 900, fontSize: 11.5, cursor: 'pointer' }}>
+                              ✓ Duyệt Chi
+                            </button>
+                            <button onClick={() => handleReviewExpense(exp.id, false, exp.source)} style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, padding: '7px 0', fontWeight: 900, fontSize: 11.5, cursor: 'pointer' }}>
+                              ✕ Từ Chối
+                            </button>
+                          </div>
+                        )}
                       </div>
-                      {exp.status === 'pending_director' && (
-                        <div style={{ display: 'flex', gap: 6, marginTop: 8 }} onClick={(e) => e.stopPropagation()}>
-                          <button onClick={() => handleReviewExpense(exp.id, true, exp.source)} style={{ flex: 1, background: '#15803d', color: '#fff', border: 'none', borderRadius: 8, padding: '7px 0', fontWeight: 900, fontSize: 11.5, cursor: 'pointer' }}>
-                            ✓ Duyệt Chi
-                          </button>
-                          <button onClick={() => handleReviewExpense(exp.id, false, exp.source)} style={{ flex: 1, background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 8, padding: '7px 0', fontWeight: 900, fontSize: 11.5, cursor: 'pointer' }}>
-                            ✕ Từ Chối
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Lớp "thông tin cuối" của 1 khoản chi/tạm ứng — bấm 1 dòng trong Sổ
             Cái mở ra đây, nằm TRÊN sheet Sổ Cái (z-index cao hơn 1200). Đóng

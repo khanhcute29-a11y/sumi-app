@@ -131,11 +131,12 @@ export async function reviewExpenseClaim(id, approve, note) {
 // Trước đây widget "Sổ Cái Khoản Chi Tiêu Hôm Nay" chỉ đọc expense_claims nên
 // tạm ứng lương đã chi (salary_advance_requests) "biến mất" khỏi mắt Giám đốc
 // dù đã ghi sổ đúng trong database (có cashbook_entry_id, đã trừ lương).
-export async function fetchExpenseAndAdvanceLedgerToday() {
-  const since = `${todayStr()}T00:00:00`;
+export async function fetchExpenseAndAdvanceLedgerToday({ from, to } = {}) {
+  const since = from || `${todayStr()}T00:00:00`;
+  const until = to || new Date().toISOString();
   const [claimsRes, advancesRes] = await Promise.all([
-    supabase.from('expense_claims').select('*').gte('created_at', since).order('created_at', { ascending: false }),
-    supabase.from('salary_advance_requests').select('*').gte('created_at', since).order('created_at', { ascending: false }),
+    supabase.from('expense_claims').select('*').gte('created_at', since).lte('created_at', until).order('created_at', { ascending: false }),
+    supabase.from('salary_advance_requests').select('*').gte('created_at', since).lte('created_at', until).order('created_at', { ascending: false }),
   ]);
   if (claimsRes.error) throw claimsRes.error;
   if (advancesRes.error) throw advancesRes.error;
