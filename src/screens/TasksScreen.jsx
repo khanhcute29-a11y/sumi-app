@@ -3,7 +3,6 @@ import { useAuth } from '../lib/AuthContext';
 import { hasAnyRole } from '../lib/roles';
 import { supabase } from '../lib/supabaseClient';
 import { fetchAllProfiles } from '../lib/queries';
-import { Input } from '../components/forms/Input';
 import { Select } from '../components/forms/Select';
 import { DailyChecklistTab } from '../components/tasks/DailyChecklistTab';
 import CongViecV2 from '../components/tasks/v2/CongViecV2';
@@ -95,7 +94,6 @@ export default function TasksScreen() {
   const [staffList, setStaffList] = useState([]);
   const [selectedStaffId, setSelectedStaffId] = useState('');
   const [stationFilter, setStationFilter] = useState('');
-  const [orderCodeFilter, setOrderCodeFilter] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [metrics, setMetrics] = useState({ dangLam: 0, choDuyet: 0, xongHomNay: 0 });
 
@@ -165,7 +163,6 @@ export default function TasksScreen() {
   // Reset về trạng thái tổng quan ban đầu
   const handleResetToOverview = () => {
     setStationFilter('');
-    setOrderCodeFilter('');
     setSelectedStaffId(profile?.id || '');
     setTab('assigned');
   };
@@ -176,7 +173,7 @@ export default function TasksScreen() {
   const viewingStaffName = viewingStaff?.full_name || (viewingStaffId === profile?.id ? 'Chính tôi' : '');
   const viewingStation = viewingStaff?.station || '';
 
-  const hasActiveFilter = !!stationFilter || !!orderCodeFilter || isViewingOtherStaff;
+  const hasActiveFilter = !!stationFilter || isViewingOtherStaff;
 
   const staffOptions = [
     ...(profile?.id ? [{ value: profile.id, label: `👤 Việc của tôi (${profile.full_name || 'Quản lý'})` }] : []),
@@ -263,14 +260,6 @@ export default function TasksScreen() {
               value={selectedStaffId || profile?.id || ''}
               onChange={setSelectedStaffId}
               options={staffOptions}
-            />
-          </div>
-          <div style={{ flex: '1 1 160px', minWidth: 130 }}>
-            <Input
-              label="Mã đơn"
-              placeholder="VD: DH001"
-              value={orderCodeFilter}
-              onChange={(e) => setOrderCodeFilter(e.target.value)}
             />
           </div>
           {hasActiveFilter && (
