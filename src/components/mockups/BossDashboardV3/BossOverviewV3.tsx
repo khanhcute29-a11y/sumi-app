@@ -82,6 +82,9 @@ import {
   reviewTaskExemption,
   fetchTodayShiftReports,
   fetchCompletedTasksReport,
+  fetchCompletedOrderWorkReport,
+  fetchTodayViolationsReport,
+  fetchTodayChecklistReport,
   fetchWeeklyScheduleAllStations,
   fetchOrderHearts,
   addOrderHeart,
@@ -501,6 +504,14 @@ export function BossOverviewV3Inner() {
   // ── Dữ liệu thật: báo cáo cuối ca hôm nay (staff_shift_reports) ──
   const [shiftReports, setShiftReports] = useState<any[]>([]);
   const [completedTasksToday, setCompletedTasksToday] = useState<any[]>([]);
+  // Thêm 3 mục cho sheet Báo Cáo Ngày: đơn hàng luồng order_work, vi phạm nội
+  // quy, checklist hàng ngày — KHÔNG trùng với "Việc hoàn thành" (chỉ
+  // assigned/adhoc) hay bảng chấm công đã có ở card riêng ngoài trang chủ.
+  const [orderWorkTasksToday, setOrderWorkTasksToday] = useState<any[]>([]);
+  const [violationsToday, setViolationsToday] = useState<any[]>([]);
+  const [checklistToday, setChecklistToday] = useState<any[]>([]);
+  const [historyOrderWorkTasks, setHistoryOrderWorkTasks] = useState<any[]>([]);
+  const [historyViolations, setHistoryViolations] = useState<any[]>([]);
 
   // Tab "Hôm nay" / "Lịch sử" của sheet Báo Cáo Ngày + chi tiết 1 mục
   const [reportTab, setReportTab] = useState<'today' | 'history'>('today');
@@ -516,12 +527,16 @@ export function BossOverviewV3Inner() {
     if (!reportHistoryFrom || !reportHistoryTo) return;
     setReportHistoryLoading(true); setReportHistoryError('');
     try {
-      const [tasks, reports] = await Promise.all([
+      const [tasks, reports, orderWorkTasks, violations] = await Promise.all([
         fetchCompletedTasksReport({ from: `${reportHistoryFrom}T00:00:00`, to: `${reportHistoryTo}T23:59:59.999` }),
         fetchTodayShiftReports({ from: reportHistoryFrom, to: reportHistoryTo }),
+        fetchCompletedOrderWorkReport({ from: `${reportHistoryFrom}T00:00:00`, to: `${reportHistoryTo}T23:59:59.999` }),
+        fetchTodayViolationsReport({ from: reportHistoryFrom, to: reportHistoryTo }),
       ]);
       setHistoryCompletedTasks(tasks);
       setHistoryShiftReports(reports);
+      setHistoryOrderWorkTasks(orderWorkTasks);
+      setHistoryViolations(violations);
     } catch (e: any) {
       setReportHistoryError(e.message || 'Không tải được lịch sử báo cáo.');
     } finally {
@@ -550,7 +565,7 @@ export function BossOverviewV3Inner() {
     setLoading(true);
     setLoadError('');
     try {
-      const [rev, duTinh, claims, status, staffOptions, orders, posts, advances, leaves, reports, schedule, editRequests, overtimes, completedTasks, taskExemptions] = await Promise.all([
+      const [rev, duTinh, claims, status, staffOptions, orders, posts, advances, leaves, reports, schedule, editRequests, overtimes, completedTasks, taskExemptions, orderWorkTasks, violations, checklist] = await Promise.all([
         fetchRevenueByChannel(),
         fetchDoanhThuDuTinh(),
         fetchExpenseAndAdvanceLedgerToday(),
@@ -566,6 +581,9 @@ export function BossOverviewV3Inner() {
         fetchPendingOvertimeRequests(),
         fetchCompletedTasksReport(),
         fetchPendingTaskExemptions(),
+        fetchCompletedOrderWorkReport(),
+        fetchTodayViolationsReport(),
+        fetchTodayChecklistReport(),
       ]);
 
       setRevenueStreams(rev.channels.map((c) => ({ id: c.key, channel: c.title, amount: c.amount, percentage: c.percentage, icon: c.icon, note: `${c.count} đơn hoàn thành`, orders: c.orders })));
@@ -595,6 +613,9 @@ export function BossOverviewV3Inner() {
       setCompletedTasksToday(completedTasks);
       setPendingTaskExemptions(taskExemptions);
       setShiftReports(reports);
+      setOrderWorkTasksToday(orderWorkTasks);
+      setViolationsToday(violations);
+      setChecklistToday(checklist);
       setWeeklySchedule(schedule);
     } catch (e: any) {
       setLoadError(e.message || 'Không tải được dữ liệu thật, thử lại sau.');
@@ -2076,8 +2097,12 @@ export function BossOverviewV3Inner() {
         {activeSheet === 'report_sheet' && (() => {
           const tasksShown = reportTab === 'history' ? historyCompletedTasks : completedTasksToday;
           const reportsShown = reportTab === 'history' ? historyShiftReports : shiftReports;
+          const orderWorkShown = reportTab === 'history' ? historyOrderWorkTasks : orderWorkTasksToday;
+          const violationsShown = reportTab === 'history' ? historyViolations : violationsToday;
           const taskGroups = groupByBoPhan(tasksShown, (t: any) => t.assignee);
           const reportGroups = groupByBoPhan(reportsShown, (r: any) => ({ station: r.station, role: r.staff_role }));
+          const orderWorkGroups = groupByBoPhan(orderWorkShown, (t: any) => t.assignee);
+          const violationGroups = groupByBoPhan(violationsShown, (v: any) => ({ station: v.station, role: v.staff_role }));
           const boPhanOrder = ['bakery', 'xuong41', 'xuong42', 'van_tai', '_khac'];
           return (
             <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
@@ -2200,6 +2225,82 @@ export function BossOverviewV3Inner() {
                           </div>
                         ))}
                       </div>
+
+                      {/* 3. Đơn hàng luồng order_work đã hoàn thành — phân
+                          luồng theo bộ phận, có cờ trễ hẹn (t.late) sẵn có. */}
+                      <div style={{ marginTop: 18 }}>
+                        <div style={{ fontSize: 12, fontWeight: 900, color: '#0369a1', textTransform: 'uppercase', marginBottom: 8 }}>
+                          📦 Đơn hàng hoàn thành ({orderWorkShown.length})
+                        </div>
+                        {orderWorkShown.length === 0 && (
+                          <div style={{ textAlign: 'center', padding: '12px 0', color: '#725f50', fontSize: 12.5 }}>Chưa có đơn nào hoàn thành trong khoảng này.</div>
+                        )}
+                        {boPhanOrder.filter((bp) => orderWorkGroups[bp]?.length).map((bp) => (
+                          <div key={bp} style={{ marginBottom: 12 }}>
+                            <div style={{ fontSize: 11, fontWeight: 800, color: '#a08060', marginBottom: 6 }}>{tenBoPhan(bp)} ({orderWorkGroups[bp].length})</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              {orderWorkGroups[bp].map((t: any) => (
+                                <button key={t.id} onClick={() => setSelectedReportItem({ kind: 'task', item: t })}
+                                  style={{ textAlign: 'left', width: '100%', background: t.late ? '#fef2f2' : '#f0f9ff', border: `1.5px solid ${t.late ? '#fecaca' : '#bae6fd'}`, borderRadius: 12, padding: 10, cursor: 'pointer' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                    <div style={{ minWidth: 0 }}>
+                                      <div style={{ fontSize: 12.5, fontWeight: 900, color: '#2d1c10' }}>{t.title}{t.late && <span style={{ color: '#dc2626' }}> · Trễ hẹn</span>}</div>
+                                      <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>
+                                        👤 {t.assignee?.full_name || 'Nhân viên'}{t.order_code ? ` · Đơn ${t.order_code}` : ''} · {new Date(t.completed_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                                      </div>
+                                    </div>
+                                    <ChevronRight size={16} color="#a08060" />
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* 4. Vi phạm nội quy — chỉ đọc, không mở chi tiết. */}
+                      <div style={{ marginTop: 18 }}>
+                        <div style={{ fontSize: 12, fontWeight: 900, color: '#dc2626', textTransform: 'uppercase', marginBottom: 8 }}>
+                          ⚠️ Vi phạm nội quy ({violationsShown.length})
+                        </div>
+                        {violationsShown.length === 0 && (
+                          <div style={{ textAlign: 'center', padding: '12px 0', color: '#725f50', fontSize: 12.5 }}>Không có vi phạm nào trong khoảng này.</div>
+                        )}
+                        {boPhanOrder.filter((bp) => violationGroups[bp]?.length).map((bp) => (
+                          <div key={bp} style={{ marginBottom: 12 }}>
+                            <div style={{ fontSize: 11, fontWeight: 800, color: '#a08060', marginBottom: 6 }}>{tenBoPhan(bp)} ({violationGroups[bp].length})</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              {violationGroups[bp].map((v: any) => (
+                                <div key={v.id} style={{ background: '#fef2f2', border: '1.5px solid #fecaca', borderRadius: 12, padding: 10 }}>
+                                  <div style={{ fontSize: 12.5, fontWeight: 900, color: '#2d1c10' }}>👤 {v.staff_name} — {v.title}</div>
+                                  {v.note && <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>{v.note}</div>}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* 5. Checklist hàng ngày — CHỈ tab "Hôm nay" (xem lý do
+                          trong bossOverviewV3.js fetchTodayChecklistReport). */}
+                      {reportTab === 'today' && (
+                        <div style={{ marginTop: 18 }}>
+                          <div style={{ fontSize: 12, fontWeight: 900, color: '#7c3aed', textTransform: 'uppercase', marginBottom: 8 }}>
+                            ✔️ Checklist hàng ngày ({checklistToday.filter((c) => c.done).length}/{checklistToday.length})
+                          </div>
+                          {checklistToday.length === 0 && (
+                            <div style={{ textAlign: 'center', padding: '12px 0', color: '#725f50', fontSize: 12.5 }}>Chưa có checklist nào được thiết lập cho hôm nay.</div>
+                          )}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {checklistToday.map((c: any) => (
+                              <div key={c.id} style={{ background: c.done ? '#f5f3ff' : '#fff', border: `1.5px solid ${c.done ? '#ddd6fe' : '#eadcca'}`, borderRadius: 12, padding: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: 12.5, fontWeight: 700, color: '#2d1c10' }}>{c.done ? '✅' : '⬜'} {c.title}</span>
+                                {c.done && !c.confirmed && <span style={{ fontSize: 10.5, color: '#a08060' }}>Chưa xác nhận</span>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>

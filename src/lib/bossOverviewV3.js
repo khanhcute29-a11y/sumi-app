@@ -447,6 +447,79 @@ export async function fetchCompletedTasksReport({ from, to } = {}) {
   return (data || []).filter((t) => !t.exclusion_reason_code);
 }
 
+// ---- 7c. Việc luồng đơn hàng đã hoàn thành trong ngày/khoảng — SONG SONG với
+// fetchCompletedTasksReport() (7b) chứ không gộp chung, vì 7b CỐ Ý chỉ lấy
+// category assigned/adhoc (khớp màn Việc CongViecV2.jsx) — việc luồng đơn
+// hàng (order_work, gắn với order_work_packages) có thêm cột `late` sẵn có,
+// hiển thị riêng để Giám đốc thấy đơn nào giao trễ mà không trộn lẫn 2 khái
+// niệm khác nhau (việc nội bộ vs. việc theo đơn khách). ----
+export async function fetchCompletedOrderWorkReport({ from, to } = {}) {
+  const fromIso = from || `${todayStr()}T00:00:00`;
+  const toIso = to || new Date().toISOString();
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('id,title,order_code,assignee_id,category,status,late,completed_at,assignee:profiles!assignee_id(id,full_name,role,station)')
+    .eq('category', 'order_work')
+    .is('deleted_at', null)
+    .eq('status', 'done')
+    .gte('completed_at', fromIso)
+    .lte('completed_at', toIso)
+    .order('completed_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+// ---- 7d. Vi phạm nội quy trong ngày/khoảng (staff_violations) — RLS bảng này
+// chỉ cho is_payroll_manager() (owner/admin/accountant) đọc, khớp đúng nhóm
+// vai trò Giám đốc/Kế toán đang xem sheet Báo Cáo Ngày này. ----
+export async function fetchTodayViolationsReport({ from, to } = {}) {
+  const fromDate = from || todayStr();
+  const toDate = to || todayStr();
+  const [violRes, profilesRes] = await Promise.all([
+    supabase.from('staff_violations').select('id,staff_id,title,note,occurred_on,penalty_amount')
+      .gte('occurred_on', fromDate).lte('occurred_on', toDate)
+      .order('occurred_on', { ascending: false }),
+    supabase.from('profiles').select('id, full_name, station, role'),
+  ]);
+  if (violRes.error) throw violRes.error;
+  if (profilesRes.error) throw profilesRes.error;
+  const profileById = {};
+  (profilesRes.data || []).forEach((p) => { profileById[p.id] = p; });
+  return (violRes.data || []).map((v) => ({
+    ...v,
+    staff_name: profileById[v.staff_id]?.full_name || '(không rõ)',
+    station: profileById[v.staff_id]?.station || null,
+    staff_role: profileById[v.staff_id]?.role || null,
+  }));
+}
+
+// ---- 7e. Checklist hàng ngày — CHỈ cho 1 ngày cụ thể (mặc định hôm nay),
+// KHÔNG hỗ trợ khoảng ngày như 2 mục trên vì logic "việc nào áp dụng ngày
+// nào" (daily/weekly/monthly) không cộng dồn tuyến tính qua nhiều ngày — dùng
+// ĐÚNG cách lọc applicable của DailyChecklistTab.jsx, không tự chế lại. ----
+export async function fetchTodayChecklistReport({ date } = {}) {
+  const day = date || todayStr();
+  const weekday = new Date(`${day}T12:00:00`).getDay();
+  const monthDay = Number(day.slice(-2));
+  const [templatesRes, completionsRes] = await Promise.all([
+    supabase.from('task_templates').select('id,title,station,assignee_id,recurrence,weekdays,day_of_month').eq('active', true),
+    supabase.from('task_completions').select('id,template_id,staff_id,date,completed_at,confirmed_at').eq('date', day),
+  ]);
+  if (templatesRes.error) throw templatesRes.error;
+  if (completionsRes.error) throw completionsRes.error;
+  const templates = templatesRes.data || [];
+  const completions = completionsRes.data || [];
+  const applicable = templates.filter((t) =>
+    t.recurrence === 'weekly' ? (t.weekdays || []).includes(weekday)
+    : t.recurrence === 'monthly' ? Number(t.day_of_month) === monthDay
+    : true
+  );
+  return applicable.map((t) => {
+    const c = completions.find((cc) => cc.template_id === t.id);
+    return { id: t.id, title: t.title, station: t.station, done: !!c?.completed_at, confirmed: !!c?.confirmed_at };
+  });
+}
+
 // ---- 8. Lịch phân ca tuần — toàn công ty (5 khu vực gộp lại) ----
 export async function fetchWeeklyScheduleAllStations() {
   const days = weekDates(mondayOf(new Date()));
