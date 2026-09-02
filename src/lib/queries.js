@@ -1199,10 +1199,10 @@ export async function fetchTaskTemplates({ active = true } = {}) {
   return data;
 }
 
-export async function createTaskTemplate({ title, description, station, assigneeId, recurrence='daily', weekdays=[], dayOfMonth=null, scheduledTime=null, remindMinutes=15 }) {
+export async function createTaskTemplate({ title, description, station, assigneeId, recurrence='daily', weekdays=[], dayOfMonth=null, scheduledTime=null, remindMinutes=15, kpiDiem=0 }) {
   const { error } = await supabase.rpc('create_recurring_todo', {
     p_title:title,p_description:description||null,p_assignee_id:assigneeId||null,p_station:station||null,p_recurrence:recurrence,
-    p_weekdays:weekdays,p_day_of_month:dayOfMonth,p_scheduled_time:scheduledTime||null,p_remind_minutes:remindMinutes,
+    p_weekdays:weekdays,p_day_of_month:dayOfMonth,p_scheduled_time:scheduledTime||null,p_remind_minutes:remindMinutes,p_kpi_diem:kpiDiem||0,
   });
   if (error) throw error;
   notifyBadgesChanged();
@@ -1239,10 +1239,15 @@ export async function setTaskCompletion({ templateId, staffId, date, completed }
   notifyBadgesChanged();
 }
 
-export async function confirmTaskCompletion(id, { confirmedBy }) {
-  const { error } = await supabase.from('task_completions').update({ confirmed_by: confirmedBy, confirmed_at: new Date().toISOString() }).eq('id', id);
+// Xác nhận checklist qua RPC (không UPDATE thẳng bảng nữa) — RPC vừa xác
+// nhận vừa ghi điểm KPI vào task_kpi_logs theo kpi_diem của template, xem
+// migration 202609031600_diem_kpi_checklist_hang_ngay.sql.
+export async function confirmTaskCompletion(id) {
+  const { data, error } = await supabase.rpc('sumi_xac_nhan_checklist', { p_completion_id: id });
   if (error) throw error;
+  if (data && data.thanh_cong === false) throw new Error(data.thong_bao || 'Không xác nhận được.');
   notifyBadgesChanged();
+  return data;
 }
 
 // --- Task management: assigned & ad-hoc tasks ---

@@ -31,6 +31,11 @@ export function DailyChecklistTab({ profile, isOwner, viewingStaffId, viewingSta
   const [weekdays,setWeekdays]=useState([]);
   const [dayOfMonth,setDayOfMonth]=useState('1');
   const [savingTemplate, setSavingTemplate] = useState(false);
+  const [kpiDiem, setKpiDiem] = useState('0');
+  // 'staff' = giao riêng nhân viên đang xem, 'station' = giao cho cả bộ phận
+  // (Khâu áp dụng) — trước đây bị lỗi luôn gán cứng theo nhân viên đang xem
+  // dù đã chọn khâu, khiến "giao cả bộ phận" không thật sự hoạt động.
+  const [assignScope, setAssignScope] = useState('staff');
   const today = localDateStr(new Date());
 
   const load = () => {
@@ -47,16 +52,25 @@ export function DailyChecklistTab({ profile, isOwner, viewingStaffId, viewingSta
   const completionFor = (templateId) => completions.find((c) => c.template_id === templateId && c.staff_id === viewingStaffId);
   const canToggle = profile?.id === viewingStaffId;
 
+  // Giao cả bộ phận bắt buộc phải chọn khâu cụ thể (không phải "Tất cả khâu")
+  // — nếu không sẽ áp dụng cho TOÀN BỘ nhân sự công ty, dễ bấm nhầm.
+  const canAssignStation = isOwner && assignScope === 'station' && newStation !== ALL_STATIONS;
   const handleAddTemplate = async () => {
     if (!newTitle.trim()) { setError('Nhập tên việc hằng ngày.'); return; }
+    if (isOwner && assignScope === 'station' && newStation === ALL_STATIONS) {
+      setError('Chọn 1 khâu cụ thể để giao cho cả bộ phận, hoặc chuyển sang "Giao riêng nhân viên này".');
+      return;
+    }
     setSavingTemplate(true); setError('');
     try {
       await createTaskTemplate({
         title: newTitle.trim(),
         station: newStation === ALL_STATIONS ? null : newStation,
-        assigneeId:viewingStaffId,recurrence,weekdays,dayOfMonth:recurrence==='monthly'?Number(dayOfMonth):null,scheduledTime:scheduledTime||null,remindMinutes:15,
+        assigneeId: canAssignStation ? null : viewingStaffId,
+        recurrence,weekdays,dayOfMonth:recurrence==='monthly'?Number(dayOfMonth):null,scheduledTime:scheduledTime||null,remindMinutes:15,
+        kpiDiem: isOwner ? Number(kpiDiem) || 0 : 0,
       });
-      setNewTitle(''); setNewStation(ALL_STATIONS);setScheduledTime('');
+      setNewTitle(''); setNewStation(ALL_STATIONS); setScheduledTime(''); setKpiDiem('0');
       load();
     } catch (err) { setError(err.message); } finally { setSavingTemplate(false); }
   };
@@ -78,7 +92,7 @@ export function DailyChecklistTab({ profile, isOwner, viewingStaffId, viewingSta
   const handleConfirm = async (completionId) => {
     setBusyId(completionId); setError('');
     try {
-      await confirmTaskCompletion(completionId, { confirmedBy: profile?.id });
+      await confirmTaskCompletion(completionId);
       load();
     } catch (err) { setError(err.message); } finally { setBusyId(''); }
   };
@@ -93,6 +107,19 @@ export function DailyChecklistTab({ profile, isOwner, viewingStaffId, viewingSta
        {recurrence==='weekly'&&<div className="sumi-weekdays">{['CN','T2','T3','T4','T5','T6','T7'].map((x,i)=><button type="button" className={weekdays.includes(i)?'active':''} key={x} onClick={()=>setWeekdays(v=>v.includes(i)?v.filter(n=>n!==i):[...v,i])}>{x}</button>)}</div>}
        {recurrence==='monthly'&&<Input label="Ngày trong tháng" type="number" min="1" max="31" value={dayOfMonth} onChange={e=>setDayOfMonth(e.target.value)}/>}
        {isOwner&&<Select label="Khâu áp dụng" value={newStation} onChange={(e) => setNewStation(e.target.value)} options={STATION_OPTIONS} placeholder="Tất cả khâu" />}
+       {isOwner && (
+         <div className="sumi-todo-schedule">
+           <Select label="Giao cho" value={assignScope} onChange={(e) => setAssignScope(e.target.value)}
+             options={[
+               { value: 'staff', label: `Riêng ${viewingStaffName || 'nhân viên này'}` },
+               { value: 'station', label: 'Cả bộ phận (chọn khâu ở trên)' },
+             ]} />
+           <Input label="Điểm KPI (+/-)" type="number" value={kpiDiem} onChange={(e) => setKpiDiem(e.target.value)} />
+         </div>
+       )}
+       {isOwner && assignScope === 'station' && newStation === ALL_STATIONS && (
+         <div style={{ font: 'var(--text-caption)', color: 'var(--status-warning)' }}>Chọn 1 khâu cụ thể ở trên để giao cho cả bộ phận.</div>
+       )}
        <Button disabled={savingTemplate} onClick={handleAddTemplate}>{savingTemplate ? 'Đang lưu...' : isOwner?'Giao vào checklist':'Thêm vào checklist của tôi'}</Button>
       </div>
       {applicable.length === 0 && <div style={{ font: 'var(--text-body)', color: 'var(--text-muted)' }}>Chưa có việc hằng ngày nào cho khâu này.</div>}
@@ -102,7 +129,7 @@ export function DailyChecklistTab({ profile, isOwner, viewingStaffId, viewingSta
         const confirmed = !!c?.confirmed_at;
         return (
           <div key={t.id} className={`sumi-todo-row ${done?'done':''}`}>
-            <div className="sumi-todo-main"><Checkbox label={t.title} checked={done} onChange={canToggle ? () => handleToggle(t.id, done) : undefined}/><small>{t.recurrence==='weekly'?'Lặp hàng tuần':t.recurrence==='monthly'?`Ngày ${t.day_of_month} hàng tháng`:'Lặp hàng ngày'}{t.scheduled_time?` · ${String(t.scheduled_time).slice(0,5)}`:''}</small></div>
+            <div className="sumi-todo-main"><Checkbox label={t.title} checked={done} onChange={canToggle ? () => handleToggle(t.id, done) : undefined}/><small>{t.recurrence==='weekly'?'Lặp hàng tuần':t.recurrence==='monthly'?`Ngày ${t.day_of_month} hàng tháng`:'Lặp hàng ngày'}{t.scheduled_time?` · ${String(t.scheduled_time).slice(0,5)}`:''}{!t.assignee_id&&t.station?' · Cả bộ phận':''}{t.kpi_diem?` · ${t.kpi_diem>0?'+':''}${t.kpi_diem} điểm KPI`:''}</small></div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               {t.locked&&<span title="Việc do quản lý tạo">🔒</span>}
               {confirmed && <span style={{ font: 'var(--text-caption)', color: 'var(--status-success)' }}>Đã xác nhận</span>}
