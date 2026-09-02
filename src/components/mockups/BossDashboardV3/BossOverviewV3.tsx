@@ -356,6 +356,12 @@ function StaffProfileSheet({ staffBasic, onBack }: { staffBasic: any; onBack: ()
   );
 }
 
+// Bỏ dấu tiếng Việt cho ô tìm kiếm đơn hàng — gõ "phuong" vẫn ra "Phượng",
+// khớp cách tab Chat đang làm (ChatScreen.jsx).
+function stripDiacritics(text: string): string {
+  return (text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, (m) => (m === 'đ' ? 'd' : 'D')).toLowerCase();
+}
+
 export function BossOverviewV3Inner() {
   const { profile } = useAuth();
 
@@ -364,6 +370,14 @@ export function BossOverviewV3Inner() {
     'revenue_detail' | 'expense_detail' | 'order_drawer' | 'staff_detail' | 'staff_overview_v2' | 'approval_center' | 'feed_sheet' | 'advance_sheet' | 'leave_sheet' | 'report_sheet' | 'schedule_sheet' | 'warehouse_sheet' | 'staff_screen_sheet' | null
   >(null);
   const [selectedOrderFilter, setSelectedOrderFilter] = useState<string>('all');
+  // Tab LUỒNG bên trong sheet "Danh Sách Đơn Hàng" — THAY THẾ thanh lọc
+  // trạng thái con cũ (Tất cả/Đang làm/Chờ giao/Trễ hạn), theo đúng yêu cầu
+  // Hồ Hoàng Diễm 01/09/2026: "các tab đó thay đổi thành các luồng ... 5
+  // luồng". Lọc theo order_type, ĐỘC LẬP với selectedOrderFilter ở trên
+  // (selectedOrderFilter vẫn quyết định danh sách gốc khi mở từ 1 trong 7 ô
+  // trạng thái ngoài Dashboard — tab luồng chỉ lọc thêm bên trong sheet).
+  const [selectedOrderFlowTab, setSelectedOrderFlowTab] = useState<string>('all');
+  const [orderSearchQuery, setOrderSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   // Khoan sâu: bấm 1 đơn trong Danh Sách Đơn Hàng -> mở chi tiết đơn đó (lớp
@@ -718,12 +732,29 @@ export function BossOverviewV3Inner() {
       const wanted = statusMap[selectedOrderFilter] || [selectedOrderFilter];
       list = allOrders.filter((o: any) => wanted.includes(o.status_v2) && (selectedOrderFilter === 'completed' || !o.is_overdue));
     }
+    if (selectedOrderFlowTab !== 'all') {
+      list = list.filter((o: any) => o.order_type === selectedOrderFlowTab);
+    }
     return list;
-  }, [allOrders, selectedOrderFilter]);
+  }, [allOrders, selectedOrderFilter, selectedOrderFlowTab]);
 
-  // Mở Drawer lọc đơn theo từng ô
+  // Ô tìm kiếm trong sheet "Danh Sách Đơn Hàng" — lọc thêm theo mã đơn / tên
+  // khách hàng trên nền filteredOrders ở trên (yêu cầu 01/09/2026: "thêm mục
+  // tìm kiếm đơn hàng để giúp Quản lý dễ dàng thao tác hơn").
+  const visibleOrders = useMemo(() => {
+    const q = stripDiacritics(orderSearchQuery.trim());
+    if (!q) return filteredOrders;
+    return filteredOrders.filter((o: any) =>
+      stripDiacritics(o.order_code).includes(q) || stripDiacritics(o.customer_name).includes(q)
+    );
+  }, [filteredOrders, orderSearchQuery]);
+
+  // Mở Drawer lọc đơn theo từng ô — luôn reset tab luồng + ô tìm kiếm về mặc
+  // định mỗi lần mở lại sheet, tránh mang bộ lọc cũ từ lần xem trước.
   const handleOpenOrderDrawer = (filterKey: string = 'all') => {
     setSelectedOrderFilter(filterKey);
+    setSelectedOrderFlowTab('all');
+    setOrderSearchQuery('');
     setActiveSheet('order_drawer');
   };
 
@@ -2406,7 +2437,7 @@ export function BossOverviewV3Inner() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 900, color: '#2d1c10' }}>
-                      🧾 Danh Sách Đơn Hàng ({filteredOrders.length} đơn)
+                      🧾 Danh Sách Đơn Hàng ({visibleOrders.length} đơn)
                     </div>
                     <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 800 }}>
                       ⬇️ Sắp xếp ưu tiên giảm dần từ trên xuống dưới
@@ -2415,79 +2446,67 @@ export function BossOverviewV3Inner() {
                   <button onClick={() => setActiveSheet(null)} aria-label="Quay lại" style={{ order: -1, flexShrink: 0, width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer' }}>‹</button>
                 </div>
 
-                {/* Thanh lọc trạng thái con bên trong Drawer */}
+                {/* Tab LUỒNG — thay cho thanh lọc trạng thái con cũ (yêu cầu
+                    Hồ Hoàng Diễm 01/09/2026). Trạng thái vẫn lọc được từ 7 ô
+                    ngoài Dashboard, ở đây chỉ còn lọc theo luồng. */}
                 <div style={{ display: 'flex', gap: 4, overflowX: 'auto', padding: '8px 14px' }}>
                 <button
-                  onClick={() => setSelectedOrderFilter('all')}
+                  onClick={() => setSelectedOrderFlowTab('all')}
                   style={{
                     padding: '5px 10px',
                     borderRadius: 99,
                     border: '1px solid #eadcca',
-                    background: selectedOrderFilter === 'all' ? '#2d1c10' : '#fff',
-                    color: selectedOrderFilter === 'all' ? '#ffd284' : '#725f50',
+                    background: selectedOrderFlowTab === 'all' ? '#2d1c10' : '#fff',
+                    color: selectedOrderFlowTab === 'all' ? '#ffd284' : '#725f50',
                     fontSize: 11,
                     fontWeight: 800,
                     whiteSpace: 'nowrap',
                     cursor: 'pointer'
                   }}
                 >
-                  Tất cả ({orderCounts.total})
+                  Tất cả ({filteredOrders.length})
                 </button>
-                <button
-                  onClick={() => setSelectedOrderFilter('in_production')}
-                  style={{
-                    padding: '5px 10px',
-                    borderRadius: 99,
-                    border: '1px solid #eadcca',
-                    background: selectedOrderFilter === 'in_production' ? '#2d1c10' : '#fff',
-                    color: selectedOrderFilter === 'in_production' ? '#ffd284' : '#725f50',
-                    fontSize: 11,
-                    fontWeight: 800,
-                    whiteSpace: 'nowrap',
-                    cursor: 'pointer'
-                  }}
-                >
-                  👩‍🍳 Đang làm ({orderCounts.production})
-                </button>
-                <button
-                  onClick={() => setSelectedOrderFilter('ready_for_fulfillment')}
-                  style={{
-                    padding: '5px 10px',
-                    borderRadius: 99,
-                    border: '1px solid #eadcca',
-                    background: selectedOrderFilter === 'ready_for_fulfillment' ? '#2d1c10' : '#fff',
-                    color: selectedOrderFilter === 'ready_for_fulfillment' ? '#ffd284' : '#725f50',
-                    fontSize: 11,
-                    fontWeight: 800,
-                    whiteSpace: 'nowrap',
-                    cursor: 'pointer'
-                  }}
-                >
-                  📦 Chờ giao ({orderCounts.ready})
-                </button>
-                <button
-                  onClick={() => setSelectedOrderFilter('overdue')}
-                  style={{
-                    padding: '5px 10px',
-                    borderRadius: 99,
-                    border: '1px solid #eadcca',
-                    background: selectedOrderFilter === 'overdue' ? '#dc2626' : '#fff',
-                    color: selectedOrderFilter === 'overdue' ? '#fff' : '#dc2626',
-                    fontSize: 11,
-                    fontWeight: 800,
-                    whiteSpace: 'nowrap',
-                    cursor: 'pointer'
-                  }}
-                >
-                  ⚠️ Trễ hạn ({orderCounts.overdue})
-                </button>
+                {ORDER_FLOWS.map((flow) => {
+                  const count = filteredOrders.filter((o: any) => o.order_type === flow.key).length;
+                  const active = selectedOrderFlowTab === flow.key;
+                  return (
+                    <button
+                      key={flow.key}
+                      onClick={() => setSelectedOrderFlowTab(flow.key)}
+                      style={{
+                        padding: '5px 10px',
+                        borderRadius: 99,
+                        border: '1px solid #eadcca',
+                        background: active ? '#2d1c10' : '#fff',
+                        color: active ? '#ffd284' : '#725f50',
+                        fontSize: 11,
+                        fontWeight: 800,
+                        whiteSpace: 'nowrap',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {flow.icon} {flow.title} ({count})
+                    </button>
+                  );
+                })}
+                </div>
+
+                {/* Ô tìm kiếm đơn hàng — theo mã đơn hoặc tên khách hàng */}
+                <div style={{ padding: '0 14px 8px' }}>
+                  <input
+                    type="text"
+                    value={orderSearchQuery}
+                    onChange={(e) => setOrderSearchQuery(e.target.value)}
+                    placeholder="🔍 Tìm theo mã đơn hoặc tên khách hàng..."
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 10, border: '1.5px solid #eadcca', fontSize: 13, boxSizing: 'border-box' }}
+                  />
                 </div>
               </div>
 
               {/* Danh sách đơn hàng ưu tiên */}
               <div style={sheetBodyStyle({ paddingTop: 8 })}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {filteredOrders.map((ord: any, idx: number) => {
+                {visibleOrders.map((ord: any, idx: number) => {
                   const flow = ORDER_FLOWS.find((f) => f.key === ord.order_type);
                   const statusLabelMap: Record<string, string> = {
                     awaiting_assignment: 'Đơn chờ làm 📥', awaiting_acceptance: 'Đơn chờ làm 📥',
@@ -2556,9 +2575,9 @@ export function BossOverviewV3Inner() {
                   );
                 })}
 
-                {filteredOrders.length === 0 && (
+                {visibleOrders.length === 0 && (
                   <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>
-                    Không có đơn hàng nào ở trạng thái này.
+                    {orderSearchQuery ? `Không tìm thấy đơn nào khớp "${orderSearchQuery}".` : 'Không có đơn hàng nào ở trạng thái này.'}
                   </div>
                 )}
               </div>
