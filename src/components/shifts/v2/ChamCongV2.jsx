@@ -6,7 +6,7 @@ import TongQuanGiamDoc from './TongQuanGiamDoc';
 import DeXuatChoDuyet from './DeXuatChoDuyet';
 import ChiTietNhanSuModal from './ChiTietNhanSuModal';
 import { theoCaCoDinh } from './luongNhanSu';
-import { doDaiPhut } from './dungChung';
+import { doDaiPhut, gomPhien } from './dungChung';
 import '../../../styles/cham-cong-v2.css';
 
 // Cửa ngõ của giao diện Chấm Công V2: chọn góc nhìn theo vai trò, nạp dữ liệu
@@ -131,6 +131,17 @@ export default function ChamCongV2({
     const cuaToi = chamCuaToi;
     const caToi = cuaToi?.ca || null;
     const devToi = cuaToi?.chenhLech || null;
+    // Trạng thái nút bấm PHẢI theo PHIÊN (gomPhien), không phải theo
+    // "đã từng vào ca / đã từng ra ca hôm nay" (cuaToi?.vaoISO/raISO chỉ gộp
+    // lần vào ĐẦU và lần ra CUỐI, đúng cho 1 ca duy nhất). TRƯỚC ĐÂY nhánh
+    // Giám đốc dùng cuaToi?.raISO để khoá cứng nút "✓ ĐÃ XONG CA" — hễ tan ca
+    // 1 lần trong ngày là kẹt luôn, không "Bắt đầu ca mới" lại được như Nhân
+    // viên (NhanVienV2.jsx đã dùng gomPhien từ trước) — vá theo đúng yêu cầu
+    // đồng bộ luồng thao tác cho mọi cấp bậc.
+    const logsCuaToi = (logsHomNay || []).filter((l) => l.staff_id === hoSo?.id);
+    const phienToi = gomPhien(logsCuaToi);
+    const phienHienTaiToi = phienToi[phienToi.length - 1] || null;
+    const dangTrongCaToi = !!(phienHienTaiToi && !phienHienTaiToi.ra);
     return (
       <div className="cc2">
         <header className="cc2-hero navy">
@@ -165,7 +176,7 @@ export default function ChamCongV2({
                 <b>{caToi ? `${caToi.ten} · ${caToi.batDau}–${caToi.ketThuc}` : 'Giờ linh hoạt'}</b>
               </div>
               <span className="cc2-status">
-                {cuaToi?.raISO ? '● Đã tan ca' : cuaToi?.vaoISO ? '● Đang trong ca' : '● Chưa vào ca'}
+                {dangTrongCaToi ? '● Đang trong ca' : phienHienTaiToi ? '● Đã tan ca' : '● Chưa vào ca'}
               </span>
             </div>
 
@@ -190,14 +201,14 @@ export default function ChamCongV2({
 
             <div className="cc2-lead-own-action">
               <button onClick={() => setDangXem({ hoSo, cham: cuaToi })}>🕘 XEM LỊCH SỬ</button>
-              {!cuaToi?.vaoISO && (
+              {!phienHienTaiToi && (
                 <button className="primary-small" onClick={onCheckin}>▶ BẮT ĐẦU CA</button>
               )}
-              {cuaToi?.vaoISO && !cuaToi?.raISO && (
+              {dangTrongCaToi && (
                 <button className="primary-small" onClick={onCheckout}>🏁 KẾT THÚC CA</button>
               )}
-              {cuaToi?.raISO && (
-                <button className="primary-small" disabled style={{ opacity: .55 }}>✓ ĐÃ XONG CA</button>
+              {phienHienTaiToi && !dangTrongCaToi && (
+                <button className="primary-small" onClick={onCheckin}>➕ CHẤM CA MỚI</button>
               )}
             </div>
             {/* Bổ sung ca quên chấm — AI CŨNG bấm được, không riêng nhân
@@ -240,6 +251,7 @@ export default function ChamCongV2({
         toi={toiTrongDanhSach}
         laGiamDoc={false}
         gioHienTai={gioHienTai}
+        logsHomNay={logsHomNay}
         onCheckin={onCheckin}
         onCheckout={onCheckout}
         onThemCa={onThemCa}

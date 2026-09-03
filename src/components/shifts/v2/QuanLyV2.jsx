@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { chuCaiDau, doDaiPhut } from './dungChung';
+import { chuCaiDau, doDaiPhut, gomPhien } from './dungChung';
 
 // Màn hình Chấm Công của QUẢN LÝ (bếp trưởng / bếp phó / trợ lý GĐ xưởng).
 // Dựng theo mockup: ca của chính mình -> việc cần xử lý -> nhân sự trong ca.
@@ -25,13 +25,28 @@ function moTaNhanSu(cham) {
 
 export default function QuanLyV2({
   hoSo, danhSach, toi, laGiamDoc, danhSachCa, boPhanTheoNguoi,
-  gioHienTai, onCheckin, onCheckout, onThemCa, onXemNhanSu,
+  gioHienTai, logsHomNay, onCheckin, onCheckout, onThemCa, onXemNhanSu,
 }) {
   const [loc, setLoc] = useState('all');
 
   const cuaToi = toi?.cham || null;
   const caToi = cuaToi?.ca || null;
   const devToi = cuaToi?.chenhLech || null;
+
+  // Trạng thái nút bấm PHẢI theo PHIÊN (gomPhien), không phải theo
+  // "đã từng vào ca / đã từng ra ca hôm nay" (cuaToi?.vaoISO/raISO chỉ gộp
+  // lần vào ĐẦU và lần ra CUỐI). TRƯỚC ĐÂY nhánh Quản lý dùng cuaToi?.raISO
+  // để khoá cứng nút "✓ ĐÃ XONG CA" — hễ tan ca 1 lần trong ngày là kẹt
+  // luôn, không "Bắt đầu ca mới" lại được như Nhân viên (NhanVienV2.jsx đã
+  // dùng gomPhien từ trước) — vá theo đúng yêu cầu đồng bộ luồng thao tác
+  // cho mọi cấp bậc.
+  const logsCuaToi = useMemo(
+    () => (logsHomNay || []).filter((l) => l.staff_id === hoSo?.id),
+    [logsHomNay, hoSo?.id],
+  );
+  const phienToi = useMemo(() => gomPhien(logsCuaToi), [logsCuaToi]);
+  const phienHienTaiToi = phienToi[phienToi.length - 1] || null;
+  const dangTrongCaToi = !!(phienHienTaiToi && !phienHienTaiToi.ra);
 
   // Người khác mình — mình đã có thẻ riêng ở trên rồi.
   const nguoiKhac = useMemo(
@@ -107,8 +122,8 @@ export default function QuanLyV2({
               <br />
               <b>{caToi ? `${caToi.ten} · ${caToi.batDau}–${caToi.ketThuc}` : 'Giờ linh hoạt'}</b>
             </div>
-            <span className={`cc2-status${cuaToi?.vaoISO ? (cuaToi?.raISO ? '' : '') : ' red'}`}>
-              {cuaToi?.raISO ? '● Đã tan ca' : cuaToi?.vaoISO ? '● Đang trong ca' : '● Chưa vào ca'}
+            <span className={`cc2-status${phienHienTaiToi ? '' : ' red'}`}>
+              {dangTrongCaToi ? '● Đang trong ca' : phienHienTaiToi ? '● Đã tan ca' : '● Chưa vào ca'}
             </span>
           </div>
 
@@ -134,14 +149,14 @@ export default function QuanLyV2({
 
           <div className="cc2-lead-own-action">
             <button onClick={() => onXemNhanSu?.({ hoSo, cham: cuaToi })}>🕘 XEM LỊCH SỬ</button>
-            {!cuaToi?.vaoISO && (
+            {!phienHienTaiToi && (
               <button className="primary-small" onClick={onCheckin}>▶ BẮT ĐẦU CA</button>
             )}
-            {cuaToi?.vaoISO && !cuaToi?.raISO && (
+            {dangTrongCaToi && (
               <button className="primary-small" onClick={onCheckout}>🏁 KẾT THÚC CA</button>
             )}
-            {cuaToi?.raISO && (
-              <button className="primary-small" disabled style={{ opacity: .55 }}>✓ ĐÃ XONG CA</button>
+            {phienHienTaiToi && !dangTrongCaToi && (
+              <button className="primary-small" onClick={onCheckin}>➕ CHẤM CA MỚI</button>
             )}
           </div>
           {/* Bổ sung ca quên chấm — AI CŨNG bấm được, không riêng nhân viên
