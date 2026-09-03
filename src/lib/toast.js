@@ -171,6 +171,21 @@ export const NOTIFY_KINDS = {
     tone: 'warning',
     tab: 'tasks',
   },
+  // 14-15. GIEO HẠT — Giám đốc Cộng/Trừ sao trực tiếp (StarRateBar). Báo cho
+  // CẢ người được/bị đánh giá LẪN toàn công ty (broadcast) — cùng 2 loại
+  // tin này, chỉ khác entity_id (staff_reward:<id> cho người liên quan).
+  star_reward: {
+    icon: '🌟',
+    title: 'Gieo hạt — Thưởng sao',
+    tone: 'success',
+    tab: 'tasks',
+  },
+  star_penalty: {
+    icon: '⚠️',
+    title: 'Gieo hạt — Trừ sao',
+    tone: 'warning',
+    tab: 'tasks',
+  },
 };
 
 /**

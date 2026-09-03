@@ -248,7 +248,7 @@ function OpsApp({ onSignOut }) {
           // và kết quả duyệt/từ chối khoản chi + tạm ứng — TRƯỚC ĐÂY 2 loại
           // tài chính này chỉ kêu khi đang mở đúng màn Hộp thư
           // (InboxV2Screen), giờ kêu TOÀN CỤC như các loại tin khác ở trên.
-          if (['task_progress', 'expense_claim', 'salary_advance', 'chat_mention', 'task_deadline_alert'].includes(n.notification_type)) {
+          if (['task_progress', 'expense_claim', 'salary_advance', 'chat_mention', 'task_deadline_alert', 'star_reward', 'star_penalty'].includes(n.notification_type)) {
             playOnce(n.notification_type + ':' + n.id, () => {
               playNotificationSound(n.sound_key);
               showToast({

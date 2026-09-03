@@ -346,6 +346,8 @@ export function playNotificationSound(soundKey) {
   else if (soundKey === 'ting') playTingSound();
   else if (soundKey === 'task_progress') playTaskProgressSound();
   else if (soundKey === 'task_deadline') playDeadlineAlertSound();
+  else if (soundKey === 'star_reward') playStarRewardSound();
+  else if (soundKey === 'star_penalty') playStarPenaltySound();
 }
 
 // GIAO VIỆC — 3 nốt nảy Mi-La-Đô, tươi và gấp gáp, khác hẳn tiếng bếp/shipper
@@ -378,6 +380,27 @@ export function playDeadlineAlertSound() {
   withRunningCtx(() => {
     beep({ freq: 1568, duration: 0.1, type: 'square', volume: 0.7 });
     beep({ freq: 1568, duration: 0.1, delay: 0.14, type: 'square', volume: 0.7 });
+  });
+}
+
+// GIEO HẠT +SAO — 3 nốt vui, đi lên (Đô-Mi-Sol), báo cho cả người được
+// thưởng lẫn toàn công ty (broadcast) — không lặp, 1 lần là đủ "kích lệ".
+export function playStarRewardSound() {
+  withRunningCtx(() => {
+    beep({ freq: 523, duration: 0.13, type: 'sine', volume: 0.85 });        // Đô5
+    beep({ freq: 659, duration: 0.13, delay: 0.13, type: 'sine', volume: 0.85 }); // Mi5
+    beep({ freq: 784, duration: 0.28, delay: 0.26, type: 'sine', volume: 0.9 });  // Sol5 ngân
+  });
+}
+
+// GIEO HẠT −SAO — 3 nốt đi xuống, rõ ràng nhưng không chói gắt như cảnh báo
+// quá hạn — chủ đích: ai cũng nghe được (đảm bảo đúng quy định), không phải
+// "báo động".
+export function playStarPenaltySound() {
+  withRunningCtx(() => {
+    beep({ freq: 784, duration: 0.12, type: 'triangle', volume: 0.8 });        // Sol5
+    beep({ freq: 659, duration: 0.12, delay: 0.13, type: 'triangle', volume: 0.8 }); // Mi5
+    beep({ freq: 494, duration: 0.24, delay: 0.26, type: 'triangle', volume: 0.85 }); // Si4
   });
 }
 
