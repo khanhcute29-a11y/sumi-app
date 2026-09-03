@@ -516,8 +516,11 @@
 .cc2-dexuat-nut button {
   min-height: 48px; border-radius: 13px; font-weight: 950; font-size: 14.5px; cursor: pointer;
 }
+/* Nút "Không duyệt" phải ĐỎ ĐẶC ngang bằng nút "Duyệt" xanh đặc. Trước đây
+   nó chỉ là viền đỏ nhạt trên nền trắng, nhìn lướt qua giống nút phụ — người
+   không đọc được chữ không phân biệt nổi đâu là đồng ý đâu là từ chối. */
 .cc2-dexuat-nut .tuchoi {
-  border: 2px solid #f1beb8; background: var(--cc2-red-soft); color: #a52c22;
+  border: 0; background: #c02a1d; color: #fff;
 }
 .cc2-dexuat-nut .dongy {
   border: 0; background: var(--cc2-green); color: #fff;

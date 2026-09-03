@@ -6,3 +6,47 @@
 .sumi-comp-title{display:flex;align-items:center;justify-content:space-between;gap:10px}.sumi-comp-title>b{padding:7px 10px;border-radius:999px;background:#fff0cf;color:#925700;font-size:11px}.sumi-comp-empty{padding:18px 5px 4px;color:#725f50;text-align:center}.sumi-overtime-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:13px 0;border-bottom:1px solid #eadcca}.sumi-overtime-row:last-child{border-bottom:0}.sumi-overtime-row strong,.sumi-overtime-row small{display:block}.sumi-overtime-row small{margin-top:4px;color:#725f50}.sumi-overtime-row em{padding:6px 8px;border-radius:9px;background:#fff0cf;color:#925700;font-size:10px;font-style:normal;font-weight:900}.sumi-overtime-row em.approved{background:#e6f6ed;color:#09663d}.sumi-overtime-row em.rejected{background:#fde8e7;color:#a52621}.sumi-overtime-row .actions{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:8px}.sumi-overtime-row .actions button{min-height:46px;border:0;border-radius:13px;background:#f5eadc;font-weight:900}.sumi-overtime-row .actions button:last-child{background:#138a53;color:#fff}
 .sumi-pay-slip{margin-top:13px;overflow:hidden;border-radius:20px;background:#2d1c10;color:#fff}.sumi-pay-slip>div{padding:19px;background:#138a53}.sumi-pay-slip small,.sumi-pay-slip strong{display:block}.sumi-pay-slip strong{margin-top:5px;font-size:34px}.sumi-pay-slip dl{display:grid;grid-template-columns:1fr auto;gap:9px;margin:0;padding:16px}.sumi-pay-slip dt{color:#f2d8c4}.sumi-pay-slip dd{margin:0;font-weight:900}.sumi-pay-slip p{margin:0;padding:0 16px 16px;color:#f2d8c4}.sumi-payroll-actions{display:grid;grid-template-columns:1fr 1fr 1.35fr;gap:7px;margin-top:12px}.sumi-payroll-actions button{min-height:46px;border:1px solid #d7c3aa;border-radius:13px;background:#fff;font-weight:900}.sumi-payroll-actions .lock{border:0;background:#138a53;color:#fff}.sumi-payroll-editor{margin-top:12px;padding:13px;border-radius:18px;background:#fffaf1;border:1px solid #eadcca}.sumi-payroll-editor .head{display:flex;align-items:center;justify-content:space-between;gap:10px}.sumi-payroll-editor .head strong,.sumi-payroll-editor .head small{display:block}.sumi-payroll-editor .head small{margin-top:3px;color:#725f50}.sumi-payroll-editor .head>b{color:#09663d;font-size:19px}.sumi-payroll-editor .fields{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.sumi-payroll-editor label{font-size:11px;font-weight:900}.sumi-payroll-editor input{width:100%;min-height:44px;box-sizing:border-box;margin-top:4px;padding:8px;border:1px solid #d7c3aa;border-radius:11px;background:#fff;font-size:15px}.sumi-payroll-editor>button{width:100%;min-height:48px;margin-top:11px;border:0;border-radius:13px;background:#2d1c10;color:#fff;font-weight:950}
 @media(max-width:380px){.sumi-top-actions{gap:4px}.sumi-bell{width:42px}.sumi-avatar-button{width:44px}.sumi-payroll-editor .fields{grid-template-columns:1fr}.sumi-payroll-actions{grid-template-columns:1fr}}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ĐỒNG BỘ MÀU KHU VỰC "TÔI" (tab Của tôi — MobileProfileScreen)
+   Yêu cầu 04/09/2026: màn này lệch tông so với phần còn lại của app.
+
+   CỐ Ý bọc tất cả trong `.sumi-profile-page` và KHÔNG đụng biến toàn cục:
+   cùng những class này (.sumi-section-head, .sumi-menu-button, .sumi-kpi-strip)
+   còn được các màn khác dùng lại, sửa thẳng ở mobile-shell.css là đổi màu cả
+   những chỗ mình chưa nhìn thấy.
+
+   Bảng màu lấy đúng theo bộ đang dùng chung toàn app:
+     nền #fffaf2 · thẻ #fff · viền #e2cdb6 · chữ #2d1c10 · chữ mờ #806a58
+     nhấn/CTA #b7431e · tốt #0b9462 · lỗi #c02a1d
+   ───────────────────────────────────────────────────────────────────────── */
+.sumi-profile-page {
+  background: #fffaf2;
+}
+
+/* Thẻ tên + ảnh đại diện: nền nâu đậm, nên MỌI chữ trên đó phải là tông kem.
+   Lỗi cũ: dòng "Chạm vào ảnh để thay đổi" đặt màu #8b7969 — nâu xám trên nền
+   gần đen, gần như không đọc được trên điện thoại ngoài nắng. */
+.sumi-profile-page .sumi-profile-card { background: #2d1c10; }
+.sumi-profile-page .sumi-profile-card p { color: #f6dcc7; }
+.sumi-profile-page .sumi-profile-card small { color: #e3c4a6; }
+
+.sumi-profile-page .sumi-section-head { color: #806a58; }
+.sumi-profile-page .sumi-section-head button,
+.sumi-profile-page .sumi-section-head > span:last-child { color: #b7431e; }
+
+.sumi-profile-page .sumi-kpi-strip > div,
+.sumi-profile-page .sumi-progress-card,
+.sumi-profile-page .sumi-menu-button { border-color: #e2cdb6; }
+.sumi-profile-page .sumi-kpi-strip span { color: #806a58; }
+.sumi-profile-page .sumi-menu-button > span { background: #fff1e4; }
+
+/* Thanh tiến độ tuần — XANH LÁ = đang tốt, theo đúng quy tắc nhận diện chung
+   (xem lib/trangThaiDuyet.js): xanh ✅ tốt, đỏ ❌ hỏng. */
+.sumi-profile-page .sumi-progress-card i { background: #f0e2d0; }
+.sumi-profile-page .sumi-progress-card i span { background: #0b9462; }
+
+/* Đăng xuất là hành động phá vỡ phiên làm việc → đỏ trọn vẹn cả ô icon,
+   không phải chỉ đổi mỗi màu chữ như trước. */
+.sumi-profile-page .sumi-menu-button.danger { border-color: #eab6b1; color: #c02a1d; }
+.sumi-profile-page .sumi-menu-button.danger > span { background: #fdecea; }

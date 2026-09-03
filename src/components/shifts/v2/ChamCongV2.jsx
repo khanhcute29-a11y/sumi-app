@@ -4,6 +4,7 @@ import NhanVienV2 from './NhanVienV2';
 import QuanLyV2 from './QuanLyV2';
 import TongQuanGiamDoc from './TongQuanGiamDoc';
 import DeXuatChoDuyet from './DeXuatChoDuyet';
+import DonTuCuaToi from './DonTuCuaToi';
 import ChiTietNhanSuModal from './ChiTietNhanSuModal';
 import { theoCaCoDinh } from './luongNhanSu';
 import { doDaiPhut, gomPhien } from './dungChung';
@@ -224,6 +225,14 @@ export default function ChamCongV2({
             )}
           </section>
 
+          {/* ĐƠN TỪ CỦA CHÍNH GIÁM ĐỐC — trước đây khối này chỉ nằm trong
+              NhanVienV2 (nhánh `!laQuanLy`), nên cấp quản lý trở lên KHÔNG có
+              đường nào tự gửi đơn nghỉ/đơn từ cho mình, chỉ duyệt đơn người
+              khác. Dùng lại đúng component đã có: nó vốn đã tự lọc
+              `requester_id === hoSo.id` nên chỉ hiện đơn của riêng mình, không
+              lẫn với DeXuatChoDuyet (đơn người khác chờ mình duyệt) ngay dưới. */}
+          <DonTuCuaToi hoSo={hoSo} duLieuGia={deXuatGia} />
+
           <TongQuanGiamDoc
             danhSach={danhSachQuanLy}
             gioHienTai={gioHienTai}
@@ -259,6 +268,9 @@ export default function ChamCongV2({
       />
 
       <main style={{ padding: '0 2px' }}>
+        {/* Đơn từ của chính quản lý/bếp trưởng — xem chú thích ở nhánh Giám đốc. */}
+        <DonTuCuaToi hoSo={hoSo} duLieuGia={deXuatGia} />
+
         <DeXuatChoDuyet
           hoSo={hoSo}
           capCuaToi={1}

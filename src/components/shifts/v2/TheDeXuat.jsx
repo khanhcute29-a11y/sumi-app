@@ -1,5 +1,6 @@
 import React from 'react';
 import { chuCaiDau } from './dungChung';
+import { TRANG_THAI_DUYET } from '../../../lib/trangThaiDuyet';
 
 // Một thẻ đơn từ / đề xuất — dựng theo ảnh mẫu anh Nghĩa gửi.
 //
@@ -30,11 +31,11 @@ export const LOAI_NGHI = {
   viec_rieng: 'Việc riêng',
 };
 
-const TRANG_THAI = {
-  approved: { chu: 'ĐÃ DUYỆT', mau: '#0b9462', nen: '#e7f7ef', icon: '✅', vien: '#0b9462' },
-  rejected: { chu: 'KHÔNG DUYỆT', mau: '#a52c22', nen: '#fff0ed', icon: '⛔', vien: '#d84c3f' },
-  pending: { chu: 'CHỜ DUYỆT', mau: '#8a5a00', nen: '#fff2ce', icon: '🕐', vien: '#e3a008' },
-};
+// Màu + icon KHÔNG còn định nghĩa tại chỗ nữa: dùng chung lib/trangThaiDuyet
+// để mọi màn hình duyệt trong app hiện y hệt nhau (xanh ✅ = duyệt, đỏ ❌ =
+// từ chối). Trước đây chỗ này dùng ⛔ còn nơi khác dùng ❌ — người không đọc
+// được chữ phải đoán xem hai hình đó có cùng nghĩa không.
+const TRANG_THAI = TRANG_THAI_DUYET;
 
 function ngayVN(d) {
   if (!d) return '';
@@ -127,10 +128,10 @@ export default function TheDeXuat({
       {(onDongY || onTuChoi) && don.status === 'pending' && (
         <div className="cc2-dexuat-nut">
           <button className="tuchoi" disabled={dangXuLy} onClick={() => onTuChoi?.(don)}>
-            {dangXuLy ? '…' : '✕ Không duyệt'}
+            {dangXuLy ? '…' : '❌ Không duyệt'}
           </button>
           <button className="dongy" disabled={dangXuLy} onClick={() => onDongY?.(don)}>
-            {dangXuLy ? 'Đang lưu…' : '✓ Duyệt'}
+            {dangXuLy ? 'Đang lưu…' : '✅ Duyệt'}
           </button>
         </div>
       )}
