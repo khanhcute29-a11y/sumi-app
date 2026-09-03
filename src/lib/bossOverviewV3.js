@@ -61,10 +61,17 @@ export async function fetchRevenueByChannel({ from, to } = {}) {
 //   • Đặt cọc của khách cho đơn CHƯA tính vào doanh thu thuần.
 //   • Công nợ đơn sỉ (trường học) chưa thu — customer_debt_balances.balance>0.
 //   • Đơn đang trong quá trình giao (status_v2='in_delivery'), tính theo total.
-// 3 luồng độc lập, có thể chồng một phần lên nhau (VD: đặt cọc của 1 đơn đang
+//   • CÔNG NỢ CẦN THU: đơn ĐÃ GIAO (status_v2='completed') nhưng CHƯA XÁC
+//     MINH thanh toán — trước đây rơi vào khoảng trống: không tính vào
+//     Doanh thu thuần (đúng, vì payment_verified=false) nhưng CŨNG không
+//     rơi vào bucket nào trong 3 bucket trên nếu đơn không có tiền cọc
+//     (deposit=0) — 15.146.000đ thật trên hệ thống (04/09/2026, 4 đơn) đang
+//     BIẾN MẤT khỏi cả 2 báo cáo. Tính theo (total − deposit) — phần deposit
+//     đã nằm trong bucket "Tiền đặt cọc" ở trên rồi, tránh cộng đôi.
+// 4 luồng độc lập, có thể chồng một phần lên nhau (VD: đặt cọc của 1 đơn đang
 // giao) — đây là con số ƯỚC TÍNH tổng quan, không phải sổ kế toán đối soát.
 export async function fetchDoanhThuDuTinh() {
-  const [depositRes, debtRes, deliveryRes] = await Promise.all([
+  const [depositRes, debtRes, deliveryRes, congNoRes] = await Promise.all([
     supabase.from('orders')
       .select('id, order_code, order_type, deposit, target_store, customers(name)')
       .gt('deposit', 0)
@@ -73,10 +80,15 @@ export async function fetchDoanhThuDuTinh() {
     supabase.from('orders')
       .select('id, order_code, order_type, total, target_store, customers(name)')
       .eq('status_v2', 'in_delivery'),
+    supabase.from('orders')
+      .select('id, order_code, order_type, total, deposit, target_store, completed_at, customers(name)')
+      .eq('status_v2', 'completed')
+      .neq('payment_verified', true),
   ]);
   if (depositRes.error) throw depositRes.error;
   if (debtRes.error) throw debtRes.error;
   if (deliveryRes.error) throw deliveryRes.error;
+  if (congNoRes.error) throw congNoRes.error;
 
   const deposit = {
     id: 'deposit', icon: '💰', title: 'Tiền đặt cọc',
@@ -109,9 +121,46 @@ export async function fetchDoanhThuDuTinh() {
     })),
   };
 
-  const buckets = [deposit, debt, delivery];
+  // CÔNG NỢ CẦN THU: phần CÒN LẠI (total − deposit) của đơn đã giao nhưng
+  // chưa xác minh — phần deposit của CHÍNH đơn này (nếu có) đã nằm trong
+  // bucket "Tiền đặt cọc" ở trên, cộng cả 2 mới ra đúng total, không cộng
+  // đôi. Đây chính là danh sách Kế toán cần đi thu/xác minh tiền.
+  const congNo = {
+    id: 'cong_no_can_thu', icon: '🧾', title: 'Công nợ cần thu',
+    note: 'Đơn đã giao, chưa xác minh dòng tiền thực tế',
+    amount: (congNoRes.data || []).reduce((s, o) => s + Math.max(0, (Number(o.total) || 0) - (Number(o.deposit) || 0)), 0),
+    count: (congNoRes.data || []).length,
+    orders: (congNoRes.data || []).map((o) => ({
+      id: o.id, orderCode: o.order_code, customerName: o.customers?.name || '—',
+      amount: Math.max(0, (Number(o.total) || 0) - (Number(o.deposit) || 0)),
+      branch: o.target_store || null, when: o.completed_at,
+    })),
+  };
+
+  const buckets = [deposit, congNo, debt, delivery];
   const total = buckets.reduce((s, b) => s + b.amount, 0);
   return { buckets, total };
+}
+
+// ---- 1c. CÔNG NỢ CẦN THU — danh sách đầy đủ cho Kế toán (không gộp số tiền
+// theo bucket như fetchDoanhThuDuTinh ở trên, trả nguyên thông tin đơn để
+// Kế toán mở thẳng từng đơn xác minh — dùng RPC verify_order_payment sẵn có
+// trong OrderV2DetailModal.jsx, không thêm luồng ghi dữ liệu nào mới). ----
+export async function fetchCongNoCanThu() {
+  const { data, error } = await supabase
+    .from('orders')
+    .select('id, order_code, order_type, total, deposit, payment_method, target_store, completed_at, customers(name, phone)')
+    .eq('status_v2', 'completed')
+    .neq('payment_verified', true)
+    .order('completed_at', { ascending: true });
+  if (error) throw error;
+  return (data || []).map((o) => ({
+    id: o.id, orderCode: o.order_code, orderType: o.order_type,
+    total: Number(o.total) || 0, deposit: Number(o.deposit) || 0,
+    conLai: Math.max(0, (Number(o.total) || 0) - (Number(o.deposit) || 0)),
+    paymentMethod: o.payment_method, branch: o.target_store || null,
+    completedAt: o.completed_at, customerName: o.customers?.name || '—', customerPhone: o.customers?.phone || null,
+  }));
 }
 
 // ---- 2. Sổ cái khoản chi (expense_claims) ----

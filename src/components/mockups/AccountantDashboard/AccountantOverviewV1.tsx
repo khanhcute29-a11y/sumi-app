@@ -17,9 +17,11 @@ import {
   closeDailyCash,
   fetchLatestCashClose,
 } from '../../../lib/accountantOverviewV1';
+import { fetchCongNoCanThu } from '../../../lib/bossOverviewV3';
 import { uploadFile } from '../../../lib/queries';
 import { VoiceMicButton } from '../../VoiceMicButton';
 import { parseThuChiVoice } from '../../../lib/parseVoiceAmount';
+import OrderV2DetailModal from '../../OrderV2DetailModal';
 
 const PHUONG_THUC_CHI = [
   { value: 'cash', label: '💵 Tiền mặt' },
@@ -41,6 +43,7 @@ const formatVNDCompact = (amount?: number | null) => {
 const TABS = [
   { key: 'pay', label: 'Chờ chi' },
   { key: 'advance', label: 'Tạm ứng' },
+  { key: 'receivable', label: 'Công nợ cần thu' },
   { key: 'ledger', label: 'Sổ chi' },
   { key: 'payroll', label: 'Lương/KPI' },
 ] as const;
@@ -69,6 +72,8 @@ export function AccountantOverviewV1Inner() {
   const [readyAdvances, setReadyAdvances] = useState<any[]>([]);
   const [pendingDirector, setPendingDirector] = useState({ count: 0, total: 0 });
   const [ledgerRows, setLedgerRows] = useState<any[]>([]);
+  const [congNoCanThu, setCongNoCanThu] = useState<any[]>([]);
+  const [xemDonId, setXemDonId] = useState<string | null>(null);
   const [wages, setWages] = useState<{ periodStatus: string | null; rows: any[] }>({ periodStatus: null, rows: [] });
   const [lastCashClose, setLastCashClose] = useState<any>(null);
   const monthKey = useMemo(() => {
@@ -80,13 +85,14 @@ export function AccountantOverviewV1Inner() {
     setLoading(true);
     setLoadError('');
     try {
-      const [expenses, advances, directorTotals, ledger, wagesSummary, cashClose] = await Promise.all([
+      const [expenses, advances, directorTotals, ledger, wagesSummary, cashClose, congNo] = await Promise.all([
         fetchReadyToPayExpenses(),
         fetchReadyToPayAdvances(),
         fetchPendingDirectorTotals(),
         fetchLedgerForMonth(monthKey),
         fetchWagesSummaryForMonth(monthKey),
         fetchLatestCashClose(),
+        fetchCongNoCanThu(),
       ]);
       setReadyExpenses(expenses || []);
       setReadyAdvances(advances || []);
@@ -94,6 +100,7 @@ export function AccountantOverviewV1Inner() {
       setLedgerRows(ledger || []);
       setWages(wagesSummary || { periodStatus: null, rows: [] });
       setLastCashClose(cashClose || null);
+      setCongNoCanThu(congNo || []);
     } catch (e: any) {
       setLoadError(e?.message || 'Không tải được dữ liệu thật, thử lại sau.');
     } finally {
@@ -422,6 +429,56 @@ export function AccountantOverviewV1Inner() {
             </>
           )}
 
+          {/* ── TAB: CÔNG NỢ CẦN THU ── đơn đã giao (status_v2='completed')
+              nhưng CHƯA xác minh dòng tiền (payment_verified=false).
+              TRƯỚC ĐÂY: đơn kiểu này không tính vào Doanh thu thuần (đúng),
+              nhưng Kế toán không có cách nào NHÌN THẤY danh sách này ở đâu
+              cả — chỉ Giám đốc thấy tổng số ở "Doanh thu dự tính" trên
+              Dashboard. Bấm vào 1 dòng mở thẳng chi tiết đơn (đã có sẵn nút
+              "Xác minh thanh toán" trong OrderV2DetailModal — không thêm
+              đường ghi dữ liệu nào mới). */}
+          {activeTab === 'receivable' && (
+            <>
+              <div style={{ display: 'flex', gap: 8, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 14, padding: 10, marginTop: 8, marginBottom: 12 }}>
+                <span style={{ fontSize: 18 }}>🧾</span>
+                <div style={{ fontSize: 11.5, color: '#991b1b', fontWeight: 700, lineHeight: 1.4 }}>
+                  Đơn đã giao nhưng chưa xác minh tiền vào — chưa tính vào Doanh thu thuần. Bấm vào 1 đơn để xác minh (ảnh chuyển khoản/tiền mặt).
+                </div>
+              </div>
+              <div style={{ fontSize: 11, fontWeight: 900, color: '#725f50', textTransform: 'uppercase', marginBottom: 8 }}>
+                Chưa xác minh ({congNoCanThu.length}) · Tổng {formatVND(congNoCanThu.reduce((s, o) => s + (o.conLai || 0), 0))}
+              </div>
+              {congNoCanThu.length === 0 && !loading && (
+                <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Không có đơn nào đang chờ xác minh thanh toán.</div>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {congNoCanThu.map((o: any) => (
+                  <div
+                    key={o.id}
+                    onClick={() => setXemDonId(o.id)}
+                    style={{ background: '#fffcf7', border: '1.5px solid #fecaca', borderRadius: 16, padding: 12, cursor: 'pointer' }}
+                  >
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                      <div style={{ width: 42, height: 42, borderRadius: 12, background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>🧾</div>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                          <div style={{ fontSize: 13.5, fontWeight: 900, color: '#2d1b10' }}>{o.orderCode || 'Đơn không rõ mã'}</div>
+                          <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace', fontWeight: 900, fontSize: 14, color: '#b91c1c', whiteSpace: 'nowrap' }}>
+                            {formatVND(o.conLai)}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 11, color: '#6b5b48', marginTop: 2 }}>
+                          {o.customerName}{o.deposit > 0 ? ` · đã cọc ${formatVND(o.deposit)}` : ''}
+                          {o.completedAt ? ` · giao ${new Date(o.completedAt).toLocaleDateString('vi-VN')}` : ''}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
           {/* ── TAB: SỔ CHI ── */}
           {activeTab === 'ledger' && (
             <>
@@ -679,6 +736,13 @@ export function AccountantOverviewV1Inner() {
                   )}
                 </div>
               </div>
+            </div>
+          )}
+
+          {xemDonId && (
+            <div style={{ position: 'fixed', inset: 0, zIndex: 2000 }}>
+              <OrderV2DetailModal orderId={xemDonId} onClose={() => setXemDonId(null)}
+                onChanged={() => { fetchCongNoCanThu().then((d) => setCongNoCanThu(d || [])).catch(() => {}); }} />
             </div>
           )}
 
