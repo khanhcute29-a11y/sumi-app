@@ -7,7 +7,28 @@
  * - School (X42): Only X42 kitchen lead + X42 staff can see
  * - Driver/Logistics: Can see ALL orders
  * - Owner/Admin: Can see ALL orders
+ * - NGOẠI LỆ (mọi order_type): nhân sự thuộc 1 bếp đang có work package thật
+ *   cho đơn đó (order.kitchen_codes, từ order_operations_list — xem migration
+ *   202609041100) LUÔN thấy được, bất kể luồng gì — đây là chỗ "bếp phối
+ *   hợp" (assign_order_package_collab) cần để nhân sự bếp được mời thấy đơn
+ *   dù đơn thuộc luồng khác station mặc định của họ (vd macaron giao cho bếp
+ *   lạnh cùng làm).
  */
+
+// station (profiles.station) -> code tương ứng trong organization_units.
+// Đối chiếu trực tiếp qua Supabase MCP — không đoán tên.
+const STATION_TO_UNIT_CODE = {
+  lanh: 'BAKERY_COLD',
+  nong: 'BAKERY_HOT',
+  xuong41: 'X41_KITCHEN',
+  xuong42: 'X42_KITCHEN',
+};
+
+function hasWorkPackageForMyStation(order, userProfile) {
+  const code = STATION_TO_UNIT_CODE[(userProfile?.station || '').toLowerCase()];
+  if (!code) return false;
+  return Array.isArray(order?.kitchen_codes) && order.kitchen_codes.includes(code);
+}
 
 function isOwnerOrAdmin(userProfile) {
   return ['owner', 'admin'].includes(userProfile?.role) ||
@@ -46,6 +67,10 @@ export function canUserViewOrder(order, userProfile) {
   // Driver/Logistics can see all
   const isDriver = userProfile.role === 'driver_logistics';
   if (isDriver) return true;
+
+  // Bếp phối hợp: có work package thật cho đúng bếp của mình -> luôn thấy,
+  // bất kể order_type gì (xem ghi chú đầu file).
+  if (hasWorkPackageForMyStation(order, userProfile)) return true;
 
   // Public flows: Bếp Nóng (Bakery), Bếp Lạnh (Cake), Teabreak
   // All kitchen staff can see these
