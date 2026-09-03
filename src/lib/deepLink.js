@@ -10,11 +10,24 @@ const LUAT = [
   { re: /^\/company-feed\/([0-9a-f-]{36})/i,  tab: 'feed' },
   { re: /^\/tasks\/([0-9a-f-]{36})/i,         tab: 'tasks' },
   { re: /^\/finance-requests\/([0-9a-f-]{36})/i, tab: 'financeRequests' },
+  // Tin nhắn Chat nội bộ (chat_message/chat_mention) — deep_link server gửi
+  // '/messenger/<room_id>' (xem migration 202608300500) nhưng TRƯỚC ĐÂY
+  // không có luật nào khớp ở đây, nên bấm thông báo đẩy (lúc màn hình tắt/
+  // app đóng) rơi vào nhánh dự phòng của sw.js và chỉ mở lại trang mặc định
+  // (Trang chủ) thay vì đúng phòng chat. 'messenger' (không phải 'chat') để
+  // khớp đúng tên tab App.jsx đang tự đổi thành 'chat' + mở phòng qua entityId.
+  { re: /^\/messenger\/([0-9a-f-]{36})/i,     tab: 'messenger' },
+  // Chuyến giao được phân cho shipper (delivery_assigned) — deep_link
+  // '/shipping/<delivery_run_id>' (xem 202608220016/202608230040), cũng
+  // chưa từng có luật khớp. Chưa có cơ chế mở thẳng đúng chuyến (chỉ mở
+  // đúng trang Vận Chuyển) — vẫn hơn hẳn rơi về Trang chủ như trước.
+  { re: /^\/shipping\/([0-9a-f-]{36})/i,      tab: 'shipping' },
   // Đường dẫn KHÔNG kèm mã: chỉ mở đúng trang, không cuộn tới mục nào.
   // Cần có vì một số thông báo cũ vẫn gửi dạng này.
-  { re: /^\/feed\/?$/i,   tab: 'feed' },
-  { re: /^\/tasks\/?$/i,  tab: 'tasks' },
-  { re: /^\/orders\/?$/i, tab: 'orders' },
+  { re: /^\/feed\/?$/i,      tab: 'feed' },
+  { re: /^\/tasks\/?$/i,     tab: 'tasks' },
+  { re: /^\/orders\/?$/i,    tab: 'orders' },
+  { re: /^\/messenger\/?$/i, tab: 'messenger' },
 ];
 
 // Chỉ nhận đường dẫn nội bộ. Đường dẫn từ bên ngoài (http://...) bị bỏ qua để

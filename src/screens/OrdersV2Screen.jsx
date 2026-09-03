@@ -175,12 +175,21 @@ export default function OrdersV2Screen() {
     [userWorkflows]
   );
 
+  // Đơn user THẬT SỰ được xem — dùng chung cho mọi chỗ đếm/hiển thị, để số
+  // đếm ở màn Tổng quan (trước đây đếm thẳng trên `orders` thô, không áp
+  // canUserViewOrder) không còn lệch với danh sách chi tiết sau khi bấm vào
+  // (đã áp canUserViewOrder từ trước) — đúng nguyên nhân "đếm 11 nhưng danh
+  // sách chỉ có 7".
+  const visibleOrders = useMemo(
+    () => orders.filter(o => canUserViewOrder(o, profile)),
+    [orders, profile]
+  );
+
   // Lọc theo trạng thái trước + visibility rules
   const statusOrders = useMemo(() => {
     if (!filter) return [];
-    const filtered = orders.filter(FILTERS.find(x => x.key === filter)?.match || (() => true));
-    return filtered.filter(o => canUserViewOrder(o, profile));
-  }, [orders, filter, profile]);
+    return visibleOrders.filter(FILTERS.find(x => x.key === filter)?.match || (() => true));
+  }, [visibleOrders, filter]);
 
   // Lọc tiếp theo 5 luồng và tìm kiếm
   const shownOrders = useMemo(() => {
@@ -336,7 +345,7 @@ export default function OrdersV2Screen() {
         <div>
           <small>THEO DÕI XUYÊN SUỐT</small>
           <h1>Đơn hàng</h1>
-          <p>{orders.length} đơn đang hiển thị</p>
+          <p>{visibleOrders.length} đơn đang hiển thị</p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {drafts.length > 0 && (
@@ -399,7 +408,7 @@ export default function OrdersV2Screen() {
             >
               <span><item.Icon size={22} /></span>
               <strong>{item.label}</strong>
-              <b>{orders.filter(item.match).length}</b>
+              <b>{visibleOrders.filter(item.match).length}</b>
             </button>
           ))}
 
