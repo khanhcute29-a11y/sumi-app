@@ -86,6 +86,14 @@ function TheViecTongQuat({ viec, tenTheoId, tenKhau, onXem, onSua, onXoa, dangXo
         <span className="cv-meta-item">👨‍🍳 {tenTheoId[viec.assignee_id] || 'Chưa giao ai'}</span>
         {viec.deadline && <span className="cv-meta-item">🎯 {ngayGio(viec.deadline)}</span>}
         <span className="cv-badge" style={{ background: tt.nen, color: tt.mau }}>{tt.icon} {tt.nhan}</span>
+        {/* Nhân sự đã dùng quyền từ chối (ngoài giờ làm) — xem migration
+            202609042200. Không cần ai duyệt, nhưng Giám đốc phải thấy ngay để
+            tự quyết định gia hạn hoặc giao người khác. */}
+        {viec.declined_at && (
+          <span className="cv-badge" style={{ background: '#fee2e2', color: '#a52c22' }}>
+            🚫 Đã từ chối: {viec.decline_reason}
+          </span>
+        )}
       </div>
       <button className="cv-btn outline full" onClick={() => onXem(viec)}>Xem báo cáo</button>
       {(onSua || onXoa) && (

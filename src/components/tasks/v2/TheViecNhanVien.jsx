@@ -4,6 +4,8 @@ import {
   TRANG_THAI, ngayGio, gioNgan, nhanKpiNhanViec, nhanKpiHoanThanh,
   quaHan, docBuocCon, tienDoBuocCon, treBaoNhieu, doDaiThoiGian,
 } from '../../../lib/congViec';
+import { viecNgoaiGioLamViec } from '../../../lib/chamCong';
+import { tuChoiViecNgoaiGio } from '../../../lib/queries';
 import VongDoiViec from './VongDoiViec';
 
 // Thẻ một công việc của thợ. Bấm vào mở rộng ra để xem chi tiết, các bước con
@@ -37,9 +39,15 @@ function HuyHieuKpi({ viec }) {
   return <span className="cv-badge" style={mau}>{nhan.chu}</span>;
 }
 
-export default function TheViecNhanVien({ viec, hoSo, tenTheoId = {}, onDoi, onBaoLoi }) {
+export default function TheViecNhanVien({ viec, hoSo, tenTheoId = {}, onDoi, onBaoLoi, danhSachCa = [] }) {
   const [mo, setMo] = useState(false);
   const [dangChay, setDangChay] = useState('');
+  // Từ chối việc ngoài giờ — QUYỀN của nhân sự, không phải đề xuất chờ duyệt
+  // (khác hẳn "Xin miễn trừ" hiện có). Xem chamCong.viecNgoaiGioLamViec() +
+  // migration 202609042200.
+  const [moTuChoi, setMoTuChoi] = useState(false);
+  const [lyDoTuChoi, setLyDoTuChoi] = useState('');
+  const [dangTuChoi, setDangTuChoi] = useState(false);
   const [buoc, setBuoc] = useState(() => docBuocCon(viec));
   const [buocMoi, setBuocMoi] = useState('');
   const [baoCao, setBaoCao] = useState([]);
@@ -103,6 +111,10 @@ export default function TheViecNhanVien({ viec, hoSo, tenTheoId = {}, onDoi, onB
   const choDuyet = viec.status === 'pending_approval';
   const daXong = viec.status === 'done';
   const tienDo = tienDoBuocCon(viec);
+  // Chỉ áp dụng việc Giám đốc/Quản lý giao tay (category='assigned'), CHƯA
+  // nhận, và hạn chót rơi ngoài mọi ca quy định của chính người này.
+  const ngoaiGio = laCuaToi && !daNhan && !daXong && viec.category === 'assigned'
+    && viecNgoaiGioLamViec(viec.deadline, hoSo, danhSachCa);
 
   const goi = async (ten, thamSo, nhan) => {
     setDangChay(nhan); setLoiThe('');
@@ -151,6 +163,21 @@ export default function TheViecNhanVien({ viec, hoSo, tenTheoId = {}, onDoi, onB
     } catch (e) {
       setLoiThe(e?.message || 'Không lưu được nhắc nhở/hạn chót.');
     } finally { setDangLuuNhacHan(false); }
+  };
+
+  const tuChoi = async () => {
+    const ly = lyDoTuChoi.trim();
+    if (!ly) { setLoiThe('Hãy ghi lý do từ chối để người giao việc hiểu.'); return; }
+    setDangTuChoi(true); setLoiThe('');
+    try {
+      await tuChoiViecNgoaiGio(viec.id, ly);
+      setMoTuChoi(false); setLyDoTuChoi('');
+      await onDoi?.();
+    } catch (e) {
+      const msg = e?.message || 'Không từ chối được việc này.';
+      setLoiThe(msg);
+      onBaoLoi?.(msg);
+    } finally { setDangTuChoi(false); }
   };
 
   const luuBuoc = async (ds) => {
@@ -223,12 +250,67 @@ export default function TheViecNhanVien({ viec, hoSo, tenTheoId = {}, onDoi, onB
 
       {loiThe && <div className="cv-error">⚠️ {loiThe}</div>}
 
+      {/* Đã từng từ chối — hiện lại lý do để không phải hỏi lại từ đầu, dù
+          nút "Xác nhận nhận việc" vẫn còn (đổi ý thì vẫn nhận được). */}
+      {viec.declined_at && (
+        <div style={{
+          margin: '4px 0 10px', padding: '10px 12px', borderRadius: 12,
+          background: '#fee2e2', border: '1px solid #fca5a5', color: '#a52c22',
+          fontSize: 12.5, fontWeight: 700, lineHeight: 1.5,
+        }}>
+          🚫 Bạn đã từ chối việc này lúc {gioNgan(viec.declined_at)} (ngoài giờ làm) — lý do: {viec.decline_reason}
+        </div>
+      )}
+
       {/* Chưa nhận việc: chỉ hiện đúng một nút, không rối */}
       {laCuaToi && !daNhan && !daXong && (
         <button className="cv-btn success full" disabled={!!dangChay}
           onClick={() => goi('sumi_nhan_viec', { p_task_id: viec.id }, 'nhan')}>
           {dangChay === 'nhan' ? 'Đang gửi…' : '✓ Xác nhận nhận việc'}
         </button>
+      )}
+
+      {/* Việc rơi ngoài ca làm quy định — cho QUYỀN từ chối ngay, không cần
+          ai duyệt (khác "Xin miễn trừ": việc đó phải chờ Quản lý rồi Giám
+          đốc). Ẩn nếu đã từng từ chối, tránh mời bấm lại một việc đã xử lý. */}
+      {ngoaiGio && !viec.declined_at && (
+        <div style={{ marginTop: 8 }}>
+          <div style={{
+            padding: '8px 12px', borderRadius: '12px 12px 0 0',
+            background: '#fff3cd', color: '#8a5a00', fontSize: 12, fontWeight: 800,
+          }}>
+            ⏰ Việc này ngoài ca làm của bạn hôm nay — bạn có quyền từ chối, không cần chờ duyệt.
+          </div>
+          {!moTuChoi ? (
+            <button type="button" className="cv-btn outline full"
+              style={{ borderRadius: '0 0 12px 12px', borderColor: '#f5d76e', color: '#a52c22' }}
+              onClick={() => setMoTuChoi(true)}>
+              ✕ Từ chối việc này
+            </button>
+          ) : (
+            <div style={{ padding: 10, border: '1px solid #f5d76e', borderTop: 0, borderRadius: '0 0 12px 12px' }}>
+              <textarea
+                value={lyDoTuChoi}
+                onChange={(e) => setLyDoTuChoi(e.target.value)}
+                placeholder="Lý do từ chối (VD: đã hết ca, không thể ở lại)…"
+                rows={2}
+                style={{
+                  width: '100%', padding: '8px 10px', borderRadius: 10,
+                  border: '1px solid var(--cv-border)', fontSize: 13.5, fontFamily: 'inherit',
+                  boxSizing: 'border-box', resize: 'vertical',
+                }}
+              />
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button type="button" className="cv-btn outline" disabled={dangTuChoi}
+                  onClick={() => { setMoTuChoi(false); setLyDoTuChoi(''); }}>Huỷ</button>
+                <button type="button" className="cv-btn danger" disabled={dangTuChoi || !lyDoTuChoi.trim()}
+                  onClick={tuChoi}>
+                  {dangTuChoi ? 'Đang gửi…' : 'Xác nhận từ chối'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {(daNhan || daXong || choDuyet) && (

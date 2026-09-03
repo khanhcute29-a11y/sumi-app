@@ -145,6 +145,46 @@ export function caCuaBoPhan(danhSachCa, boPhan) {
   return (danhSachCa || []).filter((c) => c.boPhan === boPhan);
 }
 
+// Danh sách ca ÁP DỤNG cho đúng một người: ưu tiên ca RIÊNG (bo_phan = id
+// người đó) trước, không có mới lấy ca chung của bộ phận — cùng thứ tự ưu
+// tiên với caChuanCuaLog() ở trên, dùng cho tính năng "Từ chối việc ngoài
+// giờ" (nút quyền, xem migration 202609042200): cần biết KHUNG GIỜ áp dụng
+// cho người đó chứ không phải một bản ghi chấm công cụ thể.
+export function caCuaNhanSu(danhSachCa, hoSo) {
+  const rieng = caCuaBoPhan(danhSachCa, hoSo?.id);
+  if (rieng.length) return rieng;
+  const boPhan = boPhanCuaHoSo(hoSo);
+  return boPhan ? caCuaBoPhan(danhSachCa, boPhan) : [];
+}
+
+// Hạn chót một việc có rơi NGOÀI mọi ca quy định của người được giao không —
+// dùng để quyết định có hiện nút "Từ chối" hay không. Chỉ là gợi ý hiển thị
+// (client), quyền quyết THẬT nằm ở RPC sumi_tu_choi_viec dưới database.
+//
+// Không theo ca cố định (Giám đốc, kế toán…) hoặc chưa có ca nào được cấu
+// hình thì KHÔNG có "giờ quy định" để so — trả về false, không chặn nhầm.
+export function viecNgoaiGioLamViec(deadlineIso, hoSo, danhSachCa) {
+  if (!deadlineIso) return false;
+  const list = caCuaNhanSu(danhSachCa, hoSo);
+  if (!list.length) return false;
+  const d = new Date(deadlineIso);
+  if (Number.isNaN(d.getTime())) return false;
+  const phutHan = d.getHours() * 60 + d.getMinutes();
+  // "Ngoài giờ" = hạn chót không rơi vào BÊN TRONG bất kỳ ca nào của người đó.
+  const trongMotCa = list.some((ca) => {
+    const batDau = phutTrongNgay(ca.batDau);
+    const ketThuc = phutTrongNgay(ca.ketThuc);
+    if (batDau == null || ketThuc == null) return false;
+    // Ca qua đêm (VD 22:00 -> 06:00): "trong ca" là phutHan >= batDau (tối
+    // hôm đó) HOẶC phutHan <= ketThuc (sáng hôm sau), tức nằm ngoài khoảng
+    // trống giữa ketThuc và batDau — đảo lại phép so với ca trong ngày.
+    return ketThuc >= batDau
+      ? phutHan >= batDau && phutHan <= ketThuc
+      : phutHan >= batDau || phutHan <= ketThuc;
+  });
+  return !trongMotCa;
+}
+
 // ── Chênh lệch so với quy định ──────────────────────────────────────────────
 // phutMuonDB: `late_minutes` do database tính. Có thì lấy làm chuẩn.
 // boPhanThat: bộ phận THẬT của nhân viên (không phải ca.boPhan) — dùng riêng

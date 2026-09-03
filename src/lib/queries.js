@@ -799,6 +799,15 @@ export async function addCashReconciliation({ workDate, branch, expectedCash, ac
 
 // ---- Ca làm việc (chấm công / trễ giờ / xin nghỉ đột xuất) ----
 
+// Bảng quy định ca THẬT theo bộ phận (khác `shift_configs` bên dưới — bảng
+// đó cũ hơn, chỉ còn dùng cho Lịch tuần & KPI). Ai đã duyệt cũng đọc được.
+// Chuẩn hoá qua `chuanHoaCa()` (lib/chamCong.js) trước khi dùng.
+export async function fetchQuyDinhCa() {
+  const { data, error } = await supabase.from('sumi_quy_dinh_ca').select('*').eq('active', true);
+  if (error) throw error;
+  return data || [];
+}
+
 export async function fetchShiftConfigs() {
   const { data, error } = await supabase.from('shift_configs').select('*').order('start_time', { ascending: true });
   if (error) throw error;
@@ -1418,4 +1427,17 @@ export async function exemptTask(id) {
   const { error } = await supabase.from('tasks').update({ status: 'exempted' }).eq('id', id);
   if (error) throw error;
   notifyBadgesChanged();
+}
+
+// Nhân sự TỪ CHỐI ngay một việc bị giao ngoài giờ làm quy định — quyền, không
+// phải đề xuất chờ duyệt (khác hẳn requestTaskExemption/exemptTask ở trên).
+// Xem migration 202609042200_tu_choi_viec_ngoai_gio.sql — chỉ áp dụng việc
+// category='assigned' và CHƯA nhận (status='open', accepted_at rỗng); RPC tự
+// kiểm tra lại toàn bộ điều kiện, không tin riêng phía client.
+export async function tuChoiViecNgoaiGio(taskId, lyDo) {
+  const { data, error } = await supabase.rpc('sumi_tu_choi_viec', { p_task_id: taskId, p_ly_do: lyDo });
+  if (error) throw error;
+  if (data && data.thanh_cong === false) throw new Error(data.thong_bao || 'Không từ chối được việc này.');
+  notifyBadgesChanged();
+  return data;
 }

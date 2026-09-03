@@ -20,7 +20,7 @@ function Khoi({ tieuDe, danhSach, ...props }) {
   );
 }
 
-export default function ViecNhanVien({ tasks, hoSo, tenTheoId, dangTai, loi, onTaiLai }) {
+export default function ViecNhanVien({ tasks, hoSo, tenTheoId, dangTai, loi, onTaiLai, danhSachCa }) {
   const [baoXong, setBaoXong] = useState(null);
   const [loiChung, setLoiChung] = useState('');
   const [moBaoCao, setMoBaoCao] = useState(false);
@@ -35,7 +35,7 @@ export default function ViecNhanVien({ tasks, hoSo, tenTheoId, dangTai, loi, onT
     await onTaiLai?.();
   };
 
-  const chung = { hoSo, tenTheoId, onDoi: xuLy, onBaoLoi: setLoiChung };
+  const chung = { hoSo, tenTheoId, onDoi: xuLy, onBaoLoi: setLoiChung, danhSachCa };
 
   return (
     <div>

@@ -45,6 +45,13 @@ function TheTheoDoi({ viec, tenTheoId, onDuyet, onXemBaoCao, onSua, onXoa, dangX
               Thợ báo xong ({kpi.chu})
             </span>
           )}
+          {/* Thợ đã dùng quyền từ chối (ngoài giờ làm) — báo ngay ở đây để
+              quản lý không phải mở từng thẻ mới biết việc đang bị kẹt. */}
+          {viec.declined_at && (
+            <span className="cv-badge" style={{ background: '#fee2e2', color: '#a52c22' }}>
+              🚫 Đã từ chối: {viec.decline_reason}
+            </span>
+          )}
         </div>
       </div>
 
@@ -81,7 +88,7 @@ function TheTheoDoi({ viec, tenTheoId, onDuyet, onXemBaoCao, onSua, onXoa, dangX
 }
 
 export default function ViecQuanLy({
-  tasks, hoSo, tenTheoId, danhSachTho, dangTai, loi, onTaiLai, onMoGiaoViec,
+  tasks, hoSo, tenTheoId, danhSachTho, dangTai, loi, onTaiLai, onMoGiaoViec, danhSachCa,
 }) {
   const [tab, setTab] = useState('daGiao');
   const [duyet, setDuyet] = useState(null);
@@ -162,7 +169,7 @@ export default function ViecQuanLy({
           <div className="cv-list">
             {nhom.duocGiao.map((v) => (
               <TheViecNhanVien key={v.id} viec={v} hoSo={hoSo} tenTheoId={tenTheoId}
-                onDoi={onTaiLai} onBaoLoi={setLoiChung} />
+                onDoi={onTaiLai} onBaoLoi={setLoiChung} danhSachCa={danhSachCa} />
             ))}
           </div>
         ) : <div className="cv-empty"><div className="cv-empty-icon">☕</div>Bạn chưa nhận việc nào về mình.</div>

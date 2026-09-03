@@ -43,6 +43,11 @@ export default function EditTaskModal({ viec, onClose, onXong }) {
         title: tieuDe.trim(),
         description: moTa.trim() || null,
         deadline: hanChot ? new Date(hanChot).toISOString() : null,
+        // Sửa việc coi như đã xử lý lượt từ chối trước đó (VD: đổi hạn chót
+        // vào lại đúng ca làm) — không để banner "đã từ chối" cũ còn treo ở
+        // đó gây hiểu nhầm là chưa ai động tới.
+        declined_at: null,
+        decline_reason: null,
       });
       await onXong?.();
     } catch (e) {

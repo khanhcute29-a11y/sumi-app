@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
+import { fetchQuyDinhCa } from '../../../lib/queries';
+import { chuanHoaCa } from '../../../lib/chamCong';
 import ViecNhanVien from './ViecNhanVien';
 import ViecQuanLy from './ViecQuanLy';
 import ViecGiamDoc from './ViecGiamDoc';
@@ -76,6 +78,14 @@ export default function CongViecV2({ profile, staffList = [], onMetrics }) {
 
   useEffect(() => { if (profile?.id) tai(); }, [profile?.id, tai]);
 
+  // Ca quy định — CHỈ để tính "việc này có rơi ngoài giờ làm của người được
+  // giao không" (xem lib/chamCong.viecNgoaiGioLamViec), phục vụ nút "Từ chối"
+  // ở TheViecNhanVien. Tải một lần, không phải mỗi khi tasks đổi.
+  const [danhSachCa, setDanhSachCa] = useState([]);
+  useEffect(() => {
+    fetchQuyDinhCa().then((rows) => setDanhSachCa(chuanHoaCa(rows))).catch(() => setDanhSachCa([]));
+  }, []);
+
   // Số liệu nhỏ cho hero-metrics ở khung ngoài (TasksScreen.jsx) — dùng chung
   // một lần tải `tasks` ở đây, không mở thêm truy vấn riêng chỉ để đếm.
   //
@@ -133,7 +143,7 @@ export default function CongViecV2({ profile, staffList = [], onMetrics }) {
     await tai();
   };
 
-  const chung = { tasks, tenTheoId, dangTai, loi, onTaiLai: tai };
+  const chung = { tasks, tenTheoId, dangTai, loi, onTaiLai: tai, danhSachCa };
 
   if (laGiamDoc) {
     return (
