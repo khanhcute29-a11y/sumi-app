@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import './employee-overview-v4.css';
 import {
   Bell,
-  BellRing,
   Clock,
   Calendar,
   DollarSign,
@@ -285,11 +284,8 @@ export function EmployeeOverviewV4Inner({ onNavigate } = {}) {
           </div>
         </div>
         <div className="eov4-header-actions">
-          <button className="eov4-icon-btn" title="Bảng tin công ty" onClick={() => openSheet('feed')}>
-            <Bell size={18} />
-          </button>
           <button className="eov4-icon-btn" title="Thông báo của tôi" style={{ position: 'relative' }} onClick={() => onNavigate?.('inbox')}>
-            <BellRing size={18} />
+            <Bell size={18} />
             {unreadCount > 0 && (
               <span style={{
                 position: 'absolute', top: -3, right: -3, minWidth: 16, height: 16, padding: '0 3px',
