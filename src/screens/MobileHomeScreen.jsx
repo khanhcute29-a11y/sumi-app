@@ -7,8 +7,17 @@ import EditApprovalPanel from '../components/EditApprovalPanel';
 import { EmployeeOverviewV4Inner } from '../components/mockups/EmployeeDashboard/EmployeeOverviewV4';
 import { BossOverviewV3Inner } from '../components/mockups/BossDashboardV3/BossOverviewV3';
 import TodayAttendanceWidget from '../components/mockups/EmployeeDashboard/TodayAttendanceWidget';
+import DonTuCuaToi from '../components/shifts/v2/DonTuCuaToi';
+import DeXuatChoDuyet from '../components/shifts/v2/DeXuatChoDuyet';
+import TheDeXuat from '../components/shifts/v2/TheDeXuat';
+import FinishedGoodsInventoryV2 from '../components/warehouse/FinishedGoodsInventoryV2';
+import '../styles/cham-cong-v2.css';
+import '../styles/cong-viec.css';
 import { boPhanCuaHoSo } from '../lib/chamCong';
-import { Zap, Megaphone, Calendar as IconCalendar, Package as IconPackageAdmin, Users as IconUsers } from 'lucide-react';
+import { fetchApprovalRequests } from '../lib/queries';
+import { fetchDanhSachNhanSuNgay } from '../lib/hoSoNgayNhanSu';
+import { localDateStr } from '../lib/date';
+import { Zap, Megaphone, FileText as IconLeave, ClipboardList as IconReport, Package as IconPackageAdmin, Boxes as IconStock } from 'lucide-react';
 
 import { ROLE_META, KITCHEN_LEAD_ROLES, getRoleMeta, formatStationLabel } from '../lib/roles';
 import { ORDER_FLOWS } from '../data/orderCatalogs';
@@ -137,22 +146,114 @@ function DirectorHome({orders,staff,onNavigate,canViewRevenue}){
 // đơn của toàn hệ thống như trước.
 const MA_KHAU_BEP_THEO_BO_PHAN={bep_lanh:'BAKERY_COLD',bep_nong:'BAKERY_HOT',xuong41:'X41_KITCHEN',xuong42:'X42_KITCHEN'};
 
-// 5 ô "TÔI (Quản trị & Tiện ích điều hành)" cho Bếp trưởng — cùng kiểu ô màu
+// 6 ô "TÔI (Quản trị & Tiện ích điều hành)" cho Bếp trưởng — cùng kiểu ô màu
 // như Giám đốc (BossOverviewV3), nhưng chỉ giữ tính năng LIÊN QUAN tới vai
-// trò Bếp trưởng: không có "Kho Thành Phẩm toàn hệ thống" hay các mục tài
-// chính chỉ Giám đốc mới xem.
+// trò Bếp trưởng: không có "Nhân viên" kiểu phân quyền tài khoản, không có
+// mục tài chính chỉ Giám đốc mới xem.
+//
+// Sửa theo phản hồi 04/09/2026:
+//  - "Lịch làm" (trùng hẳn với widget Chấm công phía trên, cùng ra 'shifts')
+//    -> đổi thành "Đơn từ/Xin nghỉ": đơn của mình + đơn cấp dưới đang chờ
+//    mình duyệt + lịch sử đội đã qua tay mình duyệt (kể cả Giám đốc duyệt
+//    tiếp sau đó) — mở sheet riêng, KHÔNG điều hướng sang 'shifts' nữa.
+//  - "Nhân viên" (trỏ 'staff' — màn phân quyền tài khoản kiểu Giám đốc, quá
+//    tay với Bếp trưởng) -> đổi thành "Báo cáo ngày": danh sách nhân sự cùng
+//    khâu, trạng thái chấm công hôm nay — mở sheet riêng.
+//  - Thêm ô thứ 6 "Tồn kho thành phẩm" lấp chỗ trống của lưới 2 cột (5 ô lẻ)
+//    — mở ĐÚNG component Kho Thành Phẩm đang dùng trong list Đơn hàng
+//    (FinishedGoodsInventoryV2), không dựng bản khác.
 const O_DIEU_HANH_BEP_TRUONG=[
  {ten:'Giao việc',Icon:Zap,tab:'tasks',mau:'#7c3aed',nen:'#f2ecff',phu:'Giao & duyệt việc bếp'},
  {ten:'Bảng tin',Icon:Megaphone,tab:'feed',mau:'#0284c7',nen:'#e6f4fc',phu:'Chỉ đạo & thông báo'},
- {ten:'Lịch làm',Icon:IconCalendar,tab:'shifts',mau:'#c2410c',nen:'#fff1e6',phu:'Ca làm của đội'},
+ {ten:'Đơn từ/Xin nghỉ',Icon:IconLeave,sheet:'donTu',mau:'#0b9462',nen:'#e7f7ef',phu:'Của tôi & đội cần duyệt'},
  {ten:'Nguyên liệu',Icon:IconPackageAdmin,tab:'warehouse',mau:'#a16207',nen:'#fdf4dd',phu:'Yêu cầu & tồn kho'},
- {ten:'Nhân viên',Icon:IconUsers,tab:'staff',mau:'#be185d',nen:'#fdeaf2',phu:'Đội bếp của tôi'},
+ {ten:'Báo cáo ngày',Icon:IconReport,sheet:'baoCao',mau:'#be185d',nen:'#fdeaf2',phu:'Đội bếp hôm nay'},
+ {ten:'Tồn kho thành phẩm',Icon:IconStock,sheet:'khoTP',mau:'#2563eb',nen:'#e8f0ff',phu:'Xem như trong Đơn hàng'},
 ];
+
+// Sheet dùng chung kiểu RevenueModal đã có sẵn trong file này — tái dùng
+// nguyên class CSS (.sumi-order-create-overlay/...-body/-create-head), không
+// tạo CSS mới.
+function LeadSheet({title,onClose,children}){
+ return <div className="sumi-order-create-overlay" onClick={onClose}>
+  <div className="sumi-order-create-body" onClick={e=>e.stopPropagation()}>
+   <div className="sumi-create-head"><button onClick={onClose} aria-label="Đóng">←</button><h2>{title}</h2></div>
+   {children}
+  </div>
+ </div>;
+}
+
+// "Đơn từ/Xin nghỉ" — của tôi (DonTuCuaToi) + đội đang chờ tôi duyệt
+// (DeXuatChoDuyet capCuaToi=1, chỉ hiện đơn PENDING) + lịch sử đội đã qua
+// tay tôi (mọi đơn có cap1_by = chính tôi, dù đã duyệt/từ chối, dù Giám đốc
+// đã xử lý cấp 2 tiếp sau đó hay chưa — không cần dò danh sách "cấp dưới",
+// cap1_by=tôi ĐÃ LÀ bằng chứng đơn đó thuộc quyền tôi).
+function DonTuXinNghiSheet({hoSo,onClose}){
+ const[lichSu,setLichSu]=useState(null);
+ const[lamMoi,setLamMoi]=useState(0);
+ useEffect(()=>{
+  let huy=false;
+  fetchApprovalRequests({}).then(ds=>{if(!huy)setLichSu((ds||[]).filter(r=>r.cap1_by===hoSo?.id&&r.status!=='pending'))}).catch(()=>{if(!huy)setLichSu([])});
+  return()=>{huy=true};
+ },[hoSo?.id,lamMoi]);
+ return <LeadSheet title="📝 Đơn từ / Xin nghỉ" onClose={onClose}>
+  <DonTuCuaToi hoSo={hoSo}/>
+  <DeXuatChoDuyet hoSo={hoSo} capCuaToi={1} onDaXuLy={()=>setLamMoi(x=>x+1)}/>
+  <div className="cc2-section-title" style={{marginTop:16}}><span>LỊCH SỬ ĐỘI ĐÃ XỬ LÝ</span></div>
+  {lichSu===null?<div className="cc2-empty">Đang tải…</div>:lichSu.length===0?(
+   <div className="cc2-empty">Chưa có đơn nào của đội qua tay bạn duyệt.</div>
+  ):(
+   <div className="cc2-history">{lichSu.map(r=><TheDeXuat key={r.id} don={r}/>)}</div>
+  )}
+ </LeadSheet>;
+}
+
+// "Báo cáo ngày" — danh sách nhân sự CÙNG KHÂU (station) với Bếp trưởng đang
+// xem, trạng thái chấm công hôm nay. Lọc client-side theo `station` — khớp
+// đúng điều kiện la_quan_ly_cua_ho_so() dưới database đang dùng cho quyền
+// quản lý (không tự đặt luật phạm vi khác).
+const NHAN_TRANG_THAI_NS={dang_lam:{c:'Đang làm',m:'#1e7e4c',n:'#e6f4ea'},xong:{c:'Đã tan ca',m:'#2563eb',n:'#eef3ff'},nghi:{c:'Xin nghỉ',m:'#a16207',n:'#fdf4dd'},chua_cham:{c:'Chưa chấm công',m:'#a52c22',n:'#fdecea'}};
+function BaoCaoNgaySheet({hoSo,onClose}){
+ const[ds,setDs]=useState(null);
+ useEffect(()=>{
+  let huy=false;
+  fetchDanhSachNhanSuNgay(localDateStr()).then(rows=>{
+   if(huy)return;
+   const cungKhau=(rows||[]).filter(p=>p.id!==hoSo?.id&&hoSo?.station&&p.station===hoSo.station);
+   setDs(cungKhau);
+  }).catch(()=>{if(!huy)setDs([])});
+  return()=>{huy=true};
+ },[hoSo?.id,hoSo?.station]);
+ const gio=iso=>iso?new Date(iso).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Ho_Chi_Minh'}):'--:--';
+ return <LeadSheet title="📋 Báo cáo ngày — đội của tôi" onClose={onClose}>
+  {!hoSo?.station?(
+   <div className="cc2-empty">Hồ sơ của bạn chưa gán khâu (station) nên chưa xác định được "đội của tôi".</div>
+  ):ds===null?(
+   <div className="cc2-empty">Đang tải…</div>
+  ):ds.length===0?(
+   <div className="cc2-empty">Chưa có nhân sự nào khác cùng khâu.</div>
+  ):(
+   <div className="cc2-history">
+    {ds.map(p=>{const tt=NHAN_TRANG_THAI_NS[p.trangThai]||NHAN_TRANG_THAI_NS.chua_cham;return(
+     <div key={p.id} className="cv-card" style={{marginBottom:8}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+       <strong>{p.full_name}</strong>
+       <span className="cv-badge" style={{background:tt.n,color:tt.m}}>{tt.c}</span>
+      </div>
+      <div className="cv-meta"><span className="cv-meta-item">Vào: {gio(p.gioVao)}</span><span className="cv-meta-item">Ra: {gio(p.gioRa)}</span>{p.phutMuon>0&&<span className="cv-meta-item" style={{color:'#a52c22'}}>Trễ {p.phutMuon}p</span>}</div>
+     </div>
+    )})}
+   </div>
+  )}
+ </LeadSheet>;
+}
+
 function LeadHome({orders,tasks,onNavigate,profile}){
  const maKhau=MA_KHAU_BEP_THEO_BO_PHAN[boPhanCuaHoSo(profile)];
  // Không xác định được khâu (dữ liệu thiếu station) thì hiện nguyên danh sách
  // — thà thấy dư còn hơn dữ liệu biến mất không rõ lý do.
  const ordersCuaKhau=maKhau?orders.filter(o=>Array.isArray(o.kitchen_codes)&&o.kitchen_codes.includes(maKhau)):orders;
+ const[sheetMo,setSheetMo]=useState(null);
  return <>
   <TodayAttendanceWidget profile={profile} onNavigate={onNavigate}/>
   <div className="sumi-workplace">👨‍🍳 Xưởng sản xuất bánh SUMI</div>
@@ -161,7 +262,7 @@ function LeadHome({orders,tasks,onNavigate,profile}){
   <SectionHead title="👤 TÔI (QUẢN TRỊ & TIỆN ÍCH ĐIỀU HÀNH)"/>
   <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:14}}>
    {O_DIEU_HANH_BEP_TRUONG.map(o=>{const Icon=o.Icon;return(
-    <div key={o.ten} onClick={()=>onNavigate(o.tab)} style={{background:'#fff',border:'1.5px solid #eadcca',borderRadius:18,padding:'12px 14px',cursor:'pointer',boxShadow:'0 2px 8px rgba(0,0,0,0.03)',display:'flex',flexDirection:'column',justifyContent:'space-between',minHeight:88,boxSizing:'border-box'}}>
+    <div key={o.ten} onClick={()=>o.tab?onNavigate(o.tab):setSheetMo(o.sheet)} style={{background:'#fff',border:'1.5px solid #eadcca',borderRadius:18,padding:'12px 14px',cursor:'pointer',boxShadow:'0 2px 8px rgba(0,0,0,0.03)',display:'flex',flexDirection:'column',justifyContent:'space-between',minHeight:88,boxSizing:'border-box'}}>
      <div style={{width:38,height:38,borderRadius:12,background:o.nen,display:'flex',alignItems:'center',justifyContent:'center'}}><Icon size={21} color={o.mau} strokeWidth={1.9}/></div>
      <div style={{marginTop:8}}><div style={{fontSize:13.5,fontWeight:800,color:'#2d1c10'}}>{o.ten}</div><div style={{fontSize:11,color:'#725f50',marginTop:1}}>{o.phu}</div></div>
     </div>
@@ -171,6 +272,9 @@ function LeadHome({orders,tasks,onNavigate,profile}){
   <SectionHead title="TIẾN ĐỘ SẢN XUẤT" value={`${tasks.length} việc`}/>
   <TaskQueue tasks={tasks}/>
   <div className="sumi-flow-note">Bếp trưởng duyệt "Hoàn thành" thì hệ thống mới nhập kho thành phẩm. Nhân viên báo làm xong chưa tự cộng kho.</div>
+  {sheetMo==='donTu'&&<DonTuXinNghiSheet hoSo={profile} onClose={()=>setSheetMo(null)}/>}
+  {sheetMo==='baoCao'&&<BaoCaoNgaySheet hoSo={profile} onClose={()=>setSheetMo(null)}/>}
+  {sheetMo==='khoTP'&&<div style={{position:'fixed',inset:0,zIndex:1400,background:'#fdf9f2',overflowY:'auto',padding:16,boxSizing:'border-box'}}><FinishedGoodsInventoryV2 onBack={()=>setSheetMo(null)}/></div>}
  </>;
 }
 function TaskQueue({tasks}){return <div className="sumi-task-queue">{tasks.map((t,i)=><button key={t.id}><b>{i+2}</b><span><strong>{t.title}</strong><small>{t.order_code?`Đơn ${t.order_code}`:'Việc trong ngày'}</small></span><em>{t.status==='in_progress'?'ĐANG LÀM':'CHỜ'}</em></button>)}</div>}
