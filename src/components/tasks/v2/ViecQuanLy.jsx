@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import DuyetViecModal from './DuyetViecModal';
+import EditTaskModal from './EditTaskModal';
 import TheViecNhanVien from './TheViecNhanVien';
+import { deleteTask } from '../../../lib/queries';
 import {
   TRANG_THAI, nhomViecQuanLy, ngayGio, gioNgan, quaHan,
   nhanKpiHoanThanh, doDaiThoiGian, treBaoNhieu, khauCuaViec, nhanKhau,
@@ -16,7 +18,7 @@ function chuCaiDau(ten) {
 }
 
 // ── Thẻ theo dõi thợ ──
-function TheTheoDoi({ viec, tenTheoId, onDuyet, onXemBaoCao }) {
+function TheTheoDoi({ viec, tenTheoId, onDuyet, onXemBaoCao, onSua, onXoa, dangXoa }) {
   const choDuyet = viec.status === 'pending_approval';
   const tt = TRANG_THAI[quaHan(viec) ? 'qua_han' : viec.status] || TRANG_THAI.open;
   const kpi = nhanKpiHoanThanh(viec);
@@ -67,6 +69,13 @@ function TheTheoDoi({ viec, tenTheoId, onDuyet, onXemBaoCao }) {
           ✓ Duyệt nghiệm thu
         </button>
       )}
+
+      <div className="cv-actions" style={{ marginTop: 8 }}>
+        <button className="cv-btn outline" onClick={() => onSua(viec)} disabled={dangXoa === viec.id}>✏️ Sửa</button>
+        <button className="cv-btn danger" onClick={() => onXoa(viec)} disabled={dangXoa === viec.id}>
+          {dangXoa === viec.id ? 'Đang xoá…' : '🗑️ Xoá'}
+        </button>
+      </div>
     </div>
   );
 }
@@ -77,7 +86,22 @@ export default function ViecQuanLy({
   const [tab, setTab] = useState('daGiao');
   const [duyet, setDuyet] = useState(null);
   const [xemBaoCao, setXemBaoCao] = useState(null);
+  const [sua, setSua] = useState(null);
+  const [dangXoa, setDangXoa] = useState('');
   const [loiChung, setLoiChung] = useState('');
+
+  const xoa = async (viec) => {
+    if (!window.confirm(`Xoá việc "${viec.title}"? Không thể hoàn tác.`)) return;
+    setDangXoa(viec.id); setLoiChung('');
+    try {
+      await deleteTask(viec.id);
+      await onTaiLai?.();
+    } catch (e) {
+      setLoiChung(e?.message || 'Không xoá được việc này.');
+    } finally {
+      setDangXoa('');
+    }
+  };
 
   const nhom = nhomViecQuanLy(tasks, hoSo?.id);
 
@@ -91,7 +115,7 @@ export default function ViecQuanLy({
     { key: 'cuaToi', nhan: `Của tôi (${nhom.duocGiao.length})` },
   ];
 
-  const chungTheoDoi = { tenTheoId, onDuyet: setDuyet, onXemBaoCao: setXemBaoCao };
+  const chungTheoDoi = { tenTheoId, onDuyet: setDuyet, onXemBaoCao: setXemBaoCao, onSua: setSua, onXoa: xoa, dangXoa };
 
   return (
     <div>
@@ -153,6 +177,11 @@ export default function ViecQuanLy({
       {xemBaoCao && (
         <DuyetViecModal viec={xemBaoCao} tenTho={tenTheoId[xemBaoCao.assignee_id]} hoSo={hoSo} vaiTro="quan_ly"
           chiXem onClose={() => setXemBaoCao(null)} onXong={async () => { setXemBaoCao(null); await onTaiLai?.(); }} />
+      )}
+
+      {sua && (
+        <EditTaskModal viec={sua} onClose={() => setSua(null)}
+          onXong={async () => { setSua(null); await onTaiLai?.(); }} />
       )}
     </div>
   );

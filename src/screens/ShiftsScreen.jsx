@@ -386,6 +386,16 @@ function CheckoutModal({ staffName, staffId, activeCheckins, defaultBranch, onCl
           </div>
         )}
 
+        {/* Gợi ý nghỉ trưa — chỉ hiện trong khung 11h00–13h00 */}
+        {(() => {
+          const p = new Date().getHours() * 60 + new Date().getMinutes();
+          return p >= 660 && p <= 780 ? (
+            <div style={{ padding: 10, borderRadius: 10, background: '#fff8e6', border: '1px solid #f0c14b', fontSize: 12, color: '#7a5b00' }}>
+              🍜 Đang trong khung giờ nghỉ trưa (11h00–13h00). Nếu chỉ ra ăn trưa, bấm "Kết thúc ca" rồi vào lại "Bắt đầu ca mới" trong vòng 1 tiếng — hệ thống tự nhận là nghỉ trưa, không tính đi muộn.
+            </div>
+          ) : null;
+        })()}
+
         {/* Photo Capture - Required (Front camera/Selfie) */}
         <div>
           <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 8 }}>📷 Chụp ảnh xác nhận (Camera xoay mặt) *</label>
@@ -559,10 +569,31 @@ export default function ShiftsScreen() {
   const [logsThang, setLogsThang] = useState([]);
   const [thangXem, setThangXem] = useState(() => { const d = new Date(); return { nam: d.getFullYear(), thang: d.getMonth() + 1 }; });
   const [xemChamCongCuaToi, setXemChamCongCuaToi] = useState(false);
+  const [overridesNgay, setOverridesNgay] = useState({});
 
   useEffect(() => { const timer = setInterval(() => setCurrentTime(new Date()), 1000); return () => clearInterval(timer); }, []);
   const loadLogs = () => { setLoading(true); fetchShiftLogs({ date }).then((data) => { setLogs(data || []); setError(''); }).catch((err) => setError(err.message)).finally(() => setLoading(false)); };
   useEffect(loadLogs, [date]);
+
+  // Giờ làm riêng của TỪNG người cho đúng ngày đang xem — chỉ để lấy giờ kết
+  // thúc riêng (nếu Giám đốc có đặt) làm mốc tính tăng ca. RLS chỉ payroll
+  // manager (owner/admin/accountant) hoặc chính người đó đọc được — quản lý
+  // khâu xem "hôm nay" của đội mình sẽ không thấy giờ riêng người khác (lỗi
+  // sẵn có từ RLS bảng này, không phải lỗi mới của tính năng này), khi đó
+  // coi như không có giờ riêng, tính tăng ca theo mặc định bộ phận như cũ.
+  useEffect(() => {
+    let huy = false;
+    supabase.from('staff_shift_overrides').select('staff_id,gio_ket_thuc').eq('work_date', date)
+      .then(({ data, error }) => {
+        if (huy) return;
+        if (error) { setOverridesNgay({}); return; }
+        const m = {};
+        (data || []).forEach((r) => { if (r.gio_ket_thuc) m[r.staff_id] = { gioKetThuc: r.gio_ket_thuc }; });
+        setOverridesNgay(m);
+      })
+      .catch(() => { if (!huy) setOverridesNgay({}); });
+    return () => { huy = true; };
+  }, [date]);
   useEffect(() => {
     const handleAction = (e) => {
       if (e.detail?.action === 'checkin') setShowCheckin(true);
@@ -625,7 +656,7 @@ export default function ShiftsScreen() {
   const boPhanTheoNguoi = {};
   hoSoList.forEach((h) => { boPhanTheoNguoi[h.id] = boPhanCuaHoSo(h); });
   const boPhanCuaToi = boPhanTheoNguoi[profile?.id] ?? boPhanCuaHoSo(profile);
-  const chamNgay = gomChamCongNgay(logs, danhSachCa, boPhanTheoNguoi);
+  const chamNgay = gomChamCongNgay(logs, danhSachCa, boPhanTheoNguoi, overridesNgay);
   const rong = (id, ten) => ({
     staffId: id, ten, vaoISO: null, raISO: null, vao: null, ra: null,
     ca: null, coCaChuan: false, chenhLech: null, trangThai: 'upcoming',

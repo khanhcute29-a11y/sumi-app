@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
 import DuyetViecModal from './DuyetViecModal';
+import EditTaskModal from './EditTaskModal';
 import SoKetToanKpi from './SoKetToanKpi';
+import { deleteTask } from '../../../lib/queries';
 import {
   TRANG_THAI, tomTatViec, sapXepQuaHan, nhanKhau, daDong,
   locTheoTuKhoa, ngayGio, doDaiThoiGian, treBaoNhieu, tienDoDuAn, quaHan,
@@ -72,7 +74,7 @@ function TheQuaHan({ viec, tenTheoId, tenKhau, onNhacNho, onXem, dangNhac }) {
 
 // Thẻ việc dùng chung cho các trang danh sách theo trạng thái (không riêng
 // quá hạn) — xem báo cáo, không có nút "Nhắc quản lý" (chỉ hợp với quá hạn).
-function TheViecTongQuat({ viec, tenTheoId, tenKhau, onXem }) {
+function TheViecTongQuat({ viec, tenTheoId, tenKhau, onXem, onSua, onXoa, dangXoa }) {
   const choDuyet = viec.status === 'pending_approval';
   const qh = quaHan(viec);
   const tt = TRANG_THAI[qh ? 'qua_han' : viec.status] || TRANG_THAI.open;
@@ -86,6 +88,16 @@ function TheViecTongQuat({ viec, tenTheoId, tenKhau, onXem }) {
         <span className="cv-badge" style={{ background: tt.nen, color: tt.mau }}>{tt.icon} {tt.nhan}</span>
       </div>
       <button className="cv-btn outline full" onClick={() => onXem(viec)}>Xem báo cáo</button>
+      {(onSua || onXoa) && (
+        <div className="cv-actions" style={{ marginTop: 8 }}>
+          {onSua && <button className="cv-btn outline" onClick={() => onSua(viec)} disabled={dangXoa === viec.id}>✏️ Sửa</button>}
+          {onXoa && (
+            <button className="cv-btn danger" onClick={() => onXoa(viec)} disabled={dangXoa === viec.id}>
+              {dangXoa === viec.id ? 'Đang xoá…' : '🗑️ Xoá'}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -97,7 +109,7 @@ function TheViecTongQuat({ viec, tenTheoId, tenKhau, onXem }) {
 // thử thật trên máy mới thấy tên khâu thật đa dạng hơn nhiều ("Bakery — Bếp
 // nóng", "Phòng Kế toán", "Vận tải — Nhân viên giao hàng"...), gõ cứng 4 khâu
 // cũ (nong/lanh/xuong41/xuong42) là bịa, không khớp dữ liệu thật.
-function TrangDanhSachViec({ tieuDe, dsViec, tenTheoId, tenKhau, danhSachKhau, onXem, onBack, onNhacNho, dangNhac }) {
+function TrangDanhSachViec({ tieuDe, dsViec, tenTheoId, tenKhau, danhSachKhau, onXem, onBack, onNhacNho, dangNhac, onSua, onXoa, dangXoa }) {
   const [khauDangXem, setKhauDangXem] = useState('all');
   const maKhau = (t) => t?.station_id || '_khac';
   const tabs = [
@@ -127,7 +139,8 @@ function TrangDanhSachViec({ tieuDe, dsViec, tenTheoId, tenKhau, danhSachKhau, o
             quaHan(v) && onNhacNho
               ? <TheQuaHan key={v.id} viec={v} tenTheoId={tenTheoId} tenKhau={tenKhau}
                   onNhacNho={onNhacNho} onXem={onXem} dangNhac={dangNhac} />
-              : <TheViecTongQuat key={v.id} viec={v} tenTheoId={tenTheoId} tenKhau={tenKhau} onXem={onXem} />
+              : <TheViecTongQuat key={v.id} viec={v} tenTheoId={tenTheoId} tenKhau={tenKhau} onXem={onXem}
+                  onSua={onSua} onXoa={onXoa} dangXoa={dangXoa} />
           ))}
         </div>
       ) : (
@@ -157,7 +170,22 @@ export default function ViecGiamDoc({
   }, [tasks.length]);
   const [xem, setXem] = useState(null);
   const [dangNhac, setDangNhac] = useState('');
+  const [sua, setSua] = useState(null);
+  const [dangXoa, setDangXoa] = useState('');
   const [loiChung, setLoiChung] = useState('');
+
+  const xoa = async (viec) => {
+    if (!window.confirm(`Xoá việc "${viec.title}"? Không thể hoàn tác.`)) return;
+    setDangXoa(viec.id); setLoiChung('');
+    try {
+      await deleteTask(viec.id);
+      await onTaiLai?.();
+    } catch (e) {
+      setLoiChung(e?.message || 'Không xoá được việc này.');
+    } finally {
+      setDangXoa('');
+    }
+  };
 
   const tenKhau = (t) => {
     const ma = t?.station_id || '_khac';
@@ -199,15 +227,21 @@ export default function ViecGiamDoc({
   if (trangDanhSach) {
     return (
       <div className="cv-wrap">
+        {loiChung && <div className="cv-error">⚠️ {loiChung}</div>}
         <TrangDanhSachViec tieuDe={trangDanhSach.tieuDe} dsViec={dsTheoLoc(trangDanhSach.loc)}
           tenTheoId={tenTheoId} tenKhau={tenKhau} danhSachKhau={danhSachKhau}
           onXem={setXem} onBack={() => setTrangDanhSach(null)}
-          onNhacNho={nhac} dangNhac={dangNhac} />
+          onNhacNho={nhac} dangNhac={dangNhac}
+          onSua={setSua} onXoa={xoa} dangXoa={dangXoa} />
         {xem && (
           <DuyetViecModal viec={xem} tenTho={tenTheoId[xem.assignee_id]} hoSo={hoSo} vaiTro="giam_doc"
             chiXem={xem.status !== 'pending_approval'}
             onClose={() => setXem(null)}
             onXong={async () => { setXem(null); await onTaiLai?.(); }} />
+        )}
+        {sua && (
+          <EditTaskModal viec={sua} onClose={() => setSua(null)}
+            onXong={async () => { setSua(null); await onTaiLai?.(); }} />
         )}
       </div>
     );

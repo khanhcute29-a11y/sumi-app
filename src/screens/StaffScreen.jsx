@@ -155,6 +155,7 @@ function GioLamRiengPanel({ hoSo, onDone }) {
   const [danhSach, setDanhSach] = useState(null);
   const [ngay, setNgay] = useState('');
   const [gio, setGio] = useState('');
+  const [gioRa, setGioRa] = useState('');
   const [lyDo, setLyDo] = useState('');
   const [dangGui, setDangGui] = useState(false);
   const [loi, setLoi] = useState('');
@@ -168,11 +169,12 @@ function GioLamRiengPanel({ hoSo, onDone }) {
 
   const dat = async () => {
     if (!ngay || !gio) { setLoi('Chọn ngày và giờ vào ca trước.'); return; }
+    if (gioRa && gioRa <= gio) { setLoi('Giờ kết thúc phải sau giờ bắt đầu.'); return; }
     setDangGui(true); setLoi(''); setXong('');
     try {
-      await setStaffShiftOverride({ staffId: hoSo.id, workDate: ngay, gioBatDau: gio, lyDo });
+      await setStaffShiftOverride({ staffId: hoSo.id, workDate: ngay, gioBatDau: gio, gioKetThuc: gioRa || null, lyDo });
       setXong('Đã đặt giờ làm riêng.');
-      setNgay(''); setGio(''); setLyDo('');
+      setNgay(''); setGio(''); setGioRa(''); setLyDo('');
       await taiLai();
       await onDone?.();
     } catch (e) {
@@ -191,6 +193,9 @@ function GioLamRiengPanel({ hoSo, onDone }) {
       <div style={{ font: 'var(--text-caption)', fontWeight: 800, color: 'var(--text-primary)', marginBottom: 6 }}>
         ⏰ Yêu cầu giờ làm riêng (khác giờ chuẩn, cho 1 ngày cụ thể)
       </div>
+      <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', marginBottom: 8 }}>
+        Giờ vào ca bắt buộc chọn. Giờ kết thúc để trống thì giữ giờ tan ca mặc định của bộ phận; có chọn thì hệ thống tính tăng ca theo ĐÚNG mốc này.
+      </div>
 
       {danhSach === null && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Đang tải…</div>}
       {danhSach && danhSach.length > 0 && (
@@ -199,6 +204,7 @@ function GioLamRiengPanel({ hoSo, onDone }) {
             <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface-card)', borderRadius: 10, padding: '6px 10px', fontSize: 12.5 }}>
               <span>
                 <strong>{new Date(o.work_date).toLocaleDateString('vi-VN')}</strong> — vào lúc <strong>{o.gio_bat_dau?.slice(0, 5)}</strong>
+                {o.gio_ket_thuc ? <> – kết thúc lúc <strong>{o.gio_ket_thuc.slice(0, 5)}</strong></> : ''}
                 {o.ly_do ? ` · ${o.ly_do}` : ''}
               </span>
               <button type="button" onClick={() => huy(o.work_date)} style={{ border: 'none', background: 'none', color: 'var(--status-danger)', fontWeight: 700, cursor: 'pointer', fontSize: 12 }}>Huỷ</button>
@@ -213,7 +219,9 @@ function GioLamRiengPanel({ hoSo, onDone }) {
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
         <input type="date" value={ngay} min={homNayYMD()} onChange={(e) => setNgay(e.target.value)}
           style={{ minHeight: 38, borderRadius: 8, border: '1px solid var(--border-default)', padding: '0 8px', fontSize: 12.5, fontFamily: 'inherit' }} />
-        <input type="time" value={gio} onChange={(e) => setGio(e.target.value)}
+        <input type="time" value={gio} onChange={(e) => setGio(e.target.value)} title="Giờ vào ca"
+          style={{ minHeight: 38, borderRadius: 8, border: '1px solid var(--border-default)', padding: '0 8px', fontSize: 12.5, fontFamily: 'inherit' }} />
+        <input type="time" value={gioRa} onChange={(e) => setGioRa(e.target.value)} title="Giờ kết thúc (không bắt buộc — để trống thì giữ giờ tan ca mặc định)"
           style={{ minHeight: 38, borderRadius: 8, border: '1px solid var(--border-default)', padding: '0 8px', fontSize: 12.5, fontFamily: 'inherit' }} />
         <input type="text" value={lyDo} onChange={(e) => setLyDo(e.target.value)} placeholder="Lý do (VD: đơn đặc biệt)"
           style={{ flex: 1, minWidth: 140, minHeight: 38, borderRadius: 8, border: '1px solid var(--border-default)', padding: '0 8px', fontSize: 12.5, fontFamily: 'inherit' }} />

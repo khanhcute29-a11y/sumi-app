@@ -122,7 +122,7 @@ export function caCuaBoPhan(danhSachCa, boPhan) {
 // khác khi caChuanCuaLog() không tìm thấy ca khớp giờ đúng bộ phận (dữ liệu
 // chấm công cũ trước khi sửa giờ chuẩn Bakery ngày 29/08) — ca.boPhan lúc đó
 // KHÔNG phản ánh đúng bộ phận thật, nên không được dùng để rẽ nhánh Bakery.
-export function tinhChenhLech(ca, gioVao, gioRa, phutMuonDB, boPhanThat) {
+export function tinhChenhLech(ca, gioVao, gioRa, phutMuonDB, boPhanThat, gioKetThucRieng) {
   if (!ca) return null;
   const mocP = phutTrongNgay(ca.moc);
 
@@ -146,7 +146,10 @@ export function tinhChenhLech(ca, gioVao, gioRa, phutMuonDB, boPhanThat) {
   // không theo giờ tan ca riêng của từng ca — theo xác nhận của chủ tiệm
   // (30/08/2026). Bakery vẫn giữ nguyên tính theo giờ tan ca chuẩn của ca đó
   // (05:30 sáng → 14:30, hoặc 13:30 chiều → 22:30).
-  const mocTangCa = (boPhanThat ?? ca.boPhan) === 'bakery' ? ca.ketThuc : '16:00';
+  // Giám đốc đặt GIỜ KẾT THÚC RIÊNG cho hôm đó (staff_shift_overrides) thì
+  // mốc này LUÔN ưu tiên theo giờ riêng đó — chỉ thị trực tiếp của quản lý
+  // nên thắng cả 2 nhánh mặc định ở trên.
+  const mocTangCa = gioKetThucRieng || ((boPhanThat ?? ca.boPhan) === 'bakery' ? ca.ketThuc : '16:00');
 
   let lechRa = null;
   let nhanRa = 'Chưa ra ca';
@@ -197,6 +200,35 @@ export function gioLamThuc(vaoISO, raISO) {
   return Math.max(0, tho - truTrua);
 }
 
+// ── Nghỉ trưa kiểu bấm 2 lần ─────────────────────────────────────────────────
+// Ghép các sự kiện checkin/checkout của MỘT người trong MỘT ngày thành từng
+// phiên làm việc. Người chỉ có 1 phiên/ngày (không bấm nghỉ trưa) vẫn tính
+// đúng công thức cũ (gioLamThuc, trừ cứng khung 11:30–12:30). Người có >=2
+// phiên (đã Kết thúc ca rồi Bắt đầu ca mới giữa buổi) thì khoảng hở GIỮA các
+// phiên tự động không được cộng vào giờ làm — khớp đúng hàm
+// `sumi_gio_lam_trong_ngay` dưới database.
+export function gioLamTheoPhien(suKien) {
+  const sapXep = [...(suKien || [])]
+    .filter((e) => e?.luc)
+    .sort((a, b) => new Date(a.luc) - new Date(b.luc));
+  let dangVao = null, vaoDau = null, raCuoi = null, tongGio = 0, soPhien = 0;
+  sapXep.forEach((e) => {
+    if (e.type === 'checkin') {
+      if (!vaoDau) vaoDau = e.luc;
+      if (!dangVao) dangVao = e.luc;
+    } else if (e.type === 'checkout' && dangVao) {
+      tongGio += (new Date(e.luc) - new Date(dangVao)) / 3600000;
+      soPhien += 1;
+      raCuoi = e.luc;
+      dangVao = null;
+    }
+  });
+  if (!vaoDau) return { soGio: 0, dangTrongCa: false, raCuoi: null };
+  if (dangVao) return { soGio: Math.max(0, tongGio), dangTrongCa: true, raCuoi: null };
+  if (soPhien <= 1) return { soGio: gioLamThuc(vaoDau, raCuoi) || 0, dangTrongCa: false, raCuoi };
+  return { soGio: Math.max(0, tongGio), dangTrongCa: false, raCuoi };
+}
+
 // ── Trạng thái ──────────────────────────────────────────────────────────────
 export const TRANG_THAI = {
   working: { nhan: 'Đang làm', mau: '#16a34a', nen: '#f0fdf4', vien: '#86efac', icon: '🟢' },
@@ -213,7 +245,10 @@ export const MAU_CHAM_LICH = {
 
 // ── Gom nhật ký MỘT ngày thành trạng thái từng nhân viên ────────────────────
 // boPhanTheoNguoi: { [staff_id]: 'bakery' | 'xuong41' | ... }
-export function gomChamCongNgay(logs, danhSachCa, boPhanTheoNguoi = {}) {
+// overrideTheoNguoi: { [staff_id]: { gioKetThuc } } — giờ kết thúc RIÊNG của
+// hôm đó (staff_shift_overrides), dùng để tính tăng ca đúng mốc quản lý đã
+// đặt thay vì giờ tan ca mặc định của bộ phận. Không truyền thì tính như cũ.
+export function gomChamCongNgay(logs, danhSachCa, boPhanTheoNguoi = {}, overrideTheoNguoi = {}) {
   const theoNguoi = new Map();
 
   const sapXep = [...(logs || [])].sort(
@@ -230,13 +265,16 @@ export function gomChamCongNgay(logs, danhSachCa, boPhanTheoNguoi = {}) {
         vaoISO: null, raISO: null, vao: null, ra: null,
         ca: null, coCaChuan: false, phutMuonDB: null,
         ghiChu: '', xinNghi: false, nhanCa: null,
+        suKien: [],   // toàn bộ checkin/checkout trong ngày — để ghép PHIÊN
       });
     }
     const n = theoNguoi.get(id);
 
     if (l.type === 'checkin') {
-      if (!n.vaoISO) {                       // lấy lần vào ĐẦU TIÊN làm mốc
-        n.vaoISO = l.checkin_time || l.created_at;
+      const luc = l.checkin_time || l.created_at;
+      n.suKien.push({ type: 'checkin', luc });
+      if (!n.vaoISO) {                       // lấy lần vào ĐẦU TIÊN làm mốc hiển thị
+        n.vaoISO = luc;
         n.vao = gioPhut(n.vaoISO);
         n.nhanCa = l.shift_label || null;
         n.phutMuonDB = typeof l.late_minutes === 'number' ? l.late_minutes : null;
@@ -245,8 +283,10 @@ export function gomChamCongNgay(logs, danhSachCa, boPhanTheoNguoi = {}) {
         if (ca) { n.ca = ca; n.coCaChuan = true; }
       }
     } else if (l.type === 'checkout') {
-      n.raISO = l.checkin_time || l.created_at;   // lấy lần ra CUỐI CÙNG
-      n.ra = gioPhut(n.raISO);
+      const luc = l.checkin_time || l.created_at;
+      n.suKien.push({ type: 'checkout', luc });
+      n.raISO = luc;   // lấy lần ra CUỐI CÙNG (chỉ để hiển thị — trạng thái
+      n.ra = gioPhut(n.raISO);   // thật do gioLamTheoPhien() quyết định bên dưới)
     } else if (l.type === 'leave_request') {
       n.xinNghi = true;
       if (l.reason) n.ghiChu = l.reason;
@@ -254,12 +294,18 @@ export function gomChamCongNgay(logs, danhSachCa, boPhanTheoNguoi = {}) {
   });
 
   theoNguoi.forEach((n) => {
-    n.chenhLech = n.coCaChuan ? tinhChenhLech(n.ca, n.vao, n.ra, n.phutMuonDB, n.boPhan) : null;
-    if (n.raISO) n.trangThai = 'done';
-    else if (n.vaoISO) n.trangThai = n.chenhLech?.loaiVao === 'late' ? 'late' : 'working';
+    const phien = gioLamTheoPhien(n.suKien);
+    n.soGio = phien.soGio;
+    // Nếu đang trong phiên (mới bấm "Bắt đầu ca mới" sau nghỉ trưa, chưa
+    // Kết thúc ca lại), KHÔNG được đưa lần checkout nghỉ trưa cũ vào tính
+    // "Về sớm"/tăng ca — coi như "Chưa ra ca" cho đúng thực tế.
+    const raThatSu = phien.dangTrongCa ? null : n.ra;
+    const gioKetThucRieng = overrideTheoNguoi?.[n.staffId]?.gioKetThuc || null;
+    n.chenhLech = n.coCaChuan ? tinhChenhLech(n.ca, n.vao, raThatSu, n.phutMuonDB, n.boPhan, gioKetThucRieng) : null;
+    if (phien.dangTrongCa) n.trangThai = n.chenhLech?.loaiVao === 'late' ? 'late' : 'working';
+    else if (n.vaoISO) n.trangThai = 'done';
     else if (n.xinNghi) n.trangThai = 'leave';
     else n.trangThai = 'upcoming';
-    n.soGio = gioLamThuc(n.vaoISO, n.raISO);
   });
 
   return theoNguoi;

@@ -16,9 +16,10 @@ export async function fetchUpcomingShiftOverrides(staffId) {
   return data || [];
 }
 
-export async function setStaffShiftOverride({ staffId, workDate, gioBatDau, lyDo }) {
+export async function setStaffShiftOverride({ staffId, workDate, gioBatDau, gioKetThuc, lyDo }) {
   const { data, error } = await supabase.rpc('sumi_dat_gio_lam_rieng', {
-    p_staff_id: staffId, p_ngay: workDate, p_gio_bat_dau: gioBatDau, p_ly_do: lyDo || null,
+    p_staff_id: staffId, p_ngay: workDate, p_gio_bat_dau: gioBatDau,
+    p_gio_ket_thuc: gioKetThuc || null, p_ly_do: lyDo || null,
   });
   if (error) {
     if (/function .* does not exist|schema cache/i.test(error.message || '')) {
