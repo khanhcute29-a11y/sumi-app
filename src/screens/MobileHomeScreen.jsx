@@ -342,7 +342,6 @@ function HangGioLam({nguoi,tenHienThi,laToi,tu,den}){
 
 function HieuSuatBepSheet({loai,onClose,doiRoster,tenTheoId,doanhThuBep,doanhThuCaNhan,donCuaBep,gioLamDoi,thuongDoi,profile,tu,den}){
  const[xemDon,setXemDon]=useState(null);      // orderId đang xem chi tiết
- const[xemAnh,setXemAnh]=useState(null);      // photo_url đang xem full
  if(loai==='doanhThu'){
   const donCoDoanhThu=(donCuaBep||[]).filter(o=>o.status_v2==='completed');
   return<LeadSheet title="💰 Doanh thu bếp (tháng này)" onClose={onClose}>
@@ -382,21 +381,26 @@ function HieuSuatBepSheet({loai,onClose,doiRoster,tenTheoId,doanhThuBep,doanhThu
  const tongBep=(thuongDoi||[]).reduce((s,r)=>s+Number(r.amount||0),0);
  const cuaToi=(thuongDoi||[]).filter(r=>r.staff_id===profile?.id);
  const tongCaNhan=cuaToi.reduce((s,r)=>s+Number(r.amount||0),0);
+ const[xemThuong,setXemThuong]=useState(null); // reward đang mở chi tiết
  const HangThuong=({r,hienTen})=>(
-  <div key={r.id} className="eov4-table-row" onClick={()=>r.photo_url&&setXemAnh(r.photo_url)} style={r.photo_url?{cursor:'pointer'}:undefined}>
+  <button key={r.id} className="eov4-table-row" onClick={()=>setXemThuong(r)} style={{width:'100%',border:0,background:'transparent',cursor:'pointer',textAlign:'left',font:'inherit'}}>
    <div className="eov4-table-main"><strong>{hienTen?`${tenTheoId[r.staff_id]||'?'} — `:''}{r.title||'Thưởng nóng'}</strong><span>Từ {r.ten_nguoi_thuong} · {r.awarded_on}{r.note?` · ${r.note}`:''}</span></div>
    <span style={{display:'flex',alignItems:'center',gap:4}}>
     <span className="eov4-hours-pill">+{fmtVND(r.amount)}</span>
-    {r.photo_url&&<ChevronRight size={14} color="#a08a72"/>}
+    <ChevronRight size={14} color="#a08a72"/>
    </span>
-  </div>
+  </button>
  );
+ // Nguồn thưởng — "liên kết đến từ đâu" đúng như yêu cầu gốc. Chỉ có 2 loại
+ // link_type thật trong dữ liệu (task/order_created); loại khác hoặc không
+ // có link thì chỉ ghi "Sếp tự chọn thưởng", không bịa thêm nguồn.
+ const NHAN_NGUON={task:'Từ một việc đã hoàn thành',order_created:'Từ một đơn hàng đã tạo'};
  return<LeadSheet title="🎁 Thưởng bếp (tháng này)" onClose={onClose}>
   <div className="eov4-kpi-grid" style={{gridTemplateColumns:'1fr 1fr'}}>
    <div className="eov4-kpi-card eov4-kpi-amber"><div className="eov4-kpi-value">{fmtVND(tongBep)}</div><div className="eov4-kpi-label">Cả bếp</div></div>
    <div className="eov4-kpi-card eov4-kpi-blue"><div className="eov4-kpi-value">{fmtVND(tongCaNhan)}</div><div className="eov4-kpi-label">Cá nhân tôi</div></div>
   </div>
-  <div className="eov4-field-label" style={{marginTop:14}}>Thưởng của tôi</div>
+  <div className="eov4-field-label" style={{marginTop:14}}>Thưởng của tôi — bấm vào xem chi tiết</div>
   {cuaToi.length===0?<div className="eov4-empty-box">Chưa có thưởng nào tháng này.</div>:(
    <div className="eov4-table">{cuaToi.map(r=><HangThuong key={r.id} r={r} hienTen={false}/>)}</div>
   )}
@@ -404,9 +408,26 @@ function HieuSuatBepSheet({loai,onClose,doiRoster,tenTheoId,doanhThuBep,doanhThu
   {!thuongDoi||thuongDoi.length===0?<div className="eov4-empty-box">Chưa có thưởng nào tháng này.</div>:(
    <div className="eov4-table">{thuongDoi.map(r=><HangThuong key={r.id} r={r} hienTen={true}/>)}</div>
   )}
-  {xemAnh&&(
-   <div onClick={()=>setXemAnh(null)} style={{position:'fixed',inset:0,zIndex:1500,background:'rgba(0,0,0,.85)',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
-    <img src={xemAnh} alt="Ảnh thưởng" style={{maxWidth:'100%',maxHeight:'90vh',borderRadius:12}}/>
+  {xemThuong&&(
+   <div onClick={()=>setXemThuong(null)} style={{position:'fixed',inset:0,zIndex:1500,background:'rgba(0,0,0,.6)',display:'flex',alignItems:'flex-end',justifyContent:'center'}}>
+    <div onClick={e=>e.stopPropagation()} style={{width:'100%',maxWidth:520,maxHeight:'88vh',overflowY:'auto',background:'#fffaf0',borderRadius:'22px 22px 0 0',padding:'20px 18px calc(20px + env(safe-area-inset-bottom))'}}>
+     <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:12}}>
+      <div>
+       <div style={{fontSize:11,fontWeight:800,color:'#a16207',textTransform:'uppercase'}}>Chi tiết thưởng</div>
+       <h2 style={{margin:'4px 0 0',fontSize:20,fontWeight:900,color:'#2d1c10'}}>{xemThuong.title||'Thưởng nóng'}</h2>
+      </div>
+      <button onClick={()=>setXemThuong(null)} style={{border:0,background:'#f3eadf',width:36,height:36,borderRadius:12,fontSize:18,fontWeight:900,cursor:'pointer'}}>×</button>
+     </div>
+     <div style={{fontSize:30,fontWeight:900,color:'#c2790e',marginBottom:14}}>+{fmtVND(xemThuong.amount)}</div>
+     <div className="eov4-table">
+      <div className="eov4-table-row"><div className="eov4-table-main"><strong>Người được thưởng</strong></div><span>{tenTheoId[xemThuong.staff_id]||(xemThuong.staff_id===profile?.id?'Tôi':'?')}</span></div>
+      <div className="eov4-table-row"><div className="eov4-table-main"><strong>Ai thưởng</strong></div><span>{xemThuong.ten_nguoi_thuong}</span></div>
+      <div className="eov4-table-row"><div className="eov4-table-main"><strong>Ngày</strong></div><span>{xemThuong.awarded_on}</span></div>
+      <div className="eov4-table-row"><div className="eov4-table-main"><strong>Nguồn</strong></div><span>{NHAN_NGUON[xemThuong.link_type]||'Sếp tự chọn thưởng'}</span></div>
+     </div>
+     {xemThuong.note&&<div style={{marginTop:12}}><div className="eov4-field-label">Lý do</div><div style={{fontSize:14,color:'#5f4b3d',lineHeight:1.5}}>{xemThuong.note}</div></div>}
+     {xemThuong.photo_url&&<img src={xemThuong.photo_url} alt="Ảnh chứng từ thưởng" style={{width:'100%',borderRadius:14,marginTop:14}}/>}
+    </div>
    </div>
   )}
  </LeadSheet>;
