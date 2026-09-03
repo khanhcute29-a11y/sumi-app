@@ -949,6 +949,50 @@ export async function updateShiftRule(id, { gioBatDau, soGioChuan, phutDenSomToi
   if (error) throw error;
 }
 
+// ---- Ca làm QUY ĐỊNH riêng cho TỪNG cá nhân (Individual Shift Override) ----
+// Tái dùng ĐÚNG bảng sumi_quy_dinh_ca (dùng id nhân viên làm bo_phan) — cơ
+// chế này đã tồn tại từ migration 202608300800 (11 người đã được set thẳng
+// bằng SQL, chưa có UI). RLS bảng này chỉ owner/admin ghi được
+// (is_business_director(), 202609022200) — cùng quyền với "Sửa giờ quy định
+// cả bộ phận" nên ghi thẳng, không cần RPC riêng.
+export function tinhSoGioChuan(gioBatDau, gioKetThuc) {
+  const [h1, m1] = gioBatDau.split(':').map(Number);
+  const [h2, m2] = gioKetThuc.split(':').map(Number);
+  let phut = (h2 * 60 + m2) - (h1 * 60 + m1);
+  if (phut <= 0) phut += 1440; // ca qua đêm
+  return Math.round((phut / 60) * 100) / 100;
+}
+
+export async function fetchCaRiengCaNhan(staffId) {
+  const { data, error } = await supabase.from('sumi_quy_dinh_ca')
+    .select('*').eq('bo_phan', staffId).eq('active', true).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function upsertCaRiengCaNhan({ staffId, staffName, gioBatDau, gioKetThuc, khongNghiTrua }) {
+  if (!gioBatDau || !gioKetThuc) throw new Error('Chọn đủ giờ bắt đầu và giờ kết thúc.');
+  const soGioChuan = tinhSoGioChuan(gioBatDau, gioKetThuc);
+  const hienCo = await fetchCaRiengCaNhan(staffId);
+  const payload = {
+    bo_phan: staffId, ma_ca: 'rieng', ten_ca: `Ca riêng — ${staffName || 'Nhân sự'}`,
+    gio_bat_dau: gioBatDau, so_gio_chuan: soGioChuan,
+    phut_den_som_toi_thieu: hienCo?.phut_den_som_toi_thieu ?? 10,
+    khong_nghi_trua: !!khongNghiTrua, active: true, updated_at: new Date().toISOString(),
+  };
+  const { error } = hienCo
+    ? await supabase.from('sumi_quy_dinh_ca').update(payload).eq('id', hienCo.id)
+    : await supabase.from('sumi_quy_dinh_ca').insert(payload);
+  if (error) throw error;
+}
+
+export async function xoaCaRiengCaNhan(staffId) {
+  const { error } = await supabase.from('sumi_quy_dinh_ca')
+    .update({ active: false, updated_at: new Date().toISOString() })
+    .eq('bo_phan', staffId).eq('active', true);
+  if (error) throw error;
+}
+
 // ---- Chia công đoạn bếp (gán nhân viên đang trực vào công đoạn của đơn) ----
 
 export async function createOrderStages(rows) {

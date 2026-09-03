@@ -622,7 +622,7 @@ export default function ShiftsScreen() {
     supabase.from('sumi_quy_dinh_ca').select('*').eq('active', true)
       .then(({ data }) => setCauHinhCa(data || []))
       .catch(() => setCauHinhCa([]));
-    supabase.from('profiles').select('id,full_name,role,station,phone')
+    supabase.from('profiles').select('id,full_name,role,station,phone,extra_roles')
       .eq('approved', true).neq('active', false).order('full_name')
       .then(({ data }) => setHoSoList(data || []))
       .catch(() => setHoSoList([]));

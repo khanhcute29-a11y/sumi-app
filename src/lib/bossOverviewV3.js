@@ -175,7 +175,7 @@ export async function fetchExpenseAndAdvanceLedgerToday({ from, to } = {}) {
 export async function fetchTodayStaffStatus() {
   const today = todayStr();
   const [profilesRes, logsRes] = await Promise.all([
-    supabase.from('profiles').select('id, full_name, role, station').eq('approved', true).neq('active', false),
+    supabase.from('profiles').select('id, full_name, role, station, extra_roles').eq('approved', true).neq('active', false),
     supabase.from('shift_logs').select('*').eq('work_date', today),
   ]);
   if (profilesRes.error) throw profilesRes.error;

@@ -56,29 +56,48 @@ function iconCa(ten) {
 }
 
 export const TEN_BO_PHAN = {
-  bakery: 'Bakery (Thu ngân · Bếp lạnh · Bếp nóng)',
+  bep_lanh: 'Bếp Lạnh',
+  bep_nong: 'Bếp Nóng',
+  thu_ngan: 'Thu Ngân',
+  ban_hang: 'Bán Hàng',
   xuong41: 'Xưởng 41',
   xuong42: 'Xưởng 42',
   van_tai: 'Vận tải',
 };
 
+// Bộ phận đều thuộc "khối Bakery" (Bakery cũ) — dùng để giữ nguyên các nhánh
+// rẽ đã có (mốc tính tăng ca theo giờ tan ca chuẩn, thay vì mốc cố định
+// 16:00 của Xưởng/Vận tải) sau khi tách 1 bo_phan 'bakery' thành 4 bo_phan
+// riêng (202609041700) — xem tinhChenhLech() bên dưới.
+const KHOI_BAKERY = new Set(['bep_lanh', 'bep_nong', 'thu_ngan', 'ban_hang']);
+
 // Bộ phận của một nhân viên. PHẢI khớp đúng hàm `sumi_bo_phan_cham_cong` dưới
 // database — đã đối chiếu trên toàn bộ nhân sự thật, không lệch dòng nào.
 // Ưu tiên `station`; hồ sơ chưa gán khâu thì suy từ chức danh.
+//
+// Tách theo yêu cầu Giám đốc (04/09/2026): Thu Ngân/Bán Hàng/Bếp Nóng/Bếp
+// Lạnh trước đây gộp chung 1 bo_phan 'bakery' (sửa giờ 1 khâu là đổi giờ cả
+// 4), giờ mỗi khâu có ca RIÊNG, sửa độc lập được (202609041700).
 export function boPhanCuaHoSo(hoSo) {
   const st = (hoSo?.station || '').trim();
-  if (st === 'lanh' || st === 'nong') return 'bakery';
+  if (st === 'lanh') return 'bep_lanh';
+  if (st === 'nong') return 'bep_nong';
   if (st === 'xuong41') return 'xuong41';
   if (st === 'xuong42') return 'xuong42';
 
   const r = hoSo?.role;
+  const extra = hoSo?.extra_roles || [];
   if (r === 'shipper') return 'van_tai';
-  // 'sale' = bán hàng tại tiệm, làm cùng ca với thu ngân và bếp.
-  if (r === 'cashier' || r === 'sale' || r === 'bakery' || r === 'kitchen_lead') return 'bakery';
+  if (r === 'cashier') return 'thu_ngan';
+  if (r === 'bakery' || r === 'kitchen_lead') return 'bep_lanh';
+  // 'sale' = bán hàng tại tiệm — CHỈ tính theo ca cố định khi có gắn thêm
+  // extra_role 'bakery' (đúng như sumi_bo_phan_cham_cong dưới database);
+  // 'sale' đơn thuần không extra thì không theo ca cố định.
+  if (r === 'sale' && extra.includes('bakery')) return 'ban_hang';
   if (r === 'kho_xuong42' || r === 'deputy_director_x42') return 'xuong42';
   if (r === 'deputy_director_x41') return 'xuong41';
 
-  return null;   // Giám đốc, kế toán, bán hàng, kho... không theo ca cố định
+  return null;   // Giám đốc, kế toán, bán hàng (không gắn bakery), kho... không theo ca cố định
 }
 
 export function chuanHoaCa(rows) {
@@ -87,6 +106,7 @@ export function chuanHoaCa(rows) {
     const soGio = Number(r.so_gio_chuan) || 9;
     const phutSom = Number(r.phut_den_som_toi_thieu ?? 10);
     return {
+      id: r.id,
       boPhan: r.bo_phan,
       maCa: r.ma_ca,
       ten: r.ten_ca,
@@ -96,6 +116,7 @@ export function chuanHoaCa(rows) {
       ketThuc: tuPhut(batDauP + soGio * 60),
       soGio,
       phutSom,
+      khongNghiTrua: !!r.khong_nghi_trua,
     };
   }).sort((a, b) => phutTrongNgay(a.batDau) - phutTrongNgay(b.batDau));
 }
@@ -103,7 +124,16 @@ export function chuanHoaCa(rows) {
 // Bản ghi đã được trigger điền `expected_start` = giờ vào ca quy định.
 // Trống nghĩa là người này không thuộc ca cố định (giám đốc, kế toán…) hoặc
 // chấm công ngoài khung ca — hai trường hợp đó KHÔNG tính đi muộn.
+//
+// Ưu tiên TUYỆT ĐỐI ca RIÊNG của đúng người này (bo_phan = staff_id, xem
+// migration 202608300800/202609041700) — khớp đúng cách sumi_bo_phan_cham_cong
+// dưới database ưu tiên id cá nhân trước bo_phan chung. TRƯỚC ĐÂY hàm này chỉ
+// khớp theo giờ trùng (batDau === es) rồi mới ưu tiên boPhan — nếu 2 người
+// khác khâu tình cờ có giờ vào ca trùng nhau thì lấy nhầm ca của người kia;
+// giờ khớp thẳng theo ID trước, không phụ thuộc trùng giờ nữa.
 export function caChuanCuaLog(log, danhSachCa, boPhan) {
+  const rieng = (danhSachCa || []).find((c) => c.boPhan === log?.staff_id);
+  if (rieng) return rieng;
   const es = catGiay(log?.expected_start);
   if (!es) return null;
   const hop = (danhSachCa || []).filter((c) => c.batDau === es);
@@ -144,12 +174,14 @@ export function tinhChenhLech(ca, gioVao, gioRa, phutMuonDB, boPhanThat, gioKetT
 
   // Mốc tính TĂNG CA: Xưởng 41/42 và Vận tải tính từ mốc CỐ ĐỊNH 16:00 chiều,
   // không theo giờ tan ca riêng của từng ca — theo xác nhận của chủ tiệm
-  // (30/08/2026). Bakery vẫn giữ nguyên tính theo giờ tan ca chuẩn của ca đó
-  // (05:30 sáng → 14:30, hoặc 13:30 chiều → 22:30).
+  // (30/08/2026). Khối Bakery (Bếp Lạnh/Bếp Nóng/Thu Ngân/Bán Hàng — tách từ
+  // 1 bo_phan 'bakery' ngày 04/09/2026, xem KHOI_BAKERY) vẫn giữ nguyên tính
+  // theo giờ tan ca chuẩn của ca đó (05:30 sáng → 14:30, hoặc 13:30 chiều →
+  // 22:30).
   // Giám đốc đặt GIỜ KẾT THÚC RIÊNG cho hôm đó (staff_shift_overrides) thì
   // mốc này LUÔN ưu tiên theo giờ riêng đó — chỉ thị trực tiếp của quản lý
   // nên thắng cả 2 nhánh mặc định ở trên.
-  const mocTangCa = gioKetThucRieng || ((boPhanThat ?? ca.boPhan) === 'bakery' ? ca.ketThuc : '16:00');
+  const mocTangCa = gioKetThucRieng || (KHOI_BAKERY.has(boPhanThat ?? ca.boPhan) ? ca.ketThuc : '16:00');
 
   let lechRa = null;
   let nhanRa = 'Chưa ra ca';
@@ -207,7 +239,10 @@ export function gioLamThuc(vaoISO, raISO) {
 // phiên (đã Kết thúc ca rồi Bắt đầu ca mới giữa buổi) thì khoảng hở GIỮA các
 // phiên tự động không được cộng vào giờ làm — khớp đúng hàm
 // `sumi_gio_lam_trong_ngay` dưới database.
-export function gioLamTheoPhien(suKien) {
+// khongNghiTrua: ca RIÊNG của người này (nếu có) khai báo "ca liên tục,
+// không nghỉ trưa" (vd ca bán hàng) — bỏ qua trừ cứng khung 11:30–12:30 dù
+// chỉ có 1 phiên/ngày, khớp đúng sumi_gio_lam_trong_ngay dưới database.
+export function gioLamTheoPhien(suKien, khongNghiTrua = false) {
   const sapXep = [...(suKien || [])]
     .filter((e) => e?.luc)
     .sort((a, b) => new Date(a.luc) - new Date(b.luc));
@@ -225,7 +260,10 @@ export function gioLamTheoPhien(suKien) {
   });
   if (!vaoDau) return { soGio: 0, dangTrongCa: false, raCuoi: null };
   if (dangVao) return { soGio: Math.max(0, tongGio), dangTrongCa: true, raCuoi: null };
-  if (soPhien <= 1) return { soGio: gioLamThuc(vaoDau, raCuoi) || 0, dangTrongCa: false, raCuoi };
+  if (soPhien <= 1) {
+    if (khongNghiTrua) return { soGio: Math.max(0, (new Date(raCuoi) - new Date(vaoDau)) / 3600000), dangTrongCa: false, raCuoi };
+    return { soGio: gioLamThuc(vaoDau, raCuoi) || 0, dangTrongCa: false, raCuoi };
+  }
   return { soGio: Math.max(0, tongGio), dangTrongCa: false, raCuoi };
 }
 
@@ -294,7 +332,7 @@ export function gomChamCongNgay(logs, danhSachCa, boPhanTheoNguoi = {}, override
   });
 
   theoNguoi.forEach((n) => {
-    const phien = gioLamTheoPhien(n.suKien);
+    const phien = gioLamTheoPhien(n.suKien, n.ca?.khongNghiTrua);
     n.soGio = phien.soGio;
     // Nếu đang trong phiên (mới bấm "Bắt đầu ca mới" sau nghỉ trưa, chưa
     // Kết thúc ca lại), KHÔNG được đưa lần checkout nghỉ trưa cũ vào tính

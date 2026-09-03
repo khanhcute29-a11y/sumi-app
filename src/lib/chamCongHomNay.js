@@ -13,7 +13,7 @@ export async function fetchChamCongHomNayGomBoPhan() {
   const [logs, caRes, hoSoRes] = await Promise.all([
     fetchShiftLogs({ date: homNay }).catch(() => []),
     supabase.from('sumi_quy_dinh_ca').select('*').eq('active', true),
-    supabase.from('profiles').select('id,full_name,role,station,phone')
+    supabase.from('profiles').select('id,full_name,role,station,phone,extra_roles')
       .eq('approved', true).neq('active', false).order('full_name'),
   ]);
 

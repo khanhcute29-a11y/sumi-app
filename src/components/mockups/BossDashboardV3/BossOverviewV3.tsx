@@ -243,7 +243,7 @@ function StaffProfileSheet({ staffBasic, onBack }: { staffBasic: any; onBack: ()
   const ngayDs = Object.keys(caTheoNgay).sort((a, b) => b.localeCompare(a));
   const soLanTre = logs.filter((l: any) => l.type === 'checkin' && (l.late_minutes || 0) > 0).length;
   const danhSachCa = chuanHoaCa(cauHinhCa);
-  const boPhan = boPhanCuaHoSo({ station: staffBasic.station, role: staffBasic.role });
+  const boPhan = boPhanCuaHoSo({ station: staffBasic.station, role: staffBasic.role, extra_roles: staffBasic.extra_roles });
   const tomTat = tomTatThang(logs, staffBasic.id, danhSachCa, boPhan);
 
   return (

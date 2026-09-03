@@ -30,7 +30,7 @@ const layDs = (kq) => (kq.status === 'fulfilled' ? (kq.value.data || []) : []);
 // không có dữ liệu thì hiện rõ "Chưa chấm công".
 export async function fetchDanhSachNhanSuNgay(ngay) {
   const [hoSoRes, logRes] = await Promise.all([
-    supabase.from('profiles').select('id, full_name, role, station')
+    supabase.from('profiles').select('id, full_name, role, station, extra_roles')
       .eq('approved', true).neq('active', false).order('full_name'),
     supabase.from('shift_logs').select('staff_id, type, checkin_time, late_minutes, shift_label')
       .eq('work_date', ngay),

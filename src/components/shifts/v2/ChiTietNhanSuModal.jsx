@@ -7,6 +7,7 @@ import { haversineKm } from '../../../lib/geo';
 import { boPhanCuaHoSo } from '../../../lib/chamCong';
 import { hasAnyRole } from '../../../lib/roles';
 import GioLamRiengPanel from '../../staff/GioLamRiengPanel';
+import CaCaNhanPanel from '../../staff/CaCaNhanPanel';
 
 // Hộp chi tiết một nhân sự — Quản lý bấm vào người trong danh sách thì mở ra.
 // Gồm: giờ vào/ra hôm nay, khu vực ĐÁNH GIÁ SAO, và lịch sử chấm công.
@@ -27,6 +28,10 @@ export default function ChiTietNhanSuModal({
   // đọc/ghi được bảng staff_shift_overrides qua RLS hiện tại nên không hiện
   // nút cho họ, tránh bấm vào rồi dính lỗi quyền.
   const duocSuaCa = hasAnyRole(nguoiXem, ['owner', 'admin', 'accountant']);
+  // Sửa CA QUY ĐỊNH (sumi_quy_dinh_ca) — RLS chỉ is_business_director()
+  // (owner/admin, migration 202609022200), accountant KHÔNG có quyền ghi
+  // bảng này nên tách gate riêng, hẹp hơn duocSuaCa ở trên.
+  const duocSuaCaQuyDinh = hasAnyRole(nguoiXem, ['owner', 'admin']);
   const dev = cham?.chenhLech || null;
 
   const tongSao = (thuong || []).reduce(
@@ -134,6 +139,7 @@ export default function ChiTietNhanSuModal({
           </div>
         )}
 
+        {duocSuaCaQuyDinh && <CaCaNhanPanel hoSo={nhanSu} danhSachCa={danhSachCa} onDone={onXong} />}
         {duocSuaCa && <GioLamRiengPanel hoSo={nhanSu} onDone={onXong} />}
 
         <div className="cc2-section-title"><span>LỊCH SỬ CHẤM CÔNG</span></div>

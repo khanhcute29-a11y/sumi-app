@@ -519,7 +519,7 @@ function DeactivatedStaffRow({ s, canDeactivate, onReactivate }) {
 
 // Thứ tự phân luồng phòng ban cố định — khớp đúng thứ tự dùng ở Chấm công/Báo
 // cáo ngày (Bakery → Xưởng 41 → Xưởng 42 → Vận tải → Khác).
-const BO_PHAN_ORDER = ['bakery', 'xuong41', 'xuong42', 'van_tai', '_khac'];
+const BO_PHAN_ORDER = ['bep_lanh', 'bep_nong', 'thu_ngan', 'ban_hang', 'xuong41', 'xuong42', 'van_tai', '_khac'];
 
 export default function StaffScreen() {
   const [me, setMe] = useState(null);
