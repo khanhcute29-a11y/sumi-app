@@ -296,28 +296,38 @@ function OpsApp({ onSignOut }) {
       // là cửa sổ nổi ChatLauncher riêng — đã bỏ, gộp hẳn vào ChatScreen).
       const nextTab = e.detail?.tab === 'messenger' ? 'chat' : (e.detail?.tab || 'orders');
       setTab(nextTab);
+      // 80ms (không phải 0) — khi bấm từ 1 tab KHÁC (vd Chat, Hôm nay) vào 1
+      // thông báo của tab 'orders'/'tasks'..., setTab() vừa yêu cầu React
+      // MOUNT MỚI màn đích; useEffect đăng ký lắng nghe 'sumi-open-order'/
+      // 'sumi-open-task'... bên trong màn đó cần vài nhịp để chạy xong.
+      // setTimeout(fn, 0) không đảm bảo chạy SAU khi React mount+effect kịp
+      // xong (rơi vào tình huống thắng-thua theo thời điểm) — bấm thông báo
+      // vẫn mở đúng TAB nhưng không mở được chi tiết bên trong, y hệt lỗi đã
+      // gặp và né bằng delay 300-600ms ở deepLink.js (initDeepLinkFromPush) —
+      // ở đây áp lại cùng cách né, ngắn hơn vì không cần chờ cả app khởi động.
+      const DELAY = 80;
       if (nextTab === 'chat' && e.detail?.entityId) {
-        setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-chat-room', { detail: { roomId: e.detail.entityId } })), 0);
+        setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-chat-room', { detail: { roomId: e.detail.entityId } })), DELAY);
       }
       if (nextTab === 'orders' && e.detail?.entityId) {
-        setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-order', { detail: { entityId: e.detail.entityId } })), 0);
+        setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-order', { detail: { entityId: e.detail.entityId } })), DELAY);
       }
       // Bấm vào tin nhắn thông báo còn kèm tab lọc (vd: 'production' = Bếp đang làm)
       // để mở thẳng đúng khu vực. Lời gọi cũ không có filter nên không đổi gì.
       if (nextTab === 'orders' && e.detail?.filter) {
-        setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-order-filter', { detail: { filter: e.detail.filter } })), 0);
+        setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-order-filter', { detail: { filter: e.detail.filter } })), DELAY);
       }
       // Mở thẳng đúng bài đăng / đầu việc, thay vì chỉ nhảy tới trang chung.
       if (nextTab === 'feed' && e.detail?.entityId) {
-        setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-feed', { detail: { entityId: e.detail.entityId } })), 0);
+        setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-feed', { detail: { entityId: e.detail.entityId } })), DELAY);
       }
       if ((nextTab === 'tasks' || nextTab === 'staffTasks') && e.detail?.entityId) {
-        setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-task', { detail: { entityId: e.detail.entityId } })), 0);
+        setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-task', { detail: { entityId: e.detail.entityId } })), DELAY);
       }
       // Mở thẳng đúng tab con bên trong "Ca Làm Việc" (vd: 'schedule' = Lịch tuần)
       // thay vì luôn rơi về mặc định "Chấm công realtime".
       if (nextTab === 'shifts' && e.detail?.view) {
-        setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-shift-view', { detail: { view: e.detail.view } })), 0);
+        setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-shift-view', { detail: { view: e.detail.view } })), DELAY);
       }
     };
     window.addEventListener('sumi-navigate', go);
