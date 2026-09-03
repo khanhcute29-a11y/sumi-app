@@ -725,66 +725,11 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
 
   const orderCounts = useMemo(() => summarizeOrderCounts(allOrders), [allOrders]);
 
-  // 6 ô điều hành của khối "TÔI". Gom thành một mảng thay vì 6 khối JSX chép
-  // tay giống hệt nhau — trước đây sửa màu/chữ 1 ô phải mò đúng khối trong
-  // ~160 dòng lặp lại. `phu()` là hàm để số liệu vẫn cập nhật theo state.
-  //
-  // MÀU: mỗi ô một tông riêng, cố ý lấy trong họ màu ấm/đất của tiệm chứ
-  // không phải màu neon — nhìn vẫn ra Sumi, nhưng phân biệt được bằng mắt.
-  const O_DIEU_HANH = [
-    { so: 1, ten: 'Giao việc',      Icon: Zap,           tab: 'tasks',  sheet: null,
-      mau: '#7c3aed', nen: '#f2ecff', vien: '#ddd0f7',
-      phu: () => 'Giao việc 30+ NV' },
-    { so: 2, ten: 'Bảng tin',       Icon: Megaphone,     tab: null,     sheet: 'feed_sheet',
-      mau: '#0284c7', nen: '#e6f4fc', vien: '#c3e2f4',
-      phu: () => 'Chỉ đạo & Tag @Tên' },
-    { so: 3, ten: 'Báo cáo ngày',   Icon: ClipboardList, tab: null,     sheet: 'report_sheet',
-      mau: '#0b9462', nen: '#e7f7ef', vien: '#bfe8d5',
-      phu: () => `${completedTasksToday.length} việc xong · ${shiftReports.length} báo cáo ca` },
-    { so: 4, ten: 'Lịch làm',       Icon: Calendar,      tab: null,     sheet: 'schedule_sheet',
-      mau: '#c2410c', nen: '#fff1e6', vien: '#f7d4bb',
-      phu: () => `${weeklySchedule.totalAssignments} lượt phân ca tuần này` },
-    { so: 5, ten: 'Kho Thành Phẩm', Icon: Package,       tab: null,     sheet: 'warehouse_sheet',
-      mau: '#a16207', nen: '#fdf4dd', vien: '#efdcae',
-      phu: () => 'Tồn kho, hạn dùng, nhập kho' },
-    { so: 6, ten: 'Nhân viên',      Icon: Users,         tab: null,     sheet: 'staff_screen_sheet',
-      mau: '#be185d', nen: '#fdeaf2', vien: '#f6cadd',
-      phu: () => 'Duyệt tài khoản, vai trò, khâu' },
-  ];
-
   // Lọc theo ngày/tuần/tháng CHỈ cho 2 ô "Tổng đơn hàng" và "Giao thành công"
   // (theo yêu cầu Hồ Hoàng Diễm) — KHÔNG đụng orderCounts gốc, vì orderCounts
   // còn được dùng ở nơi khác (số "Tất cả" trong drawer đơn hàng, số cạnh tiêu
   // đề) — những chỗ đó vẫn cần là tổng lifetime, không phải theo kỳ đang chọn.
   const [orderStatsPeriod, setOrderStatsPeriod] = useState<'all' | 'today' | '7d' | 'month' | 'custom'>('all');
-
-  // 7 ô tình trạng đơn hàng. Mỗi trạng thái MỘT MÀU CỐ ĐỊNH, và màu đó phải
-  // giống hệt màu dùng ở màn Đơn hàng/Bếp/Vận chuyển — nhân sự nhớ "ô xanh
-  // dương là chờ xe" thì đi đâu trong app cũng phải thấy đúng màu đó, đổi màu
-  // giữa các màn là bắt họ học lại từ đầu.
-  //   xám nâu = tổng · hổ phách = chờ · cam = bếp làm · xanh dương = chờ xe
-  //   tím = đang chạy · XANH LÁ = giao xong (tốt) · ĐỎ = trễ hẹn (lỗi)
-  // Xanh lá/đỏ ở 2 ô cuối theo đúng quy tắc chung trong lib/trangThaiDuyet.js.
-  const O_TRANG_THAI_DON: {
-    loc: string; ten: string; Icon: any; mau: string; nen: string; vien: string;
-    so: () => number; rong?: boolean; canhBao?: boolean;
-  }[] = [
-    { loc: 'all',                   ten: 'Tổng đơn hàng',   Icon: FileText,
-      mau: '#6b4b32', nen: '#f4ece2', vien: '#e2cdb6', so: () => statsTotal },
-    { loc: 'awaiting_assignment',   ten: 'Đơn chờ làm',     Icon: Inbox,
-      mau: '#a16207', nen: '#fdf4dd', vien: '#efdcae', so: () => orderCounts.waiting },
-    { loc: 'in_production',         ten: 'Bếp đang làm',    Icon: ChefHat,
-      mau: '#d97706', nen: '#fff1e0', vien: '#f6d5aa', so: () => orderCounts.production },
-    { loc: 'ready_for_fulfillment', ten: 'Chờ vận chuyển',  Icon: Package,
-      mau: '#2563eb', nen: '#e8f0ff', vien: '#c5d8fb', so: () => orderCounts.ready },
-    { loc: 'in_delivery',           ten: 'Đang vận chuyển', Icon: Truck,
-      mau: '#9333ea', nen: '#f5ebff', vien: '#e0cbf7', so: () => orderCounts.delivery },
-    { loc: 'completed',             ten: 'Giao thành công', Icon: CheckCircle2,
-      mau: '#0b9462', nen: '#e7f7ef', vien: '#bfe8d5', so: () => statsCompleted },
-    { loc: 'overdue',               ten: 'Chưa thực hiện / Trễ hẹn', Icon: AlertTriangle,
-      mau: '#c02a1d', nen: '#fdecea', vien: '#e2cdb6', so: () => orderCounts.overdue,
-      rong: true, canhBao: true },
-  ];
   const [orderStatsCustomFrom, setOrderStatsCustomFrom] = useState('');
   const [orderStatsCustomTo, setOrderStatsCustomTo] = useState('');
   const orderStatsRange = useMemo(() => {
@@ -1295,49 +1240,167 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
             <span style={{ fontSize: 11, fontWeight: 800, color: '#c28c4e' }}>6 mục điều hành</span>
           </div>
 
-          {/* 6 ô điều hành — MỖI Ô MỘT MÀU RIÊNG.
-              Trước đây cả 6 ô đều icon nâu #b87a48 trên nền trắng, nhìn xuống
-              chỉ thấy một mảng trắng - nâu, phải ĐỌC chữ mới biết ô nào là ô
-              nào. Phần lớn nhân sự đọc chậm, nên mỗi ô giờ có một màu + ô icon
-              nền màu nhạt để nhớ bằng mắt: nhớ "ô tím là giao việc" nhanh hơn
-              nhớ dòng chữ. Bố cục/khoảng cách/hành vi bấm giữ NGUYÊN như cũ,
-              chỉ đổi màu — không đụng luồng điều hướng nào. */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
-            {O_DIEU_HANH.map((o) => {
-              const Icon = o.Icon;
-              return (
-                <div
-                  key={o.so}
-                  onClick={() => (o.tab
-                    ? window.dispatchEvent(new CustomEvent('sumi-navigate', { detail: { tab: o.tab } }))
-                    : setActiveSheet(o.sheet as any))}
-                  style={{
-                    background: '#ffffff',
-                    border: `1.5px solid ${o.vien}`,
-                    borderRadius: 18,
-                    padding: '12px 14px',
-                    cursor: 'pointer',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    minHeight: 88,
-                    boxSizing: 'border-box',
-                  }}
-                >
-                  <div style={{
-                    width: 38, height: 38, borderRadius: 12, background: o.nen,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <Icon size={21} color={o.mau} strokeWidth={1.9} />
-                  </div>
-                  <div style={{ marginTop: 8 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>{o.so}. {o.ten}</div>
-                    <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>{o.phu()}</div>
-                  </div>
-                </div>
-              );
-            })}
+            {/* Ô 1: Giao việc — chuyển hẳn sang trang "Giao việc" (TasksScreen)
+                thật, không còn form nhập liệu tại chỗ trùng lặp trong dashboard. */}
+            <div
+              onClick={() => window.dispatchEvent(new CustomEvent('sumi-navigate', { detail: { tab: 'tasks' } }))}
+              style={{
+                background: '#ffffff',
+                border: '1.5px solid #eadcca',
+                borderRadius: 18,
+                padding: '12px 14px',
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                minHeight: 88,
+                boxSizing: 'border-box'
+              }}
+            >
+              <div>
+                <Zap size={22} color="#b87a48" strokeWidth={1.6} />
+              </div>
+              <div style={{ marginTop: 6 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>1. Giao việc</div>
+                <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>Giao việc 30+ NV</div>
+              </div>
+            </div>
+
+            {/* Ô 2: Bảng tin & Chỉ đạo tag tên */}
+            <div
+              onClick={() => setActiveSheet('feed_sheet')}
+              style={{
+                background: '#ffffff',
+                border: '1.5px solid #eadcca',
+                borderRadius: 18,
+                padding: '12px 14px',
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                minHeight: 88,
+                boxSizing: 'border-box'
+              }}
+            >
+              <div>
+                <Megaphone size={22} color="#b87a48" strokeWidth={1.6} />
+              </div>
+              <div style={{ marginTop: 6 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>2. Bảng tin</div>
+                <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>Chỉ đạo & Tag @Tên</div>
+              </div>
+            </div>
+
+            {/* Ô 3: Báo cáo ca ngày (Tạm ứng/Xin nghỉ đã gom vào ô "Yêu Cầu Duyệt"
+                trên banner KPI chính — không còn là ô riêng ở đây nữa). */}
+            <div
+              onClick={() => setActiveSheet('report_sheet')}
+              style={{
+                background: '#ffffff',
+                border: '1.5px solid #eadcca',
+                borderRadius: 18,
+                padding: '12px 14px',
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                minHeight: 88,
+                boxSizing: 'border-box'
+              }}
+            >
+              <div>
+                <ClipboardList size={22} color="#b87a48" strokeWidth={1.6} />
+              </div>
+              <div style={{ marginTop: 6 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>3. Báo cáo ngày</div>
+                <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>{completedTasksToday.length} việc xong · {shiftReports.length} báo cáo ca</div>
+              </div>
+            </div>
+
+            {/* Ô 6: Lịch phân ca */}
+            <div
+              onClick={() => setActiveSheet('schedule_sheet')}
+              style={{
+                background: '#ffffff',
+                border: '1.5px solid #eadcca',
+                borderRadius: 18,
+                padding: '12px 14px',
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                minHeight: 88,
+                boxSizing: 'border-box'
+              }}
+            >
+              <div>
+                <Calendar size={22} color="#b87a48" strokeWidth={1.6} />
+              </div>
+              <div style={{ marginTop: 6 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>4. Lịch làm</div>
+                <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>{weeklySchedule.totalAssignments} lượt phân ca tuần này</div>
+              </div>
+            </div>
+
+            {/* Ô 7: Kho Thành Phẩm — mở FinishedGoodsInventoryV2 thật (đã có sẵn từ
+                phân hệ Đơn hàng: tồn kho realtime, hạn dùng, phân luồng, nút "‹"
+                quay lại riêng), không tự dựng lại bản khác ở đây. */}
+            <div
+              onClick={() => setActiveSheet('warehouse_sheet')}
+              style={{
+                background: '#ffffff',
+                border: '1.5px solid #eadcca',
+                borderRadius: 18,
+                padding: '12px 14px',
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                minHeight: 88,
+                boxSizing: 'border-box'
+              }}
+            >
+              <div>
+                <Package size={22} color="#b87a48" strokeWidth={1.6} />
+              </div>
+              <div style={{ marginTop: 6 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>5. Kho Thành Phẩm</div>
+                <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>Tồn kho, hạn dùng, nhập kho</div>
+              </div>
+            </div>
+
+            {/* Ô 8: Nhân viên — mở StaffScreen thật (đã có sẵn từ Sidebar desktop):
+                duyệt tài khoản chờ, sửa vai trò/khâu, khóa tài khoản. */}
+            <div
+              onClick={() => setActiveSheet('staff_screen_sheet')}
+              style={{
+                background: '#ffffff',
+                border: '1.5px solid #eadcca',
+                borderRadius: 18,
+                padding: '12px 14px',
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                minHeight: 88,
+                boxSizing: 'border-box'
+              }}
+            >
+              <div>
+                <Users size={22} color="#b45309" strokeWidth={1.6} />
+              </div>
+              <div style={{ marginTop: 6 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>6. Nhân viên</div>
+                <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>Duyệt tài khoản, vai trò, khâu</div>
+              </div>
+            </div>
           </div>
 
           {/* ========================================================================= */}
@@ -1385,42 +1448,164 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
 
           {/* Lưới 7 Ô Gạch Phân Loại Trực Quan */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
-            {O_TRANG_THAI_DON.map((o) => {
-              const Icon = o.Icon;
-              const so = o.so();
-              // Ô "trễ hẹn" khi CÓ đơn trễ thì tô nền đỏ nhạt cả ô, không chỉ
-              // đổi mỗi con số — đây là ô duy nhất cần đập vào mắt từ xa.
-              const canhBao = o.canhBao && so > 0;
-              return (
-                <div
-                  key={o.loc}
-                  onClick={() => handleOpenOrderDrawer(o.loc)}
-                  style={{
-                    gridColumn: o.rong ? 'span 2' : undefined,
-                    background: canhBao ? '#fff1ee' : '#ffffff',
-                    border: `1.5px solid ${canhBao ? '#f3b7ac' : o.vien}`,
-                    borderRadius: 16,
-                    padding: '10px 12px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
-                    <span style={{
-                      width: 32, height: 32, borderRadius: 10, flexShrink: 0, background: o.nen,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      <Icon size={18} color={o.mau} strokeWidth={2} />
-                    </span>
-                    <span style={{ fontSize: 12, fontWeight: 900, color: '#2d1c10' }}>{o.ten}</span>
-                  </div>
-                  <span style={{ fontSize: 17, fontWeight: 900, color: so > 0 ? o.mau : '#b9a898' }}>{so}</span>
-                </div>
-              );
-            })}
+            {/* Ô 1: Tổng đơn hàng */}
+            <div
+              onClick={() => handleOpenOrderDrawer('all')}
+              style={{
+                background: '#ffffff',
+                border: '1.5px solid #eadcca',
+                borderRadius: 16,
+                padding: '10px 12px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.03)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <FileText size={20} color="#b87a48" strokeWidth={1.6} />
+                <span style={{ fontSize: 12, fontWeight: 900, color: '#2d1c10' }}>Tổng đơn hàng</span>
+              </div>
+              <span style={{ fontSize: 16, fontWeight: 900, color: '#2d1c10' }}>{statsTotal}</span>
+            </div>
+
+            {/* Ô 2: Đơn chờ làm */}
+            <div
+              onClick={() => handleOpenOrderDrawer('awaiting_assignment')}
+              style={{
+                background: '#ffffff',
+                border: '1.5px solid #eadcca',
+                borderRadius: 16,
+                padding: '10px 12px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.03)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Inbox size={20} color="#b87a48" strokeWidth={1.6} />
+                <span style={{ fontSize: 12, fontWeight: 900, color: '#2d1c10' }}>Đơn chờ làm</span>
+              </div>
+              <span style={{ fontSize: 16, fontWeight: 900, color: '#2d1c10' }}>{orderCounts.waiting}</span>
+            </div>
+
+            {/* Ô 3: Bếp đang làm */}
+            <div
+              onClick={() => handleOpenOrderDrawer('in_production')}
+              style={{
+                background: '#ffffff',
+                border: '1.5px solid #eadcca',
+                borderRadius: 16,
+                padding: '10px 12px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.03)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <ChefHat size={20} color="#b87a48" strokeWidth={1.6} />
+                <span style={{ fontSize: 12, fontWeight: 900, color: '#2d1c10' }}>Bếp đang làm</span>
+              </div>
+              <span style={{ fontSize: 16, fontWeight: 900, color: '#d97706' }}>{orderCounts.production}</span>
+            </div>
+
+            {/* Ô 4: Chờ vận chuyển */}
+            <div
+              onClick={() => handleOpenOrderDrawer('ready_for_fulfillment')}
+              style={{
+                background: '#ffffff',
+                border: '1.5px solid #eadcca',
+                borderRadius: 16,
+                padding: '10px 12px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.03)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Package size={20} color="#b87a48" strokeWidth={1.6} />
+                <span style={{ fontSize: 12, fontWeight: 900, color: '#2d1c10' }}>Chờ vận chuyển</span>
+              </div>
+              <span style={{ fontSize: 16, fontWeight: 900, color: '#2563eb' }}>{orderCounts.ready}</span>
+            </div>
+
+            {/* Ô 5: Đang vận chuyển */}
+            <div
+              onClick={() => handleOpenOrderDrawer('in_delivery')}
+              style={{
+                background: '#ffffff',
+                border: '1.5px solid #eadcca',
+                borderRadius: 16,
+                padding: '10px 12px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.03)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Truck size={20} color="#b87a48" strokeWidth={1.6} />
+                <span style={{ fontSize: 12, fontWeight: 900, color: '#2d1c10' }}>Đang vận chuyển</span>
+              </div>
+              <span style={{ fontSize: 16, fontWeight: 900, color: '#9333ea' }}>{orderCounts.delivery}</span>
+            </div>
+
+            {/* Ô 6: Giao thành công */}
+            <div
+              onClick={() => handleOpenOrderDrawer('completed')}
+              style={{
+                background: '#ffffff',
+                border: '1.5px solid #eadcca',
+                borderRadius: 16,
+                padding: '10px 12px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.03)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <CheckCircle2 size={20} color="#16a34a" strokeWidth={1.6} />
+                <span style={{ fontSize: 12, fontWeight: 900, color: '#2d1c10' }}>Giao thành công</span>
+              </div>
+              <span style={{ fontSize: 16, fontWeight: 900, color: '#16a34a' }}>{statsCompleted}</span>
+            </div>
+
+            {/* Ô 7: Chưa thực hiện (Chiếm 2 cột nổi bật) */}
+            <div
+              onClick={() => handleOpenOrderDrawer('overdue')}
+              style={{
+                gridColumn: 'span 2',
+                background: orderCounts.overdue > 0 ? '#fff7ed' : '#ffffff',
+                border: orderCounts.overdue > 0 ? '1.5px solid #fdba74' : '1.5px solid #eadcca',
+                borderRadius: 16,
+                padding: '10px 12px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.03)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <AlertTriangle size={20} color="#dc2626" strokeWidth={1.6} />
+                <span style={{ fontSize: 12, fontWeight: 900, color: orderCounts.overdue > 0 ? '#c2410c' : '#2d1c10' }}>
+                  Chưa thực hiện / Trễ hẹn
+                </span>
+              </div>
+              <span style={{ fontSize: 16, fontWeight: 900, color: orderCounts.overdue > 0 ? '#dc2626' : '#725f50' }}>
+                {orderCounts.overdue}
+              </span>
+            </div>
           </div>
 
         </div>
