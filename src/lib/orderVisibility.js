@@ -75,10 +75,18 @@ export function canUserViewOrder(order, userProfile) {
     return canViewSchoolOrder(userProfile);
   }
 
-  // Mixed orders - need to check which workflows are involved
-  // For now, restrict to owner/admin/driver only
+  // Mixed orders (đơn gồm nhiều luồng, vd bánh lạnh + bánh nóng): hiện chỉ có
+  // thể gồm bakery/cake/teabreak/macaron — trường học LUÔN bắt buộc tách đơn
+  // riêng (xem CreateOrderV2Modal.addFlow chặn thêm luồng school vào đơn đã
+  // có luồng khác, và ngược lại). Cả 4 luồng này đều công khai cho mọi nhân
+  // viên bếp/bán hàng khi đứng riêng (macaron chỉ ẩn GIÁ qua
+  // canViewMacaronPrice, không ẩn cả đơn) nên đơn mixed cũng phải công khai
+  // tương tự — TRƯỚC ĐÂY khoá cứng return false khiến MỌI nhân viên (kể cả
+  // đủ 2 vai trò bếp nóng+lạnh, hay nhân viên tạo đơn) đều không thấy đơn
+  // mixed, chỉ owner/admin/driver thấy được. Vẫn kiểm tra confidentiality để
+  // phòng hờ nếu sau này có đơn mixed dính luồng trường học.
   if (order.order_type === 'mixed') {
-    return false; // Only admin/driver can see mixed
+    return order.confidentiality !== 'school_restricted';
   }
 
   // Default: don't show
