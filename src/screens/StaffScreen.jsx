@@ -6,9 +6,9 @@ import { Select } from '../components/forms/Select';
 import { fetchMyProfile, fetchAllProfiles, updateProfileRole, updateProfileExtraRoles, updateProfileStation, updateStaffPermissions, updateStaffWorkInfo, updateShiftRule, updateProfileActive, approveStaff } from '../lib/queries';
 import { ROLE_META, ROLE_OPTIONS, ROLE_PERMISSIONS, hasRole, hasAnyRole, resolveRoleAndStation, getRoleMeta, getUiRole, normalizeStationForDb } from '../lib/roles';
 import { boPhanCuaHoSo, chuanHoaCa, caCuaBoPhan, TEN_BO_PHAN } from '../lib/chamCong';
-import { fetchUpcomingShiftOverrides, setStaffShiftOverride, cancelStaffShiftOverride } from '../lib/staffShiftOverride';
 import { supabase } from '../lib/supabaseClient';
 import ResetPasswordModal from '../components/staff/ResetPasswordModal';
+import GioLamRiengPanel from '../components/staff/GioLamRiengPanel';
 
 const STATION_OPTIONS = [
   { value: '', label: 'Chưa gán khâu (Mặc định / Không thuộc bếp)' },
@@ -18,8 +18,6 @@ const STATION_OPTIONS = [
   { value: 'xuong42', label: '🏫 Xưởng 42 (Trường học & Teabreak)' },
   { value: 'bakery', label: '🥖 Bakery (Chung)' },
 ];
-
-const homNayYMD = () => new Date().toISOString().slice(0, 10);
 
 function PendingStaffRow({ s, onApprove }) {
   const [role, setRole] = useState(getUiRole(s.role, s.station));
@@ -145,93 +143,6 @@ function SuaQuyDinhCaPanel({ caRowsBoPhan, onSaved, onClose }) {
           )}
         </div>
       ))}
-    </div>
-  );
-}
-
-// Yêu cầu giờ làm riêng cho 1 ngày cụ thể — sổ tay + form đặt mới. Chỉ hiện
-// trong panel Phân quyền (owner/admin), vì đây là quyết định điều hành.
-function GioLamRiengPanel({ hoSo, onDone }) {
-  const [danhSach, setDanhSach] = useState(null);
-  const [ngay, setNgay] = useState('');
-  const [gio, setGio] = useState('');
-  const [gioRa, setGioRa] = useState('');
-  const [lyDo, setLyDo] = useState('');
-  const [dangGui, setDangGui] = useState(false);
-  const [loi, setLoi] = useState('');
-  const [xong, setXong] = useState('');
-
-  const taiLai = async () => {
-    try { setDanhSach(await fetchUpcomingShiftOverrides(hoSo.id)); }
-    catch { setDanhSach([]); }
-  };
-  useEffect(() => { taiLai(); }, [hoSo.id]);
-
-  const dat = async () => {
-    if (!ngay || !gio) { setLoi('Chọn ngày và giờ vào ca trước.'); return; }
-    if (gioRa && gioRa <= gio) { setLoi('Giờ kết thúc phải sau giờ bắt đầu.'); return; }
-    setDangGui(true); setLoi(''); setXong('');
-    try {
-      await setStaffShiftOverride({ staffId: hoSo.id, workDate: ngay, gioBatDau: gio, gioKetThuc: gioRa || null, lyDo });
-      setXong('Đã đặt giờ làm riêng.');
-      setNgay(''); setGio(''); setGioRa(''); setLyDo('');
-      await taiLai();
-      await onDone?.();
-    } catch (e) {
-      setLoi(e?.message || 'Không đặt được giờ làm riêng.');
-    } finally { setDangGui(false); }
-  };
-
-  const huy = async (workDate) => {
-    if (!window.confirm(`Huỷ giờ làm riêng ngày ${new Date(workDate).toLocaleDateString('vi-VN')}?`)) return;
-    try { await cancelStaffShiftOverride({ staffId: hoSo.id, workDate }); await taiLai(); await onDone?.(); }
-    catch (e) { setLoi(e?.message || 'Không huỷ được.'); }
-  };
-
-  return (
-    <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--border-subtle)' }}>
-      <div style={{ font: 'var(--text-caption)', fontWeight: 800, color: 'var(--text-primary)', marginBottom: 6 }}>
-        ⏰ Yêu cầu giờ làm riêng (khác giờ chuẩn, cho 1 ngày cụ thể)
-      </div>
-      <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', marginBottom: 8 }}>
-        Giờ vào ca bắt buộc chọn. Giờ kết thúc để trống thì giữ giờ tan ca mặc định của bộ phận; có chọn thì hệ thống tính tăng ca theo ĐÚNG mốc này.
-      </div>
-
-      {danhSach === null && <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Đang tải…</div>}
-      {danhSach && danhSach.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
-          {danhSach.map((o) => (
-            <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface-card)', borderRadius: 10, padding: '6px 10px', fontSize: 12.5 }}>
-              <span>
-                <strong>{new Date(o.work_date).toLocaleDateString('vi-VN')}</strong> — vào lúc <strong>{o.gio_bat_dau?.slice(0, 5)}</strong>
-                {o.gio_ket_thuc ? <> – kết thúc lúc <strong>{o.gio_ket_thuc.slice(0, 5)}</strong></> : ''}
-                {o.ly_do ? ` · ${o.ly_do}` : ''}
-              </span>
-              <button type="button" onClick={() => huy(o.work_date)} style={{ border: 'none', background: 'none', color: 'var(--status-danger)', fontWeight: 700, cursor: 'pointer', fontSize: 12 }}>Huỷ</button>
-            </div>
-          ))}
-        </div>
-      )}
-      {danhSach && danhSach.length === 0 && (
-        <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', marginBottom: 8 }}>Chưa có ngày nào được đặt giờ riêng sắp tới.</div>
-      )}
-
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-        <input type="date" value={ngay} min={homNayYMD()} onChange={(e) => setNgay(e.target.value)}
-          style={{ minHeight: 38, borderRadius: 8, border: '1px solid var(--border-default)', padding: '0 8px', fontSize: 12.5, fontFamily: 'inherit' }} />
-        <input type="time" value={gio} onChange={(e) => setGio(e.target.value)} title="Giờ vào ca"
-          style={{ minHeight: 38, borderRadius: 8, border: '1px solid var(--border-default)', padding: '0 8px', fontSize: 12.5, fontFamily: 'inherit' }} />
-        <input type="time" value={gioRa} onChange={(e) => setGioRa(e.target.value)} title="Giờ kết thúc (không bắt buộc — để trống thì giữ giờ tan ca mặc định)"
-          style={{ minHeight: 38, borderRadius: 8, border: '1px solid var(--border-default)', padding: '0 8px', fontSize: 12.5, fontFamily: 'inherit' }} />
-        <input type="text" value={lyDo} onChange={(e) => setLyDo(e.target.value)} placeholder="Lý do (VD: đơn đặc biệt)"
-          style={{ flex: 1, minWidth: 140, minHeight: 38, borderRadius: 8, border: '1px solid var(--border-default)', padding: '0 8px', fontSize: 12.5, fontFamily: 'inherit' }} />
-        <button type="button" disabled={dangGui} onClick={dat}
-          style={{ minHeight: 38, padding: '0 14px', borderRadius: 8, border: 'none', background: 'var(--action-primary)', color: '#fff', fontWeight: 800, fontSize: 12.5, cursor: 'pointer' }}>
-          {dangGui ? 'Đang lưu…' : '+ Đặt giờ'}
-        </button>
-      </div>
-      {loi && <div style={{ color: 'var(--status-danger)', fontSize: 12, marginTop: 6 }}>⚠️ {loi}</div>}
-      {xong && <div style={{ color: '#087f5b', fontSize: 12, marginTop: 6 }}>✅ {xong}</div>}
     </div>
   );
 }

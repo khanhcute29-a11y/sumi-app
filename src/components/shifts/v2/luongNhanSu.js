@@ -26,18 +26,46 @@ export const LUONG = {
 
 // Thứ tự hiện trên màn hình — theo đúng cơ cấu tiệm, không sắp theo số lượng.
 export const THU_TU_LUONG = [
-  'thu_ngan', 'ban_hang', 'bep_nong', 'bep_lanh',
-  'xuong41', 'xuong42', 'van_tai', '_khac',
+  'bep_lanh', 'bep_nong', 'xuong41', 'xuong42',
+  'thu_ngan', 'ban_hang', 'van_tai', '_khac',
 ];
 
-// Gom các luồng thành 4 khối lớn để hiện mục "Theo bộ phận".
+// Gom các luồng thành các khối để hiện mục "Theo bộ phận" — TÁCH RIÊNG Bếp
+// Lạnh/Bếp Nóng/Cửa hàng thay vì gộp chung 1 khối "Bakery" như trước, theo
+// đúng yêu cầu Giám đốc (04/09/2026): "Bếp Lạnh, bếp nóng, xưởng 41, xưởng
+// 42, Cửa hàng (Thu Ngân, bán hàng), Vận tải" — mỗi khâu là 1 khối riêng để
+// bấm vào thấy đúng người của khâu đó, không lẫn Bếp với Cửa hàng.
 export const KHOI = [
-  { ma: 'bakery', ten: 'Bakery', icon: '🥐', luong: ['thu_ngan', 'ban_hang', 'bep_nong', 'bep_lanh'] },
+  { ma: 'bep_lanh', ten: 'Bếp Lạnh', icon: '🎂', luong: ['bep_lanh'] },
+  { ma: 'bep_nong', ten: 'Bếp Nóng', icon: '🔥', luong: ['bep_nong'] },
   { ma: 'xuong41', ten: 'Xưởng 41', icon: '🧁', luong: ['xuong41'] },
   { ma: 'xuong42', ten: 'Xưởng 42', icon: '🏫', luong: ['xuong42'] },
+  { ma: 'cua_hang', ten: 'Cửa hàng', icon: '🏬', luong: ['thu_ngan', 'ban_hang'] },
   { ma: 'van_tai', ten: 'Vận tải', icon: '🚚', luong: ['van_tai'] },
   { ma: '_khac', ten: 'Khối văn phòng', icon: '👤', luong: ['_khac'] },
 ];
+
+// Khối nào cần chia thêm theo CẤP BẬC (Bếp trưởng/Bếp phó/Nhân viên) khi hiện
+// danh sách người — Cửa hàng và Vận tải không có 2 cấp bậc này nên không cần.
+export const KHOI_CO_CAP_BAC = new Set(['bep_lanh', 'bep_nong', 'xuong41', 'xuong42']);
+
+// Cấp bậc trong khâu — dùng vai trò THẬT trong database (đã chuẩn hoá về
+// canonical 'kitchen_lead'/'kitchen_deputy' cho mọi bếp — xem lib/roles.js
+// resolveRoleAndStation; riêng Xưởng 41/42 dùng 'deputy_director_x41/x42' vì
+// đó là chức danh quản lý cao nhất của xưởng, đứng vai trò như Bếp trưởng).
+export const CAP_BAC = {
+  truong: { ma: 'truong', ten: 'Bếp trưởng / Trợ lý Giám đốc xưởng', icon: '👑' },
+  pho: { ma: 'pho', ten: 'Bếp phó', icon: '🥈' },
+  nhan_vien: { ma: 'nhan_vien', ten: 'Nhân viên', icon: '👤' },
+};
+export const THU_TU_CAP_BAC = ['truong', 'pho', 'nhan_vien'];
+
+export function capBacCuaHoSo(hoSo) {
+  const vai = [hoSo?.role, ...(hoSo?.extra_roles || [])].filter(Boolean).map(String);
+  if (vai.some((r) => r === 'kitchen_lead' || r === 'deputy_director_x41' || r === 'deputy_director_x42')) return 'truong';
+  if (vai.includes('kitchen_deputy')) return 'pho';
+  return 'nhan_vien';
+}
 
 /**
  * Luồng của một nhân sự.

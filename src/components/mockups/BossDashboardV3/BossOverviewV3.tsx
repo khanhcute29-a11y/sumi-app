@@ -55,6 +55,7 @@ import { fetchShiftLogsRange } from '../../../lib/queries';
 // viết công thức cộng giờ riêng ở đây (tránh lệch số như đã từng xảy ra).
 import { boPhanCuaHoSo, chuanHoaCa, tomTatThang, TEN_BO_PHAN } from '../../../lib/chamCong';
 import { fetchDanhSachNhanSuNgay, fetchHoSoNgayNhanSu, khongCoHoatDong } from '../../../lib/hoSoNgayNhanSu';
+import { KHOI, LUONG, luongCuaHoSo } from '../../shifts/v2/luongNhanSu';
 import { WeeklyScheduleSection } from '../../WeeklyScheduleSection';
 import DirectorStaffOverviewSheet from '../../shifts/v2/DirectorStaffOverviewSheet';
 import {
@@ -2218,7 +2219,7 @@ export function BossOverviewV3Inner() {
                           style={{ flex: 1, minWidth: 0, minHeight: 38, borderRadius: 10, border: '1px solid #eadcca', padding: '0 10px', fontSize: 12.5, fontFamily: 'inherit' }} />
                       </div>
                       <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
-                        {[['all', 'Tất cả'], ['bakery', 'Bakery'], ['xuong41', 'Xưởng 41'], ['xuong42', 'Xưởng 42'], ['van_tai', 'Vận tải'], ['_khac', 'Khác']].map(([ma, ten]) => (
+                        {[['all', 'Tất cả'], ...KHOI.map((k) => [k.ma, k.ten])].map(([ma, ten]) => (
                           <button key={ma} onClick={() => setStaffDayBoPhan(ma)} style={{
                             flexShrink: 0, padding: '6px 12px', borderRadius: 999,
                             border: staffDayBoPhan === ma ? '2px solid #db2777' : '1px solid #eadcca',
@@ -2267,8 +2268,9 @@ export function BossOverviewV3Inner() {
                       {!staffDayLoading && (() => {
                         const boDau = (s: string) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
                         const q = boDau(staffDayKeyword).trim();
+                        const khoiCuaNguoi = (p: any) => KHOI.find((k) => k.luong.includes(luongCuaHoSo(p)))?.ma || '_khac';
                         const ds = (staffDayList || [])
-                          .filter((p: any) => staffDayBoPhan === 'all' || (boPhanCuaHoSo(p) || '_khac') === staffDayBoPhan)
+                          .filter((p: any) => staffDayBoPhan === 'all' || khoiCuaNguoi(p) === staffDayBoPhan)
                           .filter((p: any) => !q || boDau(p.full_name).includes(q));
                         const nhan: Record<string, { chu: string; mau: string; nen: string }> = {
                           dang_lam: { chu: '🟢 Đang làm', mau: '#15803d', nen: '#f0fdf4' },
@@ -2291,7 +2293,7 @@ export function BossOverviewV3Inner() {
                                   <span style={{ minWidth: 0 }}>
                                     <span style={{ display: 'block', fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>{p.full_name}</span>
                                     <span style={{ display: 'block', fontSize: 11, color: '#725f50' }}>
-                                      {TEN_BO_PHAN[boPhanCuaHoSo(p) as keyof typeof TEN_BO_PHAN] || 'Chưa gán khâu'}
+                                      {LUONG[luongCuaHoSo(p)]?.ten || 'Chưa gán khâu'}
                                       {p.gioVao ? ` · ${gio(p.gioVao)}${p.gioRa ? `–${gio(p.gioRa)}` : ''}` : ''}
                                       {p.phutMuon > 0 ? ` · trễ ${p.phutMuon}p` : ''}
                                     </span>
@@ -2481,7 +2483,7 @@ export function BossOverviewV3Inner() {
                     </div>
                     <div style={{ fontSize: 15, fontWeight: 900, color: '#2d1b10' }}>
                       {staffDayPicked.full_name}
-                      <span style={{ fontSize: 11.5, fontWeight: 700, color: '#725f50' }}> · {TEN_BO_PHAN[boPhanCuaHoSo(staffDayPicked) as keyof typeof TEN_BO_PHAN] || 'Chưa gán khâu'}</span>
+                      <span style={{ fontSize: 11.5, fontWeight: 700, color: '#725f50' }}> · {LUONG[luongCuaHoSo(staffDayPicked)]?.ten || 'Chưa gán khâu'}</span>
                     </div>
                   </div>
                 </div>
@@ -2933,7 +2935,8 @@ export function BossOverviewV3Inner() {
             trúc chi tiết của Chấm công cá nhân (nhóm theo bộ phận, giữ nguyên
             đánh giá Sao +/-). */}
         {activeSheet === 'staff_overview_v2' && (
-          <DirectorStaffOverviewSheet hoSo={profile} onClose={() => setActiveSheet(null)} />
+          <DirectorStaffOverviewSheet hoSo={profile} onClose={() => setActiveSheet(null)}
+            onMoQuanLyCa={() => setActiveSheet('staff_screen_sheet')} />
         )}
 
         {/* ========================================================================= */}

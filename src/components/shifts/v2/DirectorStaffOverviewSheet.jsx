@@ -14,7 +14,7 @@ import '../../../styles/cham-cong-v2.css';
 // Tự fetch dữ liệu riêng qua fetchChamCongHomNayGomBoPhan(), KHÔNG đụng vào
 // ShiftsScreen.jsx đang chạy ổn định (tránh rủi ro refactor màn cá nhân chỉ
 // để phục vụ Dashboard).
-export default function DirectorStaffOverviewSheet({ hoSo, onClose }) {
+export default function DirectorStaffOverviewSheet({ hoSo, onClose, onMoQuanLyCa }) {
   const [duLieu, setDuLieu] = useState(null); // { danhSachQuanLy, danhSachCa, gioHienTai }
   const [logsHomNay, setLogsHomNay] = useState([]);
   const [thuongTheoNguoi, setThuongTheoNguoi] = useState({});
@@ -70,9 +70,17 @@ export default function DirectorStaffOverviewSheet({ hoSo, onClose }) {
           paddingBottom: 'calc(20px + env(safe-area-inset-bottom))', maxHeight: '92dvh', overflowY: 'auto',
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>👥 Tổng Quan Nhân Sự Hôm Nay</h3>
-          <button onClick={onClose} aria-label="Đóng" style={{ border: 0, background: 'none', fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>×</button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 8 }}>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 900, minWidth: 0 }}>👥 Tổng Quan Nhân Sự Hôm Nay</h3>
+          {onMoQuanLyCa && (
+            <button onClick={onMoQuanLyCa} style={{
+              flexShrink: 0, border: '1px solid #eadcca', background: '#fff7ed', color: '#c2410c',
+              fontWeight: 800, fontSize: 12, borderRadius: 10, padding: '6px 10px', cursor: 'pointer',
+            }}>
+              ⏰ Sửa giờ ca
+            </button>
+          )}
+          <button onClick={onClose} aria-label="Đóng" style={{ border: 0, background: 'none', fontSize: 22, cursor: 'pointer', lineHeight: 1, flexShrink: 0 }}>×</button>
         </div>
 
         {loi && <div className="cc2-error">⚠️ {loi}</div>}
@@ -99,6 +107,7 @@ export default function DirectorStaffOverviewSheet({ hoSo, onClose }) {
             thuong={thuongTheoNguoi?.[dangXem.hoSo.id] || []}
             coTheTangSao
             laChinhToi={dangXem.hoSo.id === hoSo?.id}
+            nguoiXem={hoSo}
             onClose={() => setDangXem(null)}
             onXong={taiLai}
           />

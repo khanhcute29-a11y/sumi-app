@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { chuCaiDau, doDaiPhut } from './dungChung';
 import {
-  LUONG, KHOI, NHOM_TRANG_THAI, luongCuaHoSo, demTheoLuong,
+  LUONG, KHOI, KHOI_CO_CAP_BAC, CAP_BAC, THU_TU_CAP_BAC, capBacCuaHoSo,
+  NHOM_TRANG_THAI, luongCuaHoSo, demTheoLuong,
 } from './luongNhanSu';
 
 // Khối tổng quan của GIÁM ĐỐC.
@@ -51,6 +52,37 @@ function DanhSachNguoi({ nguoi, onXemNhanSu }) {
         );
       })}
     </div>
+  );
+}
+
+/** Danh sách người trong 1 luồng, chia theo CẤP BẬC (Bếp trưởng/Bếp phó/Nhân
+ * viên) nếu luồng đó có nhiều hơn 1 cấp bậc thật sự xuất hiện — bỏ luôn tiêu
+ * đề cấp bậc nếu cả nhóm chỉ toàn 1 cấp (đỡ rối mắt cho khâu chỉ có nhân
+ * viên, không có bếp trưởng/phó). */
+function DanhSachNguoiTheoCapBac({ nguoi, onXemNhanSu }) {
+  const theoCap = useMemo(() => {
+    const m = new Map();
+    (nguoi || []).forEach((n) => {
+      const c = capBacCuaHoSo(n.hoSo);
+      if (!m.has(c)) m.set(c, []);
+      m.get(c).push(n);
+    });
+    return m;
+  }, [nguoi]);
+
+  if (theoCap.size <= 1) return <DanhSachNguoi nguoi={nguoi} onXemNhanSu={onXemNhanSu} />;
+
+  return (
+    <>
+      {THU_TU_CAP_BAC.filter((c) => theoCap.has(c)).map((c) => (
+        <div key={c} style={{ marginTop: 6 }}>
+          <div style={{ fontSize: 11, fontWeight: 900, color: 'var(--cc2-muted)', textTransform: 'uppercase', padding: '4px 2px' }}>
+            {CAP_BAC[c].icon} {CAP_BAC[c].ten} ({theoCap.get(c).length})
+          </div>
+          <DanhSachNguoi nguoi={theoCap.get(c)} onXemNhanSu={onXemNhanSu} />
+        </div>
+      ))}
+    </>
   );
 }
 
@@ -228,11 +260,15 @@ export default function TongQuanGiamDoc({ danhSach, gioHienTai, onXemNhanSu }) {
               )}
             </button>
 
-            {/* Bakery mở ra 4 luồng con; các khối một luồng thì ra thẳng danh sách người */}
+            {/* Cửa hàng mở ra 2 luồng con (Thu ngân/Bán hàng); các khối một
+                luồng thì ra thẳng danh sách người — chia thêm theo cấp bậc
+                (Bếp trưởng/Bếp phó/Nhân viên) cho các khối bếp. */}
             {mo && (
               <div className="cc2-drill" style={{ marginTop: 6 }}>
                 {con.length === 1 ? (
-                  <DanhSachNguoi nguoi={con[0].nguoi} onXemNhanSu={onXemNhanSu} />
+                  KHOI_CO_CAP_BAC.has(k.ma)
+                    ? <DanhSachNguoiTheoCapBac nguoi={con[0].nguoi} onXemNhanSu={onXemNhanSu} />
+                    : <DanhSachNguoi nguoi={con[0].nguoi} onXemNhanSu={onXemNhanSu} />
                 ) : con.map((c) => {
                   const l = LUONG[c.ma];
                   const moCon = luongKhoiMo === c.ma;
