@@ -133,7 +133,10 @@ export async function fetchHoSoNgayNhanSu({ staffId, station, ngay, tuNgay, denN
       .gte('created_at', new Date(new Date(`${ngayBatDauChecklist}T00:00:00+07:00`).getTime() - 60 * 86400000).toISOString())
       .order('created_at', { ascending: false }),
 
-    supabase.from('finished_goods_stock_in_log')
+    // ⚠️ ĐÚNG bảng là `production_logs` (có staff_id + work_date + price) —
+    // KHÔNG phải finished_goods_stock_in_log (bảng đó không có 3 cột này, hỏi
+    // sai là Supabase trả lỗi và mục "Nhập kho thành phẩm" im lặng rỗng).
+    supabase.from('production_logs')
       .select('id, product_name, size, qty, price, photo_url, created_at, work_date')
       .eq('staff_id', staffId).gte('work_date', ngayBatDauChecklist).lte('work_date', ngayKetThucChecklist),
 

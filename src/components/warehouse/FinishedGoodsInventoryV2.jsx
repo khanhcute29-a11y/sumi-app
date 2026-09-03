@@ -5,6 +5,7 @@ import { useAuth } from '../../lib/AuthContext';
 import { VoiceMicButton } from '../VoiceMicButton';
 import { parseVoiceByContext } from '../../lib/parseVoiceContext';
 import DonSanXuatTab from './DonSanXuatTab';
+import KhoMacaronX41 from './KhoMacaronX41';
 
 // Kho Thành Phẩm V2 — theo mockup đã duyệt
 // docs/mockups/SUMI-finished-goods-inventory-v2-handoff/finished-goods-inventory-v2-approved.html
@@ -435,9 +436,16 @@ export default function FinishedGoodsInventoryV2({ onBack }) {
           flex: 1, minHeight: 46, borderRadius: 14, border: view === 'orders' ? '2px solid #f05c2b' : '1px solid #e2cdb6',
           background: view === 'orders' ? '#fff1e8' : '#fff', color: view === 'orders' ? '#b7431e' : '#806a58', fontWeight: 900, cursor: 'pointer',
         }}>🧾 Đơn sản xuất</button>
+        <button onClick={() => setView('macaron')} style={{
+          flex: 1, minHeight: 46, borderRadius: 14, border: view === 'macaron' ? '2px solid #f05c2b' : '1px solid #e2cdb6',
+          background: view === 'macaron' ? '#fff1e8' : '#fff', color: view === 'macaron' ? '#b7431e' : '#806a58', fontWeight: 900, cursor: 'pointer',
+        }}>🍬 Macaron X41</button>
       </div>
 
-      {view === 'orders' ? <DonSanXuatTab /> : (
+      {/* Kho Macaron đếm theo CẶP/KHAY và tách theo 12 màu — không dùng chung
+          bảng finished_goods_stock (bảng đó khớp dòng theo product+size, bỏ
+          qua màu nên 12 màu sẽ đụng nhau vào 1 dòng). Xem KhoMacaronX41. */}
+      {view === 'macaron' ? <KhoMacaronX41 /> : view === 'orders' ? <DonSanXuatTab /> : (
       <>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
         <div style={{ background: '#fffaf2', border: '1px solid #e2cdb6', borderRadius: 16, padding: 12, textAlign: 'center' }}>
