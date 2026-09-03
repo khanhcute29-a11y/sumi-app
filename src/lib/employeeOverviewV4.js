@@ -77,14 +77,35 @@ export async function fetchMyAttendanceHistory(profileId, days = 14) {
 }
 
 // ---- Lịch phân ca tuần này ----
-export async function fetchMySchedule(profileId, station) {
+// `period`: 'week' (mặc định, tuần này) hoặc 'month' (cả tháng hiện tại) —
+// CÙNG bảng `shift_schedule` Giám đốc dùng để xếp ca (fetchShiftSchedule,
+// cũng chính là nguồn fetchWeeklyScheduleAllStations() bên bossOverviewV3.js
+// đang dùng), chỉ khác khoảng ngày lọc.
+export async function fetchMySchedule(profileId, station, period = 'week') {
   if (!station) return [];
-  const { from, to } = weekRange();
+  const { from, to } = period === 'month' ? monthFullRange() : weekRange();
   const [rows, configs] = await Promise.all([fetchShiftSchedule({ station, from, to }), fetchShiftConfigs()]);
   const configById = Object.fromEntries(configs.map((c) => [c.id, c]));
   return rows
     .filter((r) => r.staff_id === profileId)
     .map((r) => ({ date: r.work_date, config: configById[r.shift_config_id] || null }));
+}
+
+function monthFullRange(base = new Date()) {
+  const from = new Date(base.getFullYear(), base.getMonth(), 1);
+  const to = new Date(base.getFullYear(), base.getMonth() + 1, 0);
+  return { from: toDateStr(from), to: toDateStr(to) };
+}
+
+// Ghép tên người tạo (Giám đốc/Quản lý đã Gieo Hạt) vào thưởng/vi phạm — để
+// nhân viên biết "ai đánh giá", không chỉ thấy số tiền trừ/cộng vô danh.
+async function ganTenNguoiTao(rows, cotTen) {
+  const ids = [...new Set(rows.map((r) => r.created_by).filter(Boolean))];
+  if (!ids.length) return rows.map((r) => ({ ...r, [cotTen]: 'Sếp' }));
+  const { data } = await supabase.from('profiles').select('id,full_name').in('id', ids);
+  const ten = {};
+  (data || []).forEach((p) => { ten[p.id] = p.full_name; });
+  return rows.map((r) => ({ ...r, [cotTen]: ten[r.created_by] || 'Sếp' }));
 }
 
 // ---- Bảng lương tháng hiện tại ----
@@ -150,7 +171,7 @@ export async function fetchMyViolations(profileId, limit = 20) {
     .from('staff_violations').select('*').eq('staff_id', profileId)
     .order('occurred_on', { ascending: false }).limit(limit);
   if (error) throw error;
-  return data || [];
+  return ganTenNguoiTao(data || [], 'nguoi_danh_gia');
 }
 
 // ---- Thưởng nóng ----
@@ -159,7 +180,7 @@ export async function fetchMyRewards(profileId, limit = 20) {
     .from('staff_rewards').select('*').eq('staff_id', profileId)
     .order('awarded_on', { ascending: false }).limit(limit);
   if (error) throw error;
-  return data || [];
+  return ganTenNguoiTao(data || [], 'nguoi_danh_gia');
 }
 export async function fetchMyRewardsTotalThisMonth(profileId) {
   const { from, to } = monthRange();

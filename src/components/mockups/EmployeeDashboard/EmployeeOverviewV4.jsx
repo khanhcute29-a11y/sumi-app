@@ -32,8 +32,6 @@ import {
   fetchMyPayroll,
   fetchMyAdvanceRequests,
   submitMyAdvanceRequest,
-  fetchMyLeaveRequests,
-  submitMyLeaveRequest,
   submitMyShiftReport,
   fetchMyViolations,
   fetchMyRewards,
@@ -44,6 +42,9 @@ import {
 } from '../../../lib/employeeOverviewV4';
 import { chuanHoaCa, boPhanCuaHoSo, caChuanCuaLog } from '../../../lib/chamCong';
 import { gomPhien, nhanChenhLech } from '../../shifts/v2/dungChung';
+import DonTuCuaToi from '../../shifts/v2/DonTuCuaToi';
+import '../../../styles/cham-cong-v2.css';
+import { fetchHoSoNgayNhanSu, khongCoHoatDong } from '../../../lib/hoSoNgayNhanSu';
 
 // ============================================================
 // EMPLOYEE OVERVIEW V4 — nối dữ liệu THẬT (Supabase) cho nhân viên
@@ -64,19 +65,39 @@ const ORDER_STATUS_META = [
   { key: 'completed', icon: CheckCircle2, label: 'Giao thành công', tone: 'success' },
 ];
 
+// Sửa 04/09/2026 theo phản hồi thật:
+//  - Bỏ ô "Chấm công" riêng — widget CHẤM CÔNG HÔM NAY phía trên đã đủ, ô
+//    này trùng (cùng mở một sheet lịch sử).
+//  - Gộp "Tạm ứng" + "Xin nghỉ" thành 1 ô "Đơn Từ/Xin nghỉ" — dùng LẠI đúng
+//    <DonTuCuaToi> đang chạy bên Bếp trưởng/Quản lý (không viết lại luồng
+//    xin nghỉ 2 cấp lần hai).
+//  - Bỏ "Vi phạm" + "Thưởng" riêng — gộp vào "Báo cáo ngày" dưới dạng mục
+//    Gieo Hạt, vì cả hai đều là đánh giá gắn với một ngày cụ thể.
 const TILES = [
-  { key: 'attendance', icon: Clock, title: '1. Chấm công', sub: 'Lịch sử vào/ra ca' },
-  { key: 'schedule', icon: Calendar, title: '2. Lịch làm', sub: 'Phân ca tuần này' },
-  { key: 'advance', icon: DollarSign, title: '3. Tạm ứng', sub: 'Yêu cầu ứng lương' },
-  { key: 'leave', icon: FileText, title: '4. Xin nghỉ', sub: 'Đơn xin nghỉ phép' },
-  { key: 'payroll', icon: DollarSign, title: '5. Bảng lương', sub: 'Phiếu lương tháng này' },
-  { key: 'report', icon: ClipboardList, title: '6. Báo cáo ngày', sub: 'Báo cáo cuối ca' },
-  { key: 'violation', icon: AlertTriangle, title: '7. Vi phạm', sub: null },
-  { key: 'reward', icon: Gift, title: '8. Thưởng', sub: null },
+  { key: 'donTu', icon: FileText, title: '1. Đơn Từ/Xin nghỉ', sub: 'Xin nghỉ · Tạm ứng lương' },
+  { key: 'schedule', icon: Calendar, title: '2. Lịch làm', sub: 'Lịch tuần/tháng' },
+  { key: 'payroll', icon: DollarSign, title: '3. Bảng lương', sub: 'Phiếu lương tháng này' },
+  { key: 'report', icon: ClipboardList, title: '4. Báo cáo ngày', sub: 'Việc đã làm · Gieo Hạt' },
 ];
+
+// Kiểu 1 hàng bên trong panel "Hiệu suất cá nhân" — nút bấm THẬT (cả hàng),
+// không phải số liệu tĩnh.
+const eov4HangStyle = {
+  width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+  padding: '14px 4px', border: 0, borderBottom: '1px solid rgba(255,255,255,.18)',
+  background: 'transparent', color: '#fff', textAlign: 'left', cursor: 'pointer', font: 'inherit',
+};
+const eov4HangIconBox = {
+  width: 44, height: 44, borderRadius: 14, background: 'rgba(255,255,255,.18)',
+  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+};
+const eov4HangNhan = { display: 'block', fontSize: 12, fontWeight: 800, opacity: .85 };
+const eov4HangSo = { display: 'block', fontSize: 24, fontWeight: 900, marginTop: 2 };
+const eov4HangPhu = { display: 'block', fontSize: 12, fontWeight: 700, opacity: .8, marginTop: 1 };
 
 const formatVND = (n) => new Intl.NumberFormat('vi-VN').format(Math.round(n || 0)) + 'đ';
 const tomorrowStr = () => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); };
+const todayStr = () => new Date().toISOString().slice(0, 10);
 // Giờ hiển thị luôn theo múi giờ Việt Nam — chỉ định rõ timeZone, không dựa
 // vào giờ hệ điều hành của thiết bị (an toàn cả khi máy cấu hình sai múi giờ).
 const gioVN = (iso) => iso
@@ -114,11 +135,12 @@ export function EmployeeOverviewV4Inner({ onNavigate } = {}) {
   const [revenue, setRevenue] = useState(null);
   const [attendance, setAttendance] = useState(null);
   const [schedule, setSchedule] = useState(null);
+  const [schedulePeriod, setSchedulePeriod] = useState('week'); // 'week' | 'month'
   const [payroll, setPayroll] = useState(undefined); // undefined = chưa tải, null = không có bảng lương tháng này
   const [advanceRequests, setAdvanceRequests] = useState(null);
-  const [leaveRequests, setLeaveRequests] = useState(null);
   const [violations, setViolations] = useState(null);
   const [rewards, setRewards] = useState(null);
+  const [hoSoNgay, setHoSoNgay] = useState(null); // "Báo cáo ngày" — việc/đơn/sản xuất đã làm hôm nay (fetchHoSoNgayNhanSu)
   const [rewardsTotal, setRewardsTotal] = useState(null);
   const [rewardStars, setRewardStars] = useState(null);
   const [orders, setOrders] = useState(null);
@@ -130,10 +152,6 @@ export function EmployeeOverviewV4Inner({ onNavigate } = {}) {
   const [advanceReason, setAdvanceReason] = useState('');
   const [advanceNeededOn, setAdvanceNeededOn] = useState(tomorrowStr());
   const [advanceSending, setAdvanceSending] = useState(false);
-
-  const [leaveDate, setLeaveDate] = useState('');
-  const [leaveReason, setLeaveReason] = useState('');
-  const [leaveSending, setLeaveSending] = useState(false);
 
   const [reportRevenue, setReportRevenue] = useState('');
   const [reportStock, setReportStock] = useState('');
@@ -197,13 +215,21 @@ export function EmployeeOverviewV4Inner({ onNavigate } = {}) {
   const loadSheetData = (sheet) => {
     if (!profile?.id) return;
     if (sheet === 'attendance' && !attendance) fetchMyAttendanceHistory(profile.id).then(setAttendance).catch((e) => setError(e.message));
-    if (sheet === 'schedule' && !schedule) fetchMySchedule(profile.id, profile.station).then(setSchedule).catch((e) => setError(e.message));
+    if (sheet === 'schedule' && !schedule) fetchMySchedule(profile.id, profile.station, schedulePeriod).then(setSchedule).catch((e) => setError(e.message));
     if (sheet === 'payroll' && payroll === undefined) fetchMyPayroll(profile.id).then(setPayroll).catch((e) => setError(e.message));
-    if (sheet === 'advance' && !advanceRequests) fetchMyAdvanceRequests(profile.id).then(setAdvanceRequests).catch((e) => setError(e.message));
-    if (sheet === 'leave' && !leaveRequests) fetchMyLeaveRequests(profile.id).then(setLeaveRequests).catch((e) => setError(e.message));
-    if (sheet === 'violation' && !violations) fetchMyViolations(profile.id).then(setViolations).catch((e) => setError(e.message));
-    if (sheet === 'reward' && !rewards) fetchMyRewards(profile.id).then(setRewards).catch((e) => setError(e.message));
+    if (sheet === 'donTu' && !advanceRequests) fetchMyAdvanceRequests(profile.id).then(setAdvanceRequests).catch((e) => setError(e.message));
+    if (sheet === 'report') {
+      if (!hoSoNgay) fetchHoSoNgayNhanSu({ staffId: profile.id, station: profile.station, ngay: todayStr() }).then(setHoSoNgay).catch((e) => setError(e.message));
+      if (!violations) fetchMyViolations(profile.id).then(setViolations).catch(() => {});
+      if (!rewards) fetchMyRewards(profile.id).then(setRewards).catch(() => {});
+    }
   };
+
+  // Đổi tuần/tháng thì tải lại lịch — chỉ khi sheet Lịch làm đang mở.
+  useEffect(() => {
+    if (activeSheet !== 'schedule' || !profile?.id) return;
+    fetchMySchedule(profile.id, profile.station, schedulePeriod).then(setSchedule).catch((e) => setError(e.message));
+  }, [schedulePeriod]);
 
   const openSheet = (key) => { setActiveSheet(key); loadSheetData(key); };
   const closeSheet = () => setActiveSheet(null);
@@ -226,6 +252,16 @@ export function EmployeeOverviewV4Inner({ onNavigate } = {}) {
     return orders.filter((o) => o.status === selectedOrderFilter);
   }, [orders, selectedOrderFilter]);
 
+  // "GIEO HẠT" — thưởng nóng + vi phạm gộp thành một dòng thời gian, mới
+  // nhất trước. Thay cho 2 sheet "Vi phạm"/"Thưởng" tách rời trước đây.
+  const gieoHat = useMemo(() => {
+    if (!rewards || !violations) return [];
+    return [
+      ...rewards.map((r) => ({ ...r, loai: 'thuong' })),
+      ...violations.map((v) => ({ ...v, loai: 'phat' })),
+    ].sort((a, b) => (b.awarded_on || b.occurred_on).localeCompare(a.awarded_on || a.occurred_on)).slice(0, 15);
+  }, [rewards, violations]);
+
   const handleAdvanceSubmit = async () => {
     if (!advanceReason.trim()) { setError('Nhập lý do ứng lương giúp em.'); return; }
     setAdvanceSending(true);
@@ -236,19 +272,6 @@ export function EmployeeOverviewV4Inner({ onNavigate } = {}) {
       setAdvanceRequests(fresh);
       setAdvanceReason('');
     } catch (e) { setError(e.message); } finally { setAdvanceSending(false); }
-  };
-
-  const handleLeaveSubmit = async () => {
-    if (!leaveDate) { setError('Chọn ngày nghỉ giúp em.'); return; }
-    if (!leaveReason.trim()) { setError('Nhập lý do nghỉ phép giúp em.'); return; }
-    setLeaveSending(true);
-    setError('');
-    try {
-      await submitMyLeaveRequest({ profile, leaveDate, reason: leaveReason.trim() });
-      const fresh = await fetchMyLeaveRequests(profile.id);
-      setLeaveRequests(fresh);
-      setLeaveReason('');
-    } catch (e) { setError(e.message); } finally { setLeaveSending(false); }
   };
 
   const handleReportSubmit = async () => {
@@ -362,22 +385,46 @@ export function EmployeeOverviewV4Inner({ onNavigate } = {}) {
       )}
       <div className="eov4-hierarchy">{hierarchy}</div>
 
-      {/* 3. HIỆU SUẤT CÁ NHÂN */}
-      <div className="eov4-section-title">📊 HIỆU SUẤT CÁ NHÂN (tháng này)</div>
-      <div className="eov4-kpi-grid">
-        <button className="eov4-kpi-card eov4-kpi-green" onClick={() => openOrders('all')}>
-          <div className="eov4-kpi-value">{revenue ? formatVND(revenue.total) : '…'}</div>
-          <div className="eov4-kpi-label">Doanh Thu ({revenue?.orderCount ?? 0} đơn) ›</div>
+      {/* 3. HIỆU SUẤT CÁ NHÂN — panel lớn, nổi bật (yêu cầu 04/09/2026: làm
+          nổi bật giống Bếp trưởng nhưng đổi màu, mỗi dòng bấm được thật sự,
+          không dừng ở dạng số liệu tĩnh). Màu cam đất (#D96B43, accent chuẩn
+          thương hiệu) — tách biệt với xanh lá đang dùng cho Bếp trưởng. */}
+      <div style={{
+        background: 'linear-gradient(150deg,#e07a4f,#b34e26)', borderRadius: 26,
+        padding: '18px 16px 6px', marginBottom: 16, boxShadow: '0 14px 34px rgba(179,78,38,.28)',
+      }}>
+        <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: '.04em', color: '#fff' }}>
+          📊 HIỆU SUẤT CÁ NHÂN · THÁNG NÀY
+        </div>
+        <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,.8)', marginTop: 2, marginBottom: 4 }}>
+          Bấm vào từng mục để xem chi tiết
+        </div>
+        <button onClick={() => openOrders('all')} style={eov4HangStyle}>
+          <span style={eov4HangIconBox}><Receipt size={22} color="#fff" /></span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={eov4HangNhan}>DOANH THU</span>
+            <span style={eov4HangSo}>{revenue ? formatVND(revenue.total) : '…'}</span>
+            <span style={eov4HangPhu}>{revenue?.orderCount ?? 0} đơn đã tạo</span>
+          </span>
+          <ChevronRight size={22} color="rgba(255,255,255,.75)" />
         </button>
-        <button className="eov4-kpi-card eov4-kpi-blue" onClick={() => openSheet('attendance')}>
-          <div className="eov4-kpi-value">{hours === null ? '…' : `${hours}h`}</div>
-          <div className="eov4-kpi-label">Tổng Giờ Làm ›</div>
+        <button onClick={() => openSheet('attendance')} style={eov4HangStyle}>
+          <span style={eov4HangIconBox}><Clock size={22} color="#fff" /></span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={eov4HangNhan}>TỔNG GIỜ LÀM</span>
+            <span style={eov4HangSo}>{hours === null ? '…' : `${hours}h`}</span>
+            <span style={eov4HangPhu}>Xem lịch sử vào/ra từng ngày</span>
+          </span>
+          <ChevronRight size={22} color="rgba(255,255,255,.75)" />
         </button>
-        <button className="eov4-kpi-card eov4-kpi-amber" onClick={() => openSheet('reward')}>
-          <div className="eov4-kpi-value">{rewardsTotal === null ? '…' : formatVND(rewardsTotal)}</div>
-          <div className="eov4-kpi-label">
-            Tiền Thưởng{rewardStars ? ` · ⭐${rewardStars}` : ''} ›
-          </div>
+        <button onClick={() => openSheet('report')} style={{ ...eov4HangStyle, borderBottom: 'none' }}>
+          <span style={eov4HangIconBox}><Gift size={22} color="#fff" /></span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={eov4HangNhan}>TIỀN THƯỞNG</span>
+            <span style={eov4HangSo}>{rewardsTotal === null ? '…' : formatVND(rewardsTotal)}</span>
+            <span style={eov4HangPhu}>{rewardStars ? `⭐${rewardStars} sao · ` : ''}Xem trong Báo cáo ngày</span>
+          </span>
+          <ChevronRight size={22} color="rgba(255,255,255,.75)" />
         </button>
       </div>
 
@@ -459,9 +506,16 @@ export function EmployeeOverviewV4Inner({ onNavigate } = {}) {
       )}
 
       {activeSheet === 'schedule' && (
-        <BottomSheet title="📅 Lịch phân ca tuần này" onClose={closeSheet}>
+        <BottomSheet title="📅 Lịch làm việc" onClose={closeSheet}>
+          <div className="eov4-quick-amounts">
+            <button className={`eov4-chip-btn ${schedulePeriod === 'week' ? 'active' : ''}`} onClick={() => setSchedulePeriod('week')}>Tuần này</button>
+            <button className={`eov4-chip-btn ${schedulePeriod === 'month' ? 'active' : ''}`} onClick={() => setSchedulePeriod('month')}>Tháng này</button>
+          </div>
+          {/* Dùng lại ĐÚNG bảng phân ca (shift_schedule) mà Giám đốc dùng để
+              xếp lịch cho cả xưởng — chỉ lọc xuống đúng ca của mình, không tự
+              vẽ nguồn dữ liệu khác. */}
           {!schedule ? <div className="eov4-empty-box">Đang tải...</div> : schedule.length === 0 ? (
-            <div className="eov4-empty-box">Tuần này chưa được xếp ca.</div>
+            <div className="eov4-empty-box">{schedulePeriod === 'week' ? 'Tuần này' : 'Tháng này'} chưa được xếp ca.</div>
           ) : (
             <div className="eov4-table">
               {schedule.map((r, i) => (
@@ -475,8 +529,14 @@ export function EmployeeOverviewV4Inner({ onNavigate } = {}) {
         </BottomSheet>
       )}
 
-      {activeSheet === 'advance' && (
-        <BottomSheet title="💵 Yêu cầu ứng lương" onClose={closeSheet}>
+      {activeSheet === 'donTu' && (
+        <BottomSheet title="📝 Đơn Từ / Xin nghỉ" onClose={closeSheet}>
+          {/* Xin nghỉ — dùng LẠI nguyên <DonTuCuaToi> đang chạy bên Bếp
+              trưởng/Quản lý (luồng duyệt 2 cấp Quản lý→Giám đốc đã kiểm
+              chứng), không viết lại lần hai cho Nhân viên. */}
+          <DonTuCuaToi hoSo={profile} />
+
+          <div className="eov4-field-label" style={{ marginTop: 18, borderTop: '1px solid #eadcca', paddingTop: 14 }}>💵 Tạm ứng lương</div>
           <div className="eov4-quick-amounts">
             {[500000, 1000000, 2000000].map((amt) => (
               <button key={amt} className={`eov4-chip-btn ${advanceAmount === amt ? 'active' : ''}`} onClick={() => setAdvanceAmount(amt)}>{formatVND(amt)}</button>
@@ -489,7 +549,7 @@ export function EmployeeOverviewV4Inner({ onNavigate } = {}) {
           <button className="eov4-primary-btn" disabled={advanceSending} onClick={handleAdvanceSubmit}>
             <Send size={16} /> {advanceSending ? 'Đang gửi...' : 'Gửi Sếp duyệt'}
           </button>
-          <div className="eov4-field-label" style={{ marginTop: 14 }}>Lịch sử gần đây</div>
+          <div className="eov4-field-label" style={{ marginTop: 14 }}>Lịch sử tạm ứng gần đây</div>
           {!advanceRequests ? <div className="eov4-empty-box">Đang tải...</div> : advanceRequests.length === 0 ? (
             <div className="eov4-empty-box">Chưa có yêu cầu nào.</div>
           ) : (
@@ -497,31 +557,6 @@ export function EmployeeOverviewV4Inner({ onNavigate } = {}) {
               {advanceRequests.map((r) => (
                 <div key={r.id} className="eov4-table-row">
                   <div className="eov4-table-main"><strong>{formatVND(r.amount)}</strong><span className="eov4-note-text">{r.reason}</span></div>
-                  <span className="eov4-hours-pill">{r.status}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </BottomSheet>
-      )}
-
-      {activeSheet === 'leave' && (
-        <BottomSheet title="📝 Đơn xin nghỉ phép" onClose={closeSheet}>
-          <label className="eov4-field-label">Ngày nghỉ</label>
-          <input type="date" className="eov4-input" value={leaveDate} onChange={(e) => setLeaveDate(e.target.value)} />
-          <label className="eov4-field-label">Lý do nghỉ phép</label>
-          <textarea className="eov4-textarea" rows={3} placeholder="VD: Về quê giỗ ông bà..." value={leaveReason} onChange={(e) => setLeaveReason(e.target.value)} />
-          <button className="eov4-primary-btn" disabled={leaveSending} onClick={handleLeaveSubmit}>
-            <Send size={16} /> {leaveSending ? 'Đang gửi...' : 'Gửi duyệt'}
-          </button>
-          <div className="eov4-field-label" style={{ marginTop: 14 }}>Lịch sử gần đây</div>
-          {!leaveRequests ? <div className="eov4-empty-box">Đang tải...</div> : leaveRequests.length === 0 ? (
-            <div className="eov4-empty-box">Chưa có đơn nào.</div>
-          ) : (
-            <div className="eov4-table">
-              {leaveRequests.map((r) => (
-                <div key={r.id} className="eov4-table-row">
-                  <div className="eov4-table-main"><strong>{r.leave_date}</strong><span className="eov4-note-text">{r.reason}</span></div>
                   <span className="eov4-hours-pill">{r.status}</span>
                 </div>
               ))}
@@ -555,7 +590,109 @@ export function EmployeeOverviewV4Inner({ onNavigate } = {}) {
       )}
 
       {activeSheet === 'report' && (
-        <BottomSheet title="📋 Báo cáo cuối ca" onClose={closeSheet}>
+        <BottomSheet title="📋 Báo cáo ngày" onClose={closeSheet}>
+          {/* Tự động tổng hợp từ những gì đã LÀM THẬT hôm nay — dùng LẠI
+              đúng fetchHoSoNgayNhanSu() (lib/hoSoNgayNhanSu.js) mà Giám đốc
+              đang dùng cho "Báo cáo ngày · từng nhân sự", chỉ truyền staffId
+              = chính mình nên tự động chỉ ra đúng việc/đơn/sản xuất của
+              MÌNH — không viết lại logic tổng hợp lần hai. */}
+          {!hoSoNgay ? <div className="eov4-empty-box">Đang tải...</div> : khongCoHoatDong(hoSoNgay) ? (
+            <div className="eov4-empty-box">Hôm nay chưa ghi nhận việc/đơn nào — làm gì thì báo cáo sẽ tự cập nhật ở đây, không cần tự gõ.</div>
+          ) : (
+            <>
+              {hoSoNgay.viec.xongTrongNgay.length > 0 && (
+                <>
+                  <div className="eov4-field-label">✅ Việc đã xong hôm nay</div>
+                  <div className="eov4-table">
+                    {hoSoNgay.viec.xongTrongNgay.map((t) => (
+                      <div key={t.id} className="eov4-table-row">
+                        <div className="eov4-table-main"><strong>{t.title}</strong>{t.order_code && <span className="eov4-note-text">Đơn {t.order_code}</span>}</div>
+                        <span className="eov4-hours-pill">{gioVN(t.completed_at)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+              {hoSoNgay.viec.dangLam.length > 0 && (
+                <>
+                  <div className="eov4-field-label" style={{ marginTop: 14 }}>🔨 Đang làm</div>
+                  <div className="eov4-table">
+                    {hoSoNgay.viec.dangLam.map((t) => (
+                      <div key={t.id} className="eov4-table-row">
+                        <div className="eov4-table-main"><strong>{t.title}</strong>{t.order_code && <span className="eov4-note-text">Đơn {t.order_code}</span>}</div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+              {hoSoNgay.donBep.length > 0 && (
+                <>
+                  <div className="eov4-field-label" style={{ marginTop: 14 }}>🍰 Đơn bếp đã nhận</div>
+                  <div className="eov4-table">
+                    {hoSoNgay.donBep.map((p) => (
+                      <div key={p.id} className="eov4-table-row">
+                        <div className="eov4-table-main"><strong>#{p.orders?.order_code || '—'}</strong><span className="eov4-note-text">{p.orders?.order_type || ''}</span></div>
+                        <span className="eov4-hours-pill">{p.completed_at ? 'Xong' : p.status}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+              {hoSoNgay.sanXuat.length > 0 && (
+                <>
+                  <div className="eov4-field-label" style={{ marginTop: 14 }}>🏭 Nhập kho thành phẩm</div>
+                  <div className="eov4-table">
+                    {hoSoNgay.sanXuat.map((s) => (
+                      <div key={s.id} className="eov4-table-row">
+                        <div className="eov4-table-main"><strong>{s.product_name}{s.size ? ` (${s.size})` : ''}</strong></div>
+                        <span className="eov4-hours-pill">{s.qty}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+              {hoSoNgay.vanTai.length > 0 && (
+                <>
+                  <div className="eov4-field-label" style={{ marginTop: 14 }}>🛵 Chuyến giao hàng</div>
+                  <div className="eov4-table">
+                    {hoSoNgay.vanTai.map((r) => (
+                      <div key={r.id} className="eov4-table-row">
+                        <div className="eov4-table-main"><strong>{r.run_code}</strong><span className="eov4-note-text">{r.diemDung.length} điểm dừng</span></div>
+                        <span className="eov4-hours-pill">{r.status}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          {/* GIEO HẠT — đánh giá Cộng/Trừ sao của Giám đốc, gộp thưởng nóng
+              (staff_rewards) + vi phạm (staff_violations) thành một dòng
+              thời gian, thay cho 2 ô "Vi phạm"/"Thưởng" tách rời trước đây. */}
+          <div className="eov4-field-label" style={{ marginTop: 18, borderTop: '1px solid #eadcca', paddingTop: 14 }}>🌱 Gieo Hạt — đánh giá của Giám đốc</div>
+          {!rewards || !violations ? <div className="eov4-empty-box">Đang tải...</div> : gieoHat.length === 0 ? (
+            <div className="eov4-empty-box">Chưa có đánh giá nào — cứ làm tốt, sao sẽ tới!</div>
+          ) : (
+            <div className="eov4-table">
+              {gieoHat.map((h) => (
+                <div key={`${h.loai}-${h.id}`} className="eov4-table-row">
+                  <div className="eov4-table-main">
+                    <strong>{h.loai === 'thuong' ? '🌟 ' : '🥀 '}{h.title || (h.loai === 'thuong' ? 'Thưởng nóng' : 'Vi phạm')}</strong>
+                    <span className="eov4-note-text">Từ {h.nguoi_danh_gia || 'Sếp'} · {h.awarded_on || h.occurred_on}{h.note || h.description ? ` · ${h.note || h.description}` : ''}</span>
+                  </div>
+                  <span className={h.loai === 'thuong' ? 'eov4-tone-warning' : 'eov4-tone-danger'}>
+                    {h.loai === 'thuong' ? '+' : '-'}{formatVND(h.amount || h.penalty_amount)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Báo cáo cuối ca thủ công — giữ lại, dùng cho bàn giao tiền mặt/
+              tồn quầy (khác hẳn phần tự động phía trên, không thay thế
+              được nhau). */}
+          <div className="eov4-field-label" style={{ marginTop: 18, borderTop: '1px solid #eadcca', paddingTop: 14 }}>🧾 Bàn giao cuối ca (nếu có)</div>
           <label className="eov4-field-label">Doanh thu cuối ca</label>
           <input type="number" className="eov4-input" placeholder="VD: 1250000" value={reportRevenue} onChange={(e) => setReportRevenue(e.target.value)} />
           <label className="eov4-field-label">Số lượng bánh còn tồn quầy</label>
@@ -567,40 +704,6 @@ export function EmployeeOverviewV4Inner({ onNavigate } = {}) {
           <button className="eov4-primary-btn" disabled={reportSending} onClick={handleReportSubmit}>
             <Send size={16} /> {reportSending ? 'Đang gửi...' : 'Gửi báo cáo'}
           </button>
-        </BottomSheet>
-      )}
-
-      {activeSheet === 'violation' && (
-        <BottomSheet title="⚠️ Lịch sử vi phạm" onClose={closeSheet}>
-          {!violations ? <div className="eov4-empty-box">Đang tải...</div> : violations.length === 0 ? (
-            <div className="eov4-empty-box">🎉 Không có vi phạm nào — giữ vững phong độ nhé!</div>
-          ) : (
-            <div className="eov4-table">
-              {violations.map((v) => (
-                <div key={v.id} className="eov4-table-row">
-                  <div className="eov4-table-main"><strong>{v.title}</strong><span className="eov4-note-text">{v.occurred_on}</span></div>
-                  {v.penalty_amount > 0 && <span className="eov4-tone-danger">-{formatVND(v.penalty_amount)}</span>}
-                </div>
-              ))}
-            </div>
-          )}
-        </BottomSheet>
-      )}
-
-      {activeSheet === 'reward' && (
-        <BottomSheet title="🎁 Thưởng nóng" onClose={closeSheet}>
-          {!rewards ? <div className="eov4-empty-box">Đang tải...</div> : rewards.length === 0 ? (
-            <div className="eov4-empty-box">Chưa có thưởng nóng nào.</div>
-          ) : (
-            <div className="eov4-table">
-              {rewards.map((r) => (
-                <div key={r.id} className="eov4-table-row">
-                  <div className="eov4-table-main"><strong>{r.title}</strong><span className="eov4-note-text">{r.awarded_on}</span></div>
-                  <span className="eov4-tone-warning">+{formatVND(r.amount)}</span>
-                </div>
-              ))}
-            </div>
-          )}
         </BottomSheet>
       )}
 
