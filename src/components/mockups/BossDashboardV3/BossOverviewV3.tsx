@@ -54,6 +54,7 @@ import { fetchShiftLogsRange } from '../../../lib/queries';
 // gian truyền vào là 7 ngày/tháng/tùy chỉnh gì, nên tái dùng thẳng chứ không
 // viết công thức cộng giờ riêng ở đây (tránh lệch số như đã từng xảy ra).
 import { boPhanCuaHoSo, chuanHoaCa, tomTatThang, TEN_BO_PHAN } from '../../../lib/chamCong';
+import { fetchDanhSachNhanSuNgay, fetchHoSoNgayNhanSu, khongCoHoatDong } from '../../../lib/hoSoNgayNhanSu';
 import { WeeklyScheduleSection } from '../../WeeklyScheduleSection';
 import DirectorStaffOverviewSheet from '../../shifts/v2/DirectorStaffOverviewSheet';
 import {
@@ -527,8 +528,41 @@ export function BossOverviewV3Inner() {
   const [historyOrderWorkTasks, setHistoryOrderWorkTasks] = useState<any[]>([]);
   const [historyViolations, setHistoryViolations] = useState<any[]>([]);
 
-  // Tab "Hôm nay" / "Lịch sử" của sheet Báo Cáo Ngày + chi tiết 1 mục
-  const [reportTab, setReportTab] = useState<'today' | 'history'>('today');
+  // Tab "Hôm nay" / "Lịch sử" / "Theo nhân sự" của sheet Báo Cáo Ngày
+  const [reportTab, setReportTab] = useState<'today' | 'history' | 'staff'>('today');
+
+  // ── Tab "Theo nhân sự": soi 1 người làm gì trong ngày ──
+  // Toàn bộ dữ liệu ở đây LAZY: danh sách chỉ tải khi bấm vào tab, chi tiết
+  // chỉ tải khi bấm vào đúng một người — không thêm gánh nặng nào cho
+  // loadAll() lúc mở Dashboard (đang là 18 truy vấn).
+  const [staffDayDate, setStaffDayDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [staffDayList, setStaffDayList] = useState<any[] | null>(null);
+  const [staffDayLoading, setStaffDayLoading] = useState(false);
+  const [staffDayError, setStaffDayError] = useState('');
+  const [staffDayKeyword, setStaffDayKeyword] = useState('');
+  const [staffDayBoPhan, setStaffDayBoPhan] = useState('all');
+  const [staffDayPicked, setStaffDayPicked] = useState<any | null>(null);
+  const [staffDayDetail, setStaffDayDetail] = useState<any | null>(null);
+  const [staffDayDetailLoading, setStaffDayDetailLoading] = useState(false);
+
+  const loadStaffDayList = async (ngay: string) => {
+    setStaffDayLoading(true); setStaffDayError('');
+    try {
+      setStaffDayList(await fetchDanhSachNhanSuNgay(ngay));
+    } catch (e: any) {
+      setStaffDayError(e.message || 'Không tải được danh sách nhân sự.');
+      setStaffDayList([]);
+    } finally { setStaffDayLoading(false); }
+  };
+
+  const openStaffDay = async (nv: any) => {
+    setStaffDayPicked(nv); setStaffDayDetail(null); setStaffDayDetailLoading(true);
+    try {
+      setStaffDayDetail(await fetchHoSoNgayNhanSu({ staffId: nv.id, station: nv.station, ngay: staffDayDate }));
+    } catch {
+      setStaffDayDetail(null);
+    } finally { setStaffDayDetailLoading(false); }
+  };
   const [reportHistoryFrom, setReportHistoryFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10); });
   const [reportHistoryTo, setReportHistoryTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [historyShiftReports, setHistoryShiftReports] = useState<any[]>([]);
@@ -2148,8 +2182,8 @@ export function BossOverviewV3Inner() {
                     <button onClick={() => setActiveSheet(null)} aria-label="Quay lại" style={{ order: -1, flexShrink: 0, width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer' }}>‹</button>
                   </div>
 
-                  {/* 2 module: Hôm nay / Lịch sử */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, padding: '10px 14px 0' }}>
+                  {/* 3 module: Hôm nay / Lịch sử / Theo nhân sự */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, padding: '10px 14px 0' }}>
                     <button onClick={() => setReportTab('today')} style={{
                       padding: '8px 4px', borderRadius: 12, border: reportTab === 'today' ? '2px solid #db2777' : '1px solid #eadcca',
                       background: reportTab === 'today' ? '#fdf2f8' : '#fff', color: reportTab === 'today' ? '#db2777' : '#725f50',
@@ -2164,7 +2198,38 @@ export function BossOverviewV3Inner() {
                     }}>
                       🕘 Lịch sử
                     </button>
+                    <button onClick={() => { setReportTab('staff'); if (staffDayList === null && !staffDayLoading) loadStaffDayList(staffDayDate); }} style={{
+                      padding: '8px 4px', borderRadius: 12, border: reportTab === 'staff' ? '2px solid #db2777' : '1px solid #eadcca',
+                      background: reportTab === 'staff' ? '#fdf2f8' : '#fff', color: reportTab === 'staff' ? '#db2777' : '#725f50',
+                      fontSize: 11.5, fontWeight: 900, cursor: 'pointer',
+                    }}>
+                      👤 Theo nhân sự
+                    </button>
                   </div>
+
+                  {reportTab === 'staff' && (
+                    <div style={{ padding: '10px 14px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input type="date" value={staffDayDate} max={new Date().toISOString().slice(0, 10)}
+                          onChange={e => { setStaffDayDate(e.target.value); loadStaffDayList(e.target.value); }}
+                          style={{ flex: '0 0 auto', minHeight: 38, borderRadius: 10, border: '1px solid #eadcca', padding: '0 8px', fontSize: 12.5, fontFamily: 'inherit' }} />
+                        <input type="text" value={staffDayKeyword} onChange={e => setStaffDayKeyword(e.target.value)}
+                          placeholder="🔍 Tìm tên nhân sự…"
+                          style={{ flex: 1, minWidth: 0, minHeight: 38, borderRadius: 10, border: '1px solid #eadcca', padding: '0 10px', fontSize: 12.5, fontFamily: 'inherit' }} />
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
+                        {[['all', 'Tất cả'], ['bakery', 'Bakery'], ['xuong41', 'Xưởng 41'], ['xuong42', 'Xưởng 42'], ['van_tai', 'Vận tải'], ['_khac', 'Khác']].map(([ma, ten]) => (
+                          <button key={ma} onClick={() => setStaffDayBoPhan(ma)} style={{
+                            flexShrink: 0, padding: '6px 12px', borderRadius: 999,
+                            border: staffDayBoPhan === ma ? '2px solid #db2777' : '1px solid #eadcca',
+                            background: staffDayBoPhan === ma ? '#fdf2f8' : '#fff',
+                            color: staffDayBoPhan === ma ? '#db2777' : '#725f50',
+                            fontSize: 11.5, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap',
+                          }}>{ten}</button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {reportTab === 'history' && (
                     <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', padding: '10px 14px 0' }}>
@@ -2193,7 +2258,57 @@ export function BossOverviewV3Inner() {
                     <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Đang tải…</div>
                   )}
 
-                  {!(reportTab === 'history' && reportHistoryLoading) && (
+                  {/* ── Tab "Theo nhân sự": danh sách người + trạng thái trong
+                      ngày. Bấm 1 người mở hồ sơ ngày đầy đủ ở lớp trên. ── */}
+                  {reportTab === 'staff' && (
+                    <>
+                      {staffDayError && <div style={{ color: '#dc2626', fontSize: 12.5, fontWeight: 700, marginBottom: 10 }}>⚠️ {staffDayError}</div>}
+                      {staffDayLoading && <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Đang tải…</div>}
+                      {!staffDayLoading && (() => {
+                        const boDau = (s: string) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+                        const q = boDau(staffDayKeyword).trim();
+                        const ds = (staffDayList || [])
+                          .filter((p: any) => staffDayBoPhan === 'all' || (boPhanCuaHoSo(p) || '_khac') === staffDayBoPhan)
+                          .filter((p: any) => !q || boDau(p.full_name).includes(q));
+                        const nhan: Record<string, { chu: string; mau: string; nen: string }> = {
+                          dang_lam: { chu: '🟢 Đang làm', mau: '#15803d', nen: '#f0fdf4' },
+                          xong: { chu: '✅ Đã tan ca', mau: '#1d4ed8', nen: '#eff6ff' },
+                          nghi: { chu: '🏖 Xin nghỉ', mau: '#7c3aed', nen: '#f5f3ff' },
+                          chua_cham: { chu: '⚠️ Chưa chấm công', mau: '#dc2626', nen: '#fef2f2' },
+                        };
+                        if (!ds.length) return <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 12.5 }}>Không có nhân sự nào khớp.</div>;
+                        return (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {ds.map((p: any) => {
+                              const tt = nhan[p.trangThai] || nhan.chua_cham;
+                              const gio = (iso: string) => (iso ? new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '--:--');
+                              return (
+                                <button key={p.id} onClick={() => openStaffDay(p)} style={{
+                                  textAlign: 'left', background: '#fff', border: '1.5px solid #eadcca', borderRadius: 12,
+                                  padding: 10, cursor: 'pointer', font: 'inherit', display: 'flex',
+                                  justifyContent: 'space-between', alignItems: 'center', gap: 8,
+                                }}>
+                                  <span style={{ minWidth: 0 }}>
+                                    <span style={{ display: 'block', fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>{p.full_name}</span>
+                                    <span style={{ display: 'block', fontSize: 11, color: '#725f50' }}>
+                                      {TEN_BO_PHAN[boPhanCuaHoSo(p) as keyof typeof TEN_BO_PHAN] || 'Chưa gán khâu'}
+                                      {p.gioVao ? ` · ${gio(p.gioVao)}${p.gioRa ? `–${gio(p.gioRa)}` : ''}` : ''}
+                                      {p.phutMuon > 0 ? ` · trễ ${p.phutMuon}p` : ''}
+                                    </span>
+                                  </span>
+                                  <span style={{ flexShrink: 0, fontSize: 10.5, fontWeight: 900, color: tt.mau, background: tt.nen, padding: '4px 8px', borderRadius: 8 }}>
+                                    {tt.chu}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
+                    </>
+                  )}
+
+                  {reportTab !== 'staff' && !(reportTab === 'history' && reportHistoryLoading) && (
                     <>
                       {/* 1. Việc hoàn thành — phân luồng theo bộ phận */}
                       <div style={{ marginBottom: 18 }}>
@@ -2331,6 +2446,192 @@ export function BossOverviewV3Inner() {
                             ))}
                           </div>
                         </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Hồ sơ NGÀY của 1 nhân sự — mở từ tab "Theo nhân sự". Gom mọi dấu
+            vết người đó để lại trong ngày để Giám đốc đối chiếu được ai thật
+            sự có làm, ai không (đặc biệt là vận tải: chuyến nào, giao tới
+            đâu, xong chưa). */}
+        {staffDayPicked && (() => {
+          const gio = (iso: string) => (iso ? new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '--:--');
+          const hs = staffDayDetail;
+          const muc = (icon: string, ten: string, so: number | string, mau: string) => (
+            <div style={{ fontSize: 12, fontWeight: 900, color: mau, textTransform: 'uppercase', margin: '16px 0 8px' }}>
+              {icon} {ten} ({so})
+            </div>
+          );
+          const the = (noiDung: any, key: string, vien = '#eadcca') => (
+            <div key={key} style={{ background: '#fff', border: `1.5px solid ${vien}`, borderRadius: 12, padding: 10, fontSize: 12.5, color: '#2d1c10' }}>{noiDung}</div>
+          );
+          return (
+            <div style={{ position: 'fixed', inset: 0, zIndex: 2000, background: '#fdf9f2', overflowY: 'auto' }} onClick={() => { setStaffDayPicked(null); setStaffDayDetail(null); }}>
+              <div onClick={e => e.stopPropagation()}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 14, borderBottom: '1.5px solid #eadcca', position: 'sticky', top: 0, background: '#fdf9f2', zIndex: 1 }}>
+                  <button onClick={() => { setStaffDayPicked(null); setStaffDayDetail(null); }} aria-label="Quay lại" style={{ width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer', flexShrink: 0 }}>‹</button>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 1, color: '#b8692f', textTransform: 'uppercase' }}>
+                      Hồ sơ ngày {new Date(staffDayDate).toLocaleDateString('vi-VN')}
+                    </div>
+                    <div style={{ fontSize: 15, fontWeight: 900, color: '#2d1b10' }}>
+                      {staffDayPicked.full_name}
+                      <span style={{ fontSize: 11.5, fontWeight: 700, color: '#725f50' }}> · {TEN_BO_PHAN[boPhanCuaHoSo(staffDayPicked) as keyof typeof TEN_BO_PHAN] || 'Chưa gán khâu'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ padding: 16, paddingBottom: 'calc(24px + env(safe-area-inset-bottom))' }}>
+                  {staffDayDetailLoading && <div style={{ textAlign: 'center', padding: '24px 0', color: '#725f50', fontSize: 13 }}>Đang tải hồ sơ ngày…</div>}
+                  {!staffDayDetailLoading && !hs && <div style={{ textAlign: 'center', padding: '24px 0', color: '#dc2626', fontSize: 13 }}>Không tải được hồ sơ ngày của người này.</div>}
+
+                  {!staffDayDetailLoading && hs && (
+                    <>
+                      {khongCoHoatDong(hs) && (
+                        <div style={{ background: '#fef2f2', border: '1.5px solid #fecaca', borderRadius: 12, padding: 12, fontSize: 12.5, fontWeight: 800, color: '#b91c1c' }}>
+                          ⚠️ Cả ngày KHÔNG ghi nhận hoạt động nào: không chấm công, không nhận việc, không nhận đơn, không có chuyến giao.
+                        </div>
+                      )}
+
+                      {muc('⏱', 'Chấm công', hs.chamCong.length, '#0f766e')}
+                      {hs.chamCong.length === 0
+                        ? the('Không có bản ghi chấm công nào trong ngày.', 'cc-0', '#fecaca')
+                        : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {hs.chamCong.map((l: any) => the(
+                              <>
+                                <b>{l.type === 'checkin' ? '🟢 Vào ca' : l.type === 'checkout' ? '🔵 Kết thúc ca' : '🏖 Xin nghỉ'}</b>
+                                {l.checkin_time ? ` · ${gio(l.checkin_time)}` : ''}
+                                {l.late_minutes > 0 ? <span style={{ color: '#dc2626', fontWeight: 800 }}> · trễ {l.late_minutes} phút</span> : ''}
+                                {l.reason ? <div style={{ fontSize: 11.5, color: '#725f50', marginTop: 3 }}>{l.reason}</div> : null}
+                              </>, `cc-${l.id}`)) }
+                          </div>
+                        )}
+
+                      {muc('✔️', 'Checklist', `${hs.checklist.filter((c: any) => c.xong).length}/${hs.checklist.length}`, '#7c3aed')}
+                      {hs.checklist.length === 0
+                        ? the('Khâu này chưa khai báo mục checklist nào.', 'cl-0')
+                        : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                            {hs.checklist.map((c: any) => the(
+                              <span style={{ color: c.xong ? '#2d1c10' : '#a08060' }}>{c.xong ? '✅' : '⬜'} {c.title}</span>,
+                              `cl-${c.id}`, c.xong ? '#ddd6fe' : '#eadcca')) }
+                          </div>
+                        )}
+
+                      {muc('📋', 'Việc đang làm', hs.viec.dangLam.length, '#b45309')}
+                      {hs.viec.dangLam.length === 0
+                        ? the('Không còn việc nào đang mở.', 'vd-0')
+                        : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {hs.viec.dangLam.map((t: any) => the(
+                              <>
+                                <b>{t.title}</b>
+                                <div style={{ fontSize: 11.5, color: '#725f50', marginTop: 3 }}>
+                                  {t.accepted_at ? `Đã nhận ${gio(t.accepted_at)}` : 'Chưa bấm nhận việc'}
+                                  {t.deadline ? ` · hạn ${new Date(t.deadline).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}` : ''}
+                                  {t.order_code ? ` · ${t.order_code}` : ''}
+                                </div>
+                              </>, `vd-${t.id}`, t.deadline && new Date(t.deadline) < new Date() ? '#fecaca' : '#eadcca')) }
+                          </div>
+                        )}
+
+                      {muc('✅', 'Việc xong trong ngày', hs.viec.xongTrongNgay.length, '#15803d')}
+                      {hs.viec.xongTrongNgay.length === 0
+                        ? the('Chưa hoàn thành việc nào trong ngày.', 'vx-0')
+                        : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {hs.viec.xongTrongNgay.map((t: any) => the(
+                              <><b>{t.title}</b><span style={{ color: '#725f50' }}> · xong {gio(t.completed_at)}</span></>,
+                              `vx-${t.id}`, '#bbf7d0')) }
+                          </div>
+                        )}
+
+                      {muc('🍰', 'Đơn bếp phụ trách', hs.donBep.length, '#c2410c')}
+                      {hs.donBep.length === 0
+                        ? the('Không nhận đơn bếp nào.', 'db-0')
+                        : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {hs.donBep.map((p: any) => the(
+                              <>
+                                <b>{p.orders?.order_code || 'Đơn không rõ mã'}</b>
+                                <span style={{ color: '#725f50' }}> · {p.status === 'completed' ? 'đã xong' : p.status === 'in_progress' ? 'đang làm' : p.status}</span>
+                                {p.is_collaborative ? <span style={{ color: '#7c3aed', fontWeight: 800 }}> · phối hợp</span> : null}
+                                <div style={{ fontSize: 11.5, color: '#725f50', marginTop: 3 }}>
+                                  {p.accepted_at ? `Nhận ${gio(p.accepted_at)}` : 'Chưa bấm nhận'}
+                                  {p.completed_at ? ` · xong ${gio(p.completed_at)}` : ''}
+                                </div>
+                              </>, `db-${p.id}`)) }
+                          </div>
+                        )}
+
+                      {muc('🚚', 'Chuyến giao hàng', hs.vanTai.length, '#1d4ed8')}
+                      {hs.vanTai.length === 0
+                        ? the('Không có chuyến giao nào trong ngày.', 'vt-0')
+                        : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            {hs.vanTai.map((r: any) => (
+                              <div key={`vt-${r.id}`} style={{ background: '#fff', border: '1.5px solid #bfdbfe', borderRadius: 12, padding: 10 }}>
+                                <div style={{ fontSize: 12.5, fontWeight: 900, color: '#2d1c10' }}>
+                                  {r.run_code || 'Chuyến chưa có mã'}
+                                  <span style={{ fontWeight: 700, color: '#725f50' }}>
+                                    {' · '}{r.status === 'completed' ? 'đã xong' : r.status === 'in_transit' ? 'đang giao' : r.status}
+                                    {r.started_at ? ` · bắt đầu ${gio(r.started_at)}` : ' · chưa bắt đầu'}
+                                    {r.completed_at ? ` · kết thúc ${gio(r.completed_at)}` : ''}
+                                  </span>
+                                </div>
+                                {r.diemDung.length === 0
+                                  ? <div style={{ fontSize: 11.5, color: '#b45309', marginTop: 6 }}>Chuyến này chưa gắn điểm giao nào.</div>
+                                  : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+                                      {r.diemDung.map((s: any) => (
+                                        <div key={s.id} style={{ fontSize: 11.5, color: '#2d1c10', borderTop: '1px dashed #e5e7eb', paddingTop: 4 }}>
+                                          <b>{s.sequence_no}. {s.orders?.order_code || 'Đơn không rõ mã'}</b>
+                                          <span style={{ color: s.delivered_at ? '#15803d' : '#b45309', fontWeight: 800 }}>
+                                            {' · '}{s.delivered_at ? `đã giao ${gio(s.delivered_at)}` : s.status === 'failed' ? 'giao hỏng' : 'chưa giao'}
+                                          </span>
+                                          {s.destination_address ? <div style={{ color: '#725f50' }}>{s.destination_address}</div> : null}
+                                          {s.failure_reason ? <div style={{ color: '#dc2626' }}>Lý do: {s.failure_reason}</div> : null}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                      {muc('🏭', 'Nhập kho thành phẩm', hs.sanXuat.length, '#0891b2')}
+                      {hs.sanXuat.length === 0
+                        ? the('Không nhập kho thành phẩm nào trong ngày.', 'sx-0')
+                        : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {hs.sanXuat.map((s: any) => the(
+                              <>
+                                <b>{s.product_name}</b>{s.size ? ` · size ${s.size}` : ''}
+                                <span style={{ color: '#0891b2', fontWeight: 900 }}> · {s.qty}</span>
+                                {s.price ? <span style={{ color: '#725f50' }}> · {(Number(s.qty) * Number(s.price)).toLocaleString('vi-VN')}đ</span> : null}
+                              </>, `sx-${s.id}`)) }
+                          </div>
+                        )}
+
+                      {hs.viPham.length > 0 && (
+                        <>
+                          {muc('⚠️', 'Vi phạm', hs.viPham.length, '#dc2626')}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {hs.viPham.map((v: any) => the(
+                              <>
+                                <b>{v.title}</b>
+                                {v.penalty_amount ? <span style={{ color: '#dc2626', fontWeight: 800 }}> · phạt {Number(v.penalty_amount).toLocaleString('vi-VN')}đ</span> : null}
+                                {v.description ? <div style={{ fontSize: 11.5, color: '#725f50', marginTop: 3 }}>{v.description}</div> : null}
+                              </>, `vp-${v.id}`, '#fecaca')) }
+                          </div>
+                        </>
                       )}
                     </>
                   )}
