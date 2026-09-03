@@ -764,6 +764,7 @@ export default function ShiftsScreen() {
               onCheckin={() => setShowCheckin(true)}
               onCheckout={() => setShowCheckout(true)}
               onXinNghi={() => setShowLeave(true)}
+              onThemCa={() => setShowAddManual(true)}
               onTaiLai={async () => { loadLogs(); }}
             />
           ) : (laQuanLy && !xemChamCongCuaToi) ? (

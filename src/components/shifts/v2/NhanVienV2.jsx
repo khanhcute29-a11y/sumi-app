@@ -23,7 +23,7 @@ function nhanTrangThai({ xinNghi, phienHienTai, dangTrongCa, devVao }) {
 
 export default function NhanVienV2({
   hoSo, cham, danhSachCa, boPhan, logsHomNay, tomTat, thuong = [],
-  gioHienTai, onCheckin, onCheckout, onXemThang, deXuatGia = null,
+  gioHienTai, onCheckin, onCheckout, onThemCa, onXemThang, deXuatGia = null,
 }) {
   // ── Chấm ca nhiều lần trong ngày ────────────────────────────────────
   //
@@ -156,6 +156,19 @@ export default function NhanVienV2({
               </div>
               <button className="cc2-primary" onClick={onCheckin}>➕ CHẤM CA MỚI</button>
             </>
+          )}
+
+          {/* Bổ sung ca quên chấm — cho NGÀY TRƯỚC/giờ trước, không cần
+              đứng đúng vị trí GPS lúc bấm. AI CŨNG bấm được, bất kể đang
+              trong ca hay đã xong ca hôm nay. */}
+          {onThemCa && (
+            <button onClick={onThemCa} style={{
+              marginTop: 8, width: '100%', minHeight: 40, borderRadius: 12,
+              border: '2px dashed var(--cc2-line, #d7c3aa)', background: 'transparent',
+              color: 'var(--cc2-cocoa, #8c5a3c)', fontWeight: 800, fontSize: 13, cursor: 'pointer',
+            }}>
+              ＋ Bổ sung ca đã làm (quên chấm)
+            </button>
           )}
 
           <div className="cc2-mini-stats">

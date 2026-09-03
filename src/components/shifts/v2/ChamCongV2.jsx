@@ -28,7 +28,7 @@ export default function ChamCongV2({
   danhSachQuanLy, toiTrongDanhSach, chamCuaToi,
   danhSachCa, boPhanTheoNguoi, boPhanCuaToi,
   logsHomNay, tomTat, gioHienTai,
-  onCheckin, onCheckout, onTaiLai,
+  onCheckin, onCheckout, onThemCa, onTaiLai,
   deXuatGia = null,   // chỉ trang xem thử truyền vào; app thật luôn null
 }) {
   const [thuongTheoNguoi, setThuongTheoNguoi] = useState({});
@@ -108,6 +108,7 @@ export default function ChamCongV2({
         gioHienTai={gioHienTai}
         onCheckin={onCheckin}
         onCheckout={onCheckout}
+        onThemCa={onThemCa}
         deXuatGia={deXuatGia}
       />
     );
@@ -199,6 +200,17 @@ export default function ChamCongV2({
                 <button className="primary-small" disabled style={{ opacity: .55 }}>✓ ĐÃ XONG CA</button>
               )}
             </div>
+            {/* Bổ sung ca quên chấm — AI CŨNG bấm được, không riêng nhân
+                viên thường, không giới hạn theo trạng thái ca hiện tại. */}
+            {onThemCa && (
+              <button onClick={onThemCa} style={{
+                marginTop: 8, width: '100%', minHeight: 40, borderRadius: 12,
+                border: '2px dashed var(--cc2-line, #d7c3aa)', background: 'transparent',
+                color: 'var(--cc2-cocoa, #8c5a3c)', fontWeight: 800, fontSize: 13, cursor: 'pointer',
+              }}>
+                ＋ Bổ sung ca đã làm (quên chấm)
+              </button>
+            )}
           </section>
 
           <TongQuanGiamDoc
@@ -230,6 +242,7 @@ export default function ChamCongV2({
         gioHienTai={gioHienTai}
         onCheckin={onCheckin}
         onCheckout={onCheckout}
+        onThemCa={onThemCa}
         onXemNhanSu={setDangXem}
       />
 
