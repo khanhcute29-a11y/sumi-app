@@ -1,10 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { LichSuCham, chuCaiDau, gioThanhChu } from './dungChung';
 import StarRateBar from '../../StarRateBar';
 import { fetchLatestPing, googleMapsLink } from '../../../lib/liveTracking';
 import { fetchWorkLocations } from '../../../lib/workLocations';
 import { haversineKm } from '../../../lib/geo';
-import { boPhanCuaHoSo } from '../../../lib/chamCong';
 import { hasAnyRole } from '../../../lib/roles';
 import GioLamRiengPanel from '../../staff/GioLamRiengPanel';
 import CaCaNhanPanel from '../../staff/CaCaNhanPanel';
@@ -40,19 +39,33 @@ export default function ChiTietNhanSuModal({
   // Vị trí gần nhất trong ca — đối chiếu trực quan, KHÔNG phải bằng chứng
   // chống gian lận tuyệt đối (điện thoại để 1 chỗ vẫn tiếp tục ping được).
   const [ping, setPing] = useState(undefined); // undefined = đang tải, null = chưa có
-  const [viTriChuan, setViTriChuan] = useState(null);
+  const [danhSachViTri, setDanhSachViTri] = useState([]);
   useEffect(() => {
     if (!nhanSu?.id) return;
     let huy = false;
     Promise.all([fetchLatestPing(nhanSu.id), fetchWorkLocations()]).then(([p, locs]) => {
       if (huy) return;
       setPing(p);
-      const bp = boPhanCuaHoSo(nhanSu);
-      const loc = locs.find((l) => l.bo_phan === bp && l.lat != null);
-      setViTriChuan(loc || null);
+      setDanhSachViTri(locs || []);
     }).catch(() => { if (!huy) setPing(null); });
     return () => { huy = true; };
   }, [nhanSu?.id]);
+
+  // Vị trí đã định vị GẦN NHẤT với ping GPS — so với TẤT CẢ vị trí, không lọc
+  // theo bộ phận nữa (khớp đúng cách sumi_kiem_tra_geofence dưới database
+  // đang chặn/cho qua, xem migration 202609041902).
+  const viTriGanNhat = useMemo(() => {
+    if (!ping) return null;
+    let gan = null; let ganM = null;
+    for (const loc of danhSachViTri) {
+      if (loc.lat == null || loc.lng == null) continue;
+      const km = haversineKm(ping.lat, ping.lng, loc.lat, loc.lng);
+      const m = km != null ? Math.round(km * 1000) : null;
+      if (m == null) continue;
+      if (gan == null || m < ganM) { gan = loc; ganM = m; }
+    }
+    return gan ? { loc: gan, m: ganM } : null;
+  }, [ping, danhSachViTri]);
 
   return (
     <div className="cc2 cc2-sheet-backdrop" onClick={() => onClose?.()}>
@@ -102,15 +115,11 @@ export default function ChiTietNhanSuModal({
               <>
                 <div>
                   Cập nhật lúc {new Date(ping.recorded_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                  {viTriChuan?.lat != null && (() => {
-                    const km = haversineKm(ping.lat, ping.lng, viTriChuan.lat, viTriChuan.lng);
-                    const m = km != null ? Math.round(km * 1000) : null;
-                    return m != null ? (
-                      <span style={{ color: m <= viTriChuan.radius_m ? '#1e7e4c' : '#b42318', fontWeight: 800 }}>
-                        {' '}· cách {viTriChuan.name} {m}m {m <= viTriChuan.radius_m ? '✓ đúng vị trí' : '⚠️'}
-                      </span>
-                    ) : null;
-                  })()}
+                  {viTriGanNhat && (
+                    <span style={{ color: viTriGanNhat.m <= viTriGanNhat.loc.radius_m ? '#1e7e4c' : '#b42318', fontWeight: 800 }}>
+                      {' '}· gần nhất {viTriGanNhat.loc.name} {viTriGanNhat.m}m {viTriGanNhat.m <= viTriGanNhat.loc.radius_m ? '✓ đúng vị trí' : '⚠️'}
+                    </span>
+                  )}
                 </div>
                 <a href={googleMapsLink(ping.lat, ping.lng)} target="_blank" rel="noreferrer" style={{ color: 'var(--cc2-navy)', fontWeight: 700 }}>
                   Mở bản đồ →

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Badge } from '../components/feedback/Badge';
 import { Button } from '../components/forms/Button';
 import { Input } from '../components/forms/Input';
@@ -70,6 +70,26 @@ function calculateNetWorkHours(inTimeStr, outTimeStr) {
   };
 }
 
+// Vị trí ĐỊNH VỊ GẦN NHẤT với toạ độ vừa lấy — so với TẤT CẢ vị trí đã định
+// vị (không lọc theo bộ phận nữa, xem migration 202609041902): nhân sự đứng
+// gần bất kỳ 1 trong các điểm đều được, đây chỉ là hiển thị điểm gần nhất
+// cho dễ đối chiếu bằng mắt trước khi bấm — chặn THẬT vẫn do trigger
+// sumi_kiem_tra_geofence dưới database quyết định.
+function viTriGanNhatCuaGps(gpsCoords, danhSachViTri) {
+  if (!gpsCoords || !danhSachViTri?.length) return null;
+  const [lat, lng] = gpsCoords.split(',').map(Number);
+  let gan = null; let ganM = null;
+  for (const loc of danhSachViTri) {
+    if (loc.lat == null || loc.lng == null) continue;
+    const km = haversineKm(lat, lng, loc.lat, loc.lng);
+    const m = km != null ? Math.round(km * 1000) : null;
+    if (m == null) continue;
+    if (gan == null || m < ganM) { gan = loc; ganM = m; }
+  }
+  if (!gan) return null;
+  return { loc: gan, m: ganM, trongVung: ganM <= gan.radius_m };
+}
+
 function CheckinModal({ staffName, staffId, defaultBranch, danhSachCa = [], boPhan = null, onClose, onDone }) {
   const now = new Date();
   const [workDate, setWorkDate] = useState(localDateStr(now));
@@ -89,14 +109,11 @@ function CheckinModal({ staffName, staffId, defaultBranch, danhSachCa = [], boPh
   // Cảnh báo khoảng cách TRƯỚC khi bấm — chỉ để nhân viên biết sớm, chặn
   // THẬT vẫn do trigger sumi_kiem_tra_geofence dưới database quyết (server
   // luôn là nguồn sự thật cuối cùng, không tin riêng số tính ở đây).
-  const [viTriChuan, setViTriChuan] = useState(null);
+  const [danhSachViTri, setDanhSachViTri] = useState([]);
   useEffect(() => {
-    if (!boPhan) return;
-    fetchWorkLocations().then((locs) => {
-      const loc = locs.find((l) => l.bo_phan === boPhan && l.lat != null);
-      setViTriChuan(loc || null);
-    }).catch(() => {});
-  }, [boPhan]);
+    fetchWorkLocations().then((locs) => setDanhSachViTri(locs || [])).catch(() => {});
+  }, []);
+  const viTriGanNhat = useMemo(() => viTriGanNhatCuaGps(gpsCoords, danhSachViTri), [gpsCoords, danhSachViTri]);
 
   // Bắt buộc định vị khi vào ca — tự lấy ngay lúc mở popup (giống Kết thúc ca).
   const captureGps = async () => {
@@ -221,18 +238,28 @@ function CheckinModal({ staffName, staffId, defaultBranch, danhSachCa = [], boPh
               ✓ Đã lấy: {gpsCoords}{gpsAccuracy ? ` · sai số ${gpsAccuracy}m` : ''}
             </div>
           )}
-          {gpsStatus === 'ok' && viTriChuan && gpsCoords && (() => {
-            const [lat, lng] = gpsCoords.split(',').map(Number);
-            const km = haversineKm(lat, lng, viTriChuan.lat, viTriChuan.lng);
-            const m = km != null ? Math.round(km * 1000) : null;
-            if (m == null) return null;
-            const trongVung = m <= viTriChuan.radius_m;
-            return (
-              <div style={{ fontSize: 12, fontWeight: 700, marginTop: 4, color: trongVung ? '#09663d' : '#d32f2f' }}>
-                {trongVung ? '✓' : '⚠️'} Cách {viTriChuan.name} khoảng {m}m {trongVung ? '' : `(cho phép tối đa ${viTriChuan.radius_m}m — hệ thống sẽ từ chối chấm công)`}
-              </div>
-            );
-          })()}
+          {gpsStatus === 'ok' && viTriGanNhat && (
+            <div style={{ fontSize: 12, fontWeight: 700, marginTop: 4, color: viTriGanNhat.trongVung ? '#09663d' : '#d32f2f' }}>
+              {viTriGanNhat.trongVung ? '✓' : '⚠️'} Gần nhất: {viTriGanNhat.loc.name}, cách khoảng {viTriGanNhat.m}m
+              {viTriGanNhat.trongVung ? '' : ` (cho phép tối đa ${viTriGanNhat.loc.radius_m}m — hệ thống sẽ từ chối chấm công)`}
+            </div>
+          )}
+          {/* Wifi định vị hay lệch — cho phép lấy lại NGAY CẢ KHI đã có toạ
+              độ (trước đây chỉ hiện khi lấy vị trí LỖI hẳn, không giúp được
+              lúc GPS trả về nhưng sai số quá lớn). */}
+          {gpsStatus === 'ok' && (
+            <button
+              onClick={captureGps}
+              disabled={saving}
+              style={{
+                marginTop: 6, border: 'none', background: 'none', color: '#1d6f42',
+                fontSize: 12, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', padding: 0,
+                textDecoration: 'underline',
+              }}
+            >
+              🔄 Vị trí sai lệch? Lấy lại vị trí
+            </button>
+          )}
           {gpsStatus === 'loi' && (
             <button
               onClick={captureGps}
@@ -280,6 +307,11 @@ function CheckoutModal({ staffName, staffId, activeCheckins, defaultBranch, onCl
   const [gpsStatus, setGpsStatus] = useState('dang_lay'); // dang_lay | ok | loi
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [danhSachViTri, setDanhSachViTri] = useState([]);
+  useEffect(() => {
+    fetchWorkLocations().then((locs) => setDanhSachViTri(locs || [])).catch(() => {});
+  }, []);
+  const viTriGanNhat = useMemo(() => viTriGanNhatCuaGps(gpsCoords, danhSachViTri), [gpsCoords, danhSachViTri]);
 
   const selectedCheckin = activeCheckins.find(c => c.id === selectedCheckinId) || activeCheckins[0];
   const currentShiftLabel = selectedCheckin?.shift_label || 'Ca làm việc';
@@ -414,6 +446,25 @@ function CheckoutModal({ staffName, staffId, activeCheckins, defaultBranch, onCl
             <div style={{ fontSize: 12, color: '#09663d', marginTop: 4 }}>
               ✓ Đã lấy: {gpsCoords}{gpsAccuracy ? ` · sai số ${gpsAccuracy}m` : ''}
             </div>
+          )}
+          {gpsStatus === 'ok' && viTriGanNhat && (
+            <div style={{ fontSize: 12, fontWeight: 700, marginTop: 4, color: viTriGanNhat.trongVung ? '#09663d' : '#d32f2f' }}>
+              {viTriGanNhat.trongVung ? '✓' : '⚠️'} Gần nhất: {viTriGanNhat.loc.name}, cách khoảng {viTriGanNhat.m}m
+              {viTriGanNhat.trongVung ? '' : ` (cho phép tối đa ${viTriGanNhat.loc.radius_m}m — hệ thống sẽ từ chối chấm công)`}
+            </div>
+          )}
+          {gpsStatus === 'ok' && (
+            <button
+              onClick={captureGps}
+              disabled={saving}
+              style={{
+                marginTop: 6, border: 'none', background: 'none', color: '#1d6f42',
+                fontSize: 12, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', padding: 0,
+                textDecoration: 'underline',
+              }}
+            >
+              🔄 Vị trí sai lệch? Lấy lại vị trí
+            </button>
           )}
           {gpsStatus === 'loi' && (
             <button
