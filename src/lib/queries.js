@@ -222,13 +222,30 @@ export async function fetchOrders({ statuses, from, to, dateField = 'created_at'
 // hiện dropdown gợi ý (mã đơn, khách, bánh, địa chỉ), dùng chung cho mọi ô
 // "Mã đơn liên quan" đang gõ tay tự do (giao việc, báo chi, tăng ca, xuất
 // kho...). Không lấy full order (ORDER_SELECT quá nặng cho việc gõ-là-tìm).
+// Tìm theo mã đơn / tên khách / SĐT khách (migration 202609042100 thêm
+// customer_phone vào view — trước đó view không có cột này nên không lọc
+// được theo SĐT).
 export async function searchOrdersForPicker(keyword, limit = 15) {
   const q = (keyword || '').trim();
   if (!q) return [];
   const { data, error } = await supabase
     .from('order_operations_list')
-    .select('id,order_code,customer_name,product_names,address,required_at')
-    .or(`order_code.ilike.%${q}%,customer_name.ilike.%${q}%`)
+    .select('id,order_code,customer_name,customer_phone,product_names,address,required_at,status_v2')
+    .or(`order_code.ilike.%${q}%,customer_name.ilike.%${q}%,customer_phone.ilike.%${q}%`)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
+// Danh sách mặc định hiện SẴN trong OrderCodePicker lúc bấm vào ô mà CHƯA gõ
+// gì — ưu tiên đơn chưa xong (đúng nhu cầu thật: báo việc phát sinh/giao việc
+// gắn với đơn đang chưa hoàn thành nhiều hơn đơn đã xong từ lâu).
+export async function fetchRecentOpenOrdersForPicker(limit = 8) {
+  const { data, error } = await supabase
+    .from('order_operations_list')
+    .select('id,order_code,customer_name,customer_phone,product_names,address,required_at,status_v2')
+    .neq('status_v2', 'completed')
     .order('created_at', { ascending: false })
     .limit(limit);
   if (error) throw error;
