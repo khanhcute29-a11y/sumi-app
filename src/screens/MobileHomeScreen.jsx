@@ -11,6 +11,7 @@ import DonTuCuaToi from '../components/shifts/v2/DonTuCuaToi';
 import DeXuatChoDuyet from '../components/shifts/v2/DeXuatChoDuyet';
 import TheDeXuat from '../components/shifts/v2/TheDeXuat';
 import FinishedGoodsInventoryV2 from '../components/warehouse/FinishedGoodsInventoryV2';
+import OrderV2DetailModal from '../components/OrderV2DetailModal';
 import '../styles/cham-cong-v2.css';
 import '../styles/cong-viec.css';
 import '../components/mockups/EmployeeDashboard/employee-overview-v4.css';
@@ -289,7 +290,59 @@ async function fetchThuongDoi(teamIds,tu,den){
  return rows.map(r=>({...r,ten_nguoi_thuong:tenTheoId[r.created_by]||'Sếp'}));
 }
 
-function HieuSuatBepSheet({loai,onClose,doiRoster,tenTheoId,doanhThuBep,doanhThuCaNhan,donCuaBep,gioLamDoi,thuongDoi,profile}){
+// Một nhân sự trong bảng "Giờ làm" — bấm vào MỞ RA (accordion, không phải
+// modal chồng modal) danh sách vào/ra từng ngày trong tháng của người đó.
+// Tải lười (chỉ khi bấm), gom logs kiểu giống hệt fetchMyAttendanceHistory
+// (employeeOverviewV4.js) — KHÔNG viết lại cách ghép checkin/checkout.
+function HangGioLam({nguoi,tenHienThi,laToi,tu,den}){
+ const[mo,setMo]=useState(false);
+ const[ngay,setNgay]=useState(null);
+ const boMo=async()=>{
+  const dangMo=!mo;setMo(dangMo);
+  if(dangMo&&ngay===null){
+   try{
+    const logs=await fetchShiftLogsRange(tu,den);
+    const cua=logs.filter(l=>l.staff_id===nguoi.id&&l.checkin_time);
+    const theoNgay=new Map();
+    cua.forEach(l=>{
+     const r=theoNgay.get(l.work_date)||{date:l.work_date,checkin:null,checkout:null,tre:0};
+     if(l.type==='checkin'){r.checkin=l.checkin_time;r.tre=l.late_minutes||0;}
+     if(l.type==='checkout')r.checkout=l.checkin_time;
+     theoNgay.set(l.work_date,r);
+    });
+    setNgay([...theoNgay.values()].sort((a,b)=>b.date<a.date?-1:1));
+   }catch{setNgay([]);}
+  }
+ };
+ const gio=iso=>iso?new Date(iso).toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Ho_Chi_Minh'}):'--:--';
+ return<div>
+  <button onClick={boMo} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 4px',border:0,borderTop:'1px solid #f2ece3',background:'transparent',cursor:'pointer',textAlign:'left'}}>
+   <strong style={{fontSize:14,color:'#2d1c10'}}>{tenHienThi}{laToi?' (tôi)':''}</strong>
+   <span style={{display:'flex',alignItems:'center',gap:6}}>
+    <span className="eov4-hours-pill">{nguoi.gio}h</span>
+    <ChevronRight size={16} style={{transform:mo?'rotate(90deg)':'none',transition:'transform .15s',color:'#a08a72'}}/>
+   </span>
+  </button>
+  {mo&&(
+   ngay===null?<div className="eov4-empty-box">Đang tải…</div>:ngay.length===0?(
+    <div className="eov4-empty-box">Chưa có dữ liệu chấm công tháng này.</div>
+   ):(
+    <div style={{padding:'0 4px 8px'}}>
+     {ngay.map(n=>(
+      <div key={n.date} style={{display:'flex',justifyContent:'space-between',fontSize:12.5,color:'#5f4b3d',padding:'4px 0'}}>
+       <span>{n.date}</span>
+       <span>{gio(n.checkin)} → {gio(n.checkout)}{n.tre>0?<span style={{color:'#a52c22',fontWeight:800}}> · Trễ {n.tre}p</span>:null}</span>
+      </div>
+     ))}
+    </div>
+   )
+  )}
+ </div>;
+}
+
+function HieuSuatBepSheet({loai,onClose,doiRoster,tenTheoId,doanhThuBep,doanhThuCaNhan,donCuaBep,gioLamDoi,thuongDoi,profile,tu,den}){
+ const[xemDon,setXemDon]=useState(null);      // orderId đang xem chi tiết
+ const[xemAnh,setXemAnh]=useState(null);      // photo_url đang xem full
  if(loai==='doanhThu'){
   const donCoDoanhThu=(donCuaBep||[]).filter(o=>o.status_v2==='completed');
   return<LeadSheet title="💰 Doanh thu bếp (tháng này)" onClose={onClose}>
@@ -297,15 +350,16 @@ function HieuSuatBepSheet({loai,onClose,doiRoster,tenTheoId,doanhThuBep,doanhThu
     <div className="eov4-kpi-card eov4-kpi-green"><div className="eov4-kpi-value">{fmtVND(doanhThuBep)}</div><div className="eov4-kpi-label">Cả bếp ({donCoDoanhThu.length} đơn)</div></div>
     <div className="eov4-kpi-card eov4-kpi-blue"><div className="eov4-kpi-value">{fmtVND(doanhThuCaNhan)}</div><div className="eov4-kpi-label">Cá nhân tôi</div></div>
    </div>
-   <div className="eov4-field-label" style={{marginTop:14}}>Đơn hoàn thành trong tháng</div>
+   <div className="eov4-field-label" style={{marginTop:14}}>Đơn hoàn thành trong tháng — bấm để xem chi tiết đơn</div>
    {donCoDoanhThu.length===0?<div className="eov4-empty-box">Chưa có đơn hoàn thành nào tháng này.</div>:(
     <div className="eov4-table">{donCoDoanhThu.map(o=>(
-     <div key={o.id} className="eov4-table-row">
+     <button key={o.id} className="eov4-table-row" onClick={()=>setXemDon(o.id)} style={{width:'100%',border:0,background:'transparent',cursor:'pointer',textAlign:'left',font:'inherit'}}>
       <div className="eov4-table-main"><strong>#{o.order_code}</strong><span>{o.created_by_name||'—'}</span></div>
-      <span className="eov4-hours-pill">{fmtVND(o.total)}</span>
-     </div>
+      <span style={{display:'flex',alignItems:'center',gap:4}}><span className="eov4-hours-pill">{fmtVND(o.total)}</span><ChevronRight size={14} color="#a08a72"/></span>
+     </button>
     ))}</div>
    )}
+   {xemDon&&<OrderV2DetailModal orderId={xemDon} onClose={()=>setXemDon(null)}/>}
   </LeadSheet>;
  }
  if(loai==='gioLam'){
@@ -316,13 +370,10 @@ function HieuSuatBepSheet({loai,onClose,doiRoster,tenTheoId,doanhThuBep,doanhThu
     <div className="eov4-kpi-card eov4-kpi-green"><div className="eov4-kpi-value">{tongBep}h</div><div className="eov4-kpi-label">Cả bếp</div></div>
     <div className="eov4-kpi-card eov4-kpi-blue"><div className="eov4-kpi-value">{cuaToi}h</div><div className="eov4-kpi-label">Cá nhân tôi</div></div>
    </div>
-   <div className="eov4-field-label" style={{marginTop:14}}>Từng nhân sự</div>
+   <div className="eov4-field-label" style={{marginTop:14}}>Từng nhân sự — bấm vào xem chi tiết vào/ra từng ngày</div>
    {!gioLamDoi||gioLamDoi.length===0?<div className="eov4-empty-box">Chưa có dữ liệu.</div>:(
-    <div className="eov4-table">{[...gioLamDoi].sort((a,b)=>b.gio-a.gio).map(x=>(
-     <div key={x.id} className="eov4-table-row">
-      <div className="eov4-table-main"><strong>{tenTheoId[x.id]||(x.id===profile?.id?'Tôi':'?')}</strong></div>
-      <span className="eov4-hours-pill">{x.gio}h</span>
-     </div>
+    <div>{[...gioLamDoi].sort((a,b)=>b.gio-a.gio).map(x=>(
+     <HangGioLam key={x.id} nguoi={x} tenHienThi={tenTheoId[x.id]||(x.id===profile?.id?'Tôi':'?')} laToi={x.id===profile?.id} tu={tu} den={den}/>
     ))}</div>
    )}
   </LeadSheet>;
@@ -331,6 +382,15 @@ function HieuSuatBepSheet({loai,onClose,doiRoster,tenTheoId,doanhThuBep,doanhThu
  const tongBep=(thuongDoi||[]).reduce((s,r)=>s+Number(r.amount||0),0);
  const cuaToi=(thuongDoi||[]).filter(r=>r.staff_id===profile?.id);
  const tongCaNhan=cuaToi.reduce((s,r)=>s+Number(r.amount||0),0);
+ const HangThuong=({r,hienTen})=>(
+  <div key={r.id} className="eov4-table-row" onClick={()=>r.photo_url&&setXemAnh(r.photo_url)} style={r.photo_url?{cursor:'pointer'}:undefined}>
+   <div className="eov4-table-main"><strong>{hienTen?`${tenTheoId[r.staff_id]||'?'} — `:''}{r.title||'Thưởng nóng'}</strong><span>Từ {r.ten_nguoi_thuong} · {r.awarded_on}{r.note?` · ${r.note}`:''}</span></div>
+   <span style={{display:'flex',alignItems:'center',gap:4}}>
+    <span className="eov4-hours-pill">+{fmtVND(r.amount)}</span>
+    {r.photo_url&&<ChevronRight size={14} color="#a08a72"/>}
+   </span>
+  </div>
+ );
  return<LeadSheet title="🎁 Thưởng bếp (tháng này)" onClose={onClose}>
   <div className="eov4-kpi-grid" style={{gridTemplateColumns:'1fr 1fr'}}>
    <div className="eov4-kpi-card eov4-kpi-amber"><div className="eov4-kpi-value">{fmtVND(tongBep)}</div><div className="eov4-kpi-label">Cả bếp</div></div>
@@ -338,21 +398,16 @@ function HieuSuatBepSheet({loai,onClose,doiRoster,tenTheoId,doanhThuBep,doanhThu
   </div>
   <div className="eov4-field-label" style={{marginTop:14}}>Thưởng của tôi</div>
   {cuaToi.length===0?<div className="eov4-empty-box">Chưa có thưởng nào tháng này.</div>:(
-   <div className="eov4-table">{cuaToi.map(r=>(
-    <div key={r.id} className="eov4-table-row">
-     <div className="eov4-table-main"><strong>{r.title||'Thưởng nóng'}</strong><span>Từ {r.ten_nguoi_thuong} · {r.awarded_on}{r.note?` · ${r.note}`:''}</span></div>
-     <span className="eov4-hours-pill">+{fmtVND(r.amount)}</span>
-    </div>
-   ))}</div>
+   <div className="eov4-table">{cuaToi.map(r=><HangThuong key={r.id} r={r} hienTen={false}/>)}</div>
   )}
   <div className="eov4-field-label" style={{marginTop:14}}>Thưởng cả đội</div>
   {!thuongDoi||thuongDoi.length===0?<div className="eov4-empty-box">Chưa có thưởng nào tháng này.</div>:(
-   <div className="eov4-table">{thuongDoi.map(r=>(
-    <div key={r.id} className="eov4-table-row">
-     <div className="eov4-table-main"><strong>{tenTheoId[r.staff_id]||'?'} — {r.title||'Thưởng nóng'}</strong><span>Từ {r.ten_nguoi_thuong} · {r.awarded_on}{r.note?` · ${r.note}`:''}</span></div>
-     <span className="eov4-hours-pill">+{fmtVND(r.amount)}</span>
-    </div>
-   ))}</div>
+   <div className="eov4-table">{thuongDoi.map(r=><HangThuong key={r.id} r={r} hienTen={true}/>)}</div>
+  )}
+  {xemAnh&&(
+   <div onClick={()=>setXemAnh(null)} style={{position:'fixed',inset:0,zIndex:1500,background:'rgba(0,0,0,.85)',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+    <img src={xemAnh} alt="Ảnh thưởng" style={{maxWidth:'100%',maxHeight:'90vh',borderRadius:12}}/>
+   </div>
   )}
  </LeadSheet>;
 }
@@ -424,7 +479,7 @@ function HieuSuatBep({profile,ordersCuaKhau}){
   </div>
   {sheet&&<HieuSuatBepSheet loai={sheet} onClose={()=>setSheet(null)}
    doiRoster={doi} tenTheoId={tenTheoId} doanhThuBep={doanhThuBep} doanhThuCaNhan={doanhThuCaNhan}
-   donCuaBep={donThangNay} gioLamDoi={gioLamDoi} thuongDoi={thuongDoi} profile={profile}/>}
+   donCuaBep={donThangNay} gioLamDoi={gioLamDoi} thuongDoi={thuongDoi} profile={profile} tu={tu} den={den}/>}
  </>;
 }
 
