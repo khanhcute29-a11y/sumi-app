@@ -13,10 +13,12 @@ import TheDeXuat from '../components/shifts/v2/TheDeXuat';
 import FinishedGoodsInventoryV2 from '../components/warehouse/FinishedGoodsInventoryV2';
 import '../styles/cham-cong-v2.css';
 import '../styles/cong-viec.css';
+import '../components/mockups/EmployeeDashboard/employee-overview-v4.css';
 import { boPhanCuaHoSo } from '../lib/chamCong';
-import { fetchApprovalRequests } from '../lib/queries';
+import { fetchApprovalRequests, fetchShiftLogsRange, fetchShiftConfigs } from '../lib/queries';
 import { fetchDanhSachNhanSuNgay } from '../lib/hoSoNgayNhanSu';
 import { localDateStr } from '../lib/date';
+import { computeShiftHours } from '../lib/kpi';
 import { Zap, Megaphone, FileText as IconLeave, ClipboardList as IconReport, Package as IconPackageAdmin, Boxes as IconStock } from 'lucide-react';
 
 import { ROLE_META, KITCHEN_LEAD_ROLES, getRoleMeta, formatStationLabel } from '../lib/roles';
@@ -248,6 +250,167 @@ function BaoCaoNgaySheet({hoSo,onClose}){
  </LeadSheet>;
 }
 
+// ── HIỆU SUẤT BẾP (tháng này) ────────────────────────────────────────────
+// Thay cho "Xưởng sản xuất bánh SUMI / Ca sản xuất hôm nay" (dư, đã có Tình
+// trạng đơn hàng bên dưới lo phần đó) — yêu cầu 04/09/2026: 3 thẻ kiểu Nhân
+// viên (Doanh thu/Giờ làm/Thưởng), MỖI thẻ gồm CẢ số của bếp lẫn số cá nhân,
+// bấm vào xem chi tiết từng người/từng khoản.
+const fmtVND=n=>new Intl.NumberFormat('vi-VN').format(Math.round(n||0))+'đ';
+function dauThangDenNay(){
+ const d=new Date();const p=n=>String(n).padStart(2,'0');
+ const tu=new Date(d.getFullYear(),d.getMonth(),1);
+ return{tu:`${tu.getFullYear()}-${p(tu.getMonth()+1)}-${p(tu.getDate())}`,den:`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`};
+}
+async function fetchDoiCungKhau(station,boId){
+ const{data,error}=await supabase.from('profiles').select('id,full_name')
+  .eq('approved',true).neq('active',false).eq('station',station);
+ if(error)throw error;
+ // Bếp trưởng đang xem không có station cố định (hồ sơ thiếu dữ liệu) — ít
+ // nhất vẫn tính được CHÍNH MÌNH, không để mảng rỗng làm mất luôn số cá nhân.
+ return data&&data.length?data:(boId?[{id:boId,full_name:'Tôi'}]:[]);
+}
+async function fetchGioLamDoi(teamIds,tu,den){
+ const[logs,configs]=await Promise.all([fetchShiftLogsRange(tu,den),fetchShiftConfigs()]);
+ return teamIds.map(id=>({id,gio:Math.round((computeShiftHours(logs,configs,id,tu,den).hoursWorked||0)*10)/10}));
+}
+async function fetchThuongDoi(teamIds,tu,den){
+ if(!teamIds.length)return[];
+ const{data,error}=await supabase.from('staff_rewards').select('*')
+  .in('staff_id',teamIds).gte('awarded_on',tu).lte('awarded_on',den)
+  .order('awarded_on',{ascending:false});
+ if(error)throw error;
+ const rows=data||[];
+ const nguoiTaoIds=[...new Set(rows.map(r=>r.created_by).filter(Boolean))];
+ let tenTheoId={};
+ if(nguoiTaoIds.length){
+  const{data:ps}=await supabase.from('profiles').select('id,full_name').in('id',nguoiTaoIds);
+  (ps||[]).forEach(p=>{tenTheoId[p.id]=p.full_name});
+ }
+ return rows.map(r=>({...r,ten_nguoi_thuong:tenTheoId[r.created_by]||'Sếp'}));
+}
+
+function HieuSuatBepSheet({loai,onClose,doiRoster,tenTheoId,doanhThuBep,doanhThuCaNhan,donCuaBep,gioLamDoi,thuongDoi,profile}){
+ if(loai==='doanhThu'){
+  const donCoDoanhThu=(donCuaBep||[]).filter(o=>o.status_v2==='completed');
+  return<LeadSheet title="💰 Doanh thu bếp (tháng này)" onClose={onClose}>
+   <div className="eov4-kpi-grid" style={{gridTemplateColumns:'1fr 1fr'}}>
+    <div className="eov4-kpi-card eov4-kpi-green"><div className="eov4-kpi-value">{fmtVND(doanhThuBep)}</div><div className="eov4-kpi-label">Cả bếp ({donCoDoanhThu.length} đơn)</div></div>
+    <div className="eov4-kpi-card eov4-kpi-blue"><div className="eov4-kpi-value">{fmtVND(doanhThuCaNhan)}</div><div className="eov4-kpi-label">Cá nhân tôi</div></div>
+   </div>
+   <div className="eov4-field-label" style={{marginTop:14}}>Đơn hoàn thành trong tháng</div>
+   {donCoDoanhThu.length===0?<div className="eov4-empty-box">Chưa có đơn hoàn thành nào tháng này.</div>:(
+    <div className="eov4-table">{donCoDoanhThu.map(o=>(
+     <div key={o.id} className="eov4-table-row">
+      <div className="eov4-table-main"><strong>#{o.order_code}</strong><span>{o.created_by_name||'—'}</span></div>
+      <span className="eov4-hours-pill">{fmtVND(o.total)}</span>
+     </div>
+    ))}</div>
+   )}
+  </LeadSheet>;
+ }
+ if(loai==='gioLam'){
+  const tongBep=(gioLamDoi||[]).reduce((s,x)=>s+x.gio,0);
+  const cuaToi=(gioLamDoi||[]).find(x=>x.id===profile?.id)?.gio||0;
+  return<LeadSheet title="🕘 Giờ làm bếp (tháng này)" onClose={onClose}>
+   <div className="eov4-kpi-grid" style={{gridTemplateColumns:'1fr 1fr'}}>
+    <div className="eov4-kpi-card eov4-kpi-green"><div className="eov4-kpi-value">{tongBep}h</div><div className="eov4-kpi-label">Cả bếp</div></div>
+    <div className="eov4-kpi-card eov4-kpi-blue"><div className="eov4-kpi-value">{cuaToi}h</div><div className="eov4-kpi-label">Cá nhân tôi</div></div>
+   </div>
+   <div className="eov4-field-label" style={{marginTop:14}}>Từng nhân sự</div>
+   {!gioLamDoi||gioLamDoi.length===0?<div className="eov4-empty-box">Chưa có dữ liệu.</div>:(
+    <div className="eov4-table">{[...gioLamDoi].sort((a,b)=>b.gio-a.gio).map(x=>(
+     <div key={x.id} className="eov4-table-row">
+      <div className="eov4-table-main"><strong>{tenTheoId[x.id]||(x.id===profile?.id?'Tôi':'?')}</strong></div>
+      <span className="eov4-hours-pill">{x.gio}h</span>
+     </div>
+    ))}</div>
+   )}
+  </LeadSheet>;
+ }
+ // 'thuong'
+ const tongBep=(thuongDoi||[]).reduce((s,r)=>s+Number(r.amount||0),0);
+ const cuaToi=(thuongDoi||[]).filter(r=>r.staff_id===profile?.id);
+ const tongCaNhan=cuaToi.reduce((s,r)=>s+Number(r.amount||0),0);
+ return<LeadSheet title="🎁 Thưởng bếp (tháng này)" onClose={onClose}>
+  <div className="eov4-kpi-grid" style={{gridTemplateColumns:'1fr 1fr'}}>
+   <div className="eov4-kpi-card eov4-kpi-amber"><div className="eov4-kpi-value">{fmtVND(tongBep)}</div><div className="eov4-kpi-label">Cả bếp</div></div>
+   <div className="eov4-kpi-card eov4-kpi-blue"><div className="eov4-kpi-value">{fmtVND(tongCaNhan)}</div><div className="eov4-kpi-label">Cá nhân tôi</div></div>
+  </div>
+  <div className="eov4-field-label" style={{marginTop:14}}>Thưởng của tôi</div>
+  {cuaToi.length===0?<div className="eov4-empty-box">Chưa có thưởng nào tháng này.</div>:(
+   <div className="eov4-table">{cuaToi.map(r=>(
+    <div key={r.id} className="eov4-table-row">
+     <div className="eov4-table-main"><strong>{r.title||'Thưởng nóng'}</strong><span>Từ {r.ten_nguoi_thuong} · {r.awarded_on}{r.note?` · ${r.note}`:''}</span></div>
+     <span className="eov4-hours-pill">+{fmtVND(r.amount)}</span>
+    </div>
+   ))}</div>
+  )}
+  <div className="eov4-field-label" style={{marginTop:14}}>Thưởng cả đội</div>
+  {!thuongDoi||thuongDoi.length===0?<div className="eov4-empty-box">Chưa có thưởng nào tháng này.</div>:(
+   <div className="eov4-table">{thuongDoi.map(r=>(
+    <div key={r.id} className="eov4-table-row">
+     <div className="eov4-table-main"><strong>{tenTheoId[r.staff_id]||'?'} — {r.title||'Thưởng nóng'}</strong><span>Từ {r.ten_nguoi_thuong} · {r.awarded_on}{r.note?` · ${r.note}`:''}</span></div>
+     <span className="eov4-hours-pill">+{fmtVND(r.amount)}</span>
+    </div>
+   ))}</div>
+  )}
+ </LeadSheet>;
+}
+
+function HieuSuatBep({profile,ordersCuaKhau}){
+ const[doi,setDoi]=useState(null);       // [{id,full_name}]
+ const[gioLamDoi,setGioLamDoi]=useState(null);
+ const[thuongDoi,setThuongDoi]=useState(null);
+ const{tu,den}=useMemo(()=>dauThangDenNay(),[]);
+
+ useEffect(()=>{
+  let huy=false;
+  fetchDoiCungKhau(profile?.station,profile?.id).then(async ds=>{
+   if(huy)return;
+   setDoi(ds);
+   const ids=ds.map(x=>x.id);
+   const[gl,th]=await Promise.all([fetchGioLamDoi(ids,tu,den).catch(()=>[]),fetchThuongDoi(ids,tu,den).catch(()=>[])]);
+   if(!huy){setGioLamDoi(gl);setThuongDoi(th);}
+  }).catch(()=>{if(!huy){setDoi([]);setGioLamDoi([]);setThuongDoi([]);}});
+  return()=>{huy=true};
+ },[profile?.station,profile?.id,tu,den]);
+
+ const tenTheoId=useMemo(()=>{const m={};(doi||[]).forEach(p=>{m[p.id]=p.full_name});return m;},[doi]);
+
+ const donThangNay=useMemo(()=>(ordersCuaKhau||[]).filter(o=>o.created_at&&o.created_at.slice(0,10)>=tu),[ordersCuaKhau,tu]);
+ const doanhThuBep=useMemo(()=>donThangNay.filter(o=>o.status_v2==='completed').reduce((s,o)=>s+Number(o.total||0),0),[donThangNay]);
+ const doanhThuCaNhan=useMemo(()=>donThangNay.filter(o=>o.status_v2==='completed'&&o.created_by_name===profile?.full_name).reduce((s,o)=>s+Number(o.total||0),0),[donThangNay,profile?.full_name]);
+ const tongGio=(gioLamDoi||[]).reduce((s,x)=>s+x.gio,0);
+ const cuaToiGio=(gioLamDoi||[]).find(x=>x.id===profile?.id)?.gio;
+ const tongThuong=(thuongDoi||[]).reduce((s,r)=>s+Number(r.amount||0),0);
+
+ const [sheet,setSheet]=useState(null);
+
+ return<>
+  <SectionHead title="📊 HIỆU SUẤT BẾP (tháng này)"/>
+  <div className="eov4-kpi-grid">
+   <button className="eov4-kpi-card eov4-kpi-green" onClick={()=>setSheet('doanhThu')}>
+    <div className="eov4-kpi-value">{fmtVND(doanhThuBep)}</div>
+    <div className="eov4-kpi-label">Doanh Thu Bếp ›</div>
+   </button>
+   <button className="eov4-kpi-card eov4-kpi-blue" onClick={()=>setSheet('gioLam')}>
+    <div className="eov4-kpi-value">{gioLamDoi===null?'…':`${tongGio}h`}</div>
+    <div className="eov4-kpi-label">Giờ Làm Cả Bếp ›</div>
+   </button>
+   <button className="eov4-kpi-card eov4-kpi-amber" onClick={()=>setSheet('thuong')}>
+    <div className="eov4-kpi-value">{thuongDoi===null?'…':fmtVND(tongThuong)}</div>
+    <div className="eov4-kpi-label">Thưởng Cả Bếp ›</div>
+   </button>
+  </div>
+  <div style={{display:'flex',gap:8,fontSize:11.5,color:'#725f50',margin:'2px 2px 14px'}}>
+   <span>👤 Cá nhân: {fmtVND(doanhThuCaNhan)} · {cuaToiGio===undefined?'…':`${cuaToiGio}h`}</span>
+  </div>
+  {sheet&&<HieuSuatBepSheet loai={sheet} onClose={()=>setSheet(null)}
+   doiRoster={doi} tenTheoId={tenTheoId} doanhThuBep={doanhThuBep} doanhThuCaNhan={doanhThuCaNhan}
+   donCuaBep={donThangNay} gioLamDoi={gioLamDoi} thuongDoi={thuongDoi} profile={profile}/>}
+ </>;
+}
+
 function LeadHome({orders,tasks,onNavigate,profile}){
  const maKhau=MA_KHAU_BEP_THEO_BO_PHAN[boPhanCuaHoSo(profile)];
  // Không xác định được khâu (dữ liệu thiếu station) thì hiện nguyên danh sách
@@ -256,9 +419,7 @@ function LeadHome({orders,tasks,onNavigate,profile}){
  const[sheetMo,setSheetMo]=useState(null);
  return <>
   <TodayAttendanceWidget profile={profile} onNavigate={onNavigate}/>
-  <div className="sumi-workplace">👨‍🍳 Xưởng sản xuất bánh SUMI</div>
-  <div className="sumi-org-path">Giám đốc → Bếp trưởng → Bếp phó → Thợ bánh</div>
-  <section className="sumi-lead-hero"><small>CA SẢN XUẤT HÔM NAY</small><h1>{tasks.length} việc đang làm</h1><p>Nhận đơn · chia việc · duyệt hoàn thành</p></section>
+  <HieuSuatBep profile={profile} ordersCuaKhau={ordersCuaKhau}/>
   <SectionHead title="👤 TÔI (QUẢN TRỊ & TIỆN ÍCH ĐIỀU HÀNH)"/>
   <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:14}}>
    {O_DIEU_HANH_BEP_TRUONG.map(o=>{const Icon=o.Icon;return(
