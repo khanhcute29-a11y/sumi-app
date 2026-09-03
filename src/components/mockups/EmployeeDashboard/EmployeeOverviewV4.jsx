@@ -33,8 +33,6 @@ import {
   fetchMyAdvanceRequests,
   submitMyAdvanceRequest,
   submitMyShiftReport,
-  fetchMyViolations,
-  fetchMyRewards,
   fetchMyRewardsTotalThisMonth,
   fetchMyRewardStarsThisMonth,
   fetchMyOrders,
@@ -43,6 +41,8 @@ import {
 import { chuanHoaCa, boPhanCuaHoSo, caChuanCuaLog } from '../../../lib/chamCong';
 import { gomPhien, nhanChenhLech } from '../../shifts/v2/dungChung';
 import DonTuCuaToi from '../../shifts/v2/DonTuCuaToi';
+import StarRateBar from '../../StarRateBar';
+import OrderV2DetailModal from '../../OrderV2DetailModal';
 import '../../../styles/cham-cong-v2.css';
 import { fetchHoSoNgayNhanSu, khongCoHoatDong } from '../../../lib/hoSoNgayNhanSu';
 
@@ -95,6 +95,13 @@ const eov4HangNhan = { display: 'block', fontSize: 12, fontWeight: 800, opacity:
 const eov4HangSo = { display: 'block', fontSize: 24, fontWeight: 900, marginTop: 2 };
 const eov4HangPhu = { display: 'block', fontSize: 12, fontWeight: 700, opacity: .8, marginTop: 1 };
 
+// Kiểu thẻ dùng cho "Báo cáo ngày" — mô phỏng đúng giao diện Hồ Sơ Ngày Giám
+// đốc xem cho từng nhân sự (card trắng bo góc, nhãn mục màu riêng từng khối).
+const eov4ReportLabel = (mau) => ({ fontSize: 12.5, fontWeight: 900, color: mau, margin: '16px 2px 8px', letterSpacing: '.02em' });
+const eov4ReportCard = { background: '#fff', border: '1px solid #eadcca', borderRadius: 16, padding: 14, marginBottom: 8 };
+const eov4ReportEmpty = { ...eov4ReportCard, color: '#a08a72', fontSize: 13, fontStyle: 'italic' };
+const eov4LinkBtn = { display: 'block', marginTop: 6, border: 0, background: 'none', color: '#2563eb', fontWeight: 800, fontSize: 13, cursor: 'pointer', padding: 0 };
+
 const formatVND = (n) => new Intl.NumberFormat('vi-VN').format(Math.round(n || 0)) + 'đ';
 const tomorrowStr = () => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); };
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -138,9 +145,9 @@ export function EmployeeOverviewV4Inner({ onNavigate } = {}) {
   const [schedulePeriod, setSchedulePeriod] = useState('week'); // 'week' | 'month'
   const [payroll, setPayroll] = useState(undefined); // undefined = chưa tải, null = không có bảng lương tháng này
   const [advanceRequests, setAdvanceRequests] = useState(null);
-  const [violations, setViolations] = useState(null);
-  const [rewards, setRewards] = useState(null);
   const [hoSoNgay, setHoSoNgay] = useState(null); // "Báo cáo ngày" — việc/đơn/sản xuất đã làm hôm nay (fetchHoSoNgayNhanSu)
+  const [xemDonId, setXemDonId] = useState(null); // order_id đang xem chi tiết trong Báo cáo ngày
+  const [xemAnh, setXemAnh] = useState(''); // ảnh chấm công đang xem full màn hình
   const [rewardsTotal, setRewardsTotal] = useState(null);
   const [rewardStars, setRewardStars] = useState(null);
   const [orders, setOrders] = useState(null);
@@ -218,11 +225,7 @@ export function EmployeeOverviewV4Inner({ onNavigate } = {}) {
     if (sheet === 'schedule' && !schedule) fetchMySchedule(profile.id, profile.station, schedulePeriod).then(setSchedule).catch((e) => setError(e.message));
     if (sheet === 'payroll' && payroll === undefined) fetchMyPayroll(profile.id).then(setPayroll).catch((e) => setError(e.message));
     if (sheet === 'donTu' && !advanceRequests) fetchMyAdvanceRequests(profile.id).then(setAdvanceRequests).catch((e) => setError(e.message));
-    if (sheet === 'report') {
-      if (!hoSoNgay) fetchHoSoNgayNhanSu({ staffId: profile.id, station: profile.station, ngay: todayStr() }).then(setHoSoNgay).catch((e) => setError(e.message));
-      if (!violations) fetchMyViolations(profile.id).then(setViolations).catch(() => {});
-      if (!rewards) fetchMyRewards(profile.id).then(setRewards).catch(() => {});
-    }
+    if (sheet === 'report' && !hoSoNgay) fetchHoSoNgayNhanSu({ staffId: profile.id, station: profile.station, ngay: todayStr() }).then(setHoSoNgay).catch((e) => setError(e.message));
   };
 
   // Đổi tuần/tháng thì tải lại lịch — chỉ khi sheet Lịch làm đang mở.
@@ -251,16 +254,6 @@ export function EmployeeOverviewV4Inner({ onNavigate } = {}) {
     if (selectedOrderFilter === 'issue') return orders.filter((o) => o.isOverdue);
     return orders.filter((o) => o.status === selectedOrderFilter);
   }, [orders, selectedOrderFilter]);
-
-  // "GIEO HẠT" — thưởng nóng + vi phạm gộp thành một dòng thời gian, mới
-  // nhất trước. Thay cho 2 sheet "Vi phạm"/"Thưởng" tách rời trước đây.
-  const gieoHat = useMemo(() => {
-    if (!rewards || !violations) return [];
-    return [
-      ...rewards.map((r) => ({ ...r, loai: 'thuong' })),
-      ...violations.map((v) => ({ ...v, loai: 'phat' })),
-    ].sort((a, b) => (b.awarded_on || b.occurred_on).localeCompare(a.awarded_on || a.occurred_on)).slice(0, 15);
-  }, [rewards, violations]);
 
   const handleAdvanceSubmit = async () => {
     if (!advanceReason.trim()) { setError('Nhập lý do ứng lương giúp em.'); return; }
@@ -590,109 +583,124 @@ export function EmployeeOverviewV4Inner({ onNavigate } = {}) {
       )}
 
       {activeSheet === 'report' && (
-        <BottomSheet title="📋 Báo cáo ngày" onClose={closeSheet}>
-          {/* Tự động tổng hợp từ những gì đã LÀM THẬT hôm nay — dùng LẠI
-              đúng fetchHoSoNgayNhanSu() (lib/hoSoNgayNhanSu.js) mà Giám đốc
-              đang dùng cho "Báo cáo ngày · từng nhân sự", chỉ truyền staffId
-              = chính mình nên tự động chỉ ra đúng việc/đơn/sản xuất của
-              MÌNH — không viết lại logic tổng hợp lần hai. */}
+        <BottomSheet title={`📋 Hồ sơ ngày ${new Date().toLocaleDateString('vi-VN')}`} onClose={closeSheet}>
+          {/* Y HỆT cấu trúc "Hồ sơ ngày" Giám đốc xem cho từng nhân sự — dùng
+              LẠI đúng fetchHoSoNgayNhanSu() (lib/hoSoNgayNhanSu.js), chỉ
+              truyền staffId = chính mình. Card/màu/icon đồng bộ theo đúng
+              yêu cầu 04/09/2026: "liên kết nhất quán đến hệ thống", đơn bấm
+              vào mở thẳng OrderV2DetailModal — không phải bảng liệt kê tĩnh. */}
           {!hoSoNgay ? <div className="eov4-empty-box">Đang tải...</div> : khongCoHoatDong(hoSoNgay) ? (
             <div className="eov4-empty-box">Hôm nay chưa ghi nhận việc/đơn nào — làm gì thì báo cáo sẽ tự cập nhật ở đây, không cần tự gõ.</div>
           ) : (
             <>
-              {hoSoNgay.viec.xongTrongNgay.length > 0 && (
+              {hoSoNgay.chamCong.length > 0 && (
                 <>
-                  <div className="eov4-field-label">✅ Việc đã xong hôm nay</div>
-                  <div className="eov4-table">
-                    {hoSoNgay.viec.xongTrongNgay.map((t) => (
-                      <div key={t.id} className="eov4-table-row">
-                        <div className="eov4-table-main"><strong>{t.title}</strong>{t.order_code && <span className="eov4-note-text">Đơn {t.order_code}</span>}</div>
-                        <span className="eov4-hours-pill">{gioVN(t.completed_at)}</span>
+                  <div style={eov4ReportLabel('#0b9462')}>⏰ CHẤM CÔNG ({hoSoNgay.chamCong.length})</div>
+                  {hoSoNgay.chamCong.map((l) => (
+                    <div key={l.id} style={eov4ReportCard}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ width: 14, height: 14, borderRadius: '50%', flexShrink: 0, background: l.type === 'checkin' ? '#22c55e' : '#2563eb' }} />
+                        <strong style={{ fontSize: 16 }}>{l.type === 'checkin' ? 'Vào ca' : 'Kết thúc ca'} · {gioVN(l.checkin_time)}</strong>
                       </div>
-                    ))}
-                  </div>
+                      {l.photo_url && (
+                        <button onClick={() => setXemAnh(l.photo_url)} style={eov4LinkBtn}>📷 Xem ảnh chấm công</button>
+                      )}
+                    </div>
+                  ))}
                 </>
               )}
-              {hoSoNgay.viec.dangLam.length > 0 && (
+
+              {hoSoNgay.checklist.length > 0 && (
                 <>
-                  <div className="eov4-field-label" style={{ marginTop: 14 }}>🔨 Đang làm</div>
-                  <div className="eov4-table">
-                    {hoSoNgay.viec.dangLam.map((t) => (
-                      <div key={t.id} className="eov4-table-row">
-                        <div className="eov4-table-main"><strong>{t.title}</strong>{t.order_code && <span className="eov4-note-text">Đơn {t.order_code}</span>}</div>
-                      </div>
-                    ))}
+                  <div style={eov4ReportLabel('#7c3aed')}>
+                    ✔ CHECKLIST ({hoSoNgay.checklist.filter((c) => c.xong).length}/{hoSoNgay.checklist.length})
                   </div>
+                  {hoSoNgay.checklist.map((c) => (
+                    <div key={c.id} style={{ ...eov4ReportCard, display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', border: c.xong ? '1.5px solid #86efac' : eov4ReportCard.border }}>
+                      <span style={{ width: 22, height: 22, borderRadius: 6, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: c.xong ? '#22c55e' : '#f1e8da', color: '#fff', fontSize: 13, fontWeight: 900 }}>{c.xong ? '✓' : ''}</span>
+                      <span style={{ fontSize: 14.5, color: '#2d1c10' }}>{c.title}</span>
+                    </div>
+                  ))}
                 </>
               )}
-              {hoSoNgay.donBep.length > 0 && (
+
+              {(hoSoNgay.viec.xongTrongNgay.length > 0 || hoSoNgay.viec.dangLam.length > 0) && (
                 <>
-                  <div className="eov4-field-label" style={{ marginTop: 14 }}>🍰 Đơn bếp đã nhận</div>
-                  <div className="eov4-table">
-                    {hoSoNgay.donBep.map((p) => (
-                      <div key={p.id} className="eov4-table-row">
-                        <div className="eov4-table-main"><strong>#{p.orders?.order_code || '—'}</strong><span className="eov4-note-text">{p.orders?.order_type || ''}</span></div>
-                        <span className="eov4-hours-pill">{p.completed_at ? 'Xong' : p.status}</span>
+                  <div style={eov4ReportLabel('#c2410c')}>🧩 VIỆC ĐƯỢC GIAO ({hoSoNgay.viec.xongTrongNgay.length + hoSoNgay.viec.dangLam.length})</div>
+                  {hoSoNgay.viec.xongTrongNgay.map((t) => (
+                    <div key={t.id} style={eov4ReportCard}>
+                      <strong style={{ fontSize: 15 }}>{t.title}</strong>
+                      <span style={{ marginLeft: 8, fontSize: 12.5, fontWeight: 800, color: '#16a34a' }}>✅ đã xong</span>
+                      <div style={{ fontSize: 12.5, color: '#806a58', marginTop: 2 }}>
+                        {t.order_code ? `Đơn ${t.order_code} · ` : ''}Xong lúc {gioVN(t.completed_at)}
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
+                  {hoSoNgay.viec.dangLam.map((t) => (
+                    <div key={t.id} style={eov4ReportCard}>
+                      <strong style={{ fontSize: 15 }}>{t.title}</strong>
+                      <span style={{ marginLeft: 8, fontSize: 12.5, fontWeight: 800, color: '#a16207' }}>🔨 đang làm</span>
+                      {t.order_code && <div style={{ fontSize: 12.5, color: '#806a58', marginTop: 2 }}>Đơn {t.order_code}</div>}
+                    </div>
+                  ))}
                 </>
               )}
-              {hoSoNgay.sanXuat.length > 0 && (
-                <>
-                  <div className="eov4-field-label" style={{ marginTop: 14 }}>🏭 Nhập kho thành phẩm</div>
-                  <div className="eov4-table">
-                    {hoSoNgay.sanXuat.map((s) => (
-                      <div key={s.id} className="eov4-table-row">
-                        <div className="eov4-table-main"><strong>{s.product_name}{s.size ? ` (${s.size})` : ''}</strong></div>
-                        <span className="eov4-hours-pill">{s.qty}</span>
-                      </div>
-                    ))}
+
+              <div style={eov4ReportLabel('#b7431e')}>🍰 ĐƠN BẾP PHỤ TRÁCH ({hoSoNgay.donBep.length})</div>
+              {hoSoNgay.donBep.length === 0 ? (
+                <div style={eov4ReportEmpty}>Không có đơn bếp nào trong ngày.</div>
+              ) : hoSoNgay.donBep.map((p) => (
+                <button key={p.id} onClick={() => setXemDonId(p.order_id)} style={{ ...eov4ReportCard, width: '100%', textAlign: 'left', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <strong style={{ fontSize: 15 }}>#{p.orders?.order_code || '—'}</strong>
+                    <span style={{ marginLeft: 8, fontSize: 12.5, fontWeight: 800, color: p.completed_at ? '#16a34a' : '#a16207' }}>
+                      {p.completed_at ? 'đã xong' : (p.status || '')}{p.is_collaborative ? ' · phối hợp' : ''}
+                    </span>
+                    <div style={{ fontSize: 12.5, color: '#806a58', marginTop: 2 }}>
+                      {p.accepted_at ? `Nhận ${gioVN(p.accepted_at)}` : ''}{p.completed_at ? ` · xong ${gioVN(p.completed_at)}` : ''}
+                    </div>
                   </div>
-                </>
-              )}
-              {hoSoNgay.vanTai.length > 0 && (
-                <>
-                  <div className="eov4-field-label" style={{ marginTop: 14 }}>🛵 Chuyến giao hàng</div>
-                  <div className="eov4-table">
-                    {hoSoNgay.vanTai.map((r) => (
-                      <div key={r.id} className="eov4-table-row">
-                        <div className="eov4-table-main"><strong>{r.run_code}</strong><span className="eov4-note-text">{r.diemDung.length} điểm dừng</span></div>
-                        <span className="eov4-hours-pill">{r.status}</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
+                  <ChevronRight size={18} color="#a08a72" />
+                </button>
+              ))}
+
+              <div style={eov4ReportLabel('#2563eb')}>🚚 CHUYẾN GIAO HÀNG ({hoSoNgay.vanTai.length})</div>
+              {hoSoNgay.vanTai.length === 0 ? (
+                <div style={eov4ReportEmpty}>Không có chuyến giao nào trong ngày.</div>
+              ) : hoSoNgay.vanTai.map((r) => (
+                <div key={r.id} style={eov4ReportCard}>
+                  <strong style={{ fontSize: 15 }}>{r.run_code}</strong>
+                  <span style={{ marginLeft: 8, fontSize: 12.5, fontWeight: 800, color: '#2563eb' }}>{r.status}</span>
+                  <div style={{ fontSize: 12.5, color: '#806a58', marginTop: 2 }}>{r.diemDung.length} điểm dừng</div>
+                </div>
+              ))}
+
+              <div style={eov4ReportLabel('#0284c7')}>🏭 NHẬP KHO THÀNH PHẨM ({hoSoNgay.sanXuat.length})</div>
+              {hoSoNgay.sanXuat.length === 0 ? (
+                <div style={eov4ReportEmpty}>Không nhập kho thành phẩm nào trong ngày.</div>
+              ) : hoSoNgay.sanXuat.map((s) => (
+                <div key={s.id} style={eov4ReportCard}>
+                  <strong style={{ fontSize: 15 }}>{s.product_name}{s.size ? ` (${s.size})` : ''}</strong>
+                  <span style={{ marginLeft: 8, fontSize: 12.5, fontWeight: 800, color: '#0284c7' }}>{s.qty}</span>
+                </div>
+              ))}
             </>
           )}
 
-          {/* GIEO HẠT — đánh giá Cộng/Trừ sao của Giám đốc, gộp thưởng nóng
-              (staff_rewards) + vi phạm (staff_violations) thành một dòng
-              thời gian, thay cho 2 ô "Vi phạm"/"Thưởng" tách rời trước đây. */}
-          <div className="eov4-field-label" style={{ marginTop: 18, borderTop: '1px solid #eadcca', paddingTop: 14 }}>🌱 Gieo Hạt — đánh giá của Giám đốc</div>
-          {!rewards || !violations ? <div className="eov4-empty-box">Đang tải...</div> : gieoHat.length === 0 ? (
-            <div className="eov4-empty-box">Chưa có đánh giá nào — cứ làm tốt, sao sẽ tới!</div>
-          ) : (
-            <div className="eov4-table">
-              {gieoHat.map((h) => (
-                <div key={`${h.loai}-${h.id}`} className="eov4-table-row">
-                  <div className="eov4-table-main">
-                    <strong>{h.loai === 'thuong' ? '🌟 ' : '🥀 '}{h.title || (h.loai === 'thuong' ? 'Thưởng nóng' : 'Vi phạm')}</strong>
-                    <span className="eov4-note-text">Từ {h.nguoi_danh_gia || 'Sếp'} · {h.awarded_on || h.occurred_on}{h.note || h.description ? ` · ${h.note || h.description}` : ''}</span>
-                  </div>
-                  <span className={h.loai === 'thuong' ? 'eov4-tone-warning' : 'eov4-tone-danger'}>
-                    {h.loai === 'thuong' ? '+' : '-'}{formatVND(h.amount || h.penalty_amount)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+          {/* GIEO HẠT — dùng LẠI nguyên <StarRateBar> (readOnly: bỏ hẳn nút
+              Cộng/Trừ/Sửa/Xoá — đánh giá là quyền của quản lý, không phải
+              của chính người được đánh giá; RPC sumi_dieu_chinh_sao cũng
+              chặn cứng tự đánh giá chính mình ở tầng database, đây chỉ khớp
+              đúng giao diện với điều đó). Đọc thẳng view `star_transactions`
+              — CÙNG NGUỒN Giám đốc đang xem, không phải bảng thưởng/vi phạm
+              cũ (staff_rewards/staff_violations) đã lệch với view thật. */}
+          <div style={eov4ReportLabel('#0b9462')}>🌱 GIEO HẠT — đánh giá của Giám đốc</div>
+          <StarRateBar staffId={profile?.id} staffName={profile?.full_name} readOnly />
 
           {/* Báo cáo cuối ca thủ công — giữ lại, dùng cho bàn giao tiền mặt/
               tồn quầy (khác hẳn phần tự động phía trên, không thay thế
               được nhau). */}
-          <div className="eov4-field-label" style={{ marginTop: 18, borderTop: '1px solid #eadcca', paddingTop: 14 }}>🧾 Bàn giao cuối ca (nếu có)</div>
+          <div style={{ ...eov4ReportLabel('#806a58'), marginTop: 20, borderTop: '1px solid #eadcca', paddingTop: 16 }}>🧾 BÀN GIAO CUỐI CA (nếu có)</div>
           <label className="eov4-field-label">Doanh thu cuối ca</label>
           <input type="number" className="eov4-input" placeholder="VD: 1250000" value={reportRevenue} onChange={(e) => setReportRevenue(e.target.value)} />
           <label className="eov4-field-label">Số lượng bánh còn tồn quầy</label>
@@ -704,6 +712,13 @@ export function EmployeeOverviewV4Inner({ onNavigate } = {}) {
           <button className="eov4-primary-btn" disabled={reportSending} onClick={handleReportSubmit}>
             <Send size={16} /> {reportSending ? 'Đang gửi...' : 'Gửi báo cáo'}
           </button>
+
+          {xemAnh && (
+            <div onClick={() => setXemAnh('')} style={{ position: 'fixed', inset: 0, zIndex: 1600, background: 'rgba(0,0,0,.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+              <img src={xemAnh} alt="Ảnh chấm công" style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 12 }} />
+            </div>
+          )}
+          {xemDonId && <OrderV2DetailModal orderId={xemDonId} onClose={() => setXemDonId(null)} />}
         </BottomSheet>
       )}
 

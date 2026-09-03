@@ -16,7 +16,7 @@ import { CameraPhotoField } from './CameraPhotoField';
 const formatVND = (n) => Number(n || 0).toLocaleString('vi-VN') + 'đ';
 const formatNgay = (iso) => iso ? new Date(iso).toLocaleDateString('vi-VN') : '';
 
-export default function StarRateBar({ staffId, staffName, linkType, linkId, mode = 'full', compact = false, onDone }) {
+export default function StarRateBar({ staffId, staffName, linkType, linkId, mode = 'full', compact = false, onDone, readOnly = false }) {
   const [loai, setLoai] = useState(null); // 'cong' | 'tru'
   const [soSao, setSoSao] = useState('');
   const [ghiChu, setGhiChu] = useState('');
@@ -134,6 +134,8 @@ export default function StarRateBar({ staffId, staffName, linkType, linkId, mode
         🌟 Đánh giá nhanh{staffName ? ` — ${staffName}` : ''}{' '}
         <span style={{ fontWeight: 500, fontSize: '0.9em' }}>(1 sao = 1.000đ)</span>
       </div>
+      {!readOnly && (
+      <>
       <div style={{ display: 'flex', gap: 8, marginBottom: loai ? 8 : 0 }}>
         {mode !== 'tru' && (
           <button type="button" onClick={() => setLoai(loai === 'cong' ? null : 'cong')}
@@ -184,6 +186,8 @@ export default function StarRateBar({ staffId, staffName, linkType, linkId, mode
       )}
 
       {!loai && loi && <div style={{ color: '#b42318', fontSize: 12.5, marginTop: 6 }}>⚠️ {loi}</div>}
+      </>
+      )}
 
       {/* ── Lịch sử — luôn hiện ngay dưới form, kể cả khi chưa mở Cộng/Trừ ── */}
       <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px dashed #E5D3B8' }}>
@@ -232,7 +236,7 @@ export default function StarRateBar({ staffId, staffName, linkType, linkId, mode
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#a08a6f' }}>
                   <span>{it.created_by_name ? `bởi ${it.created_by_name}` : ''}{it.auto_generated ? ' · Tự động' : ''}</span>
-                  {!it.auto_generated && (
+                  {!readOnly && !it.auto_generated && (
                     <span style={{ display: 'flex', gap: 10 }}>
                       <button type="button" onClick={() => batDauSua(it)}
                         style={{ border: 'none', background: 'none', color: '#8C5A3C', fontWeight: 700, cursor: 'pointer', padding: 0, fontSize: 12 }}>
