@@ -19,7 +19,7 @@ import { fetchApprovalRequests, fetchShiftLogsRange, fetchShiftConfigs } from '.
 import { fetchDanhSachNhanSuNgay } from '../lib/hoSoNgayNhanSu';
 import { localDateStr } from '../lib/date';
 import { computeShiftHours } from '../lib/kpi';
-import { Zap, Megaphone, FileText as IconLeave, ClipboardList as IconReport, Package as IconPackageAdmin, Boxes as IconStock } from 'lucide-react';
+import { Zap, Megaphone, FileText as IconLeave, ClipboardList as IconReport, Package as IconPackageAdmin, Boxes as IconStock, ChevronRight, TrendingUp as IconMoneyUp, Clock as IconClock, Gift as IconGift } from 'lucide-react';
 
 import { ROLE_META, KITCHEN_LEAD_ROLES, getRoleMeta, formatStationLabel } from '../lib/roles';
 import { ORDER_FLOWS } from '../data/orderCatalogs';
@@ -386,24 +386,41 @@ function HieuSuatBep({profile,ordersCuaKhau}){
 
  const [sheet,setSheet]=useState(null);
 
+ // Panel LỚN, nền xanh — đây là điểm nhấn tạo động lực cho cả bếp (yêu cầu
+ // 04/09/2026), không phải một khối số liệu phụ nên KHÔNG dùng lưới 3 thẻ
+ // nhỏ (eov4-kpi-grid) nữa. Mỗi hàng là MỘT nút bấm thật (cả hàng, không chỉ
+ // con số) kèm mũi tên › để rõ ràng là bấm được, không dừng ở dạng tĩnh.
+ const Hang=({Icon,nhan,soBep,soCaNhan,onClick})=>(
+  <button onClick={onClick} style={{
+   width:'100%',display:'flex',alignItems:'center',gap:12,
+   padding:'14px 4px',border:0,borderTop:'1px solid rgba(255,255,255,.16)',
+   background:'transparent',color:'#fff',textAlign:'left',cursor:'pointer',
+  }}>
+   <div style={{width:44,height:44,borderRadius:14,background:'rgba(255,255,255,.16)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+    <Icon size={22} color="#fff"/>
+   </div>
+   <div style={{flex:1,minWidth:0}}>
+    <div style={{fontSize:12,fontWeight:800,opacity:.85}}>{nhan}</div>
+    <div style={{fontSize:26,fontWeight:900,marginTop:2}}>{soBep}</div>
+    <div style={{fontSize:12,fontWeight:700,opacity:.8,marginTop:1}}>Cá nhân tôi: {soCaNhan}</div>
+   </div>
+   <ChevronRight size={22} color="rgba(255,255,255,.75)"/>
+  </button>
+ );
  return<>
-  <SectionHead title="📊 HIỆU SUẤT BẾP (tháng này)"/>
-  <div className="eov4-kpi-grid">
-   <button className="eov4-kpi-card eov4-kpi-green" onClick={()=>setSheet('doanhThu')}>
-    <div className="eov4-kpi-value">{fmtVND(doanhThuBep)}</div>
-    <div className="eov4-kpi-label">Doanh Thu Bếp ›</div>
-   </button>
-   <button className="eov4-kpi-card eov4-kpi-blue" onClick={()=>setSheet('gioLam')}>
-    <div className="eov4-kpi-value">{gioLamDoi===null?'…':`${tongGio}h`}</div>
-    <div className="eov4-kpi-label">Giờ Làm Cả Bếp ›</div>
-   </button>
-   <button className="eov4-kpi-card eov4-kpi-amber" onClick={()=>setSheet('thuong')}>
-    <div className="eov4-kpi-value">{thuongDoi===null?'…':fmtVND(tongThuong)}</div>
-    <div className="eov4-kpi-label">Thưởng Cả Bếp ›</div>
-   </button>
-  </div>
-  <div style={{display:'flex',gap:8,fontSize:11.5,color:'#725f50',margin:'2px 2px 14px'}}>
-   <span>👤 Cá nhân: {fmtVND(doanhThuCaNhan)} · {cuaToiGio===undefined?'…':`${cuaToiGio}h`}</span>
+  <div style={{
+   background:'linear-gradient(150deg,#17a367,#0b6b3f)',borderRadius:26,
+   padding:'18px 16px 6px',marginBottom:16,boxShadow:'0 14px 34px rgba(11,107,63,.28)',
+  }}>
+   <div style={{fontSize:13,fontWeight:900,letterSpacing:'.04em',color:'#fff',display:'flex',alignItems:'center',gap:6}}>
+    🏆 HIỆU SUẤT BẾP · THÁNG NÀY
+   </div>
+   <div style={{fontSize:11.5,color:'rgba(255,255,255,.75)',marginTop:2,marginBottom:4}}>
+    Thành quả cả đội — bấm vào từng mục để xem chi tiết
+   </div>
+   <Hang Icon={IconMoneyUp} nhan="DOANH THU" soBep={fmtVND(doanhThuBep)} soCaNhan={fmtVND(doanhThuCaNhan)} onClick={()=>setSheet('doanhThu')}/>
+   <Hang Icon={IconClock} nhan="GIỜ LÀM" soBep={gioLamDoi===null?'Đang tải…':`${tongGio}h`} soCaNhan={cuaToiGio===undefined?'…':`${cuaToiGio}h`} onClick={()=>setSheet('gioLam')}/>
+   <Hang Icon={IconGift} nhan="THƯỞNG" soBep={thuongDoi===null?'Đang tải…':fmtVND(tongThuong)} soCaNhan={fmtVND((thuongDoi||[]).filter(r=>r.staff_id===profile?.id).reduce((s,r)=>s+Number(r.amount||0),0))} onClick={()=>setSheet('thuong')}/>
   </div>
   {sheet&&<HieuSuatBepSheet loai={sheet} onClose={()=>setSheet(null)}
    doiRoster={doi} tenTheoId={tenTheoId} doanhThuBep={doanhThuBep} doanhThuCaNhan={doanhThuCaNhan}
