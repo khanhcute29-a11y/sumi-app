@@ -34,7 +34,11 @@ const FLOW_GROUPS = [
   { key: 'macaron', label: 'Macaron', Icon: IconMacaron, desc: 'Xưởng 41 chuyên biệt', match: o => o.order_type === 'macaron' },
   { key: 'school', label: 'Trường học', Icon: IconSchool, desc: 'Xưởng 42 điểm trường', match: o => o.order_type === 'school' },
   { key: 'teabreak', label: 'Teabreak', Icon: IconTeabreak, desc: 'Tiệc & Sự kiện', match: o => o.order_type === 'teabreak' },
-  { key: 'mixed', label: 'Đơn tổng hợp', Icon: IconMixed, desc: 'Nhiều bếp cùng làm', match: o => o.order_type === 'mixed' || !['cake', 'bakery', 'macaron', 'teabreak', 'school'].includes(o.order_type) },
+  // "Nhiều bếp cùng làm" phải bắt được CẢ đơn 1-luồng gốc (vd order_type=
+  // 'macaron') nhưng có thêm bếp phối hợp (assign_order_package_collab) —
+  // không chỉ order_type='mixed'. kitchen_codes (order_operations_list,
+  // 202609041100) đếm đúng số bếp đang có việc thật cho đơn đó.
+  { key: 'mixed', label: 'Đơn tổng hợp', Icon: IconMixed, desc: 'Nhiều bếp cùng làm', match: o => o.order_type === 'mixed' || (Array.isArray(o.kitchen_codes) && o.kitchen_codes.length > 1) || !['cake', 'bakery', 'macaron', 'teabreak', 'school'].includes(o.order_type) },
 ];
 
 const minutesText = value => {
