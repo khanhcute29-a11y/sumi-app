@@ -54,7 +54,7 @@ import { fetchShiftLogsRange } from '../../../lib/queries';
 // gian truyền vào là 7 ngày/tháng/tùy chỉnh gì, nên tái dùng thẳng chứ không
 // viết công thức cộng giờ riêng ở đây (tránh lệch số như đã từng xảy ra).
 import { boPhanCuaHoSo, chuanHoaCa, tomTatThang, TEN_BO_PHAN } from '../../../lib/chamCong';
-import { fetchDanhSachNhanSuNgay, fetchHoSoNgayNhanSu, khongCoHoatDong } from '../../../lib/hoSoNgayNhanSu';
+import { fetchDanhSachNhanSuNgay, fetchDanhSachNhanSuKhoangNgay, fetchHoSoNgayNhanSu, khongCoHoatDong } from '../../../lib/hoSoNgayNhanSu';
 import { KHOI, LUONG, luongCuaHoSo } from '../../shifts/v2/luongNhanSu';
 import { WeeklyScheduleSection } from '../../WeeklyScheduleSection';
 import DirectorStaffOverviewSheet from '../../shifts/v2/DirectorStaffOverviewSheet';
@@ -534,22 +534,31 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
   const [historyOrderWorkTasks, setHistoryOrderWorkTasks] = useState<any[]>([]);
   const [historyViolations, setHistoryViolations] = useState<any[]>([]);
 
-  // Tab "Hôm nay" / "Lịch sử" / "Theo nhân sự" của sheet Báo Cáo Ngày
-  const [reportTab, setReportTab] = useState<'today' | 'history' | 'staff'>('today');
+  // Tab "Hôm nay" / "Lịch sử" của sheet Báo Cáo Ngày — CẢ HAI đều đi theo cấu
+  // trúc Bộ phận -> Nhân sự -> Chi tiết (tái cấu trúc 04/09/2026, thay hẳn
+  // layout liệt kê phẳng cũ "Việc hoàn thành/Báo cáo cuối ca/Đơn hàng hoàn
+  // thành/Vi phạm/Checklist" — dữ liệu đó giờ nằm bên trong Hồ Sơ của từng
+  // người, không mất đi, chỉ đổi chỗ hiển thị).
+  const [reportTab, setReportTab] = useState<'today' | 'history'>('today');
 
-  // ── Tab "Theo nhân sự": soi 1 người làm gì trong ngày ──
-  // Toàn bộ dữ liệu ở đây LAZY: danh sách chỉ tải khi bấm vào tab, chi tiết
-  // chỉ tải khi bấm vào đúng một người — không thêm gánh nặng nào cho
-  // loadAll() lúc mở Dashboard (đang là 18 truy vấn).
+  // Danh sách nhân sự (gộp Bộ phận -> Nhân sự) — dùng chung cho cả 2 tab,
+  // chỉ khác nguồn dữ liệu nạp vào (1 ngày hay cả khoảng). LAZY: chỉ tải khi
+  // bấm mở sheet/đổi tab/đổi ngày — không thêm gánh nặng cho loadAll() lúc
+  // mở Dashboard (đang là 18 truy vấn).
   const [staffDayDate, setStaffDayDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [staffDayList, setStaffDayList] = useState<any[] | null>(null);
   const [staffDayLoading, setStaffDayLoading] = useState(false);
   const [staffDayError, setStaffDayError] = useState('');
   const [staffDayKeyword, setStaffDayKeyword] = useState('');
-  const [staffDayBoPhan, setStaffDayBoPhan] = useState('all');
+  const [khoiBaoCaoMo, setKhoiBaoCaoMo] = useState<string | null>(null);
   const [staffDayPicked, setStaffDayPicked] = useState<any | null>(null);
   const [staffDayDetail, setStaffDayDetail] = useState<any | null>(null);
   const [staffDayDetailLoading, setStaffDayDetailLoading] = useState(false);
+
+  const [reportHistoryFrom, setReportHistoryFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10); });
+  const [reportHistoryTo, setReportHistoryTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [reportHistoryLoading, setReportHistoryLoading] = useState(false);
+  const [reportHistoryError, setReportHistoryError] = useState('');
 
   const loadStaffDayList = async (ngay: string) => {
     setStaffDayLoading(true); setStaffDayError('');
@@ -561,41 +570,27 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
     } finally { setStaffDayLoading(false); }
   };
 
+  const loadStaffDayListKhoang = async (tu: string, den: string) => {
+    if (!tu || !den) return;
+    setStaffDayLoading(true); setStaffDayError('');
+    try {
+      setStaffDayList(await fetchDanhSachNhanSuKhoangNgay(tu, den));
+    } catch (e: any) {
+      setStaffDayError(e.message || 'Không tải được danh sách nhân sự.');
+      setStaffDayList([]);
+    } finally { setStaffDayLoading(false); }
+  };
+
   const openStaffDay = async (nv: any) => {
     setStaffDayPicked(nv); setStaffDayDetail(null); setStaffDayDetailLoading(true);
     try {
-      setStaffDayDetail(await fetchHoSoNgayNhanSu({ staffId: nv.id, station: nv.station, ngay: staffDayDate }));
+      const tham = reportTab === 'history'
+        ? { staffId: nv.id, station: nv.station, tuNgay: reportHistoryFrom, denNgay: reportHistoryTo }
+        : { staffId: nv.id, station: nv.station, ngay: staffDayDate };
+      setStaffDayDetail(await fetchHoSoNgayNhanSu(tham));
     } catch {
       setStaffDayDetail(null);
     } finally { setStaffDayDetailLoading(false); }
-  };
-  const [reportHistoryFrom, setReportHistoryFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10); });
-  const [reportHistoryTo, setReportHistoryTo] = useState(() => new Date().toISOString().slice(0, 10));
-  const [historyShiftReports, setHistoryShiftReports] = useState<any[]>([]);
-  const [historyCompletedTasks, setHistoryCompletedTasks] = useState<any[]>([]);
-  const [reportHistoryLoading, setReportHistoryLoading] = useState(false);
-  const [reportHistoryError, setReportHistoryError] = useState('');
-  const [selectedReportItem, setSelectedReportItem] = useState<{ kind: 'task' | 'shift_report'; item: any } | null>(null);
-
-  const loadReportHistory = async () => {
-    if (!reportHistoryFrom || !reportHistoryTo) return;
-    setReportHistoryLoading(true); setReportHistoryError('');
-    try {
-      const [tasks, reports, orderWorkTasks, violations] = await Promise.all([
-        fetchCompletedTasksReport({ from: `${reportHistoryFrom}T00:00:00`, to: `${reportHistoryTo}T23:59:59.999` }),
-        fetchTodayShiftReports({ from: reportHistoryFrom, to: reportHistoryTo }),
-        fetchCompletedOrderWorkReport({ from: `${reportHistoryFrom}T00:00:00`, to: `${reportHistoryTo}T23:59:59.999` }),
-        fetchTodayViolationsReport({ from: reportHistoryFrom, to: reportHistoryTo }),
-      ]);
-      setHistoryCompletedTasks(tasks);
-      setHistoryShiftReports(reports);
-      setHistoryOrderWorkTasks(orderWorkTasks);
-      setHistoryViolations(violations);
-    } catch (e: any) {
-      setReportHistoryError(e.message || 'Không tải được lịch sử báo cáo.');
-    } finally {
-      setReportHistoryLoading(false);
-    }
   };
 
   // Nhóm 1 danh sách (việc hoàn thành HOẶC báo cáo cuối ca) theo bộ phận —
@@ -2193,15 +2188,25 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
         {/* ── BOTTOM SHEET: 7. BÁO CÁO CA NGÀY ── */}
         {/* ========================================================================= */}
         {activeSheet === 'report_sheet' && (() => {
-          const tasksShown = reportTab === 'history' ? historyCompletedTasks : completedTasksToday;
-          const reportsShown = reportTab === 'history' ? historyShiftReports : shiftReports;
-          const orderWorkShown = reportTab === 'history' ? historyOrderWorkTasks : orderWorkTasksToday;
-          const violationsShown = reportTab === 'history' ? historyViolations : violationsToday;
-          const taskGroups = groupByBoPhan(tasksShown, (t: any) => t.assignee);
-          const reportGroups = groupByBoPhan(reportsShown, (r: any) => ({ station: r.station, role: r.staff_role }));
-          const orderWorkGroups = groupByBoPhan(orderWorkShown, (t: any) => t.assignee);
-          const violationGroups = groupByBoPhan(violationsShown, (v: any) => ({ station: v.station, role: v.staff_role }));
-          const boPhanOrder = ['bakery', 'xuong41', 'xuong42', 'van_tai', '_khac'];
+          const boDau = (s: string) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+          const q = boDau(staffDayKeyword).trim();
+          const khoiCuaNguoi = (p: any) => KHOI.find((k) => k.luong.includes(luongCuaHoSo(p)))?.ma || '_khac';
+          const dsLoc = (staffDayList || []).filter((p: any) => !q || boDau(p.full_name).includes(q));
+          const nhomTheoKhoi = new Map<string, any[]>();
+          dsLoc.forEach((p: any) => {
+            const k = khoiCuaNguoi(p);
+            if (!nhomTheoKhoi.has(k)) nhomTheoKhoi.set(k, []);
+            nhomTheoKhoi.get(k)!.push(p);
+          });
+          const dangTimKiem = q.length > 0;
+          const nhanTrangThaiHomNay: Record<string, { chu: string; mau: string; nen: string }> = {
+            dang_lam: { chu: '🟢 Đang làm', mau: '#15803d', nen: '#f0fdf4' },
+            xong: { chu: '✅ Đã tan ca', mau: '#1d4ed8', nen: '#eff6ff' },
+            nghi: { chu: '🏖 Xin nghỉ', mau: '#7c3aed', nen: '#f5f3ff' },
+            chua_cham: { chu: '⚠️ Chưa chấm công', mau: '#dc2626', nen: '#fef2f2' },
+          };
+          const gio = (iso: string) => (iso ? new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '--:--');
+
           return (
             <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
               <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
@@ -2210,279 +2215,121 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
                     <div>
                       <div style={{ fontSize: 15, fontWeight: 900, color: '#db2777' }}>📋 Báo Cáo Ngày</div>
-                      <div style={{ fontSize: 11, color: '#725f50' }}>{tasksShown.length} việc xong · {reportsShown.length} báo cáo ca</div>
+                      <div style={{ fontSize: 11, color: '#725f50' }}>Bấm bộ phận → nhân sự → xem hồ sơ đầy đủ</div>
                     </div>
                     <button onClick={() => setActiveSheet(null)} aria-label="Quay lại" style={{ order: -1, flexShrink: 0, width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer' }}>‹</button>
                   </div>
 
-                  {/* 3 module: Hôm nay / Lịch sử / Theo nhân sự */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, padding: '10px 14px 0' }}>
-                    <button onClick={() => setReportTab('today')} style={{
+                  {/* 2 module: Hôm nay / Lịch sử — CÙNG cấu trúc Bộ phận ->
+                      Nhân sự -> Chi tiết, chỉ khác nguồn ngày. */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, padding: '10px 14px 0' }}>
+                    <button onClick={() => { setReportTab('today'); setKhoiBaoCaoMo(null); loadStaffDayList(staffDayDate); }} style={{
                       padding: '8px 4px', borderRadius: 12, border: reportTab === 'today' ? '2px solid #db2777' : '1px solid #eadcca',
                       background: reportTab === 'today' ? '#fdf2f8' : '#fff', color: reportTab === 'today' ? '#db2777' : '#725f50',
                       fontSize: 11.5, fontWeight: 900, cursor: 'pointer',
                     }}>
                       📅 Hôm nay
                     </button>
-                    <button onClick={() => { setReportTab('history'); if (!historyCompletedTasks.length && !historyShiftReports.length && !reportHistoryLoading) loadReportHistory(); }} style={{
+                    <button onClick={() => { setReportTab('history'); setKhoiBaoCaoMo(null); loadStaffDayListKhoang(reportHistoryFrom, reportHistoryTo); }} style={{
                       padding: '8px 4px', borderRadius: 12, border: reportTab === 'history' ? '2px solid #db2777' : '1px solid #eadcca',
                       background: reportTab === 'history' ? '#fdf2f8' : '#fff', color: reportTab === 'history' ? '#db2777' : '#725f50',
                       fontSize: 11.5, fontWeight: 900, cursor: 'pointer',
                     }}>
                       🕘 Lịch sử
                     </button>
-                    <button onClick={() => { setReportTab('staff'); if (staffDayList === null && !staffDayLoading) loadStaffDayList(staffDayDate); }} style={{
-                      padding: '8px 4px', borderRadius: 12, border: reportTab === 'staff' ? '2px solid #db2777' : '1px solid #eadcca',
-                      background: reportTab === 'staff' ? '#fdf2f8' : '#fff', color: reportTab === 'staff' ? '#db2777' : '#725f50',
-                      fontSize: 11.5, fontWeight: 900, cursor: 'pointer',
-                    }}>
-                      👤 Theo nhân sự
-                    </button>
                   </div>
 
-                  {reportTab === 'staff' && (
-                    <div style={{ padding: '10px 14px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <input type="date" value={staffDayDate} max={new Date().toISOString().slice(0, 10)}
-                          onChange={e => { setStaffDayDate(e.target.value); loadStaffDayList(e.target.value); }}
-                          style={{ flex: '0 0 auto', minHeight: 38, borderRadius: 10, border: '1px solid #eadcca', padding: '0 8px', fontSize: 12.5, fontFamily: 'inherit' }} />
-                        <input type="text" value={staffDayKeyword} onChange={e => setStaffDayKeyword(e.target.value)}
-                          placeholder="🔍 Tìm tên nhân sự…"
-                          style={{ flex: 1, minWidth: 0, minHeight: 38, borderRadius: 10, border: '1px solid #eadcca', padding: '0 10px', fontSize: 12.5, fontFamily: 'inherit' }} />
-                      </div>
-                      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
-                        {[['all', 'Tất cả'], ...KHOI.map((k) => [k.ma, k.ten])].map(([ma, ten]) => (
-                          <button key={ma} onClick={() => setStaffDayBoPhan(ma)} style={{
-                            flexShrink: 0, padding: '6px 12px', borderRadius: 999,
-                            border: staffDayBoPhan === ma ? '2px solid #db2777' : '1px solid #eadcca',
-                            background: staffDayBoPhan === ma ? '#fdf2f8' : '#fff',
-                            color: staffDayBoPhan === ma ? '#db2777' : '#725f50',
-                            fontSize: 11.5, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap',
-                          }}>{ten}</button>
-                        ))}
-                      </div>
+                  {reportTab === 'today' && (
+                    <div style={{ padding: '10px 14px 0', display: 'flex', gap: 8 }}>
+                      <input type="date" value={staffDayDate} max={new Date().toISOString().slice(0, 10)}
+                        onChange={e => { setStaffDayDate(e.target.value); setKhoiBaoCaoMo(null); loadStaffDayList(e.target.value); }}
+                        style={{ flex: '0 0 auto', minHeight: 38, borderRadius: 10, border: '1px solid #eadcca', padding: '0 8px', fontSize: 12.5, fontFamily: 'inherit' }} />
+                      <input type="text" value={staffDayKeyword} onChange={e => setStaffDayKeyword(e.target.value)}
+                        placeholder="🔍 Tìm tên nhân sự…"
+                        style={{ flex: 1, minWidth: 0, minHeight: 38, borderRadius: 10, border: '1px solid #eadcca', padding: '0 10px', fontSize: 12.5, fontFamily: 'inherit' }} />
                     </div>
                   )}
 
                   {reportTab === 'history' && (
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', padding: '10px 14px 0' }}>
-                      <label style={{ flex: 1, fontSize: 11, fontWeight: 800, color: '#725f50' }}>
-                        Từ ngày
-                        <input type="date" value={reportHistoryFrom} max={reportHistoryTo} onChange={e => setReportHistoryFrom(e.target.value)}
-                          style={{ display: 'block', width: '100%', marginTop: 4, minHeight: 38, borderRadius: 10, border: '1px solid #eadcca', padding: '0 8px', fontSize: 12.5, fontFamily: 'inherit' }} />
-                      </label>
-                      <label style={{ flex: 1, fontSize: 11, fontWeight: 800, color: '#725f50' }}>
-                        Đến ngày
-                        <input type="date" value={reportHistoryTo} min={reportHistoryFrom} max={new Date().toISOString().slice(0, 10)} onChange={e => setReportHistoryTo(e.target.value)}
-                          style={{ display: 'block', width: '100%', marginTop: 4, minHeight: 38, borderRadius: 10, border: '1px solid #eadcca', padding: '0 8px', fontSize: 12.5, fontFamily: 'inherit' }} />
-                      </label>
-                      <button onClick={loadReportHistory} disabled={reportHistoryLoading} style={{ minHeight: 38, padding: '0 14px', borderRadius: 10, border: 'none', background: '#db2777', color: '#fff', fontWeight: 900, fontSize: 12.5, cursor: 'pointer' }}>
-                        {reportHistoryLoading ? '…' : 'Xem'}
-                      </button>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 14px 0' }}>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                        <label style={{ flex: 1, fontSize: 11, fontWeight: 800, color: '#725f50' }}>
+                          Từ ngày
+                          <input type="date" value={reportHistoryFrom} max={reportHistoryTo} onChange={e => setReportHistoryFrom(e.target.value)}
+                            style={{ display: 'block', width: '100%', marginTop: 4, minHeight: 38, borderRadius: 10, border: '1px solid #eadcca', padding: '0 8px', fontSize: 12.5, fontFamily: 'inherit' }} />
+                        </label>
+                        <label style={{ flex: 1, fontSize: 11, fontWeight: 800, color: '#725f50' }}>
+                          Đến ngày
+                          <input type="date" value={reportHistoryTo} min={reportHistoryFrom} max={new Date().toISOString().slice(0, 10)} onChange={e => setReportHistoryTo(e.target.value)}
+                            style={{ display: 'block', width: '100%', marginTop: 4, minHeight: 38, borderRadius: 10, border: '1px solid #eadcca', padding: '0 8px', fontSize: 12.5, fontFamily: 'inherit' }} />
+                        </label>
+                        <button onClick={() => { setKhoiBaoCaoMo(null); loadStaffDayListKhoang(reportHistoryFrom, reportHistoryTo); }} disabled={staffDayLoading} style={{ minHeight: 38, padding: '0 14px', borderRadius: 10, border: 'none', background: '#db2777', color: '#fff', fontWeight: 900, fontSize: 12.5, cursor: 'pointer' }}>
+                          {staffDayLoading ? '…' : 'Xem'}
+                        </button>
+                      </div>
+                      <input type="text" value={staffDayKeyword} onChange={e => setStaffDayKeyword(e.target.value)}
+                        placeholder="🔍 Tìm tên nhân sự…"
+                        style={{ minHeight: 38, borderRadius: 10, border: '1px solid #eadcca', padding: '0 10px', fontSize: 12.5, fontFamily: 'inherit' }} />
                     </div>
                   )}
                 </div>
 
                 <div style={sheetBodyStyle({ paddingTop: 12 })}>
-                  {reportTab === 'history' && reportHistoryError && (
-                    <div style={{ color: '#dc2626', fontSize: 12.5, fontWeight: 700, marginBottom: 10 }}>⚠️ {reportHistoryError}</div>
-                  )}
-                  {reportTab === 'history' && reportHistoryLoading && (
-                    <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Đang tải…</div>
+                  {staffDayError && <div style={{ color: '#dc2626', fontSize: 12.5, fontWeight: 700, marginBottom: 10 }}>⚠️ {staffDayError}</div>}
+                  {staffDayLoading && <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Đang tải…</div>}
+
+                  {!staffDayLoading && !nhomTheoKhoi.size && (
+                    <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 12.5 }}>Không có nhân sự nào khớp.</div>
                   )}
 
-                  {/* ── Tab "Theo nhân sự": danh sách người + trạng thái trong
-                      ngày. Bấm 1 người mở hồ sơ ngày đầy đủ ở lớp trên. ── */}
-                  {reportTab === 'staff' && (
-                    <>
-                      {staffDayError && <div style={{ color: '#dc2626', fontSize: 12.5, fontWeight: 700, marginBottom: 10 }}>⚠️ {staffDayError}</div>}
-                      {staffDayLoading && <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Đang tải…</div>}
-                      {!staffDayLoading && (() => {
-                        const boDau = (s: string) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-                        const q = boDau(staffDayKeyword).trim();
-                        const khoiCuaNguoi = (p: any) => KHOI.find((k) => k.luong.includes(luongCuaHoSo(p)))?.ma || '_khac';
-                        const ds = (staffDayList || [])
-                          .filter((p: any) => staffDayBoPhan === 'all' || khoiCuaNguoi(p) === staffDayBoPhan)
-                          .filter((p: any) => !q || boDau(p.full_name).includes(q));
-                        const nhan: Record<string, { chu: string; mau: string; nen: string }> = {
-                          dang_lam: { chu: '🟢 Đang làm', mau: '#15803d', nen: '#f0fdf4' },
-                          xong: { chu: '✅ Đã tan ca', mau: '#1d4ed8', nen: '#eff6ff' },
-                          nghi: { chu: '🏖 Xin nghỉ', mau: '#7c3aed', nen: '#f5f3ff' },
-                          chua_cham: { chu: '⚠️ Chưa chấm công', mau: '#dc2626', nen: '#fef2f2' },
-                        };
-                        if (!ds.length) return <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 12.5 }}>Không có nhân sự nào khớp.</div>;
-                        return (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                            {ds.map((p: any) => {
-                              const tt = nhan[p.trangThai] || nhan.chua_cham;
-                              const gio = (iso: string) => (iso ? new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '--:--');
-                              return (
-                                <button key={p.id} onClick={() => openStaffDay(p)} style={{
-                                  textAlign: 'left', background: '#fff', border: '1.5px solid #eadcca', borderRadius: 12,
-                                  padding: 10, cursor: 'pointer', font: 'inherit', display: 'flex',
-                                  justifyContent: 'space-between', alignItems: 'center', gap: 8,
-                                }}>
-                                  <span style={{ minWidth: 0 }}>
-                                    <span style={{ display: 'block', fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>{p.full_name}</span>
-                                    <span style={{ display: 'block', fontSize: 11, color: '#725f50' }}>
-                                      {LUONG[luongCuaHoSo(p)]?.ten || 'Chưa gán khâu'}
-                                      {p.gioVao ? ` · ${gio(p.gioVao)}${p.gioRa ? `–${gio(p.gioRa)}` : ''}` : ''}
-                                      {p.phutMuon > 0 ? ` · trễ ${p.phutMuon}p` : ''}
-                                    </span>
+                  {/* Bộ phận -> Nhân sự — mỗi khối bấm mới mở, giống mục
+                      "Theo bộ phận" ở Tổng Quan Nhân Sự, để Giám đốc quen 1
+                      kiểu thao tác cho cả 2 màn. Đang gõ tìm kiếm thì tự mở
+                      hết các khối có người khớp, khỏi phải bấm dò từng khối. */}
+                  {!staffDayLoading && KHOI.filter((k) => nhomTheoKhoi.has(k.ma)).map((k) => {
+                    const nguoi = nhomTheoKhoi.get(k.ma)!;
+                    const mo = dangTimKiem || khoiBaoCaoMo === k.ma;
+                    return (
+                      <div key={k.ma} style={{ marginBottom: 8 }}>
+                        <button onClick={() => setKhoiBaoCaoMo(mo && !dangTimKiem ? null : k.ma)} style={{
+                          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          padding: '10px 12px', borderRadius: 12, border: '1.5px solid #eadcca',
+                          background: mo ? '#fdf2f8' : '#fff', cursor: 'pointer', font: 'inherit',
+                        }}>
+                          <span style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>{k.icon} {k.ten} ({nguoi.length})</span>
+                          <ChevronRight size={16} color="#a08060" style={{ transform: mo ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }} />
+                        </button>
+
+                        {mo && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
+                            {nguoi.map((p: any) => (
+                              <button key={p.id} onClick={() => openStaffDay(p)} style={{
+                                textAlign: 'left', background: '#fff', border: '1.5px solid #eadcca', borderRadius: 12,
+                                padding: 10, cursor: 'pointer', font: 'inherit', display: 'flex',
+                                justifyContent: 'space-between', alignItems: 'center', gap: 8,
+                              }}>
+                                <span style={{ minWidth: 0 }}>
+                                  <span style={{ display: 'block', fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>{p.full_name}</span>
+                                  <span style={{ display: 'block', fontSize: 11, color: '#725f50' }}>
+                                    {reportTab === 'today'
+                                      ? <>{p.gioVao ? `${gio(p.gioVao)}${p.gioRa ? `–${gio(p.gioRa)}` : ''}` : 'Chưa chấm công'}{p.phutMuon > 0 ? ` · trễ ${p.phutMuon}p` : ''}</>
+                                      : <>{p.soNgayCoMat} buổi có mặt{p.soNgayXinNghi ? ` · ${p.soNgayXinNghi} ngày nghỉ` : ''}{p.soLanTre ? ` · ${p.soLanTre} lần trễ` : ''}</>}
                                   </span>
-                                  <span style={{ flexShrink: 0, fontSize: 10.5, fontWeight: 900, color: tt.mau, background: tt.nen, padding: '4px 8px', borderRadius: 8 }}>
-                                    {tt.chu}
+                                </span>
+                                {reportTab === 'today' ? (
+                                  <span style={{ flexShrink: 0, fontSize: 10.5, fontWeight: 900, color: (nhanTrangThaiHomNay[p.trangThai] || nhanTrangThaiHomNay.chua_cham).mau, background: (nhanTrangThaiHomNay[p.trangThai] || nhanTrangThaiHomNay.chua_cham).nen, padding: '4px 8px', borderRadius: 8 }}>
+                                    {(nhanTrangThaiHomNay[p.trangThai] || nhanTrangThaiHomNay.chua_cham).chu}
                                   </span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        );
-                      })()}
-                    </>
-                  )}
-
-                  {reportTab !== 'staff' && !(reportTab === 'history' && reportHistoryLoading) && (
-                    <>
-                      {/* 1. Việc hoàn thành — phân luồng theo bộ phận */}
-                      <div style={{ marginBottom: 18 }}>
-                        <div style={{ fontSize: 12, fontWeight: 900, color: '#15803d', textTransform: 'uppercase', marginBottom: 8 }}>
-                          ✅ Việc hoàn thành ({tasksShown.length})
-                        </div>
-                        {tasksShown.length === 0 && (
-                          <div style={{ textAlign: 'center', padding: '12px 0', color: '#725f50', fontSize: 12.5 }}>Chưa có việc nào hoàn thành trong khoảng này.</div>
-                        )}
-                        {boPhanOrder.filter((bp) => taskGroups[bp]?.length).map((bp) => (
-                          <div key={bp} style={{ marginBottom: 12 }}>
-                            <div style={{ fontSize: 11, fontWeight: 800, color: '#a08060', marginBottom: 6 }}>{tenBoPhan(bp)} ({taskGroups[bp].length})</div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                              {taskGroups[bp].map((t: any) => (
-                                <button key={t.id} onClick={() => setSelectedReportItem({ kind: 'task', item: t })}
-                                  style={{ textAlign: 'left', width: '100%', background: '#f0fdf4', border: '1.5px solid #bbf7d0', borderRadius: 12, padding: 10, cursor: 'pointer' }}>
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                    <div style={{ minWidth: 0 }}>
-                                      <div style={{ fontSize: 12.5, fontWeight: 900, color: '#2d1c10' }}>{t.title}</div>
-                                      <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>
-                                        👤 {t.assignee?.full_name || 'Nhân viên'}{t.order_code ? ` · Đơn ${t.order_code}` : ''} · {new Date(t.completed_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                                      </div>
-                                    </div>
-                                    <ChevronRight size={16} color="#a08060" />
-                                  </div>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* 2. Báo cáo cuối ca — cũng phân luồng theo bộ phận */}
-                      <div>
-                        <div style={{ fontSize: 12, fontWeight: 900, color: '#db2777', textTransform: 'uppercase', marginBottom: 8 }}>
-                          📋 Báo cáo cuối ca ({reportsShown.length})
-                        </div>
-                        {reportsShown.length === 0 && (
-                          <div style={{ textAlign: 'center', padding: '12px 0', color: '#725f50', fontSize: 12.5 }}>Chưa có báo cáo cuối ca nào trong khoảng này.</div>
-                        )}
-                        {boPhanOrder.filter((bp) => reportGroups[bp]?.length).map((bp) => (
-                          <div key={bp} style={{ marginBottom: 12 }}>
-                            <div style={{ fontSize: 11, fontWeight: 800, color: '#a08060', marginBottom: 6 }}>{tenBoPhan(bp)} ({reportGroups[bp].length})</div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                              {reportGroups[bp].map((r: any) => (
-                                <button key={r.id} onClick={() => setSelectedReportItem({ kind: 'shift_report', item: r })}
-                                  style={{ textAlign: 'left', width: '100%', background: '#faf6f0', border: '1.5px solid #eadcca', borderRadius: 12, padding: 10, cursor: 'pointer' }}>
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                    <div style={{ minWidth: 0 }}>
-                                      <div style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>👤 {r.staff_name}</div>
-                                      <div style={{ fontSize: 11, color: '#493526', marginTop: 2 }}>
-                                        Doanh thu: <strong>{formatVND(r.revenue)}</strong> · Tiền mặt: <strong>{formatVND(r.cash_handover)}</strong>
-                                      </div>
-                                    </div>
-                                    <ChevronRight size={16} color="#a08060" />
-                                  </div>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* 3. Đơn hàng luồng order_work đã hoàn thành — phân
-                          luồng theo bộ phận, có cờ trễ hẹn (t.late) sẵn có. */}
-                      <div style={{ marginTop: 18 }}>
-                        <div style={{ fontSize: 12, fontWeight: 900, color: '#0369a1', textTransform: 'uppercase', marginBottom: 8 }}>
-                          📦 Đơn hàng hoàn thành ({orderWorkShown.length})
-                        </div>
-                        {orderWorkShown.length === 0 && (
-                          <div style={{ textAlign: 'center', padding: '12px 0', color: '#725f50', fontSize: 12.5 }}>Chưa có đơn nào hoàn thành trong khoảng này.</div>
-                        )}
-                        {boPhanOrder.filter((bp) => orderWorkGroups[bp]?.length).map((bp) => (
-                          <div key={bp} style={{ marginBottom: 12 }}>
-                            <div style={{ fontSize: 11, fontWeight: 800, color: '#a08060', marginBottom: 6 }}>{tenBoPhan(bp)} ({orderWorkGroups[bp].length})</div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                              {orderWorkGroups[bp].map((t: any) => (
-                                <button key={t.id} onClick={() => setSelectedReportItem({ kind: 'task', item: t })}
-                                  style={{ textAlign: 'left', width: '100%', background: t.late ? '#fef2f2' : '#f0f9ff', border: `1.5px solid ${t.late ? '#fecaca' : '#bae6fd'}`, borderRadius: 12, padding: 10, cursor: 'pointer' }}>
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                    <div style={{ minWidth: 0 }}>
-                                      <div style={{ fontSize: 12.5, fontWeight: 900, color: '#2d1c10' }}>{t.title}{t.late && <span style={{ color: '#dc2626' }}> · Trễ hẹn</span>}</div>
-                                      <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>
-                                        👤 {t.assignee?.full_name || 'Nhân viên'}{t.order_code ? ` · Đơn ${t.order_code}` : ''} · {new Date(t.completed_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                                      </div>
-                                    </div>
-                                    <ChevronRight size={16} color="#a08060" />
-                                  </div>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* 4. Vi phạm nội quy — chỉ đọc, không mở chi tiết. */}
-                      <div style={{ marginTop: 18 }}>
-                        <div style={{ fontSize: 12, fontWeight: 900, color: '#dc2626', textTransform: 'uppercase', marginBottom: 8 }}>
-                          ⚠️ Vi phạm nội quy ({violationsShown.length})
-                        </div>
-                        {violationsShown.length === 0 && (
-                          <div style={{ textAlign: 'center', padding: '12px 0', color: '#725f50', fontSize: 12.5 }}>Không có vi phạm nào trong khoảng này.</div>
-                        )}
-                        {boPhanOrder.filter((bp) => violationGroups[bp]?.length).map((bp) => (
-                          <div key={bp} style={{ marginBottom: 12 }}>
-                            <div style={{ fontSize: 11, fontWeight: 800, color: '#a08060', marginBottom: 6 }}>{tenBoPhan(bp)} ({violationGroups[bp].length})</div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                              {violationGroups[bp].map((v: any) => (
-                                <div key={v.id} style={{ background: '#fef2f2', border: '1.5px solid #fecaca', borderRadius: 12, padding: 10 }}>
-                                  <div style={{ fontSize: 12.5, fontWeight: 900, color: '#2d1c10' }}>👤 {v.staff_name} — {v.title}</div>
-                                  {v.note && <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>{v.note}</div>}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* 5. Checklist hàng ngày — CHỈ tab "Hôm nay" (xem lý do
-                          trong bossOverviewV3.js fetchTodayChecklistReport). */}
-                      {reportTab === 'today' && (
-                        <div style={{ marginTop: 18 }}>
-                          <div style={{ fontSize: 12, fontWeight: 900, color: '#7c3aed', textTransform: 'uppercase', marginBottom: 8 }}>
-                            ✔️ Checklist hàng ngày ({checklistToday.filter((c) => c.done).length}/{checklistToday.length})
-                          </div>
-                          {checklistToday.length === 0 && (
-                            <div style={{ textAlign: 'center', padding: '12px 0', color: '#725f50', fontSize: 12.5 }}>Chưa có checklist nào được thiết lập cho hôm nay.</div>
-                          )}
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                            {checklistToday.map((c: any) => (
-                              <div key={c.id} style={{ background: c.done ? '#f5f3ff' : '#fff', border: `1.5px solid ${c.done ? '#ddd6fe' : '#eadcca'}`, borderRadius: 12, padding: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ fontSize: 12.5, fontWeight: 700, color: '#2d1c10' }}>{c.done ? '✅' : '⬜'} {c.title}</span>
-                                {c.done && !c.confirmed && <span style={{ fontSize: 10.5, color: '#a08060' }}>Chưa xác nhận</span>}
-                              </div>
+                                ) : p.trangThai === 'khong_hoat_dong' ? (
+                                  <span style={{ flexShrink: 0, fontSize: 10.5, fontWeight: 900, color: '#dc2626', background: '#fef2f2', padding: '4px 8px', borderRadius: 8 }}>⚠️ Không hoạt động</span>
+                                ) : null}
+                              </button>
                             ))}
                           </div>
-                        </div>
-                      )}
-                    </>
-                  )}
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -2504,6 +2351,15 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
           const the = (noiDung: any, key: string, vien = '#eadcca') => (
             <div key={key} style={{ background: '#fff', border: `1.5px solid ${vien}`, borderRadius: 12, padding: 10, fontSize: 12.5, color: '#2d1c10' }}>{noiDung}</div>
           );
+          // Bản BẤM ĐƯỢC của `the` — mọi mục có nguồn dữ liệu thật để mở
+          // (đơn hàng, ảnh chứng từ...) PHẢI dùng bản này thay vì `the` tĩnh,
+          // theo đúng yêu cầu Giám đốc: không mục nào là chữ chết cả.
+          const theBam = (noiDung: any, key: string, onClick: () => void, vien = '#eadcca') => (
+            <button key={key} onClick={onClick} style={{ textAlign: 'left', width: '100%', background: '#fff', border: `1.5px solid ${vien}`, borderRadius: 12, padding: 10, fontSize: 12.5, color: '#2d1c10', cursor: 'pointer', font: 'inherit', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+              <span style={{ minWidth: 0 }}>{noiDung}</span>
+              <ChevronRight size={15} color="#a08060" style={{ flexShrink: 0, marginTop: 2 }} />
+            </button>
+          );
           return (
             <div style={{ position: 'fixed', inset: 0, zIndex: 2000, background: '#fdf9f2', overflowY: 'auto' }} onClick={() => { setStaffDayPicked(null); setStaffDayDetail(null); }}>
               <div onClick={e => e.stopPropagation()}>
@@ -2511,7 +2367,9 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
                   <button onClick={() => { setStaffDayPicked(null); setStaffDayDetail(null); }} aria-label="Quay lại" style={{ width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer', flexShrink: 0 }}>‹</button>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 1, color: '#b8692f', textTransform: 'uppercase' }}>
-                      Hồ sơ ngày {new Date(staffDayDate).toLocaleDateString('vi-VN')}
+                      {reportTab === 'history'
+                        ? `Hồ sơ ${new Date(reportHistoryFrom).toLocaleDateString('vi-VN')} – ${new Date(reportHistoryTo).toLocaleDateString('vi-VN')}`
+                        : `Hồ sơ ngày ${new Date(staffDayDate).toLocaleDateString('vi-VN')}`}
                     </div>
                     <div style={{ fontSize: 15, fontWeight: 900, color: '#2d1b10' }}>
                       {staffDayPicked.full_name}
@@ -2537,41 +2395,64 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
                         ? the('Không có bản ghi chấm công nào trong ngày.', 'cc-0', '#fecaca')
                         : (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                            {hs.chamCong.map((l: any) => the(
-                              <>
-                                <b>{l.type === 'checkin' ? '🟢 Vào ca' : l.type === 'checkout' ? '🔵 Kết thúc ca' : '🏖 Xin nghỉ'}</b>
-                                {l.checkin_time ? ` · ${gio(l.checkin_time)}` : ''}
-                                {l.late_minutes > 0 ? <span style={{ color: '#dc2626', fontWeight: 800 }}> · trễ {l.late_minutes} phút</span> : ''}
-                                {l.reason ? <div style={{ fontSize: 11.5, color: '#725f50', marginTop: 3 }}>{l.reason}</div> : null}
-                              </>, `cc-${l.id}`)) }
+                            {hs.chamCong.map((l: any) => {
+                              const noiDung = (
+                                <>
+                                  <b>{l.type === 'checkin' ? '🟢 Vào ca' : l.type === 'checkout' ? '🔵 Kết thúc ca' : '🏖 Xin nghỉ'}</b>
+                                  {l.checkin_time ? ` · ${gio(l.checkin_time)}` : ''}
+                                  {l.late_minutes > 0 ? <span style={{ color: '#dc2626', fontWeight: 800 }}> · trễ {l.late_minutes} phút</span> : ''}
+                                  {l.reason ? <div style={{ fontSize: 11.5, color: '#725f50', marginTop: 3 }}>{l.reason}</div> : null}
+                                  {l.photo_url ? <div style={{ fontSize: 11, color: '#1d4ed8', fontWeight: 800, marginTop: 3 }}>📷 Xem ảnh chấm công</div> : null}
+                                </>
+                              );
+                              return l.photo_url
+                                ? theBam(noiDung, `cc-${l.id}`, () => window.open(l.photo_url, '_blank'))
+                                : the(noiDung, `cc-${l.id}`);
+                            })}
                           </div>
                         )}
 
-                      {muc('✔️', 'Checklist', `${hs.checklist.filter((c: any) => c.xong).length}/${hs.checklist.length}`, '#7c3aed')}
-                      {hs.checklist.length === 0
-                        ? the('Khâu này chưa khai báo mục checklist nào.', 'cl-0')
-                        : (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                            {hs.checklist.map((c: any) => the(
-                              <span style={{ color: c.xong ? '#2d1c10' : '#a08060' }}>{c.xong ? '✅' : '⬜'} {c.title}</span>,
-                              `cl-${c.id}`, c.xong ? '#ddd6fe' : '#eadcca')) }
-                          </div>
-                        )}
+                      {hs.checklist.kieu === 'khoang' ? (
+                        <>
+                          {muc('✔️', 'Checklist', `${hs.checklist.luotXong}/${hs.checklist.luotApDung} lượt`, '#7c3aed')}
+                          {the(<span>Tổng {hs.checklist.luotApDung} lượt áp dụng trong khoảng, đã hoàn thành {hs.checklist.luotXong} lượt ({hs.checklist.luotApDung ? Math.round((hs.checklist.luotXong / hs.checklist.luotApDung) * 100) : 0}%).</span>, 'cl-khoang')}
+                        </>
+                      ) : (
+                        <>
+                          {muc('✔️', 'Checklist', `${hs.checklist.filter((c: any) => c.xong).length}/${hs.checklist.length}`, '#7c3aed')}
+                          {hs.checklist.length === 0
+                            ? the('Khâu này chưa khai báo mục checklist nào.', 'cl-0')
+                            : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                                {hs.checklist.map((c: any) => the(
+                                  <span style={{ color: c.xong ? '#2d1c10' : '#a08060' }}>{c.xong ? '✅' : '⬜'} {c.title}</span>,
+                                  `cl-${c.id}`, c.xong ? '#ddd6fe' : '#eadcca')) }
+                              </div>
+                            )}
+                        </>
+                      )}
 
                       {muc('📋', 'Việc đang làm', hs.viec.dangLam.length, '#b45309')}
                       {hs.viec.dangLam.length === 0
                         ? the('Không còn việc nào đang mở.', 'vd-0')
                         : (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                            {hs.viec.dangLam.map((t: any) => the(
-                              <>
-                                <b>{t.title}</b>
-                                <div style={{ fontSize: 11.5, color: '#725f50', marginTop: 3 }}>
-                                  {t.accepted_at ? `Đã nhận ${gio(t.accepted_at)}` : 'Chưa bấm nhận việc'}
-                                  {t.deadline ? ` · hạn ${new Date(t.deadline).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}` : ''}
-                                  {t.order_code ? ` · ${t.order_code}` : ''}
-                                </div>
-                              </>, `vd-${t.id}`, t.deadline && new Date(t.deadline) < new Date() ? '#fecaca' : '#eadcca')) }
+                            {hs.viec.dangLam.map((t: any) => {
+                              const noiDung = (
+                                <>
+                                  <b>{t.title}</b>
+                                  <div style={{ fontSize: 11.5, color: '#725f50', marginTop: 3 }}>
+                                    {t.accepted_at ? `Đã nhận ${gio(t.accepted_at)}` : 'Chưa bấm nhận việc'}
+                                    {t.deadline ? ` · hạn ${new Date(t.deadline).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}` : ''}
+                                    {t.order_code ? ` · ${t.order_code}` : ''}
+                                  </div>
+                                </>
+                              );
+                              const vien = t.deadline && new Date(t.deadline) < new Date() ? '#fecaca' : '#eadcca';
+                              return t.orderIdThat
+                                ? theBam(noiDung, `vd-${t.id}`, () => setSelectedOrderId(t.orderIdThat), vien)
+                                : the(noiDung, `vd-${t.id}`, vien);
+                            })}
                           </div>
                         )}
 
@@ -2580,9 +2461,12 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
                         ? the('Chưa hoàn thành việc nào trong ngày.', 'vx-0')
                         : (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                            {hs.viec.xongTrongNgay.map((t: any) => the(
-                              <><b>{t.title}</b><span style={{ color: '#725f50' }}> · xong {gio(t.completed_at)}</span></>,
-                              `vx-${t.id}`, '#bbf7d0')) }
+                            {hs.viec.xongTrongNgay.map((t: any) => {
+                              const noiDung = <><b>{t.title}</b><span style={{ color: '#725f50' }}> · xong {gio(t.completed_at)}</span></>;
+                              return t.orderIdThat
+                                ? theBam(noiDung, `vx-${t.id}`, () => setSelectedOrderId(t.orderIdThat), '#bbf7d0')
+                                : the(noiDung, `vx-${t.id}`, '#bbf7d0');
+                            })}
                           </div>
                         )}
 
@@ -2591,7 +2475,7 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
                         ? the('Không nhận đơn bếp nào.', 'db-0')
                         : (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                            {hs.donBep.map((p: any) => the(
+                            {hs.donBep.map((p: any) => theBam(
                               <>
                                 <b>{p.orders?.order_code || 'Đơn không rõ mã'}</b>
                                 <span style={{ color: '#725f50' }}> · {p.status === 'completed' ? 'đã xong' : p.status === 'in_progress' ? 'đang làm' : p.status}</span>
@@ -2600,7 +2484,7 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
                                   {p.accepted_at ? `Nhận ${gio(p.accepted_at)}` : 'Chưa bấm nhận'}
                                   {p.completed_at ? ` · xong ${gio(p.completed_at)}` : ''}
                                 </div>
-                              </>, `db-${p.id}`)) }
+                              </>, `db-${p.id}`, () => setSelectedOrderId(p.order_id))) }
                           </div>
                         )}
 
@@ -2624,14 +2508,18 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
                                   : (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
                                       {r.diemDung.map((s: any) => (
-                                        <div key={s.id} style={{ fontSize: 11.5, color: '#2d1c10', borderTop: '1px dashed #e5e7eb', paddingTop: 4 }}>
+                                        <button key={s.id} onClick={() => setSelectedOrderId(s.order_id)} disabled={!s.order_id} style={{
+                                          textAlign: 'left', width: '100%', font: 'inherit', background: 'none', border: 'none', padding: 0,
+                                          fontSize: 11.5, color: '#2d1c10', borderTop: '1px dashed #e5e7eb', paddingTop: 4,
+                                          cursor: s.order_id ? 'pointer' : 'default',
+                                        }}>
                                           <b>{s.sequence_no}. {s.orders?.order_code || 'Đơn không rõ mã'}</b>
                                           <span style={{ color: s.delivered_at ? '#15803d' : '#b45309', fontWeight: 800 }}>
                                             {' · '}{s.delivered_at ? `đã giao ${gio(s.delivered_at)}` : s.status === 'failed' ? 'giao hỏng' : 'chưa giao'}
                                           </span>
                                           {s.destination_address ? <div style={{ color: '#725f50' }}>{s.destination_address}</div> : null}
                                           {s.failure_reason ? <div style={{ color: '#dc2626' }}>Lý do: {s.failure_reason}</div> : null}
-                                        </div>
+                                        </button>
                                       ))}
                                     </div>
                                   )}
@@ -2645,12 +2533,19 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
                         ? the('Không nhập kho thành phẩm nào trong ngày.', 'sx-0')
                         : (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                            {hs.sanXuat.map((s: any) => the(
-                              <>
-                                <b>{s.product_name}</b>{s.size ? ` · size ${s.size}` : ''}
-                                <span style={{ color: '#0891b2', fontWeight: 900 }}> · {s.qty}</span>
-                                {s.price ? <span style={{ color: '#725f50' }}> · {(Number(s.qty) * Number(s.price)).toLocaleString('vi-VN')}đ</span> : null}
-                              </>, `sx-${s.id}`)) }
+                            {hs.sanXuat.map((s: any) => {
+                              const noiDung = (
+                                <>
+                                  <b>{s.product_name}</b>{s.size ? ` · size ${s.size}` : ''}
+                                  <span style={{ color: '#0891b2', fontWeight: 900 }}> · {s.qty}</span>
+                                  {s.price ? <span style={{ color: '#725f50' }}> · {(Number(s.qty) * Number(s.price)).toLocaleString('vi-VN')}đ</span> : null}
+                                  {s.photo_url ? <div style={{ fontSize: 11, color: '#1d4ed8', fontWeight: 800, marginTop: 3 }}>📷 Xem ảnh thành phẩm</div> : null}
+                                </>
+                              );
+                              return s.photo_url
+                                ? theBam(noiDung, `sx-${s.id}`, () => window.open(s.photo_url, '_blank'))
+                                : the(noiDung, `sx-${s.id}`);
+                            })}
                           </div>
                         )}
 
@@ -2674,55 +2569,6 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
             </div>
           );
         })()}
-
-        {/* Chi tiết 1 mục Báo Cáo Ngày — bấm 1 việc hoàn thành hoặc 1 báo cáo
-            cuối ca đều mở ra đây, xem đầy đủ trước khi đóng lại. */}
-        {selectedReportItem && (
-          <div style={{ position: 'fixed', inset: 0, zIndex: 2000, background: '#fdf9f2', overflowY: 'auto' }} onClick={() => setSelectedReportItem(null)}>
-            <div onClick={e => e.stopPropagation()}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 14, borderBottom: '1.5px solid #eadcca', position: 'sticky', top: 0, background: '#fdf9f2', zIndex: 1 }}>
-                <button onClick={() => setSelectedReportItem(null)} aria-label="Quay lại" style={{ width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer', flexShrink: 0 }}>‹</button>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 1, color: '#b8692f', textTransform: 'uppercase' }}>
-                    {selectedReportItem.kind === 'task' ? 'Việc hoàn thành' : 'Báo cáo cuối ca'}
-                  </div>
-                  <div style={{ fontSize: 15, fontWeight: 900, color: '#2d1b10' }}>Chi tiết</div>
-                </div>
-              </div>
-
-              <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {selectedReportItem.kind === 'task' ? (() => {
-                  const t = selectedReportItem.item;
-                  return (
-                    <>
-                      <DetailRow label="Tên việc" value={t.title} />
-                      <DetailRow label="Người làm" value={t.assignee?.full_name || 'Nhân viên'} />
-                      <DetailRow label="Bộ phận" value={tenBoPhan(boPhanCuaHoSo(t.assignee) || '_khac')} />
-                      {t.description && <DetailRow label="Mô tả" value={t.description} />}
-                      {t.order_code && <DetailRow label="Đơn liên quan" value={t.order_code} />}
-                      <DetailRow label="Tạo lúc" value={new Date(t.created_at).toLocaleString('vi-VN')} />
-                      {t.deadline && <DetailRow label="Hạn chót" value={new Date(t.deadline).toLocaleString('vi-VN')} />}
-                      <DetailRow label="Hoàn thành lúc" value={new Date(t.completed_at).toLocaleString('vi-VN')} />
-                    </>
-                  );
-                })() : (() => {
-                  const r = selectedReportItem.item;
-                  return (
-                    <>
-                      <DetailRow label="Nhân viên" value={r.staff_name} />
-                      {r.station && <DetailRow label="Bộ phận" value={r.station} />}
-                      <DetailRow label="Doanh thu ca" value={formatVND(r.revenue)} />
-                      <DetailRow label="Tiền mặt bàn giao" value={formatVND(r.cash_handover)} />
-                      {r.stock_remaining != null && <DetailRow label="Tồn kho" value={String(r.stock_remaining)} />}
-                      <DetailRow label="Nộp lúc" value={new Date(r.created_at).toLocaleString('vi-VN')} />
-                      {r.note && <DetailRow label="Ghi chú" value={r.note} />}
-                    </>
-                  );
-                })()}
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* ========================================================================= */}
         {/* ── BOTTOM SHEET: 8. LỊCH PHÂN CA LÀM VIỆC ── */}

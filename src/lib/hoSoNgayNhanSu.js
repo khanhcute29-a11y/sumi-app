@@ -1,24 +1,30 @@
 import { supabase } from './supabaseClient';
 
 // HỒ SƠ NGÀY CỦA MỘT NHÂN SỰ — trả lời đúng câu hỏi của Giám đốc:
-// "hôm nay người này làm được gì, nhận đơn nào, giao tới đâu, có trốn việc
-// không?". Trước đây Dashboard chỉ có báo cáo gom theo LOẠI việc (việc hoàn
-// thành, đơn hoàn thành…) nên không soi được theo TỪNG NGƯỜI, và nhân sự vận
-// tải thì không thấy gì cả vì chuyến giao chưa từng được đưa vào báo cáo.
+// "hôm nay/khoảng này người này làm được gì, nhận đơn nào, giao tới đâu, có
+// trốn việc không?". Trước đây Dashboard chỉ có báo cáo gom theo LOẠI việc
+// (việc hoàn thành, đơn hoàn thành…) nên không soi được theo TỪNG NGƯỜI, và
+// nhân sự vận tải thì không thấy gì cả vì chuyến giao chưa từng được đưa vào
+// báo cáo.
 //
 // ⚠️ TÁCH RIÊNG khỏi bossOverviewV3.js là CỐ Ý:
 //  • loadAll() của Dashboard đã gánh 18 truy vấn chạy ngay lúc mở màn hình.
-//    Các truy vấn ở file này chỉ chạy khi Giám đốc thật sự bấm mở tab "Theo
-//    nhân sự" (danh sách) và bấm vào một người (chi tiết) — không làm nặng
-//    thêm lần tải Dashboard.
+//    Các truy vấn ở file này chỉ chạy khi Giám đốc thật sự bấm mở sheet Báo
+//    Cáo Ngày (danh sách theo bộ phận) và bấm vào một người (chi tiết) —
+//    không làm nặng thêm lần tải Dashboard.
 //  • Mỗi nguồn dữ liệu chạy độc lập (Promise.allSettled): một bảng lỗi hoặc
 //    bị RLS chặn thì các mục còn lại VẪN hiện, thay vì trắng cả bảng.
 
-// Mốc đầu/cuối ngày theo giờ Việt Nam. Phải ghi rõ +07:00 — cột thời gian
+// Mốc đầu/cuối NGÀY theo giờ Việt Nam. Phải ghi rõ +07:00 — cột thời gian
 // trong database là timestamptz, đưa chuỗi trần "2026-09-04T00:00:00" vào là
 // Postgres hiểu thành giờ UTC, lệch 7 tiếng và cắt mất ca sáng sớm của bếp.
 function khoangNgayVN(ngay) {
   return { tu: `${ngay}T00:00:00+07:00`, den: `${ngay}T23:59:59.999+07:00` };
+}
+
+// Mốc đầu/cuối một KHOẢNG ngày (Từ ngày - Đến ngày, dùng cho tab Lịch sử).
+function khoangNhieuNgayVN(tuNgay, denNgay) {
+  return { tu: `${tuNgay}T00:00:00+07:00`, den: `${denNgay}T23:59:59.999+07:00` };
 }
 
 const layDs = (kq) => (kq.status === 'fulfilled' ? (kq.value.data || []) : []);
@@ -56,40 +62,84 @@ export async function fetchDanhSachNhanSuNgay(ngay) {
   });
 }
 
-// ── 2. Toàn bộ hoạt động trong NGÀY của MỘT người ───────────────────────────
-export async function fetchHoSoNgayNhanSu({ staffId, station, ngay }) {
-  const { tu, den } = khoangNgayVN(ngay);
+// ── 1b. Danh sách nhân sự + TÓM TẮT chấm công của cả KHOẢNG ngày (Lịch sử) ──
+export async function fetchDanhSachNhanSuKhoangNgay(tuNgay, denNgay) {
+  const [hoSoRes, logRes] = await Promise.all([
+    supabase.from('profiles').select('id, full_name, role, station, extra_roles')
+      .eq('approved', true).neq('active', false).order('full_name'),
+    supabase.from('shift_logs').select('staff_id, type, work_date, late_minutes')
+      .gte('work_date', tuNgay).lte('work_date', denNgay),
+  ]);
+  if (hoSoRes.error) throw hoSoRes.error;
+  const logs = logRes.error ? [] : (logRes.data || []);
+
+  return (hoSoRes.data || []).map((p) => {
+    const cua = logs.filter((l) => l.staff_id === p.id);
+    const ngayCoMat = new Set(cua.filter((l) => l.type === 'checkin').map((l) => l.work_date));
+    const ngayXinNghi = new Set(cua.filter((l) => l.type === 'leave_request').map((l) => l.work_date));
+    const soLanTre = cua.filter((l) => l.type === 'checkin' && (l.late_minutes || 0) > 0).length;
+    return {
+      ...p,
+      soNgayCoMat: ngayCoMat.size,
+      soNgayXinNghi: ngayXinNghi.size,
+      soLanTre,
+      trangThai: ngayCoMat.size === 0 && ngayXinNghi.size === 0 ? 'khong_hoat_dong' : 'binh_thuong',
+    };
+  });
+}
+
+// Gắn order_id thật vào từng "việc" có work_package_id (việc phát sinh từ
+// đơn hàng) — để màn chi tiết mở thẳng được đúng đơn khi bấm vào, không chỉ
+// hiện order_code dạng chữ tĩnh. Tasks không gắn work_package_id (assigned/
+// adhoc thường) thì giữ nguyên, không có gì để mở thêm.
+async function ganOrderIdChoViec(viecList) {
+  const wpIds = [...new Set(viecList.filter((t) => t.work_package_id).map((t) => t.work_package_id))];
+  if (!wpIds.length) return viecList;
+  const { data } = await supabase.from('order_work_packages').select('id, order_id').in('id', wpIds);
+  const map = new Map((data || []).map((w) => [w.id, w.order_id]));
+  return viecList.map((t) => ({ ...t, orderIdThat: t.work_package_id ? map.get(t.work_package_id) || null : null }));
+}
+
+// ── 2. Toàn bộ hoạt động trong NGÀY (hoặc KHOẢNG ngày) của MỘT người ────────
+// truyền `ngay` cho 1 ngày (tab Hôm nay), hoặc `tuNgay`+`denNgay` cho cả
+// khoảng (tab Lịch sử) — cùng 1 hàm, tránh viết trùng logic 2 lần.
+export async function fetchHoSoNgayNhanSu({ staffId, station, ngay, tuNgay, denNgay }) {
+  const { tu, den } = ngay ? khoangNgayVN(ngay) : khoangNhieuNgayVN(tuNgay, denNgay);
+  const ngayBatDauChecklist = ngay || tuNgay;
+  const ngayKetThucChecklist = ngay || denNgay;
 
   const [
     chamCongRes, mauChecklistRes, tickChecklistRes, viecRes,
     sanXuatRes, viPhamRes, chuyenGiaoRes,
   ] = await Promise.allSettled([
     supabase.from('shift_logs')
-      .select('id, type, checkin_time, late_minutes, expected_start, shift_label, reason, photo_url')
-      .eq('staff_id', staffId).eq('work_date', ngay).order('checkin_time'),
+      .select('id, type, checkin_time, work_date, late_minutes, expected_start, shift_label, reason, photo_url')
+      .eq('staff_id', staffId).gte('work_date', ngayBatDauChecklist).lte('work_date', ngayKetThucChecklist)
+      .order('checkin_time'),
 
     supabase.from('task_templates').select('id, title, station, recurrence, weekdays, day_of_month')
       .eq('active', true),
 
-    supabase.from('task_completions').select('template_id, completed_at, confirmed_at')
-      .eq('staff_id', staffId).eq('date', ngay),
+    supabase.from('task_completions').select('template_id, date, completed_at, confirmed_at')
+      .eq('staff_id', staffId).gte('date', ngayBatDauChecklist).lte('date', ngayKetThucChecklist),
 
     // Việc được giao: lấy việc CÒN MỞ (đang phải làm) + việc đã xong trong
-    // ngày. Chặn 60 ngày đổ lại để không quét cả bảng khi dữ liệu lớn dần.
+    // khoảng. Chặn 60 ngày trước mốc bắt đầu để không quét cả bảng khi dữ
+    // liệu lớn dần.
     supabase.from('tasks')
-      .select('id, title, status, category, deadline, accepted_at, completed_at, created_at, order_code')
+      .select('id, title, status, category, deadline, accepted_at, completed_at, created_at, order_code, work_package_id')
       .eq('assignee_id', staffId).is('deleted_at', null)
       .in('category', ['assigned', 'adhoc', 'order_work'])
-      .gte('created_at', new Date(new Date(`${ngay}T00:00:00+07:00`).getTime() - 60 * 86400000).toISOString())
+      .gte('created_at', new Date(new Date(`${ngayBatDauChecklist}T00:00:00+07:00`).getTime() - 60 * 86400000).toISOString())
       .order('created_at', { ascending: false }),
 
     supabase.from('finished_goods_stock_in_log')
-      .select('id, product_name, size, qty, price, photo_url, created_at')
-      .eq('staff_id', staffId).eq('work_date', ngay),
+      .select('id, product_name, size, qty, price, photo_url, created_at, work_date')
+      .eq('staff_id', staffId).gte('work_date', ngayBatDauChecklist).lte('work_date', ngayKetThucChecklist),
 
     supabase.from('staff_violations')
       .select('id, title, description, penalty_amount, so_sao, occurred_on')
-      .eq('staff_id', staffId).eq('occurred_on', ngay),
+      .eq('staff_id', staffId).gte('occurred_on', ngayBatDauChecklist).lte('occurred_on', ngayKetThucChecklist),
 
     supabase.from('delivery_runs')
       .select('id, run_code, status, started_at, completed_at, distance_km, provider_label, vehicle_type')
@@ -101,26 +151,48 @@ export async function fetchHoSoNgayNhanSu({ staffId, station, ngay }) {
   const tick = layDs(tickChecklistRes);
   const chuyenGiao = layDs(chuyenGiaoRes);
 
-  // Checklist áp cho người này: mục của ĐÚNG khâu họ đang đứng, cộng các mục
-  // dùng chung (station trống). Lọc theo lịch lặp giống hệt màn Checklist.
-  const thu = new Date(`${ngay}T12:00:00`).getDay();
-  const ngayTrongThang = Number(ngay.slice(-2));
-  const checklist = layDs(mauChecklistRes)
-    .filter((t) => !t.station || t.station === station)
-    .filter((t) => (t.recurrence === 'weekly' ? (t.weekdays || []).includes(thu)
-      : t.recurrence === 'monthly' ? Number(t.day_of_month) === ngayTrongThang
-        : true))
-    .map((t) => {
-      const c = tick.find((x) => x.template_id === t.id);
-      return { id: t.id, title: t.title, xong: !!c?.completed_at, daDuyet: !!c?.confirmed_at };
-    });
+  // Checklist: LOẠI 1 ngày (Hôm nay) — danh sách mục + đã tick hay chưa.
+  // KHOẢNG nhiều ngày (Lịch sử) — cộng tổng số LƯỢT áp dụng và số lượt đã
+  // hoàn thành trên toàn khoảng (mỗi ngày mỗi mục là 1 lượt).
+  let checklist;
+  if (ngay) {
+    const thu = new Date(`${ngay}T12:00:00`).getDay();
+    const ngayTrongThang = Number(ngay.slice(-2));
+    checklist = layDs(mauChecklistRes)
+      .filter((t) => !t.station || t.station === station)
+      .filter((t) => (t.recurrence === 'weekly' ? (t.weekdays || []).includes(thu)
+        : t.recurrence === 'monthly' ? Number(t.day_of_month) === ngayTrongThang
+          : true))
+      .map((t) => {
+        const c = tick.find((x) => x.template_id === t.id);
+        return { id: t.id, title: t.title, xong: !!c?.completed_at, daDuyet: !!c?.confirmed_at };
+      });
+  } else {
+    const mauApDung = layDs(mauChecklistRes).filter((t) => !t.station || t.station === station);
+    let luotApDung = 0;
+    let luotXong = 0;
+    for (let d = new Date(`${tuNgay}T12:00:00`); d <= new Date(`${denNgay}T12:00:00`); d.setDate(d.getDate() + 1)) {
+      const iso = d.toISOString().slice(0, 10);
+      const thu = d.getDay();
+      const ngayTrongThang = d.getDate();
+      mauApDung.forEach((t) => {
+        const apDung = t.recurrence === 'weekly' ? (t.weekdays || []).includes(thu)
+          : t.recurrence === 'monthly' ? Number(t.day_of_month) === ngayTrongThang
+            : true;
+        if (!apDung) return;
+        luotApDung += 1;
+        if (tick.some((x) => x.template_id === t.id && x.date === iso && x.completed_at)) luotXong += 1;
+      });
+    }
+    checklist = { kieu: 'khoang', luotApDung, luotXong };
+  }
 
   // Việc: chia 2 nhóm cho Giám đốc nhìn phát ra ngay ai đang ôm việc dở.
-  const trongNgay = (iso) => !!iso && iso >= tu && iso <= den;
-  const viecTatCa = layDs(viecRes);
+  const trongKhoang = (iso) => !!iso && iso >= tu && iso <= den;
+  const viecTatCa = await ganOrderIdChoViec(layDs(viecRes));
   const viec = {
     dangLam: viecTatCa.filter((t) => !['done', 'exempted'].includes(t.status)),
-    xongTrongNgay: viecTatCa.filter((t) => t.status === 'done' && trongNgay(t.completed_at)),
+    xongTrongNgay: viecTatCa.filter((t) => t.status === 'done' && trongKhoang(t.completed_at)),
   };
 
   // Điểm dừng của các chuyến giao — đây là phần Giám đốc đang thiếu hoàn
@@ -134,17 +206,18 @@ export async function fetchHoSoNgayNhanSu({ staffId, station, ngay }) {
     if (!res.error) diemDung = res.data || [];
   }
 
-  // Đơn bếp người này nhận/làm xong trong ngày. Tách riêng khỏi Promise.all ở
-  // trên vì cần .or() 3 cột người phụ trách (nhận, được giao, hoàn thành).
+  // Đơn bếp người này nhận/làm xong trong khoảng. Tách riêng khỏi
+  // Promise.all ở trên vì cần .or() 3 cột người phụ trách (nhận, được giao,
+  // hoàn thành).
   let donBep = [];
   try {
     const res = await supabase.from('order_work_packages')
-      .select('id, status, assigned_at, accepted_at, completed_at, due_at, is_collaborative, orders(order_code, order_type, required_at, status_v2)')
+      .select('id, order_id, status, assigned_at, accepted_at, completed_at, due_at, is_collaborative, orders(order_code, order_type, required_at, status_v2)')
       .or(`accepted_by.eq.${staffId},assigned_to_staff_id.eq.${staffId},completed_by_staff_id.eq.${staffId}`)
       .gte('assigned_at', new Date(new Date(tu).getTime() - 3 * 86400000).toISOString());
     if (!res.error) {
       donBep = (res.data || []).filter((p) =>
-        trongNgay(p.accepted_at) || trongNgay(p.completed_at) || trongNgay(p.assigned_at)
+        trongKhoang(p.accepted_at) || trongKhoang(p.completed_at) || trongKhoang(p.assigned_at)
         || (!p.completed_at && p.status !== 'cancelled'));
     }
   } catch { donBep = []; }
@@ -163,11 +236,12 @@ export async function fetchHoSoNgayNhanSu({ staffId, station, ngay }) {
   };
 }
 
-// Người này cả ngày KHÔNG để lại dấu vết nào — đúng thứ Giám đốc muốn soi.
+// Người này cả ngày/khoảng KHÔNG để lại dấu vết nào — đúng thứ Giám đốc muốn soi.
 export function khongCoHoatDong(hs) {
   if (!hs) return false;
+  const checklistXong = hs.checklist?.kieu === 'khoang' ? hs.checklist.luotXong > 0 : hs.checklist.some((c) => c.xong);
   return !hs.chamCong.length
     && !hs.viec.dangLam.length && !hs.viec.xongTrongNgay.length
     && !hs.donBep.length && !hs.sanXuat.length && !hs.vanTai.length
-    && !hs.checklist.some((c) => c.xong);
+    && !checklistXong;
 }
