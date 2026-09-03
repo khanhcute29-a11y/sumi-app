@@ -176,7 +176,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
     const [o, i, p, u, e, kpi, ops, att, changes, qs, ship] = await Promise.all([
       supabase.from('orders').select('id,order_code,order_type,status_v2,required_at,fulfillment_method_v2,address,note,created_by,created_by_name,created_at,confidentiality,version,ship_fee,deposit,payment_method,total,is_internal,target_store,discount_amount,promotion_note,tax_code,vat_amount,payment_verified,payment_verified_at,payment_proof_url,customers(name,phone)').eq('id', orderId).single(),
       supabase.from('order_items').select('id,name_snapshot,quantity,unit,specification,unit_price,display_order').eq('order_id', orderId).order('display_order'),
-      supabase.from('order_work_packages_readable').select('id,unit_id,status,due_at,accepted_at,completed_at,version,organization_units(name,code),work_package_items(order_item_id,quantity)').eq('order_id', orderId),
+      supabase.from('order_work_packages_readable').select('id,unit_id,status,due_at,accepted_at,completed_at,version,is_collaborative,organization_units(name,code),work_package_items(order_item_id,quantity)').eq('order_id', orderId),
       supabase.from('organization_units').select('id,name,code').eq('unit_type', 'kitchen').eq('active', true),
       supabase.from('domain_events').select('id,event_type,occurred_at,payload').eq('entity_type', 'order').eq('entity_id', orderId).order('occurred_at', { ascending: false }),
       supabase.from('kpi_logs').select('id,event_type,created_at,staff_name,staff_id,gps_latitude,gps_longitude,photo_url,notes').eq('order_id', orderId).order('created_at', { ascending: false }),
@@ -260,42 +260,21 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       });
   }, [selectedPackage?.unit_id]);
 
-  // Số lượng CÒN LẠI CHƯA PHÂN của 1 món — cộng dồn qua mọi work package chưa
-  // huỷ đã có (bếp chính + mọi bếp phối hợp trước đó). RPC assign_order_package
-  // tự chặn nếu tổng phân bổ vượt số lượng đặt (đúng, tránh sản xuất dư) —
-  // trước đây bug ở CLIENT: luôn gửi nguyên số lượng gốc của cả đơn cho MỌI
-  // bếp phối hợp mới, nên bếp chính đã nhận đủ 100% thì bếp phối hợp nào
-  // thêm sau cũng bị RPC từ chối ngay ("allocated quantity exceeds order
-  // quantity") — không phải lỗi state null/undefined như tưởng ban đầu.
-  const remainingQtyForItem = (itemId) => {
-    const item = data.items.find(x => x.id === itemId);
-    if (!item) return 0;
-    const allocated = (data.packages || [])
-      .filter(p => p.status !== 'cancelled')
-      .reduce((sum, p) => sum + (p.work_package_items || [])
-        .filter(wpi => wpi.order_item_id === itemId)
-        .reduce((s, wpi) => s + Number(wpi.quantity || 0), 0), 0);
-    return Math.max(0, Number(item.quantity || 0) - allocated);
-  };
-
+  // "Bếp phối hợp" = CÙNG LÀM chung đúng phần bếp chính đang làm (hỗ trợ/
+  // giám sát/luyện tập), KHÔNG phải chia nhỏ số lượng ra làm riêng — dùng
+  // RPC assign_order_package_collab riêng biệt, không kiểm tra tổng số
+  // lượng, không đụng orders.status_v2 (đơn đã qua "chờ nhận" từ bếp chính
+  // rồi). assign_order_package (chia bài loại trừ) vẫn giữ nguyên, dùng ở
+  // chỗ khác — không liên quan tới nút này nữa.
   const assign = async () => {
     setBusy(true); setError('');
     try {
-      const itemsToAssign = data.items
-        .map(x => ({ order_item_id: x.id, quantity: remainingQtyForItem(x.id) }))
-        .filter(x => x.quantity > 0);
-      if (itemsToAssign.length === 0) {
-        setError('Đơn này đã phân hết số lượng cho các bếp — không còn gì để thêm bếp phối hợp.');
-        setBusy(false);
-        return;
-      }
-      const {error: assignErr} = await supabase.rpc('assign_order_package',{
-        p_idempotency_key: idempotencyKey + '-assign-' + unit,
+      const {error: assignErr} = await supabase.rpc('assign_order_package_collab',{
+        p_idempotency_key: idempotencyKey + '-assign-collab-' + unit,
         p_order_id: orderId,
         p_unit_id: unit,
         p_due_at: data.order.required_at,
-        p_items: itemsToAssign,
-        p_expected_version: data.order.version
+        p_items: data.items.map(x => ({ order_item_id: x.id, quantity: x.quantity })),
       });
       if(assignErr) throw assignErr;
       setUnit('');
@@ -1428,6 +1407,11 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                     <span style={{ fontWeight: 850, fontSize: 16, color: 'var(--text-primary)' }}>
                       {p.organization_units?.name || 'Bếp sản xuất'}
                     </span>
+                    {p.is_collaborative && (
+                      <span style={{ marginLeft: 8, fontSize: 11.5, fontWeight: 800, color: '#d96b43', background: '#fde8de', borderRadius: 999, padding: '2px 9px' }}>
+                        🤝 Phối hợp
+                      </span>
+                    )}
                     <div style={{ fontSize: 13, color: isCompleted ? '#087f5b' : isInProgress ? '#b93e13' : '#725f50', marginTop: 2, fontWeight: 700 }}>
                       {isCompleted ? '✅ Đã hoàn thành mẻ bánh' : isInProgress ? '👩‍🍳 Bếp đang thực hiện' : '⏳ Chờ bếp trưởng nhận đơn'}
                     </div>
@@ -1549,18 +1533,8 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
             </summary>
             <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px dashed var(--border-subtle)' }}>
               <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 8px' }}>
-                Dùng khi đơn hàng lớn cần xưởng khác hoặc bếp khác cùng hỗ trợ làm thêm mẻ.
-                Bếp phối hợp sẽ nhận đúng phần <strong>số lượng còn chưa phân</strong> của từng món (bếp chính đã nhận bao nhiêu thì phần còn lại mới chia tiếp).
+                Mời thêm 1 bếp khác <strong>cùng làm chung</strong> đúng phần bếp chính đang thực hiện (hỗ trợ, giám sát, luyện tập) — không chia nhỏ số lượng, bếp chính vẫn tiếp tục làm bình thường. Bếp được mời sẽ có gói việc riêng để giao cho thợ bếp của họ.
               </p>
-              {data.items.map(x => {
-                const remaining = remainingQtyForItem(x.id);
-                if (remaining <= 0) return null;
-                return (
-                  <div key={x.id} style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginBottom: 4 }}>
-                    • {x.name_snapshot}: còn <strong>{remaining}</strong> {x.unit} chưa phân
-                  </div>
-                );
-              })}
               <select
                 value={unit}
                 onChange={e => setUnit(e.target.value)}
