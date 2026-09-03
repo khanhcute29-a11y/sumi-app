@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { CameraPhotoField } from './CameraPhotoField';
 
 // Module đánh giá nhanh dùng chung — Duyệt việc / Đơn hàng / Chấm công.
 // Cộng dùng cho khen thưởng nhanh, Trừ dùng cho nhắc nhở/kỷ luật nhanh —
@@ -19,6 +20,7 @@ export default function StarRateBar({ staffId, staffName, linkType, linkId, mode
   const [loai, setLoai] = useState(null); // 'cong' | 'tru'
   const [soSao, setSoSao] = useState('');
   const [ghiChu, setGhiChu] = useState('');
+  const [anhUrl, setAnhUrl] = useState('');
   const [dangGui, setDangGui] = useState(false);
   const [loi, setLoi] = useState('');
   const [xong, setXong] = useState('');
@@ -27,7 +29,9 @@ export default function StarRateBar({ staffId, staffName, linkType, linkId, mode
   const [dangSua, setDangSua] = useState(null); // id đang sửa
   const [suaSoSao, setSuaSoSao] = useState('');
   const [suaGhiChu, setSuaGhiChu] = useState('');
+  const [suaAnhUrl, setSuaAnhUrl] = useState('');
   const [dangXuLy, setDangXuLy] = useState('');
+  const [xemAnh, setXemAnh] = useState('');
 
   const taiLichSu = useCallback(async () => {
     if (!staffId) return;
@@ -57,6 +61,7 @@ export default function StarRateBar({ staffId, staffName, linkType, linkId, mode
       const { data, error } = await supabase.rpc('sumi_dieu_chinh_sao', {
         p_staff_id: staffId, p_so_sao: n, p_loai: loai,
         p_ghi_chu: ghiChu.trim() || null, p_link_type: linkType || null, p_link_id: linkId || null,
+        p_photo_url: anhUrl || null,
       });
       if (error) {
         if (/function .* does not exist|schema cache/i.test(error.message || '')) {
@@ -66,7 +71,7 @@ export default function StarRateBar({ staffId, staffName, linkType, linkId, mode
       }
       if (data && data.thanh_cong === false) throw new Error(data.thong_bao || 'Không thực hiện được.');
       setXong(data?.thong_bao || 'Đã ghi nhận.');
-      setSoSao(''); setGhiChu(''); setLoai(null);
+      setSoSao(''); setGhiChu(''); setLoai(null); setAnhUrl('');
       await taiLichSu();
       await onDone?.();
     } catch (e) {
@@ -80,6 +85,7 @@ export default function StarRateBar({ staffId, staffName, linkType, linkId, mode
     setDangSua(item.id);
     setSuaSoSao(String(item.so_sao || ''));
     setSuaGhiChu(item.note || '');
+    setSuaAnhUrl(item.photo_url || '');
   };
 
   const luuSua = async (item) => {
@@ -89,6 +95,7 @@ export default function StarRateBar({ staffId, staffName, linkType, linkId, mode
     try {
       const { data, error } = await supabase.rpc('sumi_sua_danh_gia_sao', {
         p_id: item.id, p_loai: item.loai, p_so_sao: n, p_ghi_chu: suaGhiChu.trim() || null,
+        p_photo_url: suaAnhUrl || null,
       });
       if (error) throw error;
       if (data && data.thanh_cong === false) throw new Error(data.thong_bao || 'Không sửa được.');
@@ -157,6 +164,9 @@ export default function StarRateBar({ staffId, staffName, linkType, linkId, mode
           <textarea value={ghiChu} onChange={(e) => setGhiChu(e.target.value)} rows={2}
             placeholder="Ghi chú / nhận xét…"
             style={{ width: '100%', padding: 10, borderRadius: 10, border: '1px solid #ddd', fontFamily: 'inherit', fontSize: 14, resize: 'vertical', boxSizing: 'border-box' }} />
+          <div style={{ marginTop: 8 }}>
+            <CameraPhotoField url={anhUrl} onChange={setAnhUrl} label="Ảnh chứng từ (không bắt buộc)" prefix="sao" facingMode="environment" />
+          </div>
           {loi && <div style={{ color: '#b42318', fontSize: 12.5, marginTop: 6 }}>⚠️ {loi}</div>}
           {xong && <div style={{ color: '#1e7e4c', fontSize: 12.5, marginTop: 6 }}>✅ {xong}</div>}
           <button type="button" onClick={gui} disabled={dangGui || !soSao}
@@ -193,6 +203,7 @@ export default function StarRateBar({ staffId, staffName, linkType, linkId, mode
                   style={{ minHeight: 34, padding: '0 8px', borderRadius: 8, border: '1px solid #ddd', fontFamily: 'inherit' }} />
                 <textarea value={suaGhiChu} onChange={(e) => setSuaGhiChu(e.target.value)} rows={2}
                   style={{ padding: 8, borderRadius: 8, border: '1px solid #ddd', fontFamily: 'inherit', fontSize: 12.5, resize: 'vertical' }} />
+                <CameraPhotoField url={suaAnhUrl} onChange={setSuaAnhUrl} label="Ảnh chứng từ" prefix="sao" facingMode="environment" />
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button type="button" disabled={dangXuLy === it.id} onClick={() => luuSua(it)}
                     style={{ flex: 1, minHeight: 32, border: 0, borderRadius: 8, background: '#1e7e4c', color: '#fff', fontWeight: 800, cursor: 'pointer' }}>
@@ -213,6 +224,12 @@ export default function StarRateBar({ staffId, staffName, linkType, linkId, mode
                   <span style={{ color: '#8C5A3C', whiteSpace: 'nowrap' }}>{formatNgay(it.ngay || it.created_at)}</span>
                 </div>
                 {it.note && <div style={{ color: 'var(--text-secondary, #555)' }}>{it.note}</div>}
+                {it.photo_url && (
+                  <button type="button" onClick={() => setXemAnh(it.photo_url)}
+                    style={{ alignSelf: 'flex-start', border: 'none', background: 'none', color: '#1d4ed8', fontWeight: 700, cursor: 'pointer', padding: 0, fontSize: 12 }}>
+                    📷 Xem ảnh
+                  </button>
+                )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#a08a6f' }}>
                   <span>{it.created_by_name ? `bởi ${it.created_by_name}` : ''}{it.auto_generated ? ' · Tự động' : ''}</span>
                   {!it.auto_generated && (
@@ -233,6 +250,12 @@ export default function StarRateBar({ staffId, staffName, linkType, linkId, mode
           </div>
         ))}
       </div>
+
+      {xemAnh && (
+        <div onClick={() => setXemAnh('')} style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <img src={xemAnh} alt="Ảnh chứng từ" style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 12 }} />
+        </div>
+      )}
     </div>
   );
 }

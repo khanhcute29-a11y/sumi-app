@@ -47,6 +47,7 @@ import FinishedGoodsInventoryV2 from '../../warehouse/FinishedGoodsInventoryV2';
 // dựng lại màn quản lý nhân sự khác ở đây.
 import StaffScreen from '../../../screens/StaffScreen';
 import UserAvatar from '../../UserAvatar';
+import StarRateBar from '../../StarRateBar';
 import { supabase } from '../../../lib/supabaseClient';
 import { fetchShiftLogsRange } from '../../../lib/queries';
 // Tổng giờ làm/tăng ca dùng ĐÚNG cùng công thức với màn Chấm Công (self-view)
@@ -2549,18 +2550,24 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
                           </div>
                         )}
 
-                      {hs.viPham.length > 0 && (
-                        <>
-                          {muc('⚠️', 'Vi phạm', hs.viPham.length, '#dc2626')}
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                            {hs.viPham.map((v: any) => the(
-                              <>
-                                <b>{v.title}</b>
-                                {v.penalty_amount ? <span style={{ color: '#dc2626', fontWeight: 800 }}> · phạt {Number(v.penalty_amount).toLocaleString('vi-VN')}đ</span> : null}
-                                {v.description ? <div style={{ fontSize: 11.5, color: '#725f50', marginTop: 3 }}>{v.description}</div> : null}
-                              </>, `vp-${v.id}`, '#fecaca')) }
-                          </div>
-                        </>
+                      {/* 🌱 GIEO HẠT — thay cho mục "Vi phạm" tĩnh cũ. Giám đốc
+                          Cộng/Trừ sao trực tiếp ngay tại đây, kèm ảnh chứng từ
+                          nếu có (vd ảnh vệ sinh bẩn, sản phẩm lỗi). Tái dùng
+                          NGUYÊN cơ chế sumi_dieu_chinh_sao đã tự cộng vào
+                          "Tổng thưởng/phạt" của nhân sự (employeeOverviewV4.js
+                          fetchStarSummary) — đã liên kết KPI/thu nhập cá nhân
+                          sẵn, không viết luồng tính mới. Lịch sử đầy đủ (kể cả
+                          phạt tự động do đi trễ) hiện ngay dưới form, không
+                          lọc theo linkType — xem được TOÀN BỘ đánh giá của
+                          người này, không chỉ phần gieo từ đây. */}
+                      <div style={{ fontSize: 12, fontWeight: 900, color: '#16a34a', textTransform: 'uppercase', margin: '16px 0 8px' }}>
+                        🌱 Gieo hạt
+                      </div>
+                      {staffDayPicked.id === profile?.id ? (
+                        the('Không thể tự đánh giá cho chính mình.', 'gh-minh')
+                      ) : (
+                        <StarRateBar staffId={staffDayPicked.id} staffName={staffDayPicked.full_name}
+                          onDone={() => openStaffDay(staffDayPicked)} />
                       )}
                     </>
                   )}
