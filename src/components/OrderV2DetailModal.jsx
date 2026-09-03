@@ -260,18 +260,45 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       });
   }, [selectedPackage?.unit_id]);
 
+  // Số lượng CÒN LẠI CHƯA PHÂN của 1 món — cộng dồn qua mọi work package chưa
+  // huỷ đã có (bếp chính + mọi bếp phối hợp trước đó). RPC assign_order_package
+  // tự chặn nếu tổng phân bổ vượt số lượng đặt (đúng, tránh sản xuất dư) —
+  // trước đây bug ở CLIENT: luôn gửi nguyên số lượng gốc của cả đơn cho MỌI
+  // bếp phối hợp mới, nên bếp chính đã nhận đủ 100% thì bếp phối hợp nào
+  // thêm sau cũng bị RPC từ chối ngay ("allocated quantity exceeds order
+  // quantity") — không phải lỗi state null/undefined như tưởng ban đầu.
+  const remainingQtyForItem = (itemId) => {
+    const item = data.items.find(x => x.id === itemId);
+    if (!item) return 0;
+    const allocated = (data.packages || [])
+      .filter(p => p.status !== 'cancelled')
+      .reduce((sum, p) => sum + (p.work_package_items || [])
+        .filter(wpi => wpi.order_item_id === itemId)
+        .reduce((s, wpi) => s + Number(wpi.quantity || 0), 0), 0);
+    return Math.max(0, Number(item.quantity || 0) - allocated);
+  };
+
   const assign = async () => {
     setBusy(true); setError('');
     try {
+      const itemsToAssign = data.items
+        .map(x => ({ order_item_id: x.id, quantity: remainingQtyForItem(x.id) }))
+        .filter(x => x.quantity > 0);
+      if (itemsToAssign.length === 0) {
+        setError('Đơn này đã phân hết số lượng cho các bếp — không còn gì để thêm bếp phối hợp.');
+        setBusy(false);
+        return;
+      }
       const {error: assignErr} = await supabase.rpc('assign_order_package',{
-        p_idempotency_key: idempotencyKey + '-assign',
+        p_idempotency_key: idempotencyKey + '-assign-' + unit,
         p_order_id: orderId,
         p_unit_id: unit,
         p_due_at: data.order.required_at,
-        p_items: data.items.map(x => ({ order_item_id: x.id, quantity: x.quantity })),
+        p_items: itemsToAssign,
         p_expected_version: data.order.version
       });
       if(assignErr) throw assignErr;
+      setUnit('');
       await load();
       onChanged?.();
     } catch (e) { setError(e.message); } finally { setBusy(false); }
@@ -1523,7 +1550,17 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
             <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px dashed var(--border-subtle)' }}>
               <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 8px' }}>
                 Dùng khi đơn hàng lớn cần xưởng khác hoặc bếp khác cùng hỗ trợ làm thêm mẻ.
+                Bếp phối hợp sẽ nhận đúng phần <strong>số lượng còn chưa phân</strong> của từng món (bếp chính đã nhận bao nhiêu thì phần còn lại mới chia tiếp).
               </p>
+              {data.items.map(x => {
+                const remaining = remainingQtyForItem(x.id);
+                if (remaining <= 0) return null;
+                return (
+                  <div key={x.id} style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                    • {x.name_snapshot}: còn <strong>{remaining}</strong> {x.unit} chưa phân
+                  </div>
+                );
+              })}
               <select
                 value={unit}
                 onChange={e => setUnit(e.target.value)}
