@@ -276,7 +276,15 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, danhSachCa, onSavePermissio
     try {
       // Map an toàn sang DB role và DB station để không vi phạm check constraint
       const { mappedRole, mappedStation } = resolveRoleAndStation(role, station);
-      const safeExtraRoles = [...new Set(extraRoles.map(r => resolveRoleAndStation(r, '').mappedRole))].filter(r => r !== mappedRole);
+      // KHÔNG lọc bỏ extra role trùng mappedRole với vai trò chính — nhiều vai
+      // trò bếp khác nhau ở UI (vd kitchen_lead_cold, kitchen_lead_hot) cùng
+      // map xuống 1 DB role chung (kitchen_lead) chỉ khác station. Trước đây
+      // lọc theo mappedRole nên kiêm nhiệm "Bếp Trưởng Bếp Nóng" khi vai trò
+      // chính đã là "Bếp Trưởng Bếp Lạnh" bị âm thầm xoá mất (cùng mappedRole
+      // 'kitchen_lead' dù khác station) — không cần lọc trùng-với-chính vì
+      // danh sách kiêm nhiệm đã tự loại đúng UI role hiện tại rồi (xem
+      // `ROLE_OPTIONS.filter((o) => o.value !== role)` bên dưới).
+      const safeExtraRoles = [...new Set(extraRoles.map(r => resolveRoleAndStation(r, '').mappedRole))];
 
       await onSavePermissions(s.id, {
         role: mappedRole,
