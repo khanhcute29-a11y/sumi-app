@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import './employee-overview-v4.css';
 import {
   Bell,
+  BellRing,
   Clock,
   Calendar,
   DollarSign,
@@ -21,6 +22,7 @@ import {
   Send,
 } from 'lucide-react';
 import { AuthProvider, useAuth } from '../../../lib/AuthContext';
+import { supabase } from '../../../lib/supabaseClient';
 import {
   fetchManagerName,
   fetchMyHoursThisMonth,
@@ -122,6 +124,7 @@ export function EmployeeOverviewV4Inner({ onNavigate } = {}) {
   const [rewardStars, setRewardStars] = useState(null);
   const [orders, setOrders] = useState(null);
   const [feed, setFeed] = useState(null);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [todayAtt, setTodayAtt] = useState(null);   // null = đang tải
 
   const [advanceAmount, setAdvanceAmount] = useState(500000);
@@ -150,6 +153,8 @@ export function EmployeeOverviewV4Inner({ onNavigate } = {}) {
     fetchMyRewardStarsThisMonth(profile.id).then(setRewardStars).catch(() => {});
     fetchMyOrders(profile.full_name).then(setOrders).catch((e) => setError(e.message));
     fetchCompanyFeed().then(setFeed).catch(() => {});
+    supabase.from('notifications').select('*', { count: 'exact', head: true }).is('read_at', null)
+      .then(({ count, error }) => { if (!error) setUnreadCount(count || 0); });
   }, [profile?.id]);
 
   // ── Chấm công HÔM NAY — widget trạng thái trực tiếp trên trang chủ ──────
@@ -283,7 +288,19 @@ export function EmployeeOverviewV4Inner({ onNavigate } = {}) {
           <button className="eov4-icon-btn" title="Bảng tin công ty" onClick={() => openSheet('feed')}>
             <Bell size={18} />
           </button>
-          <button className="eov4-avatar-btn" title="Hồ sơ cá nhân">{initials}</button>
+          <button className="eov4-icon-btn" title="Thông báo của tôi" style={{ position: 'relative' }} onClick={() => onNavigate?.('inbox')}>
+            <BellRing size={18} />
+            {unreadCount > 0 && (
+              <span style={{
+                position: 'absolute', top: -3, right: -3, minWidth: 16, height: 16, padding: '0 3px',
+                borderRadius: 999, background: '#dc2626', color: '#fff', fontSize: 9.5, fontWeight: 900,
+                display: 'grid', placeItems: 'center', border: '1.5px solid #fff'
+              }}>
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
+          <button className="eov4-avatar-btn" title="Hồ sơ cá nhân" onClick={() => onNavigate?.('profile')}>{initials}</button>
         </div>
       </div>
 

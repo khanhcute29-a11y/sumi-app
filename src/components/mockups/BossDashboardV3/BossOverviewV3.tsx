@@ -364,8 +364,13 @@ function stripDiacritics(text: string): string {
   return (text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, (m) => (m === 'đ' ? 'd' : 'D')).toLowerCase();
 }
 
-export function BossOverviewV3Inner() {
+export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string) => void } = {}) {
   const { profile } = useAuth();
+  const [unreadCount, setUnreadCount] = useState(0);
+  useEffect(() => {
+    supabase.from('notifications').select('*', { count: 'exact', head: true }).is('read_at', null)
+      .then(({ count, error }) => { if (!error) setUnreadCount(count || 0); });
+  }, []);
 
   // ── States Quản Lý Bottom Sheets & Bộ Lọc Đơn Hàng ──
   const [activeSheet, setActiveSheet] = useState<
@@ -1045,6 +1050,33 @@ export function BossOverviewV3Inner() {
               </h1>
             </div>
           </div>
+          <button
+            onClick={() => onNavigate?.('inbox')}
+            aria-label="Thông báo"
+            style={{
+              position: 'relative',
+              width: 40,
+              height: 40,
+              borderRadius: 12,
+              border: '1.5px solid #eadcca',
+              background: '#fff',
+              display: 'grid',
+              placeItems: 'center',
+              cursor: 'pointer',
+              flexShrink: 0
+            }}
+          >
+            <Bell size={20} color="#2d1c10" />
+            {unreadCount > 0 && (
+              <span style={{
+                position: 'absolute', top: -4, right: -4, minWidth: 18, height: 18, padding: '0 4px',
+                borderRadius: 999, background: '#dc2626', color: '#fff', fontSize: 10.5, fontWeight: 900,
+                display: 'grid', placeItems: 'center', border: '1.5px solid #fff'
+              }}>
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
         </div>
 
         {/* ── SCROLLABLE DASHBOARD BODY ── */}
