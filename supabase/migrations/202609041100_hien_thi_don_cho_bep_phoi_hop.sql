@@ -84,7 +84,6 @@ create or replace view public.order_operations_list as
         END AS order_type_label,
     items.product_names,
     kitchens.kitchen_names,
-    kitchens.kitchen_codes,
     late.was_late,
     late.late_staff_names,
     o.is_internal,
@@ -94,7 +93,8 @@ create or replace view public.order_operations_list as
     o.payment_method,
     o.payment_verified,
     o.payment_verified_at,
-    o.payment_proof_url
+    o.payment_proof_url,
+    kitchens.kitchen_codes
    FROM ((((((orders o
      LEFT JOIN customers c ON ((c.id = o.customer_id)))
      LEFT JOIN LATERAL ( SELECT min(wp.accepted_at) AS started_at,
