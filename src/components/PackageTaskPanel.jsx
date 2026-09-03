@@ -169,7 +169,7 @@ export default function PackageTaskPanel({ packageId, packageUnit, defaultDueAt,
             onClick={() => setShowAssignForm(v => !v)}
             style={{
               border: 0,
-              background: showAssignForm ? 'var(--border-default)' : 'var(--brand-primary)',
+              background: showAssignForm ? 'var(--border-default)' : 'var(--action-primary)',
               color: showAssignForm ? 'var(--text-primary)' : '#fff',
               borderRadius: 10,
               padding: '6px 14px',
@@ -253,7 +253,7 @@ export default function PackageTaskPanel({ packageId, packageUnit, defaultDueAt,
               <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
                 {!isStarted && (
                   <button
-                    style={{ ...btn, background: 'var(--brand-primary)', color: '#fff' }}
+                    style={{ ...btn, background: 'var(--action-primary)', color: '#fff' }}
                     disabled={busy}
                     onClick={() =>
                       rpc('start_task_v2', {
@@ -350,7 +350,7 @@ export default function PackageTaskPanel({ packageId, packageUnit, defaultDueAt,
               >
                 <option value="">-- Chọn người làm (hoặc Tự nhận làm) --</option>
                 {profile?.id && (
-                  <option value={profile.id} style={{ fontWeight: 800, color: 'var(--brand-primary)' }}>
+                  <option value={profile.id} style={{ fontWeight: 800, color: 'var(--action-primary)' }}>
                     🙋‍♂️ [Tôi tự làm] {profile.full_name} ({ROLE_META[profile.role]?.shortLabel || 'Bếp Trưởng'})
                   </option>
                 )}

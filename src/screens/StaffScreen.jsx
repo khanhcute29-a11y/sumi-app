@@ -126,7 +126,7 @@ function SuaQuyDinhCaPanel({ caRowsBoPhan, onSaved, onClose }) {
               </div>
               {loi && <div style={{ color: 'var(--status-danger)', fontSize: 12 }}>⚠️ {loi}</div>}
               <div style={{ display: 'flex', gap: 6 }}>
-                <button type="button" disabled={saving} onClick={luu} style={{ minHeight: 36, padding: '0 14px', borderRadius: 8, border: 'none', background: 'var(--brand-primary)', color: '#fff', fontWeight: 800, fontSize: 12.5, cursor: 'pointer' }}>
+                <button type="button" disabled={saving} onClick={luu} style={{ minHeight: 36, padding: '0 14px', borderRadius: 8, border: 'none', background: 'var(--action-primary)', color: '#fff', fontWeight: 800, fontSize: 12.5, cursor: 'pointer' }}>
                   {saving ? 'Đang lưu…' : 'Lưu'}
                 </button>
                 <button type="button" disabled={saving} onClick={() => setDangSuaId(null)} style={{ minHeight: 36, padding: '0 14px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--surface-card)', cursor: 'pointer', fontSize: 12.5 }}>
@@ -139,7 +139,7 @@ function SuaQuyDinhCaPanel({ caRowsBoPhan, onSaved, onClose }) {
               <span style={{ fontSize: 12.5 }}>
                 <strong>{row.ten_ca}</strong> — {row.gio_bat_dau?.slice(0, 5)}, {row.so_gio_chuan}h có mặt, tới sớm {row.phut_den_som_toi_thieu} phút
               </span>
-              <button type="button" onClick={() => batDauSua(row)} style={{ border: 'none', background: 'none', color: 'var(--brand-primary)', fontWeight: 700, cursor: 'pointer', fontSize: 12.5 }}>Sửa</button>
+              <button type="button" onClick={() => batDauSua(row)} style={{ border: 'none', background: 'none', color: 'var(--action-primary)', fontWeight: 700, cursor: 'pointer', fontSize: 12.5 }}>Sửa</button>
             </div>
           )}
         </div>
@@ -217,7 +217,7 @@ function GioLamRiengPanel({ hoSo, onDone }) {
         <input type="text" value={lyDo} onChange={(e) => setLyDo(e.target.value)} placeholder="Lý do (VD: đơn đặc biệt)"
           style={{ flex: 1, minWidth: 140, minHeight: 38, borderRadius: 8, border: '1px solid var(--border-default)', padding: '0 8px', fontSize: 12.5, fontFamily: 'inherit' }} />
         <button type="button" disabled={dangGui} onClick={dat}
-          style={{ minHeight: 38, padding: '0 14px', borderRadius: 8, border: 'none', background: 'var(--brand-primary)', color: '#fff', fontWeight: 800, fontSize: 12.5, cursor: 'pointer' }}>
+          style={{ minHeight: 38, padding: '0 14px', borderRadius: 8, border: 'none', background: 'var(--action-primary)', color: '#fff', fontWeight: 800, fontSize: 12.5, cursor: 'pointer' }}>
           {dangGui ? 'Đang lưu…' : '+ Đặt giờ'}
         </button>
       </div>
@@ -470,7 +470,7 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, danhSachCa, onSavePermissio
                         style={{
                           display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 10px',
                           borderRadius: 'var(--radius-pill)',
-                          border: `1px solid ${checked ? 'var(--brand-primary)' : 'var(--border-subtle)'}`,
+                          border: `1px solid ${checked ? 'var(--action-primary)' : 'var(--border-subtle)'}`,
                           background: checked ? 'var(--surface-primary-soft)' : 'var(--surface-card)',
                           font: 'var(--text-caption)', fontWeight: checked ? 700 : 500,
                           color: checked ? 'var(--primary-700)' : 'var(--text-secondary)',
@@ -501,7 +501,7 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, danhSachCa, onSavePermissio
                     padding: '0 20px',
                     borderRadius: 12,
                     border: 0,
-                    background: isDirty ? 'var(--brand-primary)' : 'var(--border-default)',
+                    background: isDirty ? 'var(--action-primary)' : 'var(--border-default)',
                     color: isDirty ? '#fff' : 'var(--text-muted)',
                     fontWeight: 900,
                     fontSize: 15,
@@ -698,7 +698,7 @@ export default function StaffScreen() {
                   <div>
                     {caEditOpenFor !== bp ? (
                       <button type="button" onClick={() => setCaEditOpenFor(bp)}
-                        style={{ border: 'none', background: 'none', color: 'var(--brand-primary)', fontWeight: 700, fontSize: 12.5, cursor: 'pointer', padding: 0 }}>
+                        style={{ border: 'none', background: 'none', color: 'var(--action-primary)', fontWeight: 700, fontSize: 12.5, cursor: 'pointer', padding: 0 }}>
                         ✏️ Sửa giờ quy định
                       </button>
                     ) : (

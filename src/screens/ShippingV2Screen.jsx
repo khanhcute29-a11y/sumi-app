@@ -117,7 +117,7 @@ export default function ShippingV2Screen() {
         {myCompletedRuns.length > 0 && (
           <div style={{ padding: '8px 14px', borderRadius: 12, background: 'var(--surface-sunken)', fontSize: 13 }}>
             <div>Đã giao: <b>{myCompletedRuns.length} chuyến</b></div>
-            <div style={{ color: 'var(--brand-primary)', fontWeight: 800 }}>Quãng đường: {myTotalKm.toFixed(1)} km</div>
+            <div style={{ color: 'var(--action-primary)', fontWeight: 800 }}>Quãng đường: {myTotalKm.toFixed(1)} km</div>
           </div>
         )}
       </div>
@@ -144,7 +144,7 @@ export default function ShippingV2Screen() {
             key={r.id}
             style={{
               padding: 16, borderRadius: 20, background: 'var(--surface-card)',
-              border: isMine ? '2px solid var(--brand-primary)' : '1px solid var(--border-default)',
+              border: isMine ? '2px solid var(--action-primary)' : '1px solid var(--border-default)',
               boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
             }}
           >
@@ -173,7 +173,7 @@ export default function ShippingV2Screen() {
               <button
                 disabled={busy}
                 onClick={() => accept(r)}
-                style={{ ...button, width: '100%', background: 'var(--brand-primary)', color: 'white', marginBottom: 8 }}
+                style={{ ...button, width: '100%', background: 'var(--action-primary)', color: 'white', marginBottom: 8 }}
               >
                 ✓ Nhận chuyến giao
               </button>
@@ -293,7 +293,7 @@ function DispatchPanel({ onCreated, setError }) {
     return (
       <button
         onClick={() => setOpen(true)}
-        style={{ ...button, width: '100%', background: 'var(--brand-primary)', color: 'white' }}
+        style={{ ...button, width: '100%', background: 'var(--action-primary)', color: 'white' }}
       >
         ＋ Điều phối chuyến giao mới
       </button>
@@ -301,7 +301,7 @@ function DispatchPanel({ onCreated, setError }) {
   }
 
   return (
-    <div style={{ padding: 16, borderRadius: 20, background: 'var(--surface-card)', border: '2px solid var(--brand-primary)', marginBottom: 8 }}>
+    <div style={{ padding: 16, borderRadius: 20, background: 'var(--surface-card)', border: '2px solid var(--action-primary)', marginBottom: 8 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3 style={{ margin: 0, fontSize: 17 }}>Điều phối chuyến giao</h3>
         <button onClick={() => setOpen(false)} style={{ border: 0, background: 'none', fontSize: 24, cursor: 'pointer' }}>
@@ -507,7 +507,7 @@ function StopCard({ stop, runActive, onViewOrder, onDone, setError }) {
 
         {items.length > 0 && (
           <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px dashed var(--border-default)' }}>
-            <strong style={{ color: 'var(--brand-primary)', fontSize: 12 }}>🎂 BÁNH CẦN GIAO:</strong>
+            <strong style={{ color: 'var(--action-primary)', fontSize: 12 }}>🎂 BÁNH CẦN GIAO:</strong>
             {items.map(it => (
               <div key={it.id} style={{ fontSize: 13, color: 'var(--text-primary)', marginTop: 2 }}>
                 • <b>{it.quantity} {it.unit || 'cái'}</b> - {it.name_snapshot}
@@ -529,7 +529,7 @@ function StopCard({ stop, runActive, onViewOrder, onDone, setError }) {
         onClick={() => onViewOrder?.(stop.order_id)}
         style={{
           width: '100%', minHeight: 38, border: '1px solid var(--border-default)', borderRadius: 10,
-          background: '#fff', color: 'var(--brand-primary)', fontWeight: 800, fontSize: 13,
+          background: '#fff', color: 'var(--action-primary)', fontWeight: 800, fontSize: 13,
           cursor: 'pointer', marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
         }}
       >
