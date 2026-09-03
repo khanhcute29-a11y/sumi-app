@@ -8,6 +8,7 @@ import { ROLE_META, ROLE_OPTIONS, ROLE_PERMISSIONS, hasRole, hasAnyRole, resolve
 import { boPhanCuaHoSo, chuanHoaCa, caCuaBoPhan, TEN_BO_PHAN } from '../lib/chamCong';
 import { fetchUpcomingShiftOverrides, setStaffShiftOverride, cancelStaffShiftOverride } from '../lib/staffShiftOverride';
 import { supabase } from '../lib/supabaseClient';
+import ResetPasswordModal from '../components/staff/ResetPasswordModal';
 
 const STATION_OPTIONS = [
   { value: '', label: 'Chưa gán khâu (Mặc định / Không thuộc bếp)' },
@@ -227,7 +228,8 @@ function GioLamRiengPanel({ hoSo, onDone }) {
   );
 }
 
-function StaffRow({ s, isOwner, isMe, canDeactivate, danhSachCa, onSavePermissions, onDeactivate, expanded, onToggle }) {
+function StaffRow({ s, isOwner, isMe, canDeactivate, canResetPassword, danhSachCa, onSavePermissions, onDeactivate, expanded, onToggle }) {
+  const [showResetPassword, setShowResetPassword] = useState(false);
   const staffMeta = getRoleMeta(s.role, s.station);
   const perm = ROLE_PERMISSIONS.find((p) => p.role === s.role);
   const initialUiRole = getUiRole(s.role, s.station);
@@ -359,6 +361,17 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, danhSachCa, onSavePermissio
         </button>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {canResetPassword && !isMe && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowResetPassword(true)}
+              title="Cấp lại mật khẩu cho nhân sự này"
+              style={{ color: 'var(--status-warning, #b8692f)', fontWeight: 600 }}
+            >
+              🔑 Cấp lại MK
+            </Button>
+          )}
           {(isOwner || canDeactivate) && (
             <Button
               variant="ghost"
@@ -372,6 +385,14 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, danhSachCa, onSavePermissio
           )}
         </div>
       </div>
+
+      {showResetPassword && (
+        <ResetPasswordModal
+          staffId={s.id}
+          staffName={s.full_name || 'nhân sự này'}
+          onClose={() => setShowResetPassword(false)}
+        />
+      )}
 
       {/* Tóm tắt hồ sơ — Vị trí / Trách nhiệm / Ngày bắt đầu / Ca quy định.
           Luôn hiện (không cần bấm mở), chỉnh sửa thì bấm "Phân quyền". */}
@@ -625,6 +646,16 @@ export default function StaffScreen() {
 
   const isOwner = hasRole(me, 'owner');
   const canDeactivate = hasAnyRole(me, ['owner', 'admin']);
+  // "Cấp lại mật khẩu" — rộng hơn canDeactivate: cho cả Bếp trưởng/Phó GĐ
+  // xưởng, nhưng CHỈ với nhân sự CÙNG station với họ (khớp đúng phạm vi
+  // la_quan_ly_cua_ho_so() dùng cho giao việc — không tự chế luật riêng ở
+  // đây, chỉ lặp lại cùng điều kiện phía client để ẩn/hiện nút cho gọn; máy
+  // chủ vẫn tự kiểm tra lại qua RPC, không tin phía client).
+  const canResetPasswordFor = (s) => {
+    if (canDeactivate) return true;
+    if (!me?.station || !s?.station || me.station !== s.station) return false;
+    return ['kitchen_lead', 'deputy_director_x41', 'deputy_director_x42'].includes(me?.role);
+  };
   const pending = staff.filter((s) => s.approved === false);
   const approved = staff.filter((s) => s.approved !== false && s.active !== false);
   const deactivated = staff.filter((s) => s.approved !== false && s.active === false);
@@ -728,6 +759,7 @@ export default function StaffScreen() {
                         isOwner={isOwner}
                         isMe={s.id === me?.id}
                         canDeactivate={canDeactivate}
+                        canResetPassword={canResetPasswordFor(s)}
                         danhSachCa={danhSachCa}
                         onSavePermissions={handleSavePermissions}
                         onDeactivate={handleDeactivate}

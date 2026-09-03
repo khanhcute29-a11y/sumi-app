@@ -1169,6 +1169,20 @@ export async function createReport({ creatorId, creatorName, creatorRole, title,
   return data;
 }
 
+// "Cấp lại mật khẩu nhanh" — không qua email, gọi Edge Function
+// admin-reset-password (giữ SERVICE_ROLE_KEY phía server, không lộ ra
+// client). Quyền ai được đổi mật khẩu của ai do chính hàm đó kiểm tra qua
+// RPC la_quan_ly_cua_ho_so — không kiểm tra lại phía client vì không đáng
+// tin (client luôn có thể bị sửa).
+export async function resetStaffPassword({ staffId, newPassword }) {
+  const { data, error } = await supabase.functions.invoke('admin-reset-password', {
+    body: { staffId, newPassword },
+  });
+  if (error) throw error;
+  if (data && data.success === false) throw new Error(data.message || 'Không cấp lại được mật khẩu.');
+  return data;
+}
+
 export async function fetchProfilesByRole(role) {
   const { data, error } = await supabase.from('profiles').select('*').eq('role', role).order('created_at', { ascending: true });
   if (error) throw error;
