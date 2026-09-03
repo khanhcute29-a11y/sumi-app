@@ -3,11 +3,12 @@ import { supabase } from '../lib/supabaseClient';
 import { listOrdersV2 } from '../lib/featureFlags';
 import { useAuth } from '../lib/AuthContext';
 import UserAvatar from '../components/UserAvatar';
-import ShiftTodayCard from '../components/ShiftTodayCard';
 import EditApprovalPanel from '../components/EditApprovalPanel';
 import { EmployeeOverviewV4Inner } from '../components/mockups/EmployeeDashboard/EmployeeOverviewV4';
 import { BossOverviewV3Inner } from '../components/mockups/BossDashboardV3/BossOverviewV3';
-import MyQuickAccess from '../components/mockups/EmployeeDashboard/MyQuickAccess';
+import TodayAttendanceWidget from '../components/mockups/EmployeeDashboard/TodayAttendanceWidget';
+import { boPhanCuaHoSo } from '../lib/chamCong';
+import { Zap, Megaphone, Calendar as IconCalendar, Package as IconPackageAdmin, Users as IconUsers } from 'lucide-react';
 
 import { ROLE_META, KITCHEN_LEAD_ROLES, getRoleMeta, formatStationLabel } from '../lib/roles';
 import { ORDER_FLOWS } from '../data/orderCatalogs';
@@ -40,7 +41,7 @@ export default function MobileHomeScreen({onNavigate}){
  // header riêng. Phó GĐ xưởng không có quyền owner/admin thật vẫn ở lại DirectorHome
  // cũ để tránh bấm vào các nút duyệt tiền/nhắc nhở mà RPC sẽ từ chối.
  if (isDirector(profile) && canViewRevenue(profile)) return <BossOverviewV3Inner onNavigate={onNavigate} />;
- return <div className="sumi-mobile-page"><header className="sumi-topbar"><div className="sumi-brand"><div className="sumi-brand-mark"><img src="/sumi-bakery-logo.png" alt="Sumi Bakery" /></div><div><div className="sumi-brand-name">SUMI BAKERY</div><div className="sumi-hello">Chào {profile?.full_name||'nhân viên'}</div></div></div><div className="sumi-top-actions"><button className="sumi-bell" onClick={()=>onNavigate('inbox')} aria-label="Thông báo">🔔{unread>0&&<b>{unread}</b>}</button><button className="sumi-avatar-button" onClick={()=>onNavigate('profile')} aria-label="Mở hồ sơ cá nhân"><UserAvatar profile={profile} size={44}/></button></div></header><main className="sumi-main"><PinnedAnnouncement onOpen={()=>onNavigate('feed')}/>{isDirector(profile)?<DirectorHome orders={orders} staff={staff} onNavigate={onNavigate} canViewRevenue={canViewRevenue(profile)} profile={profile}/>:<LeadHome orders={orders} tasks={tasks} onNavigate={onNavigate} profile={profile}/>}</main></div>;
+ return <div className="sumi-mobile-page"><header className="sumi-topbar"><div className="sumi-brand"><div className="sumi-brand-mark"><img src="/sumi-bakery-logo.png" alt="Sumi Bakery" /></div><div><div className="sumi-brand-name">SUMI BAKERY</div><div className="sumi-hello">Chào {profile?.full_name||'nhân viên'}</div></div></div><div className="sumi-top-actions"><button className="sumi-bell" onClick={()=>onNavigate('inbox')} aria-label="Thông báo">🔔{unread>0&&<b>{unread}</b>}</button><button className="sumi-avatar-button" onClick={()=>onNavigate('profile')} aria-label="Mở hồ sơ cá nhân"><UserAvatar profile={profile} size={44}/></button></div></header><main className="sumi-main"><PinnedAnnouncement onOpen={()=>onNavigate('feed')}/>{isDirector(profile)?<DirectorHome orders={orders} staff={staff} onNavigate={onNavigate} canViewRevenue={canViewRevenue(profile)}/>:<LeadHome orders={orders} tasks={tasks} onNavigate={onNavigate} profile={profile}/>}</main></div>;
 }
 function PinnedAnnouncement({onOpen}){const[row,setRow]=useState(null);useEffect(()=>{supabase.from('company_feed_posts').select('id,title,body,severity').eq('post_type','announcement').is('deleted_at',null).in('severity',['important','urgent']).order('created_at',{ascending:false}).limit(1).maybeSingle().then(r=>{if(!r.error)setRow(r.data)})},[]);return row?<button className={`sumi-pinned-announcement ${row.severity}`} onClick={onOpen}><span>📢</span><span><strong>{row.title}</strong><small>{row.body}</small></span><em>›</em></button>:null}
 function SectionHead({title,value,onClick}){return <div className="sumi-section-head"><span>{title}</span>{onClick?<button onClick={onClick}>{value}</button>:<span>{value}</span>}</div>}
@@ -115,7 +116,7 @@ function RevenueModal({period,setPeriod,customFrom,setCustomFrom,customTo,setCus
   </div>
  </div>;
 }
-function DirectorHome({orders,staff,onNavigate,canViewRevenue,profile}){
+function DirectorHome({orders,staff,onNavigate,canViewRevenue}){
  const staffWork=p=>{sessionStorage.setItem('sumi_managed_staff_id',p.id);onNavigate('tasks')};
  const [period,setPeriod]=useState('today'); const [customFrom,setCustomFrom]=useState(''); const [customTo,setCustomTo]=useState('');
  const [showRevenue,setShowRevenue]=useState(false);
@@ -127,7 +128,49 @@ function DirectorHome({orders,staff,onNavigate,canViewRevenue,profile}){
    {period==='custom'&&<div style={{display:'flex',gap:8,margin:'8px 0 4px'}}><input type="date" value={customFrom} onChange={e=>setCustomFrom(e.target.value)} style={{flex:1,minHeight:48,border:'2px solid #d7c3aa',borderRadius:14,padding:'6px 10px'}}/><input type="date" value={customTo} onChange={e=>setCustomTo(e.target.value)} style={{flex:1,minHeight:48,border:'2px solid #d7c3aa',borderRadius:14,padding:'6px 10px'}}/></div>}
    <div className="sumi-money-grid"><button className="revenue" onClick={()=>setShowRevenue(true)} style={{border:0,cursor:'pointer',textAlign:'left'}}><small>DOANH THU</small><strong>{revenueLoading?'…':fmtVnd(revenueTotal)}</strong><span>Bấm để xem theo 5 luồng ›</span></button><div className="cost"><small>CHI</small><strong>—</strong><span>Chỉ GĐ được xem</span></div></div>
   </>:<div className="sumi-money-grid"><div className="cost"><small>DOANH THU</small><strong>—</strong><span>Chỉ Giám đốc được xem</span></div><div className="cost"><small>CHI</small><strong>—</strong><span>Chỉ Giám đốc được xem</span></div></div>}
-  <MyQuickAccess profile={profile}/>
   <OrderStatusOverview orders={orders} onNavigate={onNavigate}/><SectionHead title="NHÂN VIÊN" value="Xem tất cả ›" onClick={()=>onNavigate('staff')}/><div className="sumi-staff-list">{staff.slice(0,4).map(p=><button key={p.id} onClick={()=>staffWork(p)}><span className="avatar">{KITCHEN_LEAD_ROLES.includes(p.role)?'👨‍🍳':'👤'}</span><span><strong>{p.full_name}</strong><small>{getRoleLabel(p.role)}{p.station?` · ${p.station}`:''}</small></span><em>XEM VIỆC</em></button>)}</div><div className="sumi-flow-note">Bấm nhân viên để giao việc, theo dõi tiến độ và xem báo cáo công việc của người đó.</div>{canViewRevenue&&showRevenue&&<RevenueModal period={period} setPeriod={setPeriod} customFrom={customFrom} setCustomFrom={setCustomFrom} customTo={customTo} setCustomTo={setCustomTo} byFlow={byFlow} total={revenueTotal} loading={revenueLoading} onClose={()=>setShowRevenue(false)}/>}</>}
-function LeadHome({orders,tasks,onNavigate,profile}){return <><ShiftTodayCard onNavigate={onNavigate}/><div className="sumi-workplace">👨‍🍳 Xưởng sản xuất bánh SUMI</div><div className="sumi-org-path">Giám đốc → Bếp trưởng → Bếp phó → Thợ bánh</div><section className="sumi-lead-hero"><small>CA SẢN XUẤT HÔM NAY</small><h1>{tasks.length} việc đang làm</h1><p>Nhận đơn · chia việc · duyệt hoàn thành</p></section><div className="sumi-action-grid"><button onClick={()=>onNavigate('orders')}>🧾<span>Đơn được giao cho bếp</span></button><button onClick={()=>onNavigate('tasks')}>👥<span>Giao người thực hiện</span></button><button onClick={()=>onNavigate('warehouse')}>🌾<span>Yêu cầu nguyên liệu</span></button><button onClick={()=>onNavigate('tasks')}>✅<span>Duyệt mẻ hoàn thành</span></button></div><MyQuickAccess profile={profile}/><OrderStatusOverview orders={orders} onNavigate={onNavigate}/><SectionHead title="TIẾN ĐỘ SẢN XUẤT" value={`${tasks.length} việc`}/><TaskQueue tasks={tasks}/><div className="sumi-flow-note">Bếp trưởng duyệt “Hoàn thành” thì hệ thống mới nhập kho thành phẩm. Nhân viên báo làm xong chưa tự cộng kho.</div></>}
+// Mã khâu bếp thật trên order_operations_list.kitchen_codes (từ
+// organization_units.code) — đối chiếu trực tiếp trên dữ liệu thật
+// (04/09/2026), KHÔNG đoán: bep_lanh->BAKERY_COLD, bep_nong->BAKERY_HOT,
+// xuong41->X41_KITCHEN, xuong42->X42_KITCHEN. Dùng để lọc "Tình trạng đơn
+// hàng" xuống đúng khâu Bếp trưởng/Quản lý xưởng đó phụ trách, thay vì hiện
+// đơn của toàn hệ thống như trước.
+const MA_KHAU_BEP_THEO_BO_PHAN={bep_lanh:'BAKERY_COLD',bep_nong:'BAKERY_HOT',xuong41:'X41_KITCHEN',xuong42:'X42_KITCHEN'};
+
+// 5 ô "TÔI (Quản trị & Tiện ích điều hành)" cho Bếp trưởng — cùng kiểu ô màu
+// như Giám đốc (BossOverviewV3), nhưng chỉ giữ tính năng LIÊN QUAN tới vai
+// trò Bếp trưởng: không có "Kho Thành Phẩm toàn hệ thống" hay các mục tài
+// chính chỉ Giám đốc mới xem.
+const O_DIEU_HANH_BEP_TRUONG=[
+ {ten:'Giao việc',Icon:Zap,tab:'tasks',mau:'#7c3aed',nen:'#f2ecff',phu:'Giao & duyệt việc bếp'},
+ {ten:'Bảng tin',Icon:Megaphone,tab:'feed',mau:'#0284c7',nen:'#e6f4fc',phu:'Chỉ đạo & thông báo'},
+ {ten:'Lịch làm',Icon:IconCalendar,tab:'shifts',mau:'#c2410c',nen:'#fff1e6',phu:'Ca làm của đội'},
+ {ten:'Nguyên liệu',Icon:IconPackageAdmin,tab:'warehouse',mau:'#a16207',nen:'#fdf4dd',phu:'Yêu cầu & tồn kho'},
+ {ten:'Nhân viên',Icon:IconUsers,tab:'staff',mau:'#be185d',nen:'#fdeaf2',phu:'Đội bếp của tôi'},
+];
+function LeadHome({orders,tasks,onNavigate,profile}){
+ const maKhau=MA_KHAU_BEP_THEO_BO_PHAN[boPhanCuaHoSo(profile)];
+ // Không xác định được khâu (dữ liệu thiếu station) thì hiện nguyên danh sách
+ // — thà thấy dư còn hơn dữ liệu biến mất không rõ lý do.
+ const ordersCuaKhau=maKhau?orders.filter(o=>Array.isArray(o.kitchen_codes)&&o.kitchen_codes.includes(maKhau)):orders;
+ return <>
+  <TodayAttendanceWidget profile={profile} onNavigate={onNavigate}/>
+  <div className="sumi-workplace">👨‍🍳 Xưởng sản xuất bánh SUMI</div>
+  <div className="sumi-org-path">Giám đốc → Bếp trưởng → Bếp phó → Thợ bánh</div>
+  <section className="sumi-lead-hero"><small>CA SẢN XUẤT HÔM NAY</small><h1>{tasks.length} việc đang làm</h1><p>Nhận đơn · chia việc · duyệt hoàn thành</p></section>
+  <SectionHead title="👤 TÔI (QUẢN TRỊ & TIỆN ÍCH ĐIỀU HÀNH)"/>
+  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:14}}>
+   {O_DIEU_HANH_BEP_TRUONG.map(o=>{const Icon=o.Icon;return(
+    <div key={o.ten} onClick={()=>onNavigate(o.tab)} style={{background:'#fff',border:'1.5px solid #eadcca',borderRadius:18,padding:'12px 14px',cursor:'pointer',boxShadow:'0 2px 8px rgba(0,0,0,0.03)',display:'flex',flexDirection:'column',justifyContent:'space-between',minHeight:88,boxSizing:'border-box'}}>
+     <div style={{width:38,height:38,borderRadius:12,background:o.nen,display:'flex',alignItems:'center',justifyContent:'center'}}><Icon size={21} color={o.mau} strokeWidth={1.9}/></div>
+     <div style={{marginTop:8}}><div style={{fontSize:13.5,fontWeight:800,color:'#2d1c10'}}>{o.ten}</div><div style={{fontSize:11,color:'#725f50',marginTop:1}}>{o.phu}</div></div>
+    </div>
+   )})}
+  </div>
+  <OrderStatusOverview orders={ordersCuaKhau} onNavigate={onNavigate}/>
+  <SectionHead title="TIẾN ĐỘ SẢN XUẤT" value={`${tasks.length} việc`}/>
+  <TaskQueue tasks={tasks}/>
+  <div className="sumi-flow-note">Bếp trưởng duyệt "Hoàn thành" thì hệ thống mới nhập kho thành phẩm. Nhân viên báo làm xong chưa tự cộng kho.</div>
+ </>;
+}
 function TaskQueue({tasks}){return <div className="sumi-task-queue">{tasks.map((t,i)=><button key={t.id}><b>{i+2}</b><span><strong>{t.title}</strong><small>{t.order_code?`Đơn ${t.order_code}`:'Việc trong ngày'}</small></span><em>{t.status==='in_progress'?'ĐANG LÀM':'CHỜ'}</em></button>)}</div>}

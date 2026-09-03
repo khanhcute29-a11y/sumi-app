@@ -56,10 +56,7 @@ import { gomPhien, nhanChenhLech } from '../../shifts/v2/dungChung';
 // cho 3/4 phần; Doanh thu cá nhân tính trực tiếp từ orders.created_by.
 // ============================================================
 
-// Xuất ra để MyQuickAccess.jsx (Bếp trưởng/Quản lý) dùng LẠI đúng danh sách
-// này — một nguồn duy nhất cho nhãn/màu trạng thái đơn, không tự chép tay
-// một bản khác dễ lệch nhau theo thời gian.
-export const ORDER_STATUS_META = [
+const ORDER_STATUS_META = [
   { key: 'awaiting_assignment', icon: Inbox, label: 'Đơn chờ làm' },
   { key: 'in_production', icon: ChefHat, label: 'Bếp đang làm' },
   { key: 'ready_for_fulfillment', icon: PackageCheck, label: 'Chờ vận chuyển' },
@@ -86,11 +83,7 @@ const gioVN = (iso) => iso
   ? new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' })
   : '--:--';
 
-// Xuất ra để MyQuickAccess.jsx (Bếp trưởng/Quản lý) dùng LẠI đúng khung sheet
-// này — bấm vào "Chấm công"/"Tạm ứng"/"Đơn hàng" ở màn Bếp trưởng/Quản lý phải
-// RA ĐÚNG GIAO DIỆN đang dùng cho Nhân viên (yêu cầu 04/09/2026: đồng bộ luồng
-// điều hướng), không dựng một bản trông khác đi.
-export function BottomSheet({ title, onClose, children }) {
+function BottomSheet({ title, onClose, children }) {
   return (
     <div className="eov4-overlay" onClick={onClose}>
       <div className="eov4-sheet" onClick={(e) => e.stopPropagation()}>
