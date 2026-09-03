@@ -265,11 +265,6 @@
   border-radius: 999px; background: var(--cv-danger, #d03027); color: #fff;
   font-size: 10px; font-weight: 900; display: grid; place-items: center; line-height: 1;
 }
-.cv-hero-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 16px; }
-.cv-hero-metric { background: rgba(255,255,255,0.14); border-radius: 14px; padding: 9px 8px; text-align: center; }
-.cv-hero-metric strong { display: block; font-size: 19px; font-weight: 900; line-height: 1.2; }
-.cv-hero-metric span { display: block; font-size: 10px; font-weight: 700; opacity: .85; margin-top: 2px; }
-
 .cv-quick-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
 .cv-quick-actions .cv-btn { flex: 1 1 140px; }
 
@@ -285,10 +280,6 @@
   font-weight: 800; font-size: 13px; cursor: pointer; white-space: nowrap; font-family: inherit;
 }
 .cv-pill-tab.active { background: var(--cv-surface); color: var(--cv-text); box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
-
-@media (min-width: 700px) {
-  .cv-hero-metrics { grid-template-columns: repeat(3, minmax(0,180px)); }
-}
 
 /* ── Vòng đời 6 bước — mockup task-lifecycle-v2-approved ────────────────── */
 .cv-vongdoi {

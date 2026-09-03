@@ -95,7 +95,6 @@ export default function TasksScreen() {
   const [selectedStaffId, setSelectedStaffId] = useState('');
   const [stationFilter, setStationFilter] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
-  const [metrics, setMetrics] = useState({ dangLam: 0, choDuyet: 0, xongHomNay: 0 });
 
 
   useEffect(() => {
@@ -209,11 +208,6 @@ export default function TasksScreen() {
             🔔
           </button>
         </div>
-        <div className="cv-hero-metrics">
-          <div className="cv-hero-metric"><strong>{metrics.dangLam}</strong><span>Đang làm</span></div>
-          <div className="cv-hero-metric"><strong>{metrics.choDuyet}</strong><span>Chờ duyệt</span></div>
-          <div className="cv-hero-metric"><strong>{metrics.xongHomNay}</strong><span>Xong hôm nay</span></div>
-        </div>
       </div>
 
       {/* Hàng thao tác nhanh */}
@@ -274,7 +268,7 @@ export default function TasksScreen() {
       ) : (
         <React.Fragment>
           {tab === 'assigned' && (
-            <CongViecV2 profile={profile} staffList={staffList} onMetrics={setMetrics} />
+            <CongViecV2 profile={profile} staffList={staffList} />
           )}
           {tab === 'daily' && (
             <DailyChecklistTab
