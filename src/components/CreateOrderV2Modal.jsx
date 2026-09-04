@@ -279,9 +279,27 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
       customerId = schoolCust?.id || null;
     }
   } else if(customerName||customerPhone){
-    const {data: cust} = await supabase.from('customers').select('id').match({name: customerName || null, phone: customerPhone || null}).maybeSingle();
+    // Khớp khách theo CẢ tên và SĐT (không chỉ SĐT) — chuẩn hoá hoa/thường +
+    // khoảng trắng khi so sánh, để nhận ra "chị Mỹ Linh" và "Chị Mỹ Linh" +
+    // "0364756769 " (dính khoảng trắng thừa) là cùng 1 người dù gõ hơi khác.
+    // Trước đây khớp CHÍNH XÁC từng ký tự nên chỉ cần lệch 1 chút là tạo trùng.
+    // KHÔNG khớp chỉ theo SĐT một mình — thực tế có nhiều khách khác nhau
+    // (người thật, trường học, tổ chức) dùng chung 1 số điện thoại văn phòng, vd
+    // SĐT 0941947939 vừa là "Đăng Mon" vừa là 2 trường học khác nhau — gộp theo
+    // SĐT một mình sẽ ghép nhầm những người/tổ chức không liên quan.
+    const trimmedName=(customerName||'').trim();
+    const trimmedPhone=(customerPhone||'').trim();
+    const norm=(s)=>s.trim().toLowerCase().replace(/\s+/g,' ');
+    let cust = null;
+    if(trimmedPhone){
+      const {data: samePhone} = await supabase.from('customers').select('id,name').eq('phone', trimmedPhone);
+      cust = (samePhone||[]).find(c=>norm(c.name||'')===norm(trimmedName)) || null;
+    } else if(trimmedName){
+      const {data} = await supabase.from('customers').select('id').eq('name', trimmedName).is('phone', null).maybeSingle();
+      cust = data;
+    }
     if(!cust) {
-      const {data: newCust} = await supabase.from('customers').insert({name: customerName || null, phone: customerPhone || null, created_by: user?.id}).select('id').single();
+      const {data: newCust} = await supabase.from('customers').insert({name: trimmedName || null, phone: trimmedPhone || null, created_by: user?.id}).select('id').single();
       customerId = newCust?.id || null;
     } else {
       customerId = cust?.id || null;

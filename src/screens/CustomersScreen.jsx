@@ -20,7 +20,7 @@ function CustomerDetailModal({ customer, orders, onClose }) {
             <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
               {customer.name}{customer.vip && <Badge tone="primary" icon={<IconStar size={13} />}>VIP</Badge>}
             </div>
-            <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>{customer.phone || '—'} · {customer.channel || '—'}</div>
+            <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>{customer.phone ? `SĐT: ${customer.phone}` : '—'}{customer.channel ? ` · ${customer.channel}` : ''}</div>
           </div>
           <button onClick={onClose} style={{ border: 'none', background: 'none', color: 'var(--text-muted)', fontSize: 18, cursor: 'pointer' }}>✕</button>
         </div>
@@ -61,24 +61,21 @@ function CustomerDetailModal({ customer, orders, onClose }) {
 
 function CustomerRow({ c, onOpen }) {
   return (
-    <Card style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', cursor: 'pointer' }} padding={14} onClick={() => onOpen(c)}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 180 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>{c.name}</span>
+    <Card style={{ display: 'flex', flexDirection: 'column', gap: 6, cursor: 'pointer' }} padding={14} onClick={() => onOpen(c)}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          <span style={{ font: 'var(--text-label)', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
           {c.vip && <Badge tone="primary" icon={<IconStar size={13} />}>VIP</Badge>}
         </div>
-        <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>{c.phone || '—'} · {c.channel || '—'}</div>
+        <TrustScoreBadge score={c.trust_score} locked={c.locked} noData={c.orderCount === 0} style={{ flexShrink: 0, whiteSpace: 'nowrap' }} />
       </div>
-      <div style={{ display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>{c.orderCount} đơn</div>
-          <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>{c.lastOrder ? `Lần cuối ${c.lastOrder}` : 'Chưa có đơn'}</div>
-        </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ font: 'var(--text-label)', color: 'var(--text-primary)' }}>{c.spent.toLocaleString('vi-VN')}đ</div>
-          <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)' }}>Tổng chi tiêu</div>
-        </div>
-        <TrustScoreBadge score={c.trust_score} locked={c.locked} noData={c.orderCount === 0} />
+      <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>{c.phone ? `SĐT: ${c.phone}` : '—'}{c.channel ? ` · ${c.channel}` : ''}</div>
+      <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        <span>{c.orderCount} đơn</span>
+        <span>·</span>
+        <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{c.spent.toLocaleString('vi-VN')}đ</span>
+        <span>·</span>
+        <span>{c.lastOrder ? `Lần cuối ${c.lastOrder}` : 'Chưa có đơn'}</span>
       </div>
     </Card>
   );
@@ -100,9 +97,13 @@ export default function CustomersScreen() {
         const merged = customerRows.map((c) => {
           const own = orderRows.filter((o) => o.customer_id === c.id);
           const spent = own.reduce((s, o) => s + Number(o.total || 0), 0);
-          const lastOrder = own[0] ? new Date(own[0].created_at).toLocaleDateString('vi-VN') : null;
-          return { ...c, orderCount: own.length, spent, lastOrder };
+          const lastOrderDate = own[0]?.created_at || null;
+          const lastOrder = lastOrderDate ? new Date(lastOrderDate).toLocaleDateString('vi-VN') : null;
+          return { ...c, orderCount: own.length, spent, lastOrder, lastOrderDate };
         });
+        // Mới nhất lên trên — ưu tiên ngày mua gần nhất, khách chưa có đơn nào thì
+        // xếp theo ngày tạo hồ sơ (vẫn cùng nguyên tắc "mới nhất trước").
+        merged.sort((a, b) => new Date(b.lastOrderDate || b.created_at) - new Date(a.lastOrderDate || a.created_at));
         setCustomers(merged);
         setOrders(orderRows);
         setError('');
