@@ -73,11 +73,23 @@ function nemLoi(data, error, macDinh) {
   return data;
 }
 
-export async function nhapMacaron({ ma, soCap, ghiChu }) {
+export async function nhapMacaron({ ma, soCap, ghiChu, ngaySx, hanSuDung }) {
   const { data, error } = await supabase.rpc('sumi_macaron_nhap', {
     p_ma: ma, p_so_cap: soCap, p_ghi_chu: ghiChu || null,
+    p_ngay_sx: ngaySx || null, p_han_su_dung: hanSuDung || null,
   });
   return nemLoi(data, error, 'Không nhập kho được.');
+}
+
+/** Sửa 1 dòng "Nhập kho" đã ghi sai (số cặp/Ngày SX/HSD) — chỉ Quản lý Xưởng
+ * 41/Giám đốc (chặn ở RPC la_quan_ly_cua_khau). Tồn kho hiện hành tự cộng/
+ * trừ đúng phần chênh lệch, xem migration 202609043000. */
+export async function suaLoNhapMacaron({ logId, soCapMoi, ngaySx, hanSuDung, ghiChu }) {
+  const { data, error } = await supabase.rpc('sumi_macaron_sua_lo_nhap', {
+    p_log_id: logId, p_so_cap_moi: soCapMoi,
+    p_ngay_sx: ngaySx || null, p_han_su_dung: hanSuDung || null, p_ghi_chu: ghiChu || null,
+  });
+  return nemLoi(data, error, 'Không sửa được dòng nhập kho.');
 }
 
 export async function xuatMacaron({ ma, soCap, orderCode, ghiChu }) {

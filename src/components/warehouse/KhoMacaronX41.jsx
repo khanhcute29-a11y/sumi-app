@@ -4,7 +4,7 @@ import { hasAnyRole } from '../../lib/roles';
 import {
   CAP_MOI_KHAY, BANH_DON_MOI_CAP, chuKhay, goiYChiaDeu,
   fetchTonMacaron, fetchSoGiaoDichMacaron,
-  nhapMacaron, tronMacaron, kiemKeMacaron,
+  nhapMacaron, tronMacaron, kiemKeMacaron, suaLoNhapMacaron,
 } from '../../lib/khoMacaron';
 
 // KHO MACARON — XƯỞNG 41.
@@ -115,16 +115,19 @@ function TabTonKho({ mauDon, cacMix, tongCapMauDon, onXong, onLoi }) {
   const [soKhay, setSoKhay] = useState('');
   const [soCapLe, setSoCapLe] = useState('');
   const [ghiChu, setGhiChu] = useState('');
+  const [ngaySx, setNgaySx] = useState('');
+  const [hanSuDung, setHanSuDung] = useState('');
   const [luu, setLuu] = useState(false);
 
-  const moNhap = (ma) => { setDangNhap(ma); setSoKhay(''); setSoCapLe(''); setGhiChu(''); };
+  const moNhap = (ma) => { setDangNhap(ma); setSoKhay(''); setSoCapLe(''); setGhiChu(''); setNgaySx(''); setHanSuDung(''); };
 
   const nhap = async () => {
     const tong = (Number(soKhay) || 0) * CAP_MOI_KHAY + (Number(soCapLe) || 0);
     if (tong <= 0) { onLoi('Nhập số khay hoặc số cặp lớn hơn 0.'); return; }
+    if (hanSuDung && ngaySx && hanSuDung < ngaySx) { onLoi('Hạn sử dụng không được sớm hơn Ngày sản xuất.'); return; }
     setLuu(true); onLoi('');
     try {
-      const kq = await nhapMacaron({ ma: dangNhap, soCap: tong, ghiChu });
+      const kq = await nhapMacaron({ ma: dangNhap, soCap: tong, ghiChu, ngaySx: ngaySx || null, hanSuDung: hanSuDung || null });
       setDangNhap(null);
       onXong(kq?.thong_bao || 'Đã nhập kho.');
     } catch (e) { onLoi(e?.message || 'Không nhập kho được.'); }
@@ -149,6 +152,21 @@ function TabTonKho({ mauDon, cacMix, tongCapMauDon, onXong, onLoi }) {
             <input style={{ ...o.o, minHeight: 40 }} inputMode="numeric" placeholder="Khay" value={soKhay} onChange={(e) => setSoKhay(e.target.value)} />
             <input style={{ ...o.o, minHeight: 40 }} inputMode="numeric" placeholder="Cặp lẻ" value={soCapLe} onChange={(e) => setSoCapLe(e.target.value)} />
           </div>
+          {/* Ngày SX/HSD — bắt buộc bổ sung cho macaron MÀU ĐƠN (yêu cầu
+              04/09/2026), không bắt với khay mix trộn sẵn (không có lô SX
+              riêng, đã ghép từ nhiều màu/nhiều mẻ khác nhau). */}
+          {t.loai === 'mau_don' && (
+            <div style={{ display: 'flex', gap: 6 }}>
+              <label style={{ flex: 1 }}>
+                <span style={{ ...o.nhan, marginBottom: 2 }}>Ngày SX</span>
+                <input type="date" style={{ ...o.o, minHeight: 40, fontSize: 12.5, padding: '0 6px' }} value={ngaySx} onChange={(e) => setNgaySx(e.target.value)} />
+              </label>
+              <label style={{ flex: 1 }}>
+                <span style={{ ...o.nhan, marginBottom: 2 }}>Hạn SD</span>
+                <input type="date" style={{ ...o.o, minHeight: 40, fontSize: 12.5, padding: '0 6px' }} value={hanSuDung} onChange={(e) => setHanSuDung(e.target.value)} />
+              </label>
+            </div>
+          )}
           <input style={{ ...o.o, minHeight: 40 }} placeholder="Ghi chú (không bắt buộc)" value={ghiChu} onChange={(e) => setGhiChu(e.target.value)} />
           <div style={{ display: 'flex', gap: 6 }}>
             <button disabled={luu} onClick={nhap} style={{ ...o.nut, minHeight: 40, fontSize: 13 }}>{luu ? 'Đang lưu…' : '✓ Nhập'}</button>
@@ -342,10 +360,44 @@ function TabKiemKe({ ton, laQuanLy, onXong, onLoi }) {
   const [luu, setLuu] = useState('');
   const [lichSu, setLichSu] = useState([]);
 
+  // Sửa 1 dòng "Nhập kho" đã ghi sai — chỉ Quản lý Xưởng 41/Giám đốc, xem
+  // RPC sumi_macaron_sua_lo_nhap (migration 202609043000).
+  const [dangSua, setDangSua] = useState(null); // id dòng log đang mở form sửa
+  const [suaSoCap, setSuaSoCap] = useState('');
+  const [suaNgaySx, setSuaNgaySx] = useState('');
+  const [suaHanSuDung, setSuaHanSuDung] = useState('');
+  const [suaGhiChu, setSuaGhiChu] = useState('');
+  const [dangLuuSua, setDangLuuSua] = useState(false);
+
   const taiLichSu = useCallback(async () => {
     try { setLichSu(await fetchSoGiaoDichMacaron({ limit: 30 })); } catch { setLichSu([]); }
   }, []);
   useEffect(() => { taiLichSu(); }, [taiLichSu]);
+
+  const moSua = (l) => {
+    setDangSua(l.id);
+    setSuaSoCap(String(l.so_cap_thay_doi ?? ''));
+    setSuaNgaySx(l.ngay_sx || '');
+    setSuaHanSuDung(l.han_su_dung || '');
+    setSuaGhiChu('');
+  };
+
+  const luuSua = async (l) => {
+    const soCapMoi = Number(suaSoCap);
+    if (!suaSoCap || Number.isNaN(soCapMoi) || soCapMoi <= 0) { onLoi('Số cặp phải lớn hơn 0.'); return; }
+    if (suaNgaySx && suaHanSuDung && suaHanSuDung < suaNgaySx) { onLoi('Hạn sử dụng không được sớm hơn Ngày sản xuất.'); return; }
+    if (!suaGhiChu.trim()) { onLoi('Bắt buộc ghi lý do sửa.'); return; }
+    setDangLuuSua(true); onLoi('');
+    try {
+      const kq = await suaLoNhapMacaron({
+        logId: l.id, soCapMoi, ngaySx: suaNgaySx || null, hanSuDung: suaHanSuDung || null, ghiChu: suaGhiChu.trim(),
+      });
+      setDangSua(null);
+      onXong(kq?.thong_bao || 'Đã sửa dòng nhập kho.');
+      taiLichSu();
+    } catch (e) { onLoi(e?.message || 'Không sửa được dòng nhập kho.'); }
+    finally { setDangLuuSua(false); }
+  };
 
   const luuMot = async (t) => {
     const thucTe = Number(dem[t.ma]);
@@ -417,24 +469,72 @@ function TabKiemKe({ ton, laQuanLy, onXong, onLoi }) {
       )}
 
       <div style={{ ...o.the }}>
-        <b style={{ fontSize: 13 }}>Sổ giao dịch gần đây</b>
+        <b style={{ fontSize: 13 }}>📋 Tổng kho chi tiết — Sổ giao dịch gần đây</b>
+        <div style={{ fontSize: 11, color: '#9a7f68', margin: '2px 0 8px' }}>
+          Mỗi lượt nhập ghi rõ người nhập, Ngày SX/HSD (macaron màu đơn). Quản lý bấm "✏️ Sửa" để chỉnh lại dòng nhập ghi sai — tồn kho tự cập nhật theo.
+        </div>
         {lichSu.length === 0 && <div style={{ fontSize: 12.5, color: '#806a58', marginTop: 8 }}>Chưa có giao dịch nào.</div>}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
           {lichSu.map((l) => (
             <div key={l.id} style={{ borderTop: '1px dashed #eadcca', paddingTop: 6, fontSize: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                <span><b>{TEN_GD[l.loai_gd] || l.loai_gd}</b> · {l.ma}</span>
+                <span><b>{TEN_GD[l.loai_gd] || l.loai_gd}</b> · {l.ma}{l.da_sua && <span style={{ color: '#b7431e', fontWeight: 900 }}> · đã sửa</span>}</span>
                 <b style={{ color: Number(l.so_cap_thay_doi) >= 0 ? '#078653' : '#d94a40', whiteSpace: 'nowrap' }}>
                   {Number(l.so_cap_thay_doi) > 0 ? '+' : ''}{l.so_cap_thay_doi} cặp
                 </b>
               </div>
               <div style={{ color: '#9a7f68', fontSize: 11 }}>
                 {l.so_cap_truoc} → {l.so_cap_sau} cặp
-                {l.staff_name ? ` · ${l.staff_name}` : ''}
+                {/* Người nhập — bắt buộc phải thấy được ai đã nhập lô này (yêu cầu 04/09/2026) */}
+                {l.staff_name ? ` · 👤 ${l.staff_name}` : ''}
                 {l.order_code ? ` · ${l.order_code}` : ''}
                 {' · '}{new Date(l.created_at).toLocaleString('vi-VN')}
               </div>
+              {(l.ngay_sx || l.han_su_dung) && (
+                <div style={{ color: '#0284c7', fontSize: 11, fontWeight: 700 }}>
+                  {l.ngay_sx ? `SX ${new Date(l.ngay_sx).toLocaleDateString('vi-VN')}` : ''}
+                  {l.ngay_sx && l.han_su_dung ? ' · ' : ''}
+                  {l.han_su_dung ? `HSD ${new Date(l.han_su_dung).toLocaleDateString('vi-VN')}` : ''}
+                </div>
+              )}
               {l.ghi_chu && <div style={{ color: '#806a58', fontSize: 11 }}>{l.ghi_chu}</div>}
+              {l.da_sua && l.sua_boi_ten && (
+                <div style={{ color: '#b7431e', fontSize: 10.5 }}>
+                  Số cặp gốc trước sửa: {l.so_cap_thay_doi_goc} · sửa bởi {l.sua_boi_ten} lúc {new Date(l.sua_luc).toLocaleString('vi-VN')}
+                </div>
+              )}
+
+              {laQuanLy && l.loai_gd === 'nhap' && (
+                dangSua === l.id ? (
+                  <div style={{ marginTop: 6, padding: 8, background: '#fff7ec', borderRadius: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <label style={{ flex: 1 }}>
+                        <span style={{ ...o.nhan, marginBottom: 2 }}>Số cặp</span>
+                        <input style={{ ...o.o, minHeight: 38, fontSize: 12.5 }} inputMode="numeric" value={suaSoCap} onChange={(e) => setSuaSoCap(e.target.value)} />
+                      </label>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <label style={{ flex: 1 }}>
+                        <span style={{ ...o.nhan, marginBottom: 2 }}>Ngày SX</span>
+                        <input type="date" style={{ ...o.o, minHeight: 38, fontSize: 12.5, padding: '0 6px' }} value={suaNgaySx} onChange={(e) => setSuaNgaySx(e.target.value)} />
+                      </label>
+                      <label style={{ flex: 1 }}>
+                        <span style={{ ...o.nhan, marginBottom: 2 }}>Hạn SD</span>
+                        <input type="date" style={{ ...o.o, minHeight: 38, fontSize: 12.5, padding: '0 6px' }} value={suaHanSuDung} onChange={(e) => setSuaHanSuDung(e.target.value)} />
+                      </label>
+                    </div>
+                    <input style={{ ...o.o, minHeight: 38, fontSize: 12.5 }} placeholder="Lý do sửa *" value={suaGhiChu} onChange={(e) => setSuaGhiChu(e.target.value)} />
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button disabled={dangLuuSua} onClick={() => luuSua(l)} style={{ ...o.nut, minHeight: 36, fontSize: 12.5 }}>{dangLuuSua ? 'Đang lưu…' : '✓ Lưu sửa'}</button>
+                      <button disabled={dangLuuSua} onClick={() => setDangSua(null)} style={{ ...o.nut, minHeight: 36, fontSize: 12.5, background: '#fff', color: '#806a58', border: '1px solid #e2cdb6' }}>Huỷ</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={() => moSua(l)} style={{ marginTop: 6, border: 0, background: 'none', color: '#b7431e', fontWeight: 800, fontSize: 11.5, cursor: 'pointer', padding: 0 }}>
+                    ✏️ Sửa dòng nhập này
+                  </button>
+                )
+              )}
             </div>
           ))}
         </div>
