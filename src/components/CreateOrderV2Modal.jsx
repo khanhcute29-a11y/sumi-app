@@ -149,10 +149,15 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
  const [entryMode,setEntryMode]=useState('manual'); const [cakeLine,setCakeLine]=useState('decorated_cake');
  const [hasShipFee,setHasShipFee]=useState('no'); const [shipFee,setShipFee]=useState('');
  const [paymentMethod,setPaymentMethod]=useState('cod'); const [deposit,setDeposit]=useState('');
- // Chiết khấu/khuyến mãi/mã số thuế/VAT — CHỈ áp dụng cho đơn Macaron (theo
- // yêu cầu Nga Rubi 30/08/2026). Không đụng tới cơ chế Công Nợ Khách Hàng của
- // đơn trường học (VAT ở đó tính SAU lúc giao hàng, ghi sổ riêng) — đây là
- // VAT/chiết khấu cộng/trừ thẳng vào tổng đơn Macaron ngay lúc tạo.
+ // Chiết khấu/khuyến mãi/mã số thuế/VAT — áp dụng cho Bánh kem, Bánh mặn/ngọt,
+ // Teabreak, Macaron (ban đầu chỉ Macaron theo yêu cầu Nga Rubi 30/08/2026, mở
+ // rộng thêm 3 luồng còn lại theo yêu cầu chủ shop). KHÔNG áp dụng cho đơn
+ // trường học — trường học dùng cơ chế Công Nợ Khách Hàng riêng (VAT tính SAU
+ // lúc giao hàng, ghi sổ riêng), không phải VAT/chiết khấu cộng/trừ thẳng vào
+ // tổng đơn ngay lúc tạo như ở đây. type không bao giờ là 'mixed' cục bộ (luôn
+ // là flow đầu tiên được chọn: cake/bakery/teabreak/macaron), và trường học
+ // không bao giờ gộp được với nhóm khác (xem addFlow), nên chỉ cần loại trừ
+ // đúng 'school' là đủ, không cần liệt kê danh sách flow được phép.
  const [discountAmount,setDiscountAmount]=useState(''); const [promotionNote,setPromotionNote]=useState('');
  const [taxCode,setTaxCode]=useState(''); const [vatEnabled,setVatEnabled]=useState(false);
  const [productCatalog,setProductCatalog]=useState([]);
@@ -186,12 +191,12 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
  const getItemTotal=(item)=>(getPrice(item)||0)*(Number(item.quantity)||0);
  const getTotalPrice=()=>items.reduce((sum,item)=>sum+getItemTotal(item),0);
  const effectiveShipFee=hasShipFee==='yes'?(Number(shipFee)||0):0;
- // Chiết khấu/VAT chỉ có giá trị khi type==='macaron' (field chỉ hiện khi đó),
- // nên với mọi loại đơn khác discountAmount/vatEnabled luôn ở giá trị mặc
- // định (''/false) và công thức dưới đây tự nhiên giống hệt công thức cũ.
- const discountVal=type==='macaron'?(Number(discountAmount)||0):0;
+ // Chiết khấu/VAT chỉ có giá trị khi type!=='school' (field chỉ hiện khi đó),
+ // nên với đơn trường học discountAmount/vatEnabled luôn ở giá trị mặc định
+ // (''/false) và công thức dưới đây tự nhiên giống hệt công thức cũ.
+ const discountVal=type!=='school'?(Number(discountAmount)||0):0;
  const subtotalAfterDiscount=getTotalPrice()+effectiveShipFee-discountVal;
- const vatAmount=(type==='macaron'&&vatEnabled)?Math.round(subtotalAfterDiscount*0.08):0;
+ const vatAmount=(type!=='school'&&vatEnabled)?Math.round(subtotalAfterDiscount*0.08):0;
  const grandTotal=subtotalAfterDiscount+vatAmount;
  const remaining=grandTotal-(Number(deposit)||0);
  const blankItem=(key)=>({id:crypto.randomUUID(),flow_type:key,name:'',quantity:1,unit:'cái',specification:{product_flow:key,...(key==='cake'?{cake_line:cakeLine}:{})}});
@@ -304,7 +309,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
     }
   }
 
-  const {data: orderId, error: orderErr} = await supabase.rpc('create_order_v2',{p_idempotency_key:key,p_order_code:orderCode,p_order_type:isMixed?'mixed':type,p_customer_id:customerId,p_required_at:requiredAt?new Date(requiredAt).toISOString():null,p_fulfillment_method:fulfillment,p_address:fulfillment==='delivery'?address:null,p_note:customerNote||null,p_confidentiality:type==='school'?'school_restricted':'normal',p_items:normalizedItems,p_ship_fee:effectiveShipFee,p_deposit:Number(deposit)||0,p_payment_method:paymentMethod,p_total:grandTotal,p_discount_amount:discountVal,p_promotion_note:type==='macaron'?(promotionNote||null):null,p_tax_code:type==='macaron'?(taxCode||null):null,p_vat_amount:vatAmount});
+  const {data: orderId, error: orderErr} = await supabase.rpc('create_order_v2',{p_idempotency_key:key,p_order_code:orderCode,p_order_type:isMixed?'mixed':type,p_customer_id:customerId,p_required_at:requiredAt?new Date(requiredAt).toISOString():null,p_fulfillment_method:fulfillment,p_address:fulfillment==='delivery'?address:null,p_note:customerNote||null,p_confidentiality:type==='school'?'school_restricted':'normal',p_items:normalizedItems,p_ship_fee:effectiveShipFee,p_deposit:Number(deposit)||0,p_payment_method:paymentMethod,p_total:grandTotal,p_discount_amount:discountVal,p_promotion_note:type!=='school'?(promotionNote||null):null,p_tax_code:type!=='school'?(taxCode||null):null,p_vat_amount:vatAmount});
   if(orderErr) throw orderErr;
   for(const file of photos){
     try {
@@ -551,7 +556,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
        )}
      </div>
    )}
-   {type==='macaron'&&<section style={{marginTop:14,padding:'12px 14px',borderRadius:14,background:'#fff',border:'1px solid var(--border-default)'}}>
+   {type!=='school'&&<section style={{marginTop:14,padding:'12px 14px',borderRadius:14,background:'#fff',border:'1px solid var(--border-default)'}}>
      <div style={{fontSize:13,fontWeight:900,color:'#2d1c10',marginBottom:8}}>🏷️ Chiết khấu / Khuyến mãi / Xuất hoá đơn</div>
      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
       <input style={fieldStyle} inputMode="numeric" placeholder="Chiết khấu (VNĐ, VD: 50.000)" value={fmtMoney(discountAmount)} onChange={e=>setDiscountAmount(parseMoney(e.target.value)||'')}/>
@@ -573,7 +578,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
    </div>
    <div style={{flex:isMobile?'1 1 auto':'1 1 320px',minWidth:0,width:isMobile?'100%':undefined}}>
     <div style={{position:isMobile?'static':'sticky',top:12}}>
-     <OrderPreviewV2 type={type} customerName={type==='school'?selectedSchool?.name:customerName} customerPhone={customerPhone} selectedSchool={selectedSchool} items={items} guestCount={guestCount} fulfillment={fulfillment} address={address} requiredAt={requiredAt} note={note} itemsTotal={getTotalPrice()} shipFee={effectiveShipFee} paymentMethod={paymentMethod} deposit={Number(deposit)||0} grandTotal={grandTotal} remaining={remaining} discountAmount={discountVal} promotionNote={type==='macaron'?promotionNote:''} taxCode={type==='macaron'?taxCode:''} vatAmount={vatAmount}/>
+     <OrderPreviewV2 type={type} customerName={type==='school'?selectedSchool?.name:customerName} customerPhone={customerPhone} selectedSchool={selectedSchool} items={items} guestCount={guestCount} fulfillment={fulfillment} address={address} requiredAt={requiredAt} note={note} itemsTotal={getTotalPrice()} shipFee={effectiveShipFee} paymentMethod={paymentMethod} deposit={Number(deposit)||0} grandTotal={grandTotal} remaining={remaining} discountAmount={discountVal} promotionNote={type!=='school'?promotionNote:''} taxCode={type!=='school'?taxCode:''} vatAmount={vatAmount}/>
     </div>
    </div>
    </div>
