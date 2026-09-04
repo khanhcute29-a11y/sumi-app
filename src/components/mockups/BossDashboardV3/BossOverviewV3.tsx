@@ -762,23 +762,30 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
     } else if (selectedOrderFilter === 'all') {
       // "Tổng đơn hàng"/header — luồng đơn đang hoạt động bình thường, đơn
       // quá hạn/trễ hẹn phải bấm riêng vào ô đỏ mới thấy, không trộn ở đây.
-      list = allOrders.filter((o: any) => !o.is_overdue);
+      // Đồng bộ với số trên ô (statsTotal): nếu đang chọn kỳ Hôm nay/7 ngày/
+      // Tháng/Tuỳ chọn thì danh sách mở ra cũng phải lọc đúng kỳ đó theo
+      // ngày TẠO đơn, không hiện lẫn đơn của các ngày khác (04/09/2026: bấm
+      // "Hôm nay" vẫn thấy đơn hoàn thành từ 01/09).
+      list = allOrders.filter((o: any) => !o.is_overdue && (!orderStatsRange || inRange(o.created_at)));
+    } else if (selectedOrderFilter === 'completed') {
+      // "Giao thành công" — cùng quy tắc, lọc theo ngày GIAO xong thực tế
+      // (khớp statsCompleted) khi có chọn kỳ.
+      list = allOrders.filter((o: any) => o.status_v2 === 'completed' && (!orderStatsRange || inRange(o.delivery_completed_at || o.completed_at)));
     } else {
       const statusMap: Record<string, string[]> = {
         awaiting_assignment: ['awaiting_assignment', 'awaiting_acceptance'],
         in_production: ['in_production'],
         ready_for_fulfillment: ['ready_for_fulfillment'],
         in_delivery: ['in_delivery'],
-        completed: ['completed'],
       };
       const wanted = statusMap[selectedOrderFilter] || [selectedOrderFilter];
-      list = allOrders.filter((o: any) => wanted.includes(o.status_v2) && (selectedOrderFilter === 'completed' || !o.is_overdue));
+      list = allOrders.filter((o: any) => wanted.includes(o.status_v2) && !o.is_overdue);
     }
     if (selectedOrderFlowTab !== 'all') {
       list = list.filter((o: any) => o.order_type === selectedOrderFlowTab);
     }
     return list;
-  }, [allOrders, selectedOrderFilter, selectedOrderFlowTab]);
+  }, [allOrders, selectedOrderFilter, selectedOrderFlowTab, orderStatsRange]);
 
   // Ô tìm kiếm trong sheet "Danh Sách Đơn Hàng" — lọc thêm theo mã đơn / tên
   // khách hàng trên nền filteredOrders ở trên (yêu cầu 01/09/2026: "thêm mục
