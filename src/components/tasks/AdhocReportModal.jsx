@@ -8,6 +8,7 @@ export function AdhocReportModal({ profile, onClose, onSaved }) {
   const [title, setTitle] = useState('');
   const [orderCode, setOrderCode] = useState('');
   const [description, setDescription] = useState('');
+  const [deadline, setDeadline] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -15,7 +16,7 @@ export function AdhocReportModal({ profile, onClose, onSaved }) {
     if (!title.trim()) { setError('Nhập tên việc.'); return; }
     setSaving(true); setError('');
     try {
-      await createAdhocTask({ assigneeId: profile?.id, title, description: description || null, orderCode: orderCode || null, createdBy: profile?.id });
+      await createAdhocTask({ assigneeId: profile?.id, title, description: description || null, orderCode: orderCode || null, createdBy: profile?.id, deadline: deadline || null });
       onSaved?.();
       onClose();
     } catch (err) { setError(err.message); } finally { setSaving(false); }
@@ -29,6 +30,7 @@ export function AdhocReportModal({ profile, onClose, onSaved }) {
         <Input label="Tên việc" placeholder="VD: Phụ ship đơn quá tải" value={title} onChange={(e) => setTitle(e.target.value)} />
         <OrderCodePicker label="Mã đơn liên quan (không bắt buộc)" value={orderCode} onChange={setOrderCode} />
         <Input label="Mô tả (không bắt buộc)" value={description} onChange={(e) => setDescription(e.target.value)} />
+        <Input type="datetime-local" label="Hạn thực hiện (không bắt buộc)" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
         {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>Huỷ</Button>

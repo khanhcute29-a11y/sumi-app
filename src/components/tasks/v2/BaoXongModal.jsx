@@ -8,8 +8,15 @@ import { uploadFile } from '../../../lib/queries';
 //
 // Ảnh dùng lại đúng đường tải lên cũ (`uploadFile`) để không đẻ thêm cách làm
 // mới cho cùng một chuyện.
+//
+// `tuDuyet` (mặc định false): dùng cho việc CỦA CHÍNH người đang thao tác
+// (VD: Giám đốc tự giao/tự tạo việc cho mình qua "Việc Cho Tôi") — báo xong
+// xong là gọi LUÔN `sumi_duyet_viec` ngay sau đó, khỏi bắt người vừa tự làm
+// xong việc của chính mình phải tự mở lại để tự duyệt cho mình một lần nữa.
+// RPC sumi_duoc_duyet_viec() đã cho phép người tạo việc (created_by) tự
+// duyệt từ trước — không cần đổi gì ở database.
 
-export default function BaoXongModal({ viec, chiBaoCao, hoSo, onClose, onXong }) {
+export default function BaoXongModal({ viec, chiBaoCao, hoSo, tuDuyet = false, onClose, onXong }) {
   const [anh, setAnh] = useState(null);
   const [xemTruoc, setXemTruoc] = useState('');
   const [ghiChu, setGhiChu] = useState('');
@@ -59,6 +66,12 @@ export default function BaoXongModal({ viec, chiBaoCao, hoSo, onClose, onXong })
         });
         if (error) throw error;
         if (data && data.thanh_cong === false) throw new Error(data.thong_bao || 'Không báo xong được.');
+
+        if (tuDuyet) {
+          const duyet = await supabase.rpc('sumi_duyet_viec', { p_task_id: viec.id, p_dong_y: true });
+          if (duyet.error) throw duyet.error;
+          if (duyet.data && duyet.data.thanh_cong === false) throw new Error(duyet.data.thong_bao || 'Không tự duyệt được.');
+        }
       }
       await onXong?.();
     } catch (e) {
@@ -78,17 +91,21 @@ export default function BaoXongModal({ viec, chiBaoCao, hoSo, onClose, onXong })
         borderRadius: '20px 20px 0 0', padding: 20, paddingBottom: 'calc(20px + env(safe-area-inset-bottom))', maxHeight: '90dvh', overflowY: 'auto',
       }}>
         <h3 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 900 }}>
-          {chiBaoCao ? '📷 Thêm tiến trình' : '✅ Báo xong việc'}
+          {chiBaoCao ? '📷 Thêm tiến trình' : tuDuyet ? '✅ Hoàn thành việc' : '✅ Báo xong việc'}
         </h3>
         <div style={{ fontSize: 13, color: 'var(--cv-muted)', marginBottom: 14 }}>{viec.title}</div>
 
         {!chiBaoCao && (
           <div style={{
             marginBottom: 14, padding: '10px 12px', borderRadius: 12,
-            background: '#fff3cd', border: '1px solid #f5d76e', color: '#856404',
+            background: tuDuyet ? '#e6f4ea' : '#fff3cd',
+            border: `1px solid ${tuDuyet ? '#8fd19e' : '#f5d76e'}`,
+            color: tuDuyet ? '#1e7e4c' : '#856404',
             fontSize: 13, fontWeight: 700, lineHeight: 1.5,
           }}>
-            Việc chưa đóng ngay đâu — quản lý phải duyệt nghiệm thu thì mới xong và mới chấm điểm.
+            {tuDuyet
+              ? 'Việc này của bạn — bấm là hoàn thành luôn, không cần chờ ai duyệt.'
+              : 'Việc chưa đóng ngay đâu — quản lý phải duyệt nghiệm thu thì mới xong và mới chấm điểm.'}
           </div>
         )}
 
@@ -138,7 +155,7 @@ export default function BaoXongModal({ viec, chiBaoCao, hoSo, onClose, onXong })
         <div className="cv-actions">
           <button className="cv-btn outline" onClick={onClose} disabled={dangLuu}>Huỷ</button>
           <button className={`cv-btn ${chiBaoCao ? 'primary' : 'success'}`} onClick={luu} disabled={dangLuu}>
-            {dangLuu ? 'Đang gửi…' : chiBaoCao ? 'Gửi tiến trình' : 'Báo xong việc'}
+            {dangLuu ? 'Đang gửi…' : chiBaoCao ? 'Gửi tiến trình' : tuDuyet ? 'Hoàn thành việc' : 'Báo xong việc'}
           </button>
         </div>
       </div>

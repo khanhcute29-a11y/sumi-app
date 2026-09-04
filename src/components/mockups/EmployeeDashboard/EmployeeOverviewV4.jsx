@@ -718,7 +718,6 @@ export function EmployeeOverviewV4Inner({ onNavigate } = {}) {
               <img src={xemAnh} alt="Ảnh chấm công" style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 12 }} />
             </div>
           )}
-          {xemDonId && <OrderV2DetailModal orderId={xemDonId} onClose={() => setXemDonId(null)} />}
         </BottomSheet>
       )}
 
@@ -736,15 +735,22 @@ export function EmployeeOverviewV4Inner({ onNavigate } = {}) {
           ) : (
             <div className="eov4-table">
               {filteredOrders.map((o) => (
-                <div key={o.code} className="eov4-table-row">
+                <button key={o.code} className="eov4-table-row" onClick={() => setXemDonId(o.id)}
+                  style={{ width: '100%', border: 0, background: 'transparent', cursor: 'pointer', textAlign: 'left', font: 'inherit' }}>
                   <div className="eov4-table-main"><strong>#{o.code}</strong><span className="eov4-note-text">{o.quantity} sản phẩm</span></div>
                   <span className="eov4-hours-pill">{o.statusLabel}</span>
-                </div>
+                </button>
               ))}
             </div>
           )}
         </BottomSheet>
       )}
+
+      {/* Khoan sâu ĐÚNG 1 component chi tiết đơn hàng thật, dùng chung cho mọi
+          nơi trong màn Nhân viên bấm vào 1 đơn (7 ô "Đơn hàng của tôi" ở đây,
+          và "Đơn bếp phụ trách" trong Báo cáo ngày) — đặt ở gốc component
+          (không lồng trong 1 sheet cụ thể) để mở được bất kể đang ở sheet nào. */}
+      {xemDonId && <OrderV2DetailModal orderId={xemDonId} onClose={() => setXemDonId(null)} />}
     </div>
   );
 }

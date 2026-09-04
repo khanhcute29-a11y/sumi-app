@@ -80,6 +80,7 @@
 .cv-btn-big:active { transform: translateY(4px); box-shadow: none; }
 .cv-btn-big.task { background: var(--cv-primary); color: #fff; }
 .cv-btn-big.project { background: var(--cv-text); color: #fff; }
+.cv-btn-big.mine { background: #0f766e; color: #fff; }
 .cv-btn-big i { font-size: 20px; font-style: normal; }
 
 /* ── Ô đếm ── */

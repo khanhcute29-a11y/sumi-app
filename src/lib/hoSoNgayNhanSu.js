@@ -239,6 +239,57 @@ export async function fetchHoSoNgayNhanSu({ staffId, station, ngay, tuNgay, denN
   };
 }
 
+// ── 3. Trạng thái LÀM VIỆC THỰC TẾ theo task/đơn hàng đang xử lý — KHÁC
+// trạng thái chấm công ở mục 1 (có mặt hay không). Trả lời "người này NGAY
+// LÚC NÀY đang làm đơn nào/chuyến nào/việc gì", dùng cho module "Trạng Thái"
+// trên Dashboard Giám đốc. 4 truy vấn ĐỘC LẬP với số lượng nhân sự (không
+// N+1 theo từng người) để không nghẽn khi công ty đông nhân sự.
+export async function fetchStaffLiveStatusList() {
+  const [hoSoRes, donBepRes, vanTaiRes, viecRes] = await Promise.allSettled([
+    supabase.from('profiles').select('id, full_name, role, station, extra_roles')
+      .eq('approved', true).neq('active', false).order('full_name'),
+
+    // Đơn bếp đang mở (chưa xong/chưa huỷ) — người ĐANG LÀM là accepted_by,
+    // người ĐƯỢC GIAO (có thể chưa nhận) là assigned_to_staff_id.
+    supabase.from('order_work_packages')
+      .select('accepted_by, assigned_to_staff_id, status, order_id, orders(order_code)')
+      .not('status', 'in', '(completed,cancelled)'),
+
+    // Chuyến giao đã nhận hoặc đang trên đường — chưa hoàn thành.
+    supabase.from('delivery_runs')
+      .select('assigned_driver_id, status, run_code')
+      .in('status', ['accepted', 'in_transit']),
+
+    // Việc thường không gắn đơn hàng còn mở — để các khâu không phải bếp/vận
+    // tải (thủ kho, quản lý...) vẫn có trạng thái thật thay vì mặc định.
+    supabase.from('tasks').select('assignee_id, status, title')
+      .is('deleted_at', null)
+      .not('status', 'in', '(done,exempted,cancelled)'),
+  ]);
+
+  const hoSo = layDs(hoSoRes);
+  const donBep = layDs(donBepRes);
+  const vanTai = layDs(vanTaiRes);
+  const viec = layDs(viecRes);
+
+  return hoSo.map((p) => {
+    const donCuaToi = donBep.find((d) => d.accepted_by === p.id || d.assigned_to_staff_id === p.id);
+    if (donCuaToi) {
+      const ma = donCuaToi.orders?.order_code;
+      return { ...p, trangThaiLam: 'don_hang', nhanTrangThai: ma ? `Đang làm đơn ${ma}` : 'Đang làm đơn hàng' };
+    }
+    const chuyenCuaToi = vanTai.find((r) => r.assigned_driver_id === p.id);
+    if (chuyenCuaToi) {
+      return { ...p, trangThaiLam: 'van_chuyen', nhanTrangThai: chuyenCuaToi.run_code ? `Đang vận chuyển (${chuyenCuaToi.run_code})` : 'Đang vận chuyển đơn hàng' };
+    }
+    const viecCuaToi = viec.find((t) => t.assignee_id === p.id);
+    if (viecCuaToi) {
+      return { ...p, trangThaiLam: 'viec', nhanTrangThai: `Đang làm: ${viecCuaToi.title}` };
+    }
+    return { ...p, trangThaiLam: 'trong', nhanTrangThai: 'Chưa có việc cụ thể' };
+  });
+}
+
 // Người này cả ngày/khoảng KHÔNG để lại dấu vết nào — đúng thứ Giám đốc muốn soi.
 export function khongCoHoatDong(hs) {
   if (!hs) return false;
