@@ -6,6 +6,7 @@ import { useAuth } from '../lib/AuthContext';
 import { newId } from '../lib/ids';
 import { ORDER_FLOWS, CAKE_LINES, TEABREAK_CATALOG, MOONCAKE_CATALOG, normalizeSearch } from '../data/orderCatalogs';
 import { SCHOOL_DELIVERY_POINTS } from '../data/schoolCatalog';
+import { fetchCustomers } from '../lib/queries';
 import { CAKE_BASES, CAKE_FILLINGS, baseSurcharge } from '../lib/cakePricing';
 import { broadcastEvent, BroadcastEvents, notifyOtherTabs } from '../lib/realtimeSync';
 
@@ -146,6 +147,23 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
  },[isReadyStock,items]);
  const [catalogSearch,setCatalogSearch]=useState(''); const [guestCount,setGuestCount]=useState('');
  const [schoolSearch,setSchoolSearch]=useState(''); const [selectedSchool,setSelectedSchool]=useState(null);
+ // Gợi ý khách hàng đã lưu — CHỈ áp dụng cho đơn không phải trường học
+ // (trường học chọn theo SCHOOL_DELIVERY_POINTS ở trên, khác luồng). Tải 1
+ // lần khi vào màn (không phải mỗi lần gõ) rồi lọc tại chỗ theo tên + SĐT +
+ // địa chỉ — khớp cả 3 để tìm ra đúng khách quen dù nhớ tên hay nhớ số hơn.
+ const [customerDirectory,setCustomerDirectory]=useState([]);
+ const [customerFieldFocus,setCustomerFieldFocus]=useState(null); // 'name' | 'phone' | null
+ useEffect(()=>{
+  if(type==='school')return;
+  let huy=false;
+  fetchCustomers().then(rows=>{if(!huy)setCustomerDirectory((rows||[]).filter(c=>!c.is_school));}).catch(()=>{});
+  return()=>{huy=true;};
+ },[type]);
+ const customerSuggestQuery=customerFieldFocus==='phone'?customerPhone:customerName;
+ const customerSuggestions=(customerFieldFocus&&customerSuggestQuery.trim().length>=2)
+  ?customerDirectory.filter(c=>normalizeSearch(`${c.name||''} ${c.phone||''} ${c.address||''}`).includes(normalizeSearch(customerSuggestQuery))).slice(0,8)
+  :[];
+ const chooseCustomer=(c)=>{setCustomerName(c.name||'');setCustomerPhone(c.phone||'');if(c.address)setAddress(c.address);setCustomerFieldFocus(null);};
  const [entryMode,setEntryMode]=useState('manual'); const [cakeLine,setCakeLine]=useState('decorated_cake');
  const [hasShipFee,setHasShipFee]=useState('no'); const [shipFee,setShipFee]=useState('');
  const [paymentMethod,setPaymentMethod]=useState('cod'); const [deposit,setDeposit]=useState('');
@@ -432,8 +450,16 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
     {!selectedSchool&&<div className="sumi-school-results">{schoolSuggestions.map(school=><button key={`${school.code}-${school.name}`} onClick={()=>chooseSchool(school)}><b>🏫</b><span><strong>{school.name}</strong><small>{school.code} · {school.type}</small><em>{school.address||'Chưa có địa chỉ — cần bổ sung'}</em></span></button>)}</div>}
     {selectedSchool&&<div className="sumi-school-selected"><b>✓</b><span><strong>{selectedSchool.name}</strong><small>{selectedSchool.code} · {selectedSchool.type}</small><em>{selectedSchool.address||'Chưa có địa chỉ'}</em></span><button onClick={()=>setSelectedSchool(null)}>Đổi</button></div>}
    </section>}
-   {type!=='school'&&<><label style={{display:'block',fontWeight:900}}>Khách hàng</label><input style={{...fieldStyle,margin:'7px 0 12px'}} placeholder="Tên khách hàng" value={customerName} onChange={e=>setCustomerName(e.target.value)}/>
-   <label style={{display:'block',fontWeight:900}}>Số điện thoại</label><input style={{...fieldStyle,margin:'7px 0 12px'}} inputMode="tel" placeholder="Số điện thoại khách" value={customerPhone} onChange={e=>setCustomerPhone(e.target.value)}/>
+   {type!=='school'&&<><label style={{display:'block',fontWeight:900}}>Khách hàng</label>
+   <div style={{position:'relative'}}>
+    <input style={{...fieldStyle,margin:'7px 0 12px'}} placeholder="Tên khách hàng" value={customerName} onChange={e=>setCustomerName(e.target.value)} onFocus={()=>setCustomerFieldFocus('name')} onBlur={()=>setTimeout(()=>setCustomerFieldFocus(null),150)}/>
+    {customerFieldFocus==='name'&&customerSuggestions.length>0&&<div className="sumi-school-results" style={{position:'absolute',zIndex:20,top:'100%',left:0,right:0,background:'#fff',boxShadow:'0 8px 20px rgba(0,0,0,0.12)',padding:8,borderRadius:16,margin:'-8px 0 0'}}>{customerSuggestions.map(c=><button key={c.id} onMouseDown={e=>{e.preventDefault();chooseCustomer(c);}}><b>👤</b><span><strong>{c.name||'(Chưa có tên)'}</strong><small>{c.phone||'Chưa có SĐT'}</small><em>{c.address||'Chưa có địa chỉ'}</em></span></button>)}</div>}
+   </div>
+   <label style={{display:'block',fontWeight:900}}>Số điện thoại</label>
+   <div style={{position:'relative'}}>
+    <input style={{...fieldStyle,margin:'7px 0 12px'}} inputMode="tel" placeholder="Số điện thoại khách" value={customerPhone} onChange={e=>setCustomerPhone(e.target.value)} onFocus={()=>setCustomerFieldFocus('phone')} onBlur={()=>setTimeout(()=>setCustomerFieldFocus(null),150)}/>
+    {customerFieldFocus==='phone'&&customerSuggestions.length>0&&<div className="sumi-school-results" style={{position:'absolute',zIndex:20,top:'100%',left:0,right:0,background:'#fff',boxShadow:'0 8px 20px rgba(0,0,0,0.12)',padding:8,borderRadius:16,margin:'-8px 0 0'}}>{customerSuggestions.map(c=><button key={c.id} onMouseDown={e=>{e.preventDefault();chooseCustomer(c);}}><b>👤</b><span><strong>{c.name||'(Chưa có tên)'}</strong><small>{c.phone||'Chưa có SĐT'}</small><em>{c.address||'Chưa có địa chỉ'}</em></span></button>)}</div>}
+   </div>
    <label style={{display:'block',fontWeight:900}}>Địa chỉ</label><input style={{...fieldStyle,margin:'7px 0 14px'}} placeholder="Địa chỉ giao hàng" value={address} onChange={e=>setAddress(e.target.value)}/>
    <button onClick={startVoiceInput} disabled={isRecording||voiceLoading} style={{width:'100%',minHeight:54,border:'2px dashed #d7c3aa',borderRadius:17,background:'#fff',fontSize:16,fontWeight:900,color:isRecording?'#b93e13':'#2d1c10',cursor:isRecording||voiceLoading?'not-allowed':'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>🎤 {isRecording?'Đang ghi âm...':voiceLoading?'Đang xử lý...':'Nói để nhập đơn'}</button></>}
    {type==='teabreak'&&<section className="sumi-catalog-picker">
