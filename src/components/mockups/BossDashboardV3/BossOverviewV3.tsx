@@ -27,7 +27,8 @@ import {
   Zap,
   Megaphone,
   Gift,
-  Heart
+  Heart,
+  Radio
 } from 'lucide-react';
 import { AuthProvider, useAuth } from '../../../lib/AuthContext';
 import { playConfirmSound } from '../../../lib/sound';
@@ -55,7 +56,7 @@ import { fetchShiftLogsRange } from '../../../lib/queries';
 // gian truyền vào là 7 ngày/tháng/tùy chỉnh gì, nên tái dùng thẳng chứ không
 // viết công thức cộng giờ riêng ở đây (tránh lệch số như đã từng xảy ra).
 import { boPhanCuaHoSo, chuanHoaCa, tomTatThang, TEN_BO_PHAN } from '../../../lib/chamCong';
-import { fetchDanhSachNhanSuNgay, fetchDanhSachNhanSuKhoangNgay, fetchHoSoNgayNhanSu, khongCoHoatDong } from '../../../lib/hoSoNgayNhanSu';
+import { fetchDanhSachNhanSuNgay, fetchDanhSachNhanSuKhoangNgay, fetchHoSoNgayNhanSu, fetchStaffLiveStatusList, khongCoHoatDong } from '../../../lib/hoSoNgayNhanSu';
 import { KHOI, LUONG, luongCuaHoSo } from '../../shifts/v2/luongNhanSu';
 import { WeeklyScheduleSection } from '../../WeeklyScheduleSection';
 import DirectorStaffOverviewSheet from '../../shifts/v2/DirectorStaffOverviewSheet';
@@ -375,7 +376,7 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
 
   // ── States Quản Lý Bottom Sheets & Bộ Lọc Đơn Hàng ──
   const [activeSheet, setActiveSheet] = useState<
-    'revenue_detail' | 'expense_detail' | 'order_drawer' | 'staff_detail' | 'staff_overview_v2' | 'approval_center' | 'feed_sheet' | 'advance_sheet' | 'leave_sheet' | 'report_sheet' | 'schedule_sheet' | 'warehouse_sheet' | 'staff_screen_sheet' | null
+    'revenue_detail' | 'expense_detail' | 'order_drawer' | 'staff_detail' | 'staff_overview_v2' | 'approval_center' | 'feed_sheet' | 'advance_sheet' | 'leave_sheet' | 'report_sheet' | 'schedule_sheet' | 'warehouse_sheet' | 'staff_screen_sheet' | 'live_status_sheet' | null
   >(null);
   const [selectedOrderFilter, setSelectedOrderFilter] = useState<string>('all');
   // Tab LUỒNG bên trong sheet "Danh Sách Đơn Hàng" — THAY THẾ thanh lọc
@@ -556,6 +557,14 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
   const [staffDayDetail, setStaffDayDetail] = useState<any | null>(null);
   const [staffDayDetailLoading, setStaffDayDetailLoading] = useState(false);
 
+  // Trạng Thái Nhân Sự Thời Gian Thực (thay Ô 2 "Bảng tin" cũ) — LAZY như
+  // staffDayList ở trên: chỉ tải khi Giám đốc thật sự bấm mở Ô "Trạng Thái",
+  // không thêm gánh nặng cho loadAll() lúc mở Dashboard.
+  const [liveStatusList, setLiveStatusList] = useState<any[] | null>(null);
+  const [liveStatusLoading, setLiveStatusLoading] = useState(false);
+  const [liveStatusError, setLiveStatusError] = useState('');
+  const [liveStatusKeyword, setLiveStatusKeyword] = useState('');
+
   const [reportHistoryFrom, setReportHistoryFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10); });
   const [reportHistoryTo, setReportHistoryTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [reportHistoryLoading, setReportHistoryLoading] = useState(false);
@@ -582,16 +591,35 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
     } finally { setStaffDayLoading(false); }
   };
 
-  const openStaffDay = async (nv: any) => {
+  // `modeOverride: 'today'` dùng cho lối vào từ Ô "Trạng Thái" (luôn muốn
+  // đúng hoạt động HÔM NAY bất kể report_sheet đang ở tab Hôm nay/Lịch sử
+  // hay đang chọn ngày khác) — ép cả reportTab lẫn ngày về hôm nay TRƯỚC khi
+  // tính tham số fetch, tránh lỗi đóng gói biến cũ (stale closure) khiến
+  // tiêu đề hiện "Hôm nay" nhưng dữ liệu lại là của ngày/khoảng trước đó.
+  // Không truyền gì (undefined) thì hành vi y hệt như cũ — không ảnh hưởng
+  // các nơi đang gọi openStaffDay(nv) từ report_sheet.
+  const openStaffDay = async (nv: any, modeOverride?: 'today') => {
+    const homNay = new Date().toISOString().slice(0, 10);
+    if (modeOverride === 'today') { setReportTab('today'); setStaffDayDate(homNay); }
     setStaffDayPicked(nv); setStaffDayDetail(null); setStaffDayDetailLoading(true);
     try {
-      const tham = reportTab === 'history'
+      const tham = modeOverride !== 'today' && reportTab === 'history'
         ? { staffId: nv.id, station: nv.station, tuNgay: reportHistoryFrom, denNgay: reportHistoryTo }
-        : { staffId: nv.id, station: nv.station, ngay: staffDayDate };
+        : { staffId: nv.id, station: nv.station, ngay: modeOverride === 'today' ? homNay : staffDayDate };
       setStaffDayDetail(await fetchHoSoNgayNhanSu(tham));
     } catch {
       setStaffDayDetail(null);
     } finally { setStaffDayDetailLoading(false); }
+  };
+
+  const loadLiveStatusList = async () => {
+    setLiveStatusLoading(true); setLiveStatusError('');
+    try {
+      setLiveStatusList(await fetchStaffLiveStatusList());
+    } catch (e: any) {
+      setLiveStatusError(e.message || 'Không tải được trạng thái nhân sự.');
+      setLiveStatusList([]);
+    } finally { setLiveStatusLoading(false); }
   };
 
   // Nhóm 1 danh sách (việc hoàn thành HOẶC báo cáo cuối ca) theo bộ phận —
@@ -1281,9 +1309,13 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
               </div>
             </div>
 
-            {/* Ô 2: Bảng tin & Chỉ đạo tag tên */}
+            {/* Ô 2: Trạng Thái Nhân Sự Thời Gian Thực — thay cho "Bảng tin" cũ
+                (04/09/2026). Bảng tin/chỉ đạo tag tên vẫn còn nguyên vẹn và
+                dùng được ở tab "Bảng tin" trên thanh điều hướng dưới cùng
+                (CompanyFeedScreen) — chỉ bỏ lối tắt trùng lặp này trên màn
+                hình chính. */}
             <div
-              onClick={() => setActiveSheet('feed_sheet')}
+              onClick={() => { setActiveSheet('live_status_sheet'); loadLiveStatusList(); }}
               style={{
                 background: '#ffffff',
                 border: '1.5px solid #eadcca',
@@ -1299,11 +1331,11 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
               }}
             >
               <div>
-                <Megaphone size={22} color="#b87a48" strokeWidth={1.6} />
+                <Radio size={22} color="#b87a48" strokeWidth={1.6} />
               </div>
               <div style={{ marginTop: 6 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>2. Bảng tin</div>
-                <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>Chỉ đạo & Tag @Tên</div>
+                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>2. Trạng Thái</div>
+                <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>Nhân sự đang làm gì</div>
               </div>
             </div>
 
@@ -2341,6 +2373,87 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
                             ))}
                           </div>
                         )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ========================================================================= */}
+        {/* ── BOTTOM SHEET: TRẠNG THÁI NHÂN SỰ THỜI GIAN THỰC (thay Bảng tin) ── */}
+        {/* ========================================================================= */}
+        {activeSheet === 'live_status_sheet' && (() => {
+          const boDau = (s: string) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+          const q = boDau(liveStatusKeyword).trim();
+          const khoiCuaNguoi = (p: any) => KHOI.find((k) => k.luong.includes(luongCuaHoSo(p)))?.ma || '_khac';
+          const dsLoc = (liveStatusList || []).filter((p: any) => !q || boDau(p.full_name).includes(q));
+          const nhomTheoKhoi = new Map<string, any[]>();
+          dsLoc.forEach((p: any) => {
+            const k = khoiCuaNguoi(p);
+            if (!nhomTheoKhoi.has(k)) nhomTheoKhoi.set(k, []);
+            nhomTheoKhoi.get(k)!.push(p);
+          });
+          const mauTheo: Record<string, { mau: string; nen: string }> = {
+            don_hang: { mau: '#c2410c', nen: '#fff7ed' },
+            van_chuyen: { mau: '#1d4ed8', nen: '#eff6ff' },
+            viec: { mau: '#7c3aed', nen: '#f5f3ff' },
+            trong: { mau: '#725f50', nen: '#f4efe8' },
+          };
+
+          return (
+            <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
+              <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
+                <div {...sheetDragHandlers} style={{ flexShrink: 0, cursor: 'grab' }}>
+                  {SHEET_HANDLE}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px 8px', borderBottom: '1.5px solid #eadcca' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 15, fontWeight: 900, color: '#0d8f57' }}>📡 Trạng Thái Nhân Sự</div>
+                      <div style={{ fontSize: 11, color: '#725f50' }}>Đang làm gì ngay lúc này · Bấm 1 người để xem chi tiết</div>
+                    </div>
+                    <button onClick={() => setActiveSheet(null)} aria-label="Quay lại" style={{ order: -1, flexShrink: 0, width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer' }}>‹</button>
+                    <button onClick={loadLiveStatusList} disabled={liveStatusLoading} aria-label="Làm mới" style={{ flexShrink: 0, width: 40, height: 40, borderRadius: 12, background: '#f0fdf4', border: 'none', fontSize: 16, cursor: 'pointer', color: '#15803d' }}>⟳</button>
+                  </div>
+                  <div style={{ padding: '10px 14px 0' }}>
+                    <input type="text" value={liveStatusKeyword} onChange={e => setLiveStatusKeyword(e.target.value)}
+                      placeholder="🔍 Tìm tên nhân sự…"
+                      style={{ width: '100%', boxSizing: 'border-box', minHeight: 38, borderRadius: 10, border: '1px solid #eadcca', padding: '0 10px', fontSize: 12.5, fontFamily: 'inherit' }} />
+                  </div>
+                </div>
+
+                <div style={sheetBodyStyle({ paddingTop: 12 })}>
+                  {liveStatusError && <div style={{ color: '#dc2626', fontSize: 12.5, fontWeight: 700, marginBottom: 10 }}>⚠️ {liveStatusError}</div>}
+                  {liveStatusLoading && <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 13 }}>Đang tải…</div>}
+                  {!liveStatusLoading && !nhomTheoKhoi.size && (
+                    <div style={{ textAlign: 'center', padding: '20px 0', color: '#725f50', fontSize: 12.5 }}>Không có nhân sự nào khớp.</div>
+                  )}
+                  {!liveStatusLoading && KHOI.filter((k) => nhomTheoKhoi.has(k.ma)).map((k) => {
+                    const nguoi = nhomTheoKhoi.get(k.ma)!;
+                    return (
+                      <div key={k.ma} style={{ marginBottom: 14 }}>
+                        <div style={{ fontSize: 12, fontWeight: 900, color: '#a08060', textTransform: 'uppercase', marginBottom: 6 }}>{k.icon} {k.ten} ({nguoi.length})</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {nguoi.map((p: any) => {
+                            const badge = mauTheo[p.trangThaiLam] || mauTheo.trong;
+                            return (
+                              <button key={p.id} onClick={() => openStaffDay(p, 'today')} style={{
+                                textAlign: 'left', background: '#fff', border: '1.5px solid #eadcca', borderRadius: 12,
+                                padding: 10, cursor: 'pointer', font: 'inherit', display: 'flex',
+                                justifyContent: 'space-between', alignItems: 'center', gap: 8,
+                              }}>
+                                <span style={{ minWidth: 0 }}>
+                                  <span style={{ display: 'block', fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>{p.full_name}</span>
+                                  <span style={{ display: 'block', fontSize: 11, color: '#725f50' }}>{LUONG[luongCuaHoSo(p)]?.ten || 'Chưa gán khâu'}</span>
+                                </span>
+                                <span style={{ flexShrink: 0, fontSize: 10.5, fontWeight: 900, color: badge.mau, background: badge.nen, padding: '4px 8px', borderRadius: 8, textAlign: 'right', maxWidth: 150 }}>
+                                  {p.nhanTrangThai}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
                     );
                   })}
