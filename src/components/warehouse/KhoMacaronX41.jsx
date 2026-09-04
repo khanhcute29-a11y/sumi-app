@@ -3,8 +3,8 @@ import { useAuth } from '../../lib/AuthContext';
 import { hasAnyRole } from '../../lib/roles';
 import {
   CAP_MOI_KHAY, BANH_DON_MOI_CAP, chuKhay, goiYChiaDeu,
-  fetchTonMacaron, fetchSoGiaoDichMacaron,
-  nhapMacaron, tronMacaron, kiemKeMacaron, suaLoNhapMacaron,
+  fetchTonMacaron, fetchSoGiaoDichMacaron, fetchLoNhapMacaron,
+  nhapMacaron, xuatMacaron, tronMacaron, kiemKeMacaron, suaLoNhapMacaron,
 } from '../../lib/khoMacaron';
 
 // KHO MACARON — XƯỞNG 41.
@@ -119,7 +119,30 @@ function TabTonKho({ mauDon, cacMix, tongCapMauDon, onXong, onLoi }) {
   const [hanSuDung, setHanSuDung] = useState('');
   const [luu, setLuu] = useState(false);
 
-  const moNhap = (ma) => { setDangNhap(ma); setSoKhay(''); setSoCapLe(''); setGhiChu(''); setNgaySx(''); setHanSuDung(''); };
+  // ── Xuất kho — yêu cầu cô Kim Cúc 04/09/2026: "làm xuất giống nhập luôn,
+  // cột Ngày SX/HSD để cô xổ tất cả các ngày có trong kho để cô chọn ngày
+  // thấp nhất xuất, phần này không dùng trí nhớ được" — nên thay 2 ô gõ tay
+  // bằng 1 Ô CHỌN LÔ (select) liệt kê các lô đã từng nhập, sắp Ngày SX cũ
+  // nhất lên đầu (FEFO), chọn xong tự điền cả Ngày SX lẫn HSD.
+  const [dangXuat, setDangXuat] = useState(null); // ma đang mở form xuất
+  const [soKhayXuat, setSoKhayXuat] = useState('');
+  const [soCapLeXuat, setSoCapLeXuat] = useState('');
+  const [maDonXuat, setMaDonXuat] = useState('');
+  const [ghiChuXuat, setGhiChuXuat] = useState('');
+  const [loNhap, setLoNhap] = useState([]); // các lô [{ngaySx, hanSuDung}] của màu đang xuất
+  const [loChon, setLoChon] = useState(''); // key "ngaySx|hanSuDung" đang chọn
+  const [dangTaiLo, setDangTaiLo] = useState(false);
+  const [luuXuat, setLuuXuat] = useState(false);
+
+  const moNhap = (ma) => { setDangXuat(null); setDangNhap(ma); setSoKhay(''); setSoCapLe(''); setGhiChu(''); setNgaySx(''); setHanSuDung(''); };
+
+  const moXuat = async (ma) => {
+    setDangNhap(null); setDangXuat(ma); setSoKhayXuat(''); setSoCapLeXuat(''); setMaDonXuat(''); setGhiChuXuat(''); setLoChon(''); setLoNhap([]);
+    setDangTaiLo(true);
+    try { setLoNhap(await fetchLoNhapMacaron({ ma })); }
+    catch { setLoNhap([]); }
+    finally { setDangTaiLo(false); }
+  };
 
   const nhap = async () => {
     const tong = (Number(soKhay) || 0) * CAP_MOI_KHAY + (Number(soCapLe) || 0);
@@ -132,6 +155,22 @@ function TabTonKho({ mauDon, cacMix, tongCapMauDon, onXong, onLoi }) {
       onXong(kq?.thong_bao || 'Đã nhập kho.');
     } catch (e) { onLoi(e?.message || 'Không nhập kho được.'); }
     finally { setLuu(false); }
+  };
+
+  const xuat = async () => {
+    const tong = (Number(soKhayXuat) || 0) * CAP_MOI_KHAY + (Number(soCapLeXuat) || 0);
+    if (tong <= 0) { onLoi('Nhập số khay hoặc số cặp lớn hơn 0.'); return; }
+    const lo = loNhap.find((l) => `${l.ngaySx}|${l.hanSuDung || ''}` === loChon);
+    setLuuXuat(true); onLoi('');
+    try {
+      const kq = await xuatMacaron({
+        ma: dangXuat, soCap: tong, orderCode: maDonXuat.trim() || null, ghiChu: ghiChuXuat,
+        ngaySx: lo?.ngaySx || null, hanSuDung: lo?.hanSuDung || null,
+      });
+      setDangXuat(null);
+      onXong(kq?.thong_bao || 'Đã xuất kho.');
+    } catch (e) { onLoi(e?.message || 'Không xuất kho được.'); }
+    finally { setLuuXuat(false); }
   };
 
   const veThe = (t) => (
@@ -156,14 +195,14 @@ function TabTonKho({ mauDon, cacMix, tongCapMauDon, onXong, onLoi }) {
               04/09/2026), không bắt với khay mix trộn sẵn (không có lô SX
               riêng, đã ghép từ nhiều màu/nhiều mẻ khác nhau). */}
           {t.loai === 'mau_don' && (
-            <div style={{ display: 'flex', gap: 6 }}>
-              <label style={{ flex: 1 }}>
+            <div style={{ display: 'flex', gap: 6, minWidth: 0 }}>
+              <label style={{ flex: 1, minWidth: 0 }}>
                 <span style={{ ...o.nhan, marginBottom: 2 }}>Ngày SX</span>
-                <input type="date" style={{ ...o.o, minHeight: 40, fontSize: 12.5, padding: '0 6px' }} value={ngaySx} onChange={(e) => setNgaySx(e.target.value)} />
+                <input type="date" style={{ ...o.o, minHeight: 40, fontSize: 12, padding: '0 4px', width: '100%', minWidth: 0 }} value={ngaySx} onChange={(e) => setNgaySx(e.target.value)} />
               </label>
-              <label style={{ flex: 1 }}>
+              <label style={{ flex: 1, minWidth: 0 }}>
                 <span style={{ ...o.nhan, marginBottom: 2 }}>Hạn SD</span>
-                <input type="date" style={{ ...o.o, minHeight: 40, fontSize: 12.5, padding: '0 6px' }} value={hanSuDung} onChange={(e) => setHanSuDung(e.target.value)} />
+                <input type="date" style={{ ...o.o, minHeight: 40, fontSize: 12, padding: '0 4px', width: '100%', minWidth: 0 }} value={hanSuDung} onChange={(e) => setHanSuDung(e.target.value)} />
               </label>
             </div>
           )}
@@ -173,10 +212,45 @@ function TabTonKho({ mauDon, cacMix, tongCapMauDon, onXong, onLoi }) {
             <button disabled={luu} onClick={() => setDangNhap(null)} style={{ ...o.nut, minHeight: 40, fontSize: 13, background: '#fff', color: '#806a58', border: '1px solid #e2cdb6' }}>Huỷ</button>
           </div>
         </div>
+      ) : dangXuat === t.ma ? (
+        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input style={{ ...o.o, minHeight: 40 }} inputMode="numeric" placeholder="Khay" value={soKhayXuat} onChange={(e) => setSoKhayXuat(e.target.value)} />
+            <input style={{ ...o.o, minHeight: 40 }} inputMode="numeric" placeholder="Cặp lẻ" value={soCapLeXuat} onChange={(e) => setSoCapLeXuat(e.target.value)} />
+          </div>
+          {/* Ô CHỌN LÔ — thay vì gõ tay Ngày SX/HSD, xổ ra các lô đã từng
+              nhập (sắp Ngày SX cũ nhất lên đầu) để thủ kho chọn, không phải
+              tự nhớ/gõ lại ngày (yêu cầu cô Kim Cúc 04/09/2026). Chỉ áp dụng
+              macaron MÀU ĐƠN — khay mix không có lô SX riêng. */}
+          {t.loai === 'mau_don' && (
+            <label style={{ display: 'block' }}>
+              <span style={{ ...o.nhan, marginBottom: 2 }}>Xuất từ lô (Ngày SX → HSD)</span>
+              <select style={{ ...o.o, minHeight: 40, fontSize: 12.5 }} value={loChon} onChange={(e) => setLoChon(e.target.value)} disabled={dangTaiLo}>
+                <option value="">{dangTaiLo ? 'Đang tải các lô…' : loNhap.length ? '— Chọn lô —' : 'Chưa có lô nào ghi Ngày SX'}</option>
+                {loNhap.map((l, i) => (
+                  <option key={`${l.ngaySx}|${l.hanSuDung}`} value={`${l.ngaySx}|${l.hanSuDung || ''}`}>
+                    {new Date(l.ngaySx).toLocaleDateString('vi-VN')} → HSD {l.hanSuDung ? new Date(l.hanSuDung).toLocaleDateString('vi-VN') : '—'}{i === 0 ? ' (cũ nhất — nên xuất trước)' : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <input style={{ ...o.o, minHeight: 40 }} placeholder="Mã đơn (không bắt buộc)" value={maDonXuat} onChange={(e) => setMaDonXuat(e.target.value)} />
+          <input style={{ ...o.o, minHeight: 40 }} placeholder="Ghi chú (không bắt buộc)" value={ghiChuXuat} onChange={(e) => setGhiChuXuat(e.target.value)} />
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button disabled={luuXuat} onClick={xuat} style={{ ...o.nut, minHeight: 40, fontSize: 13, background: '#b7431e' }}>{luuXuat ? 'Đang lưu…' : '✓ Xuất'}</button>
+            <button disabled={luuXuat} onClick={() => setDangXuat(null)} style={{ ...o.nut, minHeight: 40, fontSize: 13, background: '#fff', color: '#806a58', border: '1px solid #e2cdb6' }}>Huỷ</button>
+          </div>
+        </div>
       ) : (
-        <button onClick={() => moNhap(t.ma)} style={{ marginTop: 8, width: '100%', minHeight: 36, borderRadius: 10, border: '1.5px dashed #e2cdb6', background: 'transparent', color: '#b7431e', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
-          ＋ Nhập kho
-        </button>
+        <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
+          <button onClick={() => moNhap(t.ma)} style={{ flex: 1, minHeight: 36, borderRadius: 10, border: '1.5px dashed #e2cdb6', background: 'transparent', color: '#b7431e', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
+            ＋ Nhập kho
+          </button>
+          <button onClick={() => moXuat(t.ma)} disabled={t.soCap <= 0} style={{ flex: 1, minHeight: 36, borderRadius: 10, border: '1.5px dashed #e2cdb6', background: 'transparent', color: t.soCap <= 0 ? '#c9baa9' : '#b7431e', fontWeight: 800, fontSize: 12, cursor: t.soCap <= 0 ? 'not-allowed' : 'pointer' }}>
+            − Xuất kho
+          </button>
+        </div>
       )}
     </div>
   );
@@ -513,14 +587,14 @@ function TabKiemKe({ ton, laQuanLy, onXong, onLoi }) {
                         <input style={{ ...o.o, minHeight: 38, fontSize: 12.5 }} inputMode="numeric" value={suaSoCap} onChange={(e) => setSuaSoCap(e.target.value)} />
                       </label>
                     </div>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <label style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', gap: 6, minWidth: 0 }}>
+                      <label style={{ flex: 1, minWidth: 0 }}>
                         <span style={{ ...o.nhan, marginBottom: 2 }}>Ngày SX</span>
-                        <input type="date" style={{ ...o.o, minHeight: 38, fontSize: 12.5, padding: '0 6px' }} value={suaNgaySx} onChange={(e) => setSuaNgaySx(e.target.value)} />
+                        <input type="date" style={{ ...o.o, minHeight: 38, fontSize: 12, padding: '0 4px', width: '100%', minWidth: 0 }} value={suaNgaySx} onChange={(e) => setSuaNgaySx(e.target.value)} />
                       </label>
-                      <label style={{ flex: 1 }}>
+                      <label style={{ flex: 1, minWidth: 0 }}>
                         <span style={{ ...o.nhan, marginBottom: 2 }}>Hạn SD</span>
-                        <input type="date" style={{ ...o.o, minHeight: 38, fontSize: 12.5, padding: '0 6px' }} value={suaHanSuDung} onChange={(e) => setSuaHanSuDung(e.target.value)} />
+                        <input type="date" style={{ ...o.o, minHeight: 38, fontSize: 12, padding: '0 4px', width: '100%', minWidth: 0 }} value={suaHanSuDung} onChange={(e) => setSuaHanSuDung(e.target.value)} />
                       </label>
                     </div>
                     <input style={{ ...o.o, minHeight: 38, fontSize: 12.5 }} placeholder="Lý do sửa *" value={suaGhiChu} onChange={(e) => setSuaGhiChu(e.target.value)} />

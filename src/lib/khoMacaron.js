@@ -92,11 +92,37 @@ export async function suaLoNhapMacaron({ logId, soCapMoi, ngaySx, hanSuDung, ghi
   return nemLoi(data, error, 'Không sửa được dòng nhập kho.');
 }
 
-export async function xuatMacaron({ ma, soCap, orderCode, ghiChu }) {
+export async function xuatMacaron({ ma, soCap, orderCode, ghiChu, ngaySx, hanSuDung }) {
   const { data, error } = await supabase.rpc('sumi_macaron_xuat', {
     p_ma: ma, p_so_cap: soCap, p_order_code: orderCode || null, p_ghi_chu: ghiChu || null,
+    p_ngay_sx: ngaySx || null, p_han_su_dung: hanSuDung || null,
   });
   return nemLoi(data, error, 'Không xuất kho được.');
+}
+
+/**
+ * Danh sách các lô ĐÃ NHẬP còn ghi Ngày SX/HSD cho 1 màu — để màn Xuất kho
+ * hiện ra cho thủ kho CHỌN thay vì phải tự nhớ/gõ lại ngày (yêu cầu cô Kim
+ * Cúc 04/09/2026). Sắp Ngày SX cũ nhất lên đầu (FEFO — hết hạn trước xuất
+ * trước). LƯU Ý: đây chỉ là danh sách THAM KHẢO các lô từng nhập — không
+ * phải số dư còn lại theo từng lô (macaron_stock chỉ có 1 số tồn gộp theo
+ * màu, xem migration 202609042000), nên có thể còn hiện cả lô đã xuất hết.
+ */
+export async function fetchLoNhapMacaron({ ma }) {
+  const { data, error } = await supabase.from('macaron_stock_log')
+    .select('ngay_sx, han_su_dung')
+    .eq('ma', ma).eq('loai_gd', 'nhap').not('ngay_sx', 'is', null)
+    .order('ngay_sx', { ascending: true });
+  if (error) throw error;
+  const thay = new Set();
+  const ketQua = [];
+  for (const r of data || []) {
+    const khoa = `${r.ngay_sx}|${r.han_su_dung || ''}`;
+    if (thay.has(khoa)) continue;
+    thay.add(khoa);
+    ketQua.push({ ngaySx: r.ngay_sx, hanSuDung: r.han_su_dung || null });
+  }
+  return ketQua;
 }
 
 /**
