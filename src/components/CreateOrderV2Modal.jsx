@@ -200,7 +200,10 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
  const grandTotal=subtotalAfterDiscount+vatAmount;
  const remaining=grandTotal-(Number(deposit)||0);
  const blankItem=(key)=>({id:crypto.randomUUID(),flow_type:key,name:'',quantity:1,unit:'cái',specification:{product_flow:key,...(key==='cake'?{cake_line:cakeLine}:{})}});
- const selectFlow=(key)=>{if(key==='school'&&!isDirector)return;if(key==='macaron'&&!isMacaronCreator)return;setActiveDraftId(crypto.randomUUID());setType(key);setItems(key==='teabreak'?[]:[blankItem(key)]);};
+ // Đơn trường học không có ô nhập SĐT riêng (chọn trường qua selectedSchool) —
+ // theo yêu cầu chủ shop, mặc định luôn SĐT liên hệ 0933799596 cho mọi đơn
+ // trường học (vẫn ghi vào customerNote như các luồng khác).
+ const selectFlow=(key)=>{if(key==='school'&&!isDirector)return;if(key==='macaron'&&!isMacaronCreator)return;setActiveDraftId(crypto.randomUUID());setType(key);setItems(key==='teabreak'?[]:[blankItem(key)]);if(key==='school')setCustomerPhone('0933799596');};
  const addFlow=(key)=>{if(type==='school'||key==='school'){setError('Đơn trường học cần tạo riêng để bảo vệ thông tin.');return}if(key==='macaron'&&!isMacaronCreator){setError('Chỉ Trợ lý Giám đốc mới được thêm sản phẩm Macaron.');return}setError('');setItems(x=>[...x,blankItem(key)]);setTimeout(()=>document.querySelector('.sumi-mixed-summary')?.scrollIntoView({behavior:'smooth',block:'start'}),0)};
  const changeCakeLine=(key)=>{setCakeLine(key);setItems(current=>current.map(item=>(item.flow_type||type)==='cake'?{...item,specification:{...item.specification,cake_line:key}}:item));};
  const addCatalogItem=(product)=>{setItems(current=>{
