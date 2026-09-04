@@ -65,6 +65,21 @@ export async function updateProfileActive(id, active) {
   if (error) throw error;
 }
 
+// Xoá VĨNH VIỄN tài khoản nhân sự (khác "Khoá tài khoản" ở trên — khoá chỉ
+// ẩn/chặn đăng nhập, còn giữ nguyên lịch sử; xoá là mất hẳn hồ sơ + đăng
+// nhập). RPC dưới database tự chặn xoá owner/admin và tự xoá, yêu cầu gõ
+// đúng tên hiển thị để xác nhận (p_xac_nhan_ten) — chặn bấm nhầm cho một
+// thao tác không thể hoàn tác. Xem migration 202609042700.
+export async function deleteStaffAccount(id, confirmFullName) {
+  const { data, error } = await supabase.rpc('sumi_xoa_tai_khoan_nhan_su', {
+    p_staff_id: id,
+    p_xac_nhan_ten: confirmFullName,
+  });
+  if (error) throw error;
+  if (data && data.thanh_cong === false) throw new Error(data.thong_bao || 'Không xoá được tài khoản này.');
+  return data;
+}
+
 // ---- Customers ----
 
 export async function fetchCustomers() {
