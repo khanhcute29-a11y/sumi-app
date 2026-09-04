@@ -115,14 +115,13 @@ export function treBaoNhieu(t) {
   return phutGiua(t.deadline, moc);
 }
 
-// Việc quá hạn từ 1 ngày trở lên VÀ chưa xong — ngưỡng để Giám đốc được phép
-// can thiệp trực tiếp (xoá/gia hạn). Khớp đúng điều kiện phía RPC
-// sumi_can_thiep_qua_han dưới database — sửa một bên mà quên bên kia thì nút
-// bấm sẽ hiện sai lúc (hiện ra nhưng RPC từ chối, hoặc ngược lại).
+// Việc quá hạn VÀ chưa xong — Giám đốc được phép can thiệp trực tiếp
+// (xoá/gia hạn) ngay khi quá hạn, không cần chờ đủ 1 ngày. Khớp đúng điều
+// kiện phía RPC sumi_can_thiep_qua_han dưới database — sửa một bên mà quên
+// bên kia thì nút bấm sẽ hiện sai lúc (hiện ra nhưng RPC từ chối, hoặc
+// ngược lại).
 export function duocCanThiepQuaHan(t) {
-  if (!quaHan(t)) return false;
-  const tre = treBaoNhieu(t);
-  return tre !== null && tre >= 1440;
+  return quaHan(t);
 }
 
 // ── Nhãn KPI hiện trên thẻ ──────────────────────────────────────────────────
