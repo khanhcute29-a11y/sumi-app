@@ -12,9 +12,18 @@ import { deleteTask } from '../../../lib/queries';
 // chính mình sẽ bị RPC từ chối ("manager permission required"), đây chính là
 // lý do Giám đốc trước giờ không tự giao việc cho mình được.
 import { AdhocReportModal } from '../AdhocReportModal';
+// Việc CỦA Giám đốc (assignee_id = chính họ, dù tự tạo qua "Việc Cho Tôi" hay
+// được giao qua "Giao Việc Mới" rồi tự chọn mình) phải trải nghiệm y hệt thợ:
+// nhận việc, chia bước con, sửa nhắc nhở/hạn chót, báo tiến trình, báo xong —
+// nên dùng lại ĐÚNG TheViecNhanVien/BaoXongModal của màn Thợ ở khắp nơi việc
+// đó xuất hiện (Việc của tôi, Quá hạn, Chờ duyệt, Việc đã giao...), không tự
+// dựng một bản UI thao tác riêng chỉ để tiết kiệm vài dòng.
+import TheViecNhanVien from './TheViecNhanVien';
+import BaoXongModal from './BaoXongModal';
 import {
   TRANG_THAI, tomTatViec, sapXepQuaHan, nhanKhau, daDong,
   locTheoTuKhoa, ngayGio, doDaiThoiGian, treBaoNhieu, tienDoDuAn, quaHan,
+  nhomViecNhanVien,
 } from '../../../lib/congViec';
 
 // Trạm Kiểm Soát Công Việc — màn hình Giám đốc.
@@ -125,7 +134,7 @@ function TheViecTongQuat({ viec, tenTheoId, tenKhau, onXem, onSua, onXoa, dangXo
 // thử thật trên máy mới thấy tên khâu thật đa dạng hơn nhiều ("Bakery — Bếp
 // nóng", "Phòng Kế toán", "Vận tải — Nhân viên giao hàng"...), gõ cứng 4 khâu
 // cũ (nong/lanh/xuong41/xuong42) là bịa, không khớp dữ liệu thật.
-function TrangDanhSachViec({ tieuDe, dsViec, tenTheoId, tenKhau, danhSachKhau, onXem, onBack, onNhacNho, dangNhac, onSua, onXoa, dangXoa }) {
+function TrangDanhSachViec({ tieuDe, dsViec, tenTheoId, tenKhau, danhSachKhau, onXem, onBack, onNhacNho, dangNhac, onSua, onXoa, dangXoa, hoSo, onDoiRieng, onBaoLoiRieng, danhSachCa }) {
   const [khauDangXem, setKhauDangXem] = useState('all');
   const maKhau = (t) => t?.station_id || '_khac';
   const tabs = [
@@ -152,11 +161,14 @@ function TrangDanhSachViec({ tieuDe, dsViec, tenTheoId, tenKhau, danhSachKhau, o
       {dsLoc.length ? (
         <div className="cv-list" style={{ marginTop: 12 }}>
           {dsLoc.map((v) => (
-            quaHan(v) && onNhacNho
-              ? <TheQuaHan key={v.id} viec={v} tenTheoId={tenTheoId} tenKhau={tenKhau}
-                  onNhacNho={onNhacNho} onXem={onXem} dangNhac={dangNhac} />
-              : <TheViecTongQuat key={v.id} viec={v} tenTheoId={tenTheoId} tenKhau={tenKhau} onXem={onXem}
-                  onSua={onSua} onXoa={onXoa} dangXoa={dangXoa} />
+            v.assignee_id === hoSo?.id
+              ? <TheViecNhanVien key={v.id} viec={v} hoSo={hoSo} tenTheoId={tenTheoId}
+                  onDoi={onDoiRieng} onBaoLoi={onBaoLoiRieng} danhSachCa={danhSachCa} />
+              : quaHan(v) && onNhacNho
+                ? <TheQuaHan key={v.id} viec={v} tenTheoId={tenTheoId} tenKhau={tenKhau}
+                    onNhacNho={onNhacNho} onXem={onXem} dangNhac={dangNhac} />
+                : <TheViecTongQuat key={v.id} viec={v} tenTheoId={tenTheoId} tenKhau={tenKhau} onXem={onXem}
+                    onSua={onSua} onXoa={onXoa} dangXoa={dangXoa} />
           ))}
         </div>
       ) : (
@@ -170,7 +182,7 @@ function TrangDanhSachViec({ tieuDe, dsViec, tenTheoId, tenKhau, danhSachKhau, o
 }
 
 export default function ViecGiamDoc({
-  tasks, duAn, tenTheoId, dangTai, loi, onTaiLai, onMoGiaoViec, onMoTaoDuAn, onNhacNho, hoSo,
+  tasks, duAn, tenTheoId, dangTai, loi, onTaiLai, onMoGiaoViec, onMoTaoDuAn, onNhacNho, hoSo, danhSachCa,
 }) {
   const [trangDanhSach, setTrangDanhSach] = useState(null); // { tieuDe, dsViec } | null
   const [tuKhoa, setTuKhoa] = useState('');
@@ -190,6 +202,16 @@ export default function ViecGiamDoc({
   const [dangXoa, setDangXoa] = useState('');
   const [loiChung, setLoiChung] = useState('');
   const [moViecChoToi, setMoViecChoToi] = useState(false);
+  // Việc CỦA chính Giám đốc (assignee_id = hoSo.id) — thao tác qua ĐÚNG luồng
+  // của màn Thợ (TheViecNhanVien + BaoXongModal), không phải luồng duyệt.
+  const [baoXongCuaToi, setBaoXongCuaToi] = useState(null); // { viec, chiBaoCao } | null
+  const xuLyCuaToi = async (hanhDong, viec) => {
+    if (hanhDong === 'bao-xong' || hanhDong === 'bao-cao') {
+      setBaoXongCuaToi({ viec, chiBaoCao: hanhDong === 'bao-cao' });
+      return;
+    }
+    await onTaiLai?.();
+  };
 
   const xoa = async (viec) => {
     if (!window.confirm(`Xoá việc "${viec.title}"? Không thể hoàn tác.`)) return;
@@ -215,6 +237,14 @@ export default function ViecGiamDoc({
   const tomTat = tomTatViec(daLoc);
   const quaHanDs = sapXepQuaHan(daLoc);
   const choDuyetDs = daLoc.filter((t) => t.status === 'pending_approval');
+
+  // "Việc của tôi" — LUÔN tính trên toàn bộ `tasks` (không qua bộ lọc khâu/từ
+  // khoá phía trên), để Giám đốc không bao giờ vô tình lọc mất việc của chính
+  // mình. Bỏ qua nhóm "Đã hoàn thành" ở đây vì đã xem được qua ô đếm "Hoàn
+  // thành" phía dưới, tránh lặp hiển thị.
+  const viecCuaToi = (tasks || []).filter((t) => t.assignee_id === hoSo?.id);
+  const nhomCuaToi = nhomViecNhanVien(viecCuaToi);
+  const dangMoCuaToi = [...nhomCuaToi.choNhan, ...nhomCuaToi.dangLam, ...nhomCuaToi.choDuyet];
 
   const nhac = async (viec) => {
     setDangNhac(viec.id); setLoiChung('');
@@ -249,7 +279,8 @@ export default function ViecGiamDoc({
           tenTheoId={tenTheoId} tenKhau={tenKhau} danhSachKhau={danhSachKhau}
           onXem={setXem} onBack={() => setTrangDanhSach(null)}
           onNhacNho={nhac} dangNhac={dangNhac}
-          onSua={setSua} onXoa={xoa} dangXoa={dangXoa} />
+          onSua={setSua} onXoa={xoa} dangXoa={dangXoa}
+          hoSo={hoSo} onDoiRieng={xuLyCuaToi} onBaoLoiRieng={setLoiChung} danhSachCa={danhSachCa} />
         {xem && (
           <DuyetViecModal viec={xem} tenTho={tenTheoId[xem.assignee_id]} hoSo={hoSo} vaiTro="giam_doc"
             chiXem={xem.status !== 'pending_approval'}
@@ -259,6 +290,11 @@ export default function ViecGiamDoc({
         {sua && (
           <EditTaskModal viec={sua} onClose={() => setSua(null)}
             onXong={async () => { setSua(null); await onTaiLai?.(); }} />
+        )}
+        {baoXongCuaToi && (
+          <BaoXongModal viec={baoXongCuaToi.viec} chiBaoCao={baoXongCuaToi.chiBaoCao} hoSo={hoSo} tuDuyet
+            onClose={() => setBaoXongCuaToi(null)}
+            onXong={async () => { setBaoXongCuaToi(null); await onTaiLai?.(); }} />
         )}
       </div>
     );
@@ -298,6 +334,22 @@ export default function ViecGiamDoc({
           <i>🙋</i> Việc Cho Tôi
         </button>
       </div>
+
+      {/* ── Việc của tôi: y hệt trải nghiệm màn Thợ (nhận việc, bước con, sửa
+          nhắc nhở/hạn chót, báo tiến trình, báo xong) — bấm "Xong hoàn toàn"
+          là hoàn thành luôn, không qua bước chờ duyệt như của nhân viên
+          (BaoXongModal tuDuyet). ── */}
+      {!!dangMoCuaToi.length && (
+        <>
+          <div className="cv-divider"><span>🙋 Việc của tôi ({dangMoCuaToi.length})</span></div>
+          <div className="cv-list">
+            {dangMoCuaToi.map((v) => (
+              <TheViecNhanVien key={v.id} viec={v} hoSo={hoSo} tenTheoId={tenTheoId}
+                onDoi={xuLyCuaToi} onBaoLoi={setLoiChung} danhSachCa={danhSachCa} />
+            ))}
+          </div>
+        </>
+      )}
 
       <div className="cv-metrics">
         <button className="cv-metric" style={{ cursor: 'pointer', border: 0, font: 'inherit', textAlign: 'left' }}
@@ -369,20 +421,25 @@ export default function ViecGiamDoc({
         <>
           <div className="cv-divider"><span>📤 Thợ báo xong, chờ duyệt</span></div>
           <div className="cv-list">
-            {choDuyetDs.map((v) => {
-              const tt = TRANG_THAI.pending_approval;
-              return (
-                <div className="cv-card" key={v.id} style={{ borderColor: 'var(--cv-success)' }}>
-                  <span className="cv-dept-tag">{tenKhau(v)}</span>
-                  <h3 className="cv-title" style={{ marginTop: 6 }}>{v.title}</h3>
-                  <div className="cv-meta">
-                    <span className="cv-meta-item">👨‍🍳 {tenTheoId[v.assignee_id] || 'Chưa rõ'}</span>
-                    <span className="cv-badge" style={{ background: tt.nen, color: tt.mau }}>{tt.icon} {tt.nhan}</span>
-                  </div>
-                  <button className="cv-btn success full" onClick={() => setXem(v)}>Xem &amp; duyệt</button>
-                </div>
-              );
-            })}
+            {choDuyetDs.map((v) => (
+              v.assignee_id === hoSo?.id
+                ? <TheViecNhanVien key={v.id} viec={v} hoSo={hoSo} tenTheoId={tenTheoId}
+                    onDoi={xuLyCuaToi} onBaoLoi={setLoiChung} danhSachCa={danhSachCa} />
+                : (() => {
+                    const tt = TRANG_THAI.pending_approval;
+                    return (
+                      <div className="cv-card" key={v.id} style={{ borderColor: 'var(--cv-success)' }}>
+                        <span className="cv-dept-tag">{tenKhau(v)}</span>
+                        <h3 className="cv-title" style={{ marginTop: 6 }}>{v.title}</h3>
+                        <div className="cv-meta">
+                          <span className="cv-meta-item">👨‍🍳 {tenTheoId[v.assignee_id] || 'Chưa rõ'}</span>
+                          <span className="cv-badge" style={{ background: tt.nen, color: tt.mau }}>{tt.icon} {tt.nhan}</span>
+                        </div>
+                        <button className="cv-btn success full" onClick={() => setXem(v)}>Xem &amp; duyệt</button>
+                      </div>
+                    );
+                  })()
+            ))}
           </div>
         </>
       )}
@@ -402,6 +459,12 @@ export default function ViecGiamDoc({
           onClose={() => setMoViecChoToi(false)}
           onSaved={onTaiLai}
         />
+      )}
+
+      {baoXongCuaToi && (
+        <BaoXongModal viec={baoXongCuaToi.viec} chiBaoCao={baoXongCuaToi.chiBaoCao} hoSo={hoSo} tuDuyet
+          onClose={() => setBaoXongCuaToi(null)}
+          onXong={async () => { setBaoXongCuaToi(null); await onTaiLai?.(); }} />
       )}
     </div>
   );
