@@ -3,6 +3,7 @@ import './chat-screen.css';
 import {
   fetchAllConversations,
   fetchChatDirectory,
+  fetchRoomParticipants,
   getOrCreateDmRoom,
   fetchRoomMessages,
   sendChatMessage,
@@ -17,11 +18,17 @@ import { uploadFile } from '../../lib/queries';
 import { toWebSafeImage } from '../../lib/imageConvert';
 import { IconChat, IconCamera, IconTag, IconUser, IconStaff } from '../icons/FrogIcons';
 
-// Trang Chat kiểu Zalo, gắn vào thanh điều hướng (tab riêng, khác với cửa sổ
-// chat nổi ChatWindowModal/ChatLauncher vẫn giữ nguyên song song). Desktop: 2
-// cột (danh sách trái, luồng tin phải) luôn hiện cùng lúc. Mobile: 1 cột,
-// bấm vào hội thoại mới chuyển sang xem luồng tin, có nút quay lại.
+// Trang Chat kiểu Zalo, gắn vào thanh điều hướng (tab riêng — cửa sổ chat nổi
+// ChatWindowModal/ChatLauncher cũ đã gộp hẳn vào đây và xoá, không còn song
+// song nữa). Desktop: 2 cột (danh sách trái, luồng tin phải) luôn hiện cùng
+// lúc. Mobile: 1 cột, bấm vào hội thoại mới chuyển sang xem luồng tin, có nút
+// quay lại.
 const DESKTOP_BREAKPOINT = 860;
+// Sentinel id (không phải uuid thật) cho lựa chọn "Mọi người" trong popup tag
+// — chọn xong sẽ mở rộng ra ID thật của mọi thành viên đang có trong ĐÚNG
+// phòng đang chat (không phải toàn công ty).
+const TAG_ALL_ID = '__all__';
+const TAG_ALL_TOKEN = '@MọiNgười';
 
 function formatListTime(iso) {
   if (!iso) return '';
@@ -78,8 +85,13 @@ export default function ChatScreen({ profile }) {
   const [sending, setSending] = useState(false);
   const [showMentionPopup, setShowMentionPopup] = useState(false);
   const [mentionFilter, setMentionFilter] = useState('');
-  const [selectedMentionIds, setSelectedMentionIds] = useState([]);
-  const [pendingMentionIds, setPendingMentionIds] = useState([]);
+  const [selectedMentionIds, setSelectedMentionIds] = useState([]); // có thể chứa sentinel TAG_ALL_ID
+  // Mỗi lượt "@" xong bấm Xong ghi lại { token, ids } thay vì chỉ mảng id —
+  // để lúc gửi tin kiểm tra được token đó CÒN nằm trong chữ đang gõ hay
+  // không (fix lỗi thật: xoá tay "@Tên" khỏi ô soạn rồi gửi thì người đó vẫn
+  // bị báo "được nhắc đến" dù tên không còn xuất hiện trong tin gửi đi).
+  const [pendingMentions, setPendingMentions] = useState([]); // [{ token, ids }]
+  const [roomParticipantIds, setRoomParticipantIds] = useState([]); // thành viên phòng đang mở, cho "@Mọi người"
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -120,10 +132,14 @@ export default function ChatScreen({ profile }) {
     let cancelled = false;
     setLoadingMessages(true);
     setMessages([]);
+    setRoomParticipantIds([]);
     fetchRoomMessages(activeRoomId)
       .then((data) => { if (!cancelled) setMessages(data); })
       .catch((e) => setError(e.message))
       .finally(() => { if (!cancelled) setLoadingMessages(false); });
+    fetchRoomParticipants(activeRoomId)
+      .then((ids) => { if (!cancelled) setRoomParticipantIds(ids); })
+      .catch(() => {});
 
     if (profile?.id) {
       markRoomRead(activeRoomId, profile.id).then(() => window.dispatchEvent(new CustomEvent('sumi-badges-changed'))).catch(() => {});
@@ -240,8 +256,14 @@ export default function ChatScreen({ profile }) {
     }
   };
 
+  // Chọn "Mọi người" là CHỌN RIÊNG (loại các người đã tick lẻ trước đó) và
+  // ngược lại — gộp chung không có nghĩa vì "Mọi người" đã bao trọn tất cả.
   const toggleMentionSelect = (user) => {
-    setSelectedMentionIds((prev) => (prev.includes(user.id) ? prev.filter((id) => id !== user.id) : [...prev, user.id]));
+    setSelectedMentionIds((prev) => {
+      if (user.id === TAG_ALL_ID) return prev.includes(TAG_ALL_ID) ? [] : [TAG_ALL_ID];
+      const withoutAll = prev.filter((id) => id !== TAG_ALL_ID);
+      return withoutAll.includes(user.id) ? withoutAll.filter((id) => id !== user.id) : [...withoutAll, user.id];
+    });
   };
 
   const filteredMentionUsers = useMemo(() => (
@@ -250,17 +272,29 @@ export default function ChatScreen({ profile }) {
 
   const selectAllMentions = () => {
     const ids = filteredMentionUsers.map((u) => u.id);
-    setSelectedMentionIds((prev) => (ids.every((id) => prev.includes(id)) ? prev.filter((id) => !ids.includes(id)) : [...new Set([...prev, ...ids])]));
+    setSelectedMentionIds((prev) => (ids.every((id) => prev.includes(id)) ? prev.filter((id) => !ids.includes(id)) : [...new Set([...prev.filter((id) => id !== TAG_ALL_ID), ...ids])]));
   };
 
   const confirmMentionSelection = () => {
     if (!selectedMentionIds.length) { setShowMentionPopup(false); return; }
     const lastAtPos = inputText.lastIndexOf('@');
     const prefix = lastAtPos !== -1 ? inputText.slice(0, lastAtPos) : inputText;
-    const tags = selectedMentionIds.map((id) => directory.find((u) => u.id === id)).filter(Boolean)
-      .map((u) => `@${(u.full_name || '').replace(/\s+/g, '')}`).join(' ');
+    let tags, newMention;
+    if (selectedMentionIds.includes(TAG_ALL_ID)) {
+      tags = TAG_ALL_TOKEN;
+      newMention = { token: TAG_ALL_TOKEN, ids: roomParticipantIds.filter((id) => id !== profile?.id) };
+    } else {
+      const users = selectedMentionIds.map((id) => directory.find((u) => u.id === id)).filter(Boolean);
+      tags = users.map((u) => `@${(u.full_name || '').replace(/\s+/g, '')}`).join(' ');
+      newMention = null; // nhiều người -> tách 1 entry riêng cho từng người bên dưới
+    }
     setInputText(`${prefix}${tags} `);
-    setPendingMentionIds((prev) => [...new Set([...prev, ...selectedMentionIds])]);
+    setPendingMentions((prev) => {
+      if (newMention) return [...prev, newMention];
+      const users = selectedMentionIds.map((id) => directory.find((u) => u.id === id)).filter(Boolean);
+      const entries = users.map((u) => ({ token: `@${(u.full_name || '').replace(/\s+/g, '')}`, ids: [u.id] }));
+      return [...prev, ...entries];
+    });
     setSelectedMentionIds([]);
     setShowMentionPopup(false);
     inputRef.current?.focus();
@@ -286,7 +320,12 @@ export default function ChatScreen({ profile }) {
     setError('');
     const tempId = `temp-${Date.now()}`;
     const roomIdAtSend = activeRoomId;
-    const mentionIdsAtSend = pendingMentionIds;
+    const photoAtSend = pendingPhoto;
+    // Chỉ báo "được nhắc đến" cho những mention mà token @Tên VẪN CÒN trong
+    // chữ thật sự gửi đi — người đã bị xoá tay khỏi ô soạn thì không báo nữa.
+    const mentionIdsAtSend = [...new Set(
+      pendingMentions.filter((m) => text.includes(m.token)).flatMap((m) => m.ids)
+    )];
     let attachmentUrl = null;
     try {
       if (pendingPhoto) attachmentUrl = (await uploadFile(pendingPhoto, `chat-attachments/${profile.id}`)).url;
@@ -300,7 +339,7 @@ export default function ChatScreen({ profile }) {
       setPendingPhoto(null);
       setShowMentionPopup(false);
       setSelectedMentionIds([]);
-      setPendingMentionIds([]);
+      setPendingMentions([]);
 
       const saved = await sendChatMessage({
         roomId: roomIdAtSend, senderId: profile.id, content: text || null, attachmentUrl, orderCode: extractOrderCode(text),
@@ -313,6 +352,10 @@ export default function ChatScreen({ profile }) {
     } catch (e) {
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       setInputText(text);
+      // Ảnh đã chọn (và có thể đã tải lên storage xong) không được để mất —
+      // trước đây setPendingPhoto(null) chạy trước khi biết gửi có thành
+      // công hay không, lỗi giữa chừng thì mất luôn ảnh, phải chọn lại từ đầu.
+      if (photoAtSend) setPendingPhoto(photoAtSend);
       setError(e.message);
     } finally {
       setSending(false);
@@ -422,6 +465,12 @@ export default function ChatScreen({ profile }) {
                       <span>👥 Chọn 1 hoặc nhiều người để tag:</span>
                       {filteredMentionUsers.length > 0 && <button type="button" onClick={selectAllMentions}>Chọn tất cả</button>}
                     </div>
+                    {activeConvo?.roomType !== 'direct' && roomParticipantIds.length > 1 && (
+                      <div className={`cs-mention-item ${selectedMentionIds.includes(TAG_ALL_ID) ? 'checked' : ''}`} onClick={() => toggleMentionSelect({ id: TAG_ALL_ID })}>
+                        <div className="cs-mention-avatar">{selectedMentionIds.includes(TAG_ALL_ID) ? '✓' : '🌐'}</div>
+                        <div className="cs-mention-info"><strong>Mọi người</strong><span>Tag toàn bộ {roomParticipantIds.length} người trong đoạn chat này</span></div>
+                      </div>
+                    )}
                     {filteredMentionUsers.map((u) => {
                       const checked = selectedMentionIds.includes(u.id);
                       return (
@@ -431,9 +480,11 @@ export default function ChatScreen({ profile }) {
                         </div>
                       );
                     })}
-                    {filteredMentionUsers.length === 0 && <div className="cs-list-empty">Không tìm thấy</div>}
+                    {filteredMentionUsers.length === 0 && roomParticipantIds.length <= 1 && <div className="cs-list-empty">Không tìm thấy</div>}
                     <button type="button" className="cs-mention-confirm" onClick={confirmMentionSelection} disabled={!selectedMentionIds.length}>
-                      ✓ Xong{selectedMentionIds.length ? ` (${selectedMentionIds.length} người)` : ''}
+                      ✓ Xong{selectedMentionIds.includes(TAG_ALL_ID)
+                        ? ' (Mọi người)'
+                        : selectedMentionIds.length ? ` (${selectedMentionIds.length} người)` : ''}
                     </button>
                   </div>
                 )}

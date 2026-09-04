@@ -88,10 +88,6 @@ async function mountApp() {
     const mod = await import('./components/mockups/AccountantDashboard/AccountantOverviewV1.tsx');
     RootComponent = mod.default;
     wrapWithErrorBoundary = false;
-  } else if (_mkParam === 'messenger-chat' || _mkParam === 'chat-box' || _mkParam === 'chat') {
-    const mod = await import('./components/mockups/MessengerChatBox/MessengerChatBox.jsx');
-    RootComponent = mod.default;
-    wrapWithErrorBoundary = false;
   }
 
   ReactDOM.createRoot(document.getElementById('root')).render(
