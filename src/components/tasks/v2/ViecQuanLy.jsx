@@ -2,6 +2,14 @@ import React, { useState } from 'react';
 import DuyetViecModal from './DuyetViecModal';
 import EditTaskModal from './EditTaskModal';
 import TheViecNhanVien from './TheViecNhanVien';
+import BaoXongModal from './BaoXongModal';
+// "Tạo việc phát sinh" — dùng lại ĐÚNG AdhocReportModal mà màn Thợ
+// (ViecNhanVien.jsx) và Giám đốc (ViecGiamDoc.jsx, "Việc Cho Tôi") đang dùng,
+// không viết lại luồng tự giao việc cho chính mình lần thứ 3. Phản hồi thật
+// (Phạm Thị Kim Tiến 04/09/2026): Bếp trưởng/Quản lý chưa bao giờ có nút này
+// — không phải bug mất tính năng, mà thiếu từ đầu, giờ mới lộ ra vì Giám đốc
+// vừa được bổ sung.
+import { AdhocReportModal } from '../AdhocReportModal';
 import { deleteTask } from '../../../lib/queries';
 import {
   TRANG_THAI, nhomViecQuanLy, ngayGio, gioNgan, quaHan,
@@ -96,6 +104,20 @@ export default function ViecQuanLy({
   const [sua, setSua] = useState(null);
   const [dangXoa, setDangXoa] = useState('');
   const [loiChung, setLoiChung] = useState('');
+  const [moTaoViecPhatSinh, setMoTaoViecPhatSinh] = useState(false);
+  // Việc CỦA chính Bếp trưởng/Quản lý (tab "Của tôi") phải thao tác qua ĐÚNG
+  // luồng của màn Thợ (TheViecNhanVien + BaoXongModal) — trước đây onDoi trỏ
+  // thẳng vào onTaiLai (chỉ tải lại danh sách) nên bấm "Báo xong"/"Thêm tiến
+  // trình" không mở được BaoXongModal, coi như KHÔNG báo xong được việc của
+  // chính mình. Sửa theo đúng mẫu xuLyCuaToi của ViecGiamDoc.jsx.
+  const [baoXongCuaToi, setBaoXongCuaToi] = useState(null); // { viec, chiBaoCao } | null
+  const xuLyCuaToi = async (hanhDong, viec) => {
+    if (hanhDong === 'bao-xong' || hanhDong === 'bao-cao') {
+      setBaoXongCuaToi({ viec, chiBaoCao: hanhDong === 'bao-cao' });
+      return;
+    }
+    await onTaiLai?.();
+  };
 
   const xoa = async (viec) => {
     if (!window.confirm(`Xoá việc "${viec.title}"? Không thể hoàn tác.`)) return;
@@ -129,7 +151,10 @@ export default function ViecQuanLy({
       {loi && <div className="cv-error">⚠️ Không tải được danh sách việc: {loi}</div>}
       {loiChung && <div className="cv-error">⚠️ {loiChung}</div>}
 
-      <button className="cv-btn-create" onClick={onMoGiaoViec}>➕ Tạo việc &amp; giao cho thợ</button>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button className="cv-btn-create" style={{ flex: 1 }} onClick={onMoGiaoViec}>➕ Tạo việc &amp; giao cho thợ</button>
+        <button className="cv-btn-create" style={{ flex: 1, background: 'var(--cv-text)', color: '#fff', border: 'none' }} onClick={() => setMoTaoViecPhatSinh(true)}>📝 Tạo việc phát sinh</button>
+      </div>
 
       <div className="cv-tabs">
         {cacTab.map((t) => (
@@ -169,7 +194,7 @@ export default function ViecQuanLy({
           <div className="cv-list">
             {nhom.duocGiao.map((v) => (
               <TheViecNhanVien key={v.id} viec={v} hoSo={hoSo} tenTheoId={tenTheoId}
-                onDoi={onTaiLai} onBaoLoi={setLoiChung} danhSachCa={danhSachCa} />
+                onDoi={xuLyCuaToi} onBaoLoi={setLoiChung} danhSachCa={danhSachCa} />
             ))}
           </div>
         ) : <div className="cv-empty"><div className="cv-empty-icon">☕</div>Bạn chưa nhận việc nào về mình.</div>
@@ -189,6 +214,20 @@ export default function ViecQuanLy({
       {sua && (
         <EditTaskModal viec={sua} onClose={() => setSua(null)}
           onXong={async () => { setSua(null); await onTaiLai?.(); }} />
+      )}
+
+      {moTaoViecPhatSinh && (
+        <AdhocReportModal
+          profile={hoSo}
+          onClose={() => setMoTaoViecPhatSinh(false)}
+          onSaved={onTaiLai}
+        />
+      )}
+
+      {baoXongCuaToi && (
+        <BaoXongModal viec={baoXongCuaToi.viec} chiBaoCao={baoXongCuaToi.chiBaoCao} hoSo={hoSo} tuDuyet
+          onClose={() => setBaoXongCuaToi(null)}
+          onXong={async () => { setBaoXongCuaToi(null); await onTaiLai?.(); }} />
       )}
     </div>
   );
