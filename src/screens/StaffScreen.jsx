@@ -3,7 +3,7 @@ import { Card } from '../components/data/Card';
 import { Badge } from '../components/feedback/Badge';
 import { Button } from '../components/forms/Button';
 import { Select } from '../components/forms/Select';
-import { fetchMyProfile, fetchAllProfiles, updateProfileRole, updateProfileExtraRoles, updateProfileStation, updateStaffPermissions, updateStaffWorkInfo, updateShiftRule, updateProfileActive, approveStaff } from '../lib/queries';
+import { fetchMyProfile, fetchAllProfiles, updateProfileRole, updateProfileExtraRoles, updateProfileStation, updateStaffPermissions, updateStaffWorkInfo, updateShiftRule, updateProfileActive, approveStaff, deleteStaffAccount } from '../lib/queries';
 import { ROLE_META, ROLE_OPTIONS, ROLE_PERMISSIONS, hasRole, hasAnyRole, resolveRoleAndStation, getRoleMeta, getUiRole, normalizeStationForDb } from '../lib/roles';
 import { boPhanCuaHoSo, chuanHoaCa, caCuaBoPhan, TEN_BO_PHAN } from '../lib/chamCong';
 import { supabase } from '../lib/supabaseClient';
@@ -147,7 +147,7 @@ function SuaQuyDinhCaPanel({ caRowsBoPhan, onSaved, onClose }) {
   );
 }
 
-function StaffRow({ s, isOwner, isMe, canDeactivate, canResetPassword, danhSachCa, onSavePermissions, onDeactivate, expanded, onToggle }) {
+function StaffRow({ s, isOwner, isMe, canDeactivate, canResetPassword, danhSachCa, onSavePermissions, onDeactivate, onDelete, expanded, onToggle }) {
   const [showResetPassword, setShowResetPassword] = useState(false);
   const staffMeta = getRoleMeta(s.role, s.station);
   const perm = ROLE_PERMISSIONS.find((p) => p.role === s.role);
@@ -163,6 +163,10 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, canResetPassword, danhSachC
   const [errMsg, setErrMsg] = useState('');
   const [confirmingDeactivate, setConfirmingDeactivate] = useState(false);
   const [deactivating, setDeactivating] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteErr, setDeleteErr] = useState('');
 
   // Đồng bộ lại khi prop s thay đổi
   useEffect(() => {
@@ -231,6 +235,21 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, canResetPassword, danhSachC
       setDeactivating(false);
       setConfirmingDeactivate(false);
     }
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    setDeleteErr('');
+    try {
+      await onDelete(s.id, deleteConfirmText);
+    } catch (e) {
+      setDeleteErr(e.message || 'Không xoá được tài khoản này.');
+      setDeleting(false);
+      return;
+    }
+    setDeleting(false);
+    setConfirmingDelete(false);
+    setDeleteConfirmText('');
   };
 
   const isDirty = role !== initialUiRole || station !== (s.station || '')
@@ -491,6 +510,44 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, canResetPassword, danhSachC
               )}
             </div>
           )}
+
+          {/* Xoá VĨNH VIỄN — khác hẳn "Khoá tài khoản" ở trên (khoá vẫn giữ
+              lịch sử, chỉ chặn đăng nhập). Chỉ Giám đốc/Chủ (canDeactivate)
+              mới thấy, không cho xoá chính mình hoặc tài khoản Owner/Admin —
+              khớp đúng những gì RPC sumi_xoa_tai_khoan_nhan_su chặn, tránh
+              hiện nút bấm vào chắc chắn lỗi. Bắt gõ đúng tên hiển thị để xác
+              nhận vì đây là thao tác không thể hoàn tác. */}
+          {canDeactivate && !isMe && !hasAnyRole(s, ['owner', 'admin']) && (
+            <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--border-subtle)' }}>
+              {confirmingDelete ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
+                  <span style={{ font: 'var(--text-caption)', color: 'var(--status-danger)', fontWeight: 800 }}>
+                    ⚠️ Xoá VĨNH VIỄN tài khoản này — mất hẳn hồ sơ + đăng nhập, không thể hoàn tác. Gõ đúng tên "{s.full_name}" để xác nhận:
+                  </span>
+                  <input
+                    value={deleteConfirmText}
+                    onChange={(e) => { setDeleteConfirmText(e.target.value); setDeleteErr(''); }}
+                    placeholder={s.full_name}
+                    style={{
+                      minHeight: 40, padding: '0 10px', borderRadius: 10, width: '100%', maxWidth: 320,
+                      border: '1px solid var(--status-danger)', font: 'var(--text-body)', boxSizing: 'border-box',
+                    }}
+                  />
+                  {deleteErr && <span style={{ font: 'var(--text-caption)', color: 'var(--status-danger)' }}>{deleteErr}</span>}
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <Button variant="danger" size="sm" onClick={handleDelete} disabled={deleting || deleteConfirmText.trim() !== (s.full_name || '').trim()}>
+                      {deleting ? 'Đang xoá...' : 'Xác nhận xoá vĩnh viễn'}
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => { setConfirmingDelete(false); setDeleteConfirmText(''); setDeleteErr(''); }} disabled={deleting}>Huỷ</Button>
+                  </div>
+                </div>
+              ) : (
+                <Button variant="ghost" size="sm" onClick={() => setConfirmingDelete(true)} style={{ color: 'var(--status-danger)' }}>
+                  🗑️ Xoá tài khoản (vĩnh viễn)
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -602,6 +659,11 @@ export default function StaffScreen() {
     load();
   };
 
+  const handleDeleteAccount = async (id, confirmFullName) => {
+    await deleteStaffAccount(id, confirmFullName);
+    load();
+  };
+
   const handleSavePermissions = async (id, { role, station, extraRoles, responsibilities, startDate }) => {
     await updateStaffPermissions(id, { role, station, extraRoles });
     await updateStaffWorkInfo(id, { responsibilities, startDate });
@@ -682,6 +744,7 @@ export default function StaffScreen() {
                         danhSachCa={danhSachCa}
                         onSavePermissions={handleSavePermissions}
                         onDeactivate={handleDeactivate}
+                        onDelete={handleDeleteAccount}
                         expanded={expandedId === s.id}
                         onToggle={() => setExpandedId(expandedId === s.id ? null : s.id)}
                       />
