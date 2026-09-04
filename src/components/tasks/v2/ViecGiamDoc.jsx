@@ -4,6 +4,14 @@ import DuyetViecModal from './DuyetViecModal';
 import EditTaskModal from './EditTaskModal';
 import SoKetToanKpi from './SoKetToanKpi';
 import { deleteTask } from '../../../lib/queries';
+// "Việc Cho Tôi" — dùng lại ĐÚNG AdhocReportModal mà màn Thợ (ViecNhanVien.jsx)
+// đang dùng cho nút "Tạo việc phát sinh" (tự giao việc cho chính mình, RPC
+// create_general_task category='adhoc' vốn đã cho phép assignee=người tạo).
+// KHÔNG dùng GiaoViecModal cho việc này: modal đó luôn tạo category='assigned',
+// mà RPC bắt buộc "người giao phải là quản lý CỦA người nhận" — Giám đốc chọn
+// chính mình sẽ bị RPC từ chối ("manager permission required"), đây chính là
+// lý do Giám đốc trước giờ không tự giao việc cho mình được.
+import { AdhocReportModal } from '../AdhocReportModal';
 import {
   TRANG_THAI, tomTatViec, sapXepQuaHan, nhanKhau, daDong,
   locTheoTuKhoa, ngayGio, doDaiThoiGian, treBaoNhieu, tienDoDuAn, quaHan,
@@ -181,6 +189,7 @@ export default function ViecGiamDoc({
   const [sua, setSua] = useState(null);
   const [dangXoa, setDangXoa] = useState('');
   const [loiChung, setLoiChung] = useState('');
+  const [moViecChoToi, setMoViecChoToi] = useState(false);
 
   const xoa = async (viec) => {
     if (!window.confirm(`Xoá việc "${viec.title}"? Không thể hoàn tác.`)) return;
@@ -282,6 +291,12 @@ export default function ViecGiamDoc({
         <button className="cv-btn-big project" onClick={() => onMoTaoDuAn?.()}>
           <i>📁</i> Tạo Dự Án
         </button>
+        {/* Giám đốc tự giao việc cho chính mình để theo dõi — yêu cầu
+            04/09/2026. Nằm hàng riêng (span 2 cột) vì lưới cv-director-actions
+            vốn chỉ dựng cho 2 nút. */}
+        <button className="cv-btn-big mine" style={{ gridColumn: '1 / -1' }} onClick={() => setMoViecChoToi(true)}>
+          <i>🙋</i> Việc Cho Tôi
+        </button>
       </div>
 
       <div className="cv-metrics">
@@ -379,6 +394,14 @@ export default function ViecGiamDoc({
           chiXem={xem.status !== 'pending_approval'}
           onClose={() => setXem(null)}
           onXong={async () => { setXem(null); await onTaiLai?.(); }} />
+      )}
+
+      {moViecChoToi && (
+        <AdhocReportModal
+          profile={hoSo}
+          onClose={() => setMoViecChoToi(false)}
+          onSaved={onTaiLai}
+        />
       )}
     </div>
   );
