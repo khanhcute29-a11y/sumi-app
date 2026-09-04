@@ -257,6 +257,7 @@ export async function fetchMyOrders(fullName, { days = 30 } = {}) {
   return (data || [])
     .filter((o) => o.created_by_name === fullName)
     .map((o) => ({
+      id: o.id,
       code: o.order_code,
       status: o.status_v2,
       statusLabel: STATUS_LABELS[o.status_v2] || o.status_v2,
