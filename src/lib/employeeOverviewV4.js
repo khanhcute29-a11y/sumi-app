@@ -245,17 +245,28 @@ const STATUS_LABELS = {
   completed: 'Giao thành công',
 };
 
+// "Đơn của tôi" phải hiểu đúng theo TỪNG khâu, không chỉ người TẠO đơn —
+// trước đây chỉ lọc created_by_name nên nhân viên vận tải/bếp (không tự tạo
+// đơn, chỉ nhận việc trên đơn người khác tạo) luôn thấy 0 đơn dù đang giao/
+// làm thật (báo lỗi thật 04/09/2026: "màn hình của nhân viên vận tải, không
+// thấy gì"). Giờ tính là đơn CỦA người này nếu họ là người tạo, HOẶC đang là
+// tài xế phụ trách chuyến giao (driver_name, từ delivery_runs), HOẶC có tên
+// trong danh sách bếp đã nhận việc trên đơn (kitchen_staff_names, chuỗi nhiều
+// tên cách nhau bởi ", ") — 3 vai trò chính hay chạm vào 1 đơn.
 export async function fetchMyOrders(fullName, { days = 30 } = {}) {
   const from = new Date();
   from.setDate(from.getDate() - days);
   const { data, error } = await supabase
     .from('order_operations_list')
-    .select('id, order_code, status_v2, created_by_name, created_at, is_overdue, total_quantity')
+    .select('id, order_code, status_v2, created_by_name, driver_name, kitchen_staff_names, created_at, is_overdue, total_quantity')
     .gte('created_at', from.toISOString())
     .order('created_at', { ascending: false });
   if (error) throw error;
   return (data || [])
-    .filter((o) => o.created_by_name === fullName)
+    .filter((o) =>
+      o.created_by_name === fullName
+      || o.driver_name === fullName
+      || (o.kitchen_staff_names || '').split(',').map((s) => s.trim()).includes(fullName))
     .map((o) => ({
       id: o.id,
       code: o.order_code,
