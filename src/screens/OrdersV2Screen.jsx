@@ -299,7 +299,7 @@ export default function OrdersV2Screen() {
 
       {o.status_v2 === 'in_production' && o.production_started_at && (
         <p className="mock-order-metric">
-          👨‍🍳 Bếp đã làm {minutesText(Math.max(0, Math.floor((Date.now() - new Date(o.production_started_at)) / 60000)))}
+          👨‍🍳 Bếp đã làm {minutesText(Math.max(0, Math.floor((Date.now() - new Date(o.production_started_at)) / 60000)))} · {o.kitchen_staff_names || 'Chưa rõ người làm'}
         </p>
       )}
       {o.production_minutes !== null && o.production_minutes !== undefined && (
