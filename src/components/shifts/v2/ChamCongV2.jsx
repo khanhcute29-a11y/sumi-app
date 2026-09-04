@@ -90,6 +90,7 @@ export default function ChamCongV2({
       thuong={thuongTheoNguoi?.[dangXem.hoSo.id] || []}
       coTheTangSao
       laChinhToi={dangXem.hoSo.id === hoSo?.id}
+      nguoiXem={hoSo}
       onClose={() => setDangXem(null)}
       onXong={taiLai}
     />

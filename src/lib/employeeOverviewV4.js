@@ -182,13 +182,20 @@ export async function fetchMyRewards(profileId, limit = 20) {
   if (error) throw error;
   return ganTenNguoiTao(data || [], 'nguoi_danh_gia');
 }
+// ⚠️ SỬA LỖI THẬT (04/09/2026): 2 hàm dưới đây trước đọc thẳng bảng
+// `staff_rewards` — LỆCH với view `star_transactions` mà "Báo cáo ngày →
+// Gieo Hạt" (StarRateBar) và Giám đốc đang dùng, gây ra đúng cái lỗi đã báo
+// "hiển thị trùng" (số Tiền Thưởng ở panel Hiệu Suất không khớp số trong
+// Báo cáo ngày mà nút "Xem trong Báo cáo ngày" ngay bên dưới dẫn tới). Đổi
+// sang đọc CÙNG view star_transactions, lọc loai='cong' để giữ đúng hành vi
+// cũ (chỉ hiện Sao Thưởng, không lộ Sao Phạt ở đây).
 export async function fetchMyRewardsTotalThisMonth(profileId) {
   const { from, to } = monthRange();
   const { data, error } = await supabase
-    .from('staff_rewards').select('amount').eq('staff_id', profileId)
-    .gte('awarded_on', from).lte('awarded_on', to);
+    .from('star_transactions').select('so_tien').eq('staff_id', profileId).eq('loai', 'cong')
+    .gte('ngay', from).lte('ngay', to);
   if (error) throw error;
-  return (data || []).reduce((s, r) => s + Number(r.amount || 0), 0);
+  return (data || []).reduce((s, r) => s + Number(r.so_tien || 0), 0);
 }
 
 // Trang Dashboard "Hiệu suất cá nhân" CHỈ hiển thị Sao Thưởng — tuyệt đối
@@ -197,10 +204,10 @@ export async function fetchMyRewardsTotalThisMonth(profileId) {
 export async function fetchMyRewardStarsThisMonth(profileId) {
   const { from, to } = monthRange();
   const { data, error } = await supabase
-    .from('staff_rewards').select('amount,so_sao').eq('staff_id', profileId)
-    .gte('awarded_on', from).lte('awarded_on', to);
+    .from('star_transactions').select('so_sao').eq('staff_id', profileId).eq('loai', 'cong')
+    .gte('ngay', from).lte('ngay', to);
   if (error) throw error;
-  return (data || []).reduce((s, r) => s + (r.so_sao || Math.round((r.amount || 0) / 1000)), 0);
+  return (data || []).reduce((s, r) => s + (r.so_sao || 0), 0);
 }
 
 // ---- Tổng Thưởng/Phạt Sao trong khoảng ngày [from, to] — dùng cho dòng đầu
