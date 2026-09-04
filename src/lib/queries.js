@@ -1367,9 +1367,22 @@ export async function fetchTaskProgressReports(taskId) {
   return data;
 }
 
-export async function createAdhocTask({ assigneeId, title, description, orderCode, createdBy }) {
-  const { error } = await supabase.rpc('create_general_task',{p_category:'adhoc',p_title:title,p_description:description||null,p_order_code:orderCode||null,p_assignee_id:assigneeId,p_deadline:null,p_reminder_at:null});
+export async function createAdhocTask({ assigneeId, title, description, orderCode, createdBy, deadline }) {
+  const { data: taskId, error } = await supabase.rpc('create_general_task',{p_category:'adhoc',p_title:title,p_description:description||null,p_order_code:orderCode||null,p_assignee_id:assigneeId,p_deadline:deadline?new Date(deadline).toISOString():null,p_reminder_at:null});
   if (error) throw error;
+
+  // Việc phát sinh (category='adhoc') luôn tự giao cho ĐÚNG người tạo — RPC
+  // create_general_task đã ép buộc điều này. Không ai khác cần "giao" việc
+  // này cho người tạo cả, nên tự nhận luôn thay vì bắt họ bấm thêm một bước
+  // "Xác nhận nhận việc" thừa cho chính việc họ vừa viết ra. Trước đây việc
+  // này treo mãi ở trạng thái "chờ nhận" với Giám đốc vì màn Giám đốc
+  // (ViecGiamDoc) không có nút nhận việc như màn Thợ.
+  try {
+    await supabase.rpc('sumi_nhan_viec', { p_task_id: taskId });
+  } catch {
+    // Không chặn việc tạo task nếu bước tự-nhận lỗi — vẫn còn cách nhận thủ
+    // công ở màn Thợ (TheViecNhanVien) cho các vai trò có nút đó.
+  }
 
   // 🎵 TING TING - Phát âm thanh giao việc cho tất cả người dùng
   playShipperReceiveSound();
