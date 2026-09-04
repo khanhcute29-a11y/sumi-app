@@ -428,7 +428,11 @@ export async function postCompanyAnnouncement({ authorId, authorName, body, seve
 // ---- 6. Đơn hàng ưu tiên (order_operations_list, dùng chung listOrdersV2) ----
 export function summarizeOrderCounts(orders) {
   return {
-    total: orders.length,
+    // "total" là tổng đơn đang hoạt động bình thường (KHÔNG tính đơn quá
+    // hạn/trễ hẹn) — đơn quá hạn phải tách hẳn ra ô "Chưa thực hiện/Trễ hẹn"
+    // riêng, không được cộng dồn vào đây (yêu cầu 04/09/2026: tách luồng đơn
+    // quá hạn khỏi tổng số đếm & danh sách "Đơn hàng hôm nay").
+    total: orders.filter((o) => !o.is_overdue).length,
     waiting: orders.filter((o) => ['awaiting_assignment', 'awaiting_acceptance'].includes(o.status_v2) && !o.is_overdue).length,
     production: orders.filter((o) => o.status_v2 === 'in_production' && !o.is_overdue).length,
     ready: orders.filter((o) => o.status_v2 === 'ready_for_fulfillment' && !o.is_overdue).length,

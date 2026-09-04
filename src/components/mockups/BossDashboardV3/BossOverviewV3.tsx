@@ -745,7 +745,9 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
   };
   const statsTotal = useMemo(() => {
     if (!orderStatsRange) return orderCounts.total;
-    return allOrders.filter((o: any) => inRange(o.created_at)).length;
+    // Loại đơn quá hạn/trễ hẹn khỏi "Tổng đơn hàng" theo kỳ đã chọn — cùng
+    // quy tắc tách luồng như orderCounts.total ở trên.
+    return allOrders.filter((o: any) => inRange(o.created_at) && !o.is_overdue).length;
   }, [allOrders, orderStatsRange, orderCounts.total]);
   const statsCompleted = useMemo(() => {
     if (!orderStatsRange) return orderCounts.completed;
@@ -757,7 +759,11 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
     let list = allOrders;
     if (selectedOrderFilter === 'overdue') {
       list = allOrders.filter((o: any) => o.is_overdue);
-    } else if (selectedOrderFilter !== 'all') {
+    } else if (selectedOrderFilter === 'all') {
+      // "Tổng đơn hàng"/header — luồng đơn đang hoạt động bình thường, đơn
+      // quá hạn/trễ hẹn phải bấm riêng vào ô đỏ mới thấy, không trộn ở đây.
+      list = allOrders.filter((o: any) => !o.is_overdue);
+    } else {
       const statusMap: Record<string, string[]> = {
         awaiting_assignment: ['awaiting_assignment', 'awaiting_acceptance'],
         in_production: ['in_production'],
@@ -2730,7 +2736,15 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, paddingTop: 4, borderTop: '1px solid #f2e9de' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontSize: 11, fontWeight: 800, color: ord.status_v2 === 'completed' ? '#16a34a' : ord.is_overdue ? '#dc2626' : '#138a53' }}>
+                          <span style={{
+                            fontSize: 13.5,
+                            fontWeight: 900,
+                            letterSpacing: 0.1,
+                            padding: '3px 8px',
+                            borderRadius: 8,
+                            color: ord.status_v2 === 'completed' ? '#ffffff' : ord.is_overdue ? '#ffffff' : '#ffffff',
+                            background: ord.status_v2 === 'completed' ? '#16a34a' : ord.is_overdue ? '#dc2626' : '#0d8f57',
+                          }}>
                             {ord.is_overdue ? 'Chưa thực hiện ⚠️' : (statusLabelMap[ord.status_v2] || ord.status_v2)}
                           </span>
                           {(() => {
