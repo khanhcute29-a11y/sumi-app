@@ -95,8 +95,17 @@ export function canUserViewOrder(order, userProfile) {
     return true;
   }
 
-  // Driver/Logistics can see all
-  if (isDriverRole(userProfile)) return true;
+  // Driver/Logistics can see all — cùng ngoại lệ chặn trường học như nhánh
+  // owner/admin ở trên (lỗi thật đã vá: trước đây thiếu, nên nếu ai đó bật
+  // cờ hide_school_orders cho 1 tài khoản shipper/shipper_school thì nhánh
+  // này vẫn cho xem hết, không đúng ý "chặn RIÊNG tài khoản này").
+  if (isDriverRole(userProfile)) {
+    if (isBlockedFromSchoolOrders(userProfile) &&
+        (order.order_type === 'school' || order.confidentiality === 'school_restricted')) {
+      return false;
+    }
+    return true;
+  }
 
   // Bếp phối hợp: có work package thật cho đúng bếp của mình -> luôn thấy,
   // bất kể order_type gì (xem ghi chú đầu file).

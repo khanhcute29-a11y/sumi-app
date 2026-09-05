@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // Cấu hình + triết lý lấy từ 1 tính năng giọng nói khác của sếp (đặc tả
 // "so-chi-tieu-tai-khoan.html") mà sếp và anh đánh giá rất nhạy, vào đúng ô
@@ -21,8 +21,20 @@ export function useVoiceInput({ lang = 'vi-VN' } = {}) {
   const [error, setError] = useState(null);
   const [supported] = useState(() => typeof window !== 'undefined' && Boolean(window.SpeechRecognition || window.webkitSpeechRecognition));
 
+  // Dừng phiên đang chạy (nếu có) khi component unmount giữa lúc đang nghe
+  // (vd đóng modal) — tránh onend gọi vào setter của component đã gỡ, và
+  // tránh phiên ghi âm tiếp tục chạy ngầm không ai dùng tới.
+  useEffect(() => () => { recognitionRef.current?.stop(); }, []);
+
   const start = (onResult, onInterim) => {
     if (!supported) return;
+    // Phòng hờ bị gọi start() 2 lần liên tiếp trước khi state `listening`
+    // kịp cập nhật (race condition) — phiên trước còn sống thì dừng hẳn
+    // trước khi mở phiên mới, tránh 2 phiên cùng ghi vào chung 1 ref.
+    if (recognitionRef.current) {
+      recognitionRef.current.onend = null;
+      recognitionRef.current.stop();
+    }
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
     recognition.lang = lang;
