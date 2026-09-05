@@ -30,10 +30,16 @@ export default function CompensationScreen(){
   if(p.data){const q=await supabase.from('payroll_entries').select('*,employee:profiles!employee_id(id,full_name,role,station)').eq('period_id',p.data.id).order('employee_id');if(q.error)throw q.error;setEntries(q.data||[])}else setEntries([]);
   const o=await supabase.from('overtime_requests').select('*,employee:profiles!employee_id(id,full_name,role,station)').gte('work_date',`${month}-01`).lt('work_date',nextMonthStart(month)).order('created_at',{ascending:false});if(o.error)throw o.error;setOvertime(o.data||[]);
   if(profile?.id){fetchMyStarsSummary(profile.id,`${month}-01`,nextMonthStart(month)).then(setStarsSummary).catch(()=>{})}
-  if(profile?.id){fetchLuongDuKien(profile.id,month).then(setDuKien).catch(()=>setDuKien(null))}
   if(manager){fetchSalaryConfigs().then(setSalaryConfigs).catch(()=>setSalaryConfigs([]))}
  }catch(e){setError(e.message||'Không thể tải dữ liệu lương và tăng ca');}};
  useEffect(()=>{load()},[month,profile?.id]);
+ // Lương dự kiến tải ĐỘC LẬP với load() ở trên: load() chạy tuần tự và văng
+ // vào catch ngay khi payroll_periods/overtime_requests lỗi (vd RLS chặn),
+ // để chung thì nhân viên mất luôn khung lương dự kiến dù RPC của họ chạy
+ // được. Tách ra thì hỏng cái nào chỉ mất cái đó.
+ useEffect(()=>{if(!profile?.id)return;let huy=false;
+  fetchLuongDuKien(profile.id,month).then(d=>{if(!huy)setDuKien(d)}).catch(()=>{if(!huy)setDuKien(null)});
+  return()=>{huy=true}},[month,profile?.id]);
  const requestOvertime=async()=>{if(!reason.trim())return setError('Cần nhập lý do tăng ca.');setBusy(true);setError('');try{const r=await supabase.from('overtime_requests').insert({employee_id:profile.id,work_date:localDate(),planned_minutes:Number(minutes),reason:reason.trim(),related_order_code:orderCode.trim()||null});if(r.error)throw r.error;setReason('');setOrderCode('');await load()}catch(e){setError(e.message)}finally{setBusy(false)}};
  const review=async(row,status)=>{setBusy(true);try{const r=await supabase.from('overtime_requests').update({status,reviewed_by:profile.id,reviewed_at:new Date().toISOString()}).eq('id',row.id);if(r.error)throw r.error;await load()}catch(e){setError(e.message)}finally{setBusy(false)}};
  const createPeriod=async()=>{setBusy(true);try{let r=await supabase.from('payroll_periods').insert({period_month:`${month}-01`,created_by:profile.id}).select().single();if(r.error)throw r.error;const staff=await supabase.from('profiles').select('id').eq('approved',true).neq('active',false);if(staff.error)throw staff.error;if(staff.data?.length){const seed=await supabase.from('payroll_entries').insert(staff.data.map(x=>({period_id:r.data.id,employee_id:x.id,prepared_by:profile.id})));if(seed.error)throw seed.error}
