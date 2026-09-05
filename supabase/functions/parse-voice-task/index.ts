@@ -16,6 +16,20 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const GEMINI_API_KEY = Deno.env.get("GOOGLE_GENAI_API_KEY");
 
+// LỖI THẬT đã vá: gọi từ trình duyệt (supabase.functions.invoke) luôn kèm
+// header Authorization -> trình duyệt bắt buộc gửi preflight OPTIONS trước.
+// Hàm này trước đó chặn thẳng mọi method khác POST bằng 405 và không hề trả
+// header CORS ở bất kỳ nhánh nào, nên preflight luôn bị chặn và request POST
+// thật KHÔNG BAO GIỜ được gửi đi — trình duyệt báo "Failed to send a request
+// to the Edge Function" dù gọi thẳng bằng curl (không qua CORS) vẫn chạy
+// đúng. Test bằng dòng lệnh không phát hiện được lỗi này vì curl không áp
+// dụng luật CORS như trình duyệt.
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
 interface VoiceTaskRequest {
   transcript: string;
   now?: string; // ISO, giờ hiện tại phía client
@@ -24,8 +38,11 @@ interface VoiceTaskRequest {
 }
 
 serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
   if (req.method !== "POST") {
-    return new Response("Method not allowed", { status: 405 });
+    return new Response("Method not allowed", { status: 405, headers: corsHeaders });
   }
 
   const empty = { title: null, description: null, deadline: null, reminderAt: null, orderCode: null, assigneeNames: [] };
@@ -39,7 +56,7 @@ serve(async (req) => {
     if (!transcript?.trim()) {
       return new Response(JSON.stringify({ error: "Empty transcript", ...empty }), {
         status: 200,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...corsHeaders },
       });
     }
 
@@ -117,12 +134,12 @@ Trả về đúng JSON hợp lệ theo mẫu:
     };
 
     console.log("[parse-voice-task] Returning:", response_data);
-    return new Response(JSON.stringify(response_data), { headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify(response_data), { headers: { "Content-Type": "application/json", ...corsHeaders } });
   } catch (error) {
     console.error("[parse-voice-task] Error:", error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error", ...empty }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   }
 });

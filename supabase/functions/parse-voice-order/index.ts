@@ -3,6 +3,20 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const GEMINI_API_KEY = Deno.env.get("GOOGLE_GENAI_API_KEY");
 
+// LỖI THẬT đã vá (cùng lỗi vừa tìm thấy ở parse-voice-task): gọi từ trình
+// duyệt qua supabase.functions.invoke luôn kèm header Authorization nên
+// trình duyệt bắt buộc gửi preflight OPTIONS trước — hàm này chặn thẳng
+// mọi method khác POST bằng 405 và không trả header CORS ở bất kỳ nhánh
+// nào, nên preflight luôn bị chặn, request POST thật KHÔNG BAO GIỜ được
+// gửi đi từ trình duyệt thật (dù test bằng curl vẫn chạy đúng, vì curl
+// không áp dụng luật CORS). Voice "Tạo đơn" nhiều khả năng chưa từng chạy
+// được trên trình duyệt thật vì lỗi này, không riêng gì phần Giao việc.
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
 interface VoiceOrderRequest {
   transcript: string;
   orderType?: string;
@@ -10,8 +24,11 @@ interface VoiceOrderRequest {
 }
 
 serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
   if (req.method !== "POST") {
-    return new Response("Method not allowed", { status: 405 });
+    return new Response("Method not allowed", { status: 405, headers: corsHeaders });
   }
 
   try {
@@ -24,7 +41,7 @@ serve(async (req) => {
       console.log("[parse-voice-order] Empty transcript");
       return new Response(
         JSON.stringify({ error: "Empty transcript", customerName: null, customerPhone: null, address: null, items: [], note: null }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
+        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
@@ -104,7 +121,7 @@ CHỈ TRÍCH XUẤT THÔNG TIN RÕ RÀNG TỪ VĂN BẢN. Không đoán hoặc b
     return new Response(
       JSON.stringify(response_data),
       {
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...corsHeaders },
       }
     );
   } catch (error) {
@@ -118,7 +135,7 @@ CHỈ TRÍCH XUẤT THÔNG TIN RÕ RÀNG TỪ VĂN BẢN. Không đoán hoặc b
         items: [],
         note: null,
       }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   }
 });
