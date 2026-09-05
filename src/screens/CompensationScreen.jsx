@@ -4,7 +4,8 @@ import { useAuth } from '../lib/AuthContext';
 import { hasAnyRole } from '../lib/roles';
 import { OrderCodePicker } from '../components/OrderCodePicker';
 import { fetchMyStarsSummary } from '../lib/employeeOverviewV4';
-import { fetchLuongDuKien, fetchSalaryConfigs, saveSalaryConfig } from '../lib/luongDuKien';
+import { fetchSalaryConfigs, saveSalaryConfig } from '../lib/luongDuKien';
+import BangLuongCaNhan from '../components/luong/BangLuongCaNhan';
 
 const money=n=>Number(n||0).toLocaleString('vi-VN')+'đ';
 const monthKey=()=>new Date().toISOString().slice(0,7);
@@ -20,10 +21,6 @@ export default function CompensationScreen(){
  const [month,setMonth]=useState(monthKey()); const [period,setPeriod]=useState(null); const [entries,setEntries]=useState([]); const [overtime,setOvertime]=useState([]);
  const [minutes,setMinutes]=useState(60); const [reason,setReason]=useState(''); const [orderCode,setOrderCode]=useState(''); const [error,setError]=useState(''); const [busy,setBusy]=useState(false);
  const [starsSummary,setStarsSummary]=useState(null);
- // Lương DỰ KIẾN (tính on-the-fly) — tách hẳn khỏi payroll_entries (số chính
- // thức do Kế toán chốt). Ai cũng xem được của chính mình, không cần đợi Kế
- // toán lập bảng lương tháng.
- const [duKien,setDuKien]=useState(null);
  const [salaryConfigs,setSalaryConfigs]=useState([]);
  const load=async()=>{setError('');try{
   const p=await supabase.from('payroll_periods').select('*').eq('period_month',`${month}-01`).maybeSingle();if(p.error)throw p.error;setPeriod(p.data||null);
@@ -33,13 +30,6 @@ export default function CompensationScreen(){
   if(manager){fetchSalaryConfigs().then(setSalaryConfigs).catch(()=>setSalaryConfigs([]))}
  }catch(e){setError(e.message||'Không thể tải dữ liệu lương và tăng ca');}};
  useEffect(()=>{load()},[month,profile?.id]);
- // Lương dự kiến tải ĐỘC LẬP với load() ở trên: load() chạy tuần tự và văng
- // vào catch ngay khi payroll_periods/overtime_requests lỗi (vd RLS chặn),
- // để chung thì nhân viên mất luôn khung lương dự kiến dù RPC của họ chạy
- // được. Tách ra thì hỏng cái nào chỉ mất cái đó.
- useEffect(()=>{if(!profile?.id)return;let huy=false;
-  fetchLuongDuKien(profile.id,month).then(d=>{if(!huy)setDuKien(d)}).catch(()=>{if(!huy)setDuKien(null)});
-  return()=>{huy=true}},[month,profile?.id]);
  const requestOvertime=async()=>{if(!reason.trim())return setError('Cần nhập lý do tăng ca.');setBusy(true);setError('');try{const r=await supabase.from('overtime_requests').insert({employee_id:profile.id,work_date:localDate(),planned_minutes:Number(minutes),reason:reason.trim(),related_order_code:orderCode.trim()||null});if(r.error)throw r.error;setReason('');setOrderCode('');await load()}catch(e){setError(e.message)}finally{setBusy(false)}};
  const review=async(row,status)=>{setBusy(true);try{const r=await supabase.from('overtime_requests').update({status,reviewed_by:profile.id,reviewed_at:new Date().toISOString()}).eq('id',row.id);if(r.error)throw r.error;await load()}catch(e){setError(e.message)}finally{setBusy(false)}};
  const createPeriod=async()=>{setBusy(true);try{let r=await supabase.from('payroll_periods').insert({period_month:`${month}-01`,created_by:profile.id}).select().single();if(r.error)throw r.error;const staff=await supabase.from('profiles').select('id').eq('approved',true).neq('active',false);if(staff.error)throw staff.error;if(staff.data?.length){const seed=await supabase.from('payroll_entries').insert(staff.data.map(x=>({period_id:r.data.id,employee_id:x.id,prepared_by:profile.id})));if(seed.error)throw seed.error}
@@ -52,7 +42,7 @@ export default function CompensationScreen(){
  const myEntry=useMemo(()=>entries.find(x=>x.employee_id===profile?.id),[entries,profile?.id]);
  return <div className="sumi-comp-page"><header><small>NHÂN SỰ SUMI</small><h1>Tăng ca & lương tháng</h1><p>KPI là dữ liệu tham khảo. Kế toán và Giám đốc xác nhận số tiền cuối cùng.</p></header>
   <label className="sumi-month-picker">Xem tháng<input type="month" value={month} onChange={e=>setMonth(e.target.value)}/></label>
-  {duKien&&<LuongDuKienCard d={duKien}/>}
+  {profile?.id&&<BangLuongCaNhan staffId={profile.id} thang={month}/>}
   {!manager&&<section className="sumi-overtime-request"><div><span>⏱️</span><h2>Yêu cầu tăng ca</h2></div><label>Thời gian dự kiến<select value={minutes} onChange={e=>setMinutes(e.target.value)}><option value="30">30 phút</option><option value="60">1 giờ</option><option value="90">1 giờ 30 phút</option><option value="120">2 giờ</option><option value="180">3 giờ</option></select></label><label>Lý do<textarea value={reason} onChange={e=>setReason(e.target.value)} placeholder="Ví dụ: hoàn thành đơn giao sáng mai"/></label><div className="sumi-order-code-picker"><OrderCodePicker label="Mã đơn nếu có" value={orderCode} onChange={setOrderCode} placeholder="Ví dụ: SUMI-0822-001"/></div><button disabled={busy} onClick={requestOvertime}>GỬI YÊU CẦU DUYỆT</button></section>}
   <section className="sumi-comp-section"><div className="sumi-comp-title"><h2>{manager?'Yêu cầu tăng ca':'Tăng ca của tôi'}</h2><b>{overtime.filter(x=>x.status==='pending').length} chờ</b></div>{overtime.length===0?<p className="sumi-comp-empty">Chưa có yêu cầu tăng ca trong tháng này.</p>:overtime.map(x=><article className="sumi-overtime-row" key={x.id}><div><strong>{manager?x.employee?.full_name:'Ngày '+new Date(x.work_date).toLocaleDateString('vi-VN')}</strong><small>{x.planned_minutes} phút · {x.reason}{x.related_order_code?` · ${x.related_order_code}`:''}</small></div><em className={x.status}>{statusLabel[x.status]}</em>{manager&&x.status==='pending'&&<div className="actions"><button onClick={()=>review(x,'rejected')}>Từ chối</button><button onClick={()=>review(x,'approved')}>Duyệt</button></div>}</article>)}</section>
   <section className="sumi-comp-section"><div className="sumi-comp-title"><h2>Bảng lương tháng</h2><b>{period?statusLabel[period.status]:'Chưa lập'}</b></div>
@@ -63,36 +53,6 @@ export default function CompensationScreen(){
    {manager&&period&&<><div className="sumi-payroll-actions"><button onClick={()=>setPeriodStatus('draft')}>Nháp</button><button onClick={()=>setPeriodStatus('review')}>Chờ duyệt</button><button className="lock" onClick={()=>setPeriodStatus('locked')}>Khóa & công bố</button></div>{entries.map(row=><PayrollEditor key={row.id} row={row} onChange={change} onSave={save} busy={busy}/>)}</>}
   </section>{error&&<div className="sumi-comp-error">{error.includes('does not exist')||error.includes('schema cache')||error.includes('payroll_')||error.includes('overtime_requests')?'Chức năng đang chờ kích hoạt dữ liệu nhân sự trên Supabase.':error}</div>}
  </div>;
-}
-
-// Lương DỰ KIẾN — cộng dồn theo ngày, ai cũng tự xem được của mình mà không
-// cần đợi Kế toán lập bảng lương. Nhấn mạnh "DỰ KIẾN" ngay trên đầu: tiền
-// thật vẫn là số Kế toán/Giám đốc chốt sổ ở khối "Bảng lương tháng" bên dưới.
-function LuongDuKienCard({d}){
- if(!d?.co_cau_hinh) return <div style={{padding:'12px 14px',borderRadius:14,background:'#FFF8F0',border:'1px solid #F0DFC8',fontSize:13,color:'#8C5A3C'}}>
-  💡 {d?.thong_bao||'Chưa cấu hình lương cơ bản nên chưa tính được lương dự kiến.'}
- </div>;
- const dong=(nhan,tien,mau)=><div style={{display:'flex',justifyContent:'space-between',padding:'5px 0',fontSize:13.5}}>
-  <span style={{color:'#725f50'}}>{nhan}</span><b style={{color:mau||'#2d1c10'}}>{tien}</b></div>;
- return <section style={{padding:14,borderRadius:16,background:'#fff',border:'1.5px solid #eadcca'}}>
-  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8,marginBottom:8}}>
-   <div><div style={{fontSize:11,fontWeight:900,letterSpacing:1,color:'#b8692f'}}>DỰ KIẾN — CHƯA CHỐT</div>
-    <div style={{fontSize:15,fontWeight:900,color:'#2d1c10'}}>Lương tạm tính tháng {d.thang}</div></div>
-   <div style={{textAlign:'right'}}><div style={{fontSize:20,fontWeight:900,color:'#087f5b'}}>{money(d.tong_du_kien)}</div>
-    <div style={{fontSize:11,color:'#725f50'}}>{d.ngay_cong_thuc_te}/{d.ngay_cong_chuan} ngày công</div></div>
-  </div>
-  {dong('Lương ngày công',money(d.luong_ngay_cong))}
-  {dong('Tiền cơm',money(d.tien_com))}
-  {dong(`Tăng ca (${d.gio_tang_ca} giờ × ${money(d.don_gia_gio_tang_ca)})`,money(d.tien_tang_ca))}
-  {dong('Thưởng sao (Gieo hạt)','+'+money(d.thuong_sao),'#1e7e4c')}
-  {dong(`Chuyên cần (${d.so_vi_pham} lỗi)`,money(d.chuyen_can),d.so_vi_pham?'#b45309':'#1e7e4c')}
-  {dong('Phạt sao','-'+money(d.phat_sao),'#b42318')}
-  {dong('Tạm ứng đã nhận','-'+money(d.tam_ung),'#b42318')}
-  <div style={{marginTop:8,paddingTop:8,borderTop:'1px dashed #eadcca',fontSize:11.5,color:'#725f50',lineHeight:1.6}}>
-   Số này tự cập nhật mỗi ngày theo chấm công, tăng ca đã duyệt, sao thưởng/phạt và vi phạm thực tế.
-   Số tiền chính thức là bảng lương do Kế toán chốt cuối tháng.
-  </div>
- </section>;
 }
 
 // Cấu hình lương cơ bản cố định — chỉ Giám đốc/Kế toán (RLS chặn sẵn dưới

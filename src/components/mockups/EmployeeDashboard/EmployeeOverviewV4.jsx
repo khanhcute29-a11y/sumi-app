@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import './employee-overview-v4.css';
+import BangLuongCaNhan from '../../luong/BangLuongCaNhan';
 import {
   Bell,
   Clock,
@@ -559,11 +560,17 @@ export function EmployeeOverviewV4Inner({ onNavigate } = {}) {
       )}
 
       {activeSheet === 'payroll' && (
-        <BottomSheet title="💰 Phiếu lương tháng này" onClose={closeSheet}>
+        <BottomSheet title="💰 Bảng lương tháng này" onClose={closeSheet}>
+          {/* Bảng lương DỰ KIẾN — luôn hiện đủ khung, cộng dồn theo ngày từ
+              chấm công/tăng ca/sao/vi phạm/tạm ứng thật. Không phụ thuộc việc
+              Kế toán đã lập bảng lương tháng hay chưa. */}
+          <BangLuongCaNhan staffId={profile?.id} />
+
           {payroll === undefined ? <div className="eov4-empty-box">Đang tải...</div> : !payroll ? (
-            <div className="eov4-empty-box">Chưa có bảng lương tháng này.</div>
+            <div className="eov4-empty-box" style={{ marginTop: 12 }}>Kế toán chưa chốt bảng lương chính thức tháng này.</div>
           ) : (
             <>
+              <div className="eov4-section-title" style={{ marginTop: 14 }}>Bảng lương chính thức (Kế toán chốt)</div>
               <div className="eov4-table">
                 <div className="eov4-table-row"><strong>Lương cơ bản</strong><span>{formatVND(payroll.base_pay)}</span></div>
                 <div className="eov4-table-row"><strong>Tăng ca</strong><span>{formatVND(payroll.overtime_pay)}</span></div>

@@ -11,6 +11,7 @@ import DonTuCuaToi from '../components/shifts/v2/DonTuCuaToi';
 import DeXuatChoDuyet from '../components/shifts/v2/DeXuatChoDuyet';
 import TheDeXuat from '../components/shifts/v2/TheDeXuat';
 import FinishedGoodsInventoryV2 from '../components/warehouse/FinishedGoodsInventoryV2';
+import BangLuongCaNhan from '../components/luong/BangLuongCaNhan';
 import OrderV2DetailModal from '../components/OrderV2DetailModal';
 import '../styles/cham-cong-v2.css';
 import '../styles/cong-viec.css';
@@ -20,7 +21,7 @@ import { fetchApprovalRequests, fetchShiftLogsRange, fetchShiftConfigs } from '.
 import { fetchDanhSachNhanSuNgay } from '../lib/hoSoNgayNhanSu';
 import { localDateStr } from '../lib/date';
 import { computeShiftHours } from '../lib/kpi';
-import { Zap, Megaphone, FileText as IconLeave, ClipboardList as IconReport, Package as IconPackageAdmin, Boxes as IconStock, ChevronRight, TrendingUp as IconMoneyUp, Clock as IconClock, Gift as IconGift } from 'lucide-react';
+import { Zap, FileText as IconLeave, ClipboardList as IconReport, Package as IconPackageAdmin, Boxes as IconStock, ChevronRight, TrendingUp as IconMoneyUp, Clock as IconClock, Gift as IconGift } from 'lucide-react';
 
 import { ROLE_META, KITCHEN_LEAD_ROLES, getRoleMeta, formatStationLabel } from '../lib/roles';
 import { ORDER_FLOWS } from '../data/orderCatalogs';
@@ -167,7 +168,10 @@ const MA_KHAU_BEP_THEO_BO_PHAN={bep_lanh:'BAKERY_COLD',bep_nong:'BAKERY_HOT',xuo
 //    (FinishedGoodsInventoryV2), không dựng bản khác.
 const O_DIEU_HANH_BEP_TRUONG=[
  {ten:'Giao việc',Icon:Zap,tab:'tasks',mau:'#7c3aed',nen:'#f2ecff',phu:'Giao & duyệt việc bếp'},
- {ten:'Bảng tin',Icon:Megaphone,tab:'feed',mau:'#0284c7',nen:'#e6f4fc',phu:'Chỉ đạo & thông báo'},
+ // Ô "Bảng tin" cũ đổi thành "Bảng lương" theo yêu cầu Giám đốc 04/09/2026 —
+ // Bảng tin vẫn còn nguyên ở tab "Bảng tin" dưới thanh điều hướng, không mất
+ // đường vào.
+ {ten:'Bảng lương',Icon:IconMoneyUp,sheet:'bangLuong',mau:'#0b9462',nen:'#e7f7ef',phu:'Lương dự kiến tháng này'},
  {ten:'Đơn từ/Xin nghỉ',Icon:IconLeave,sheet:'donTu',mau:'#0b9462',nen:'#e7f7ef',phu:'Của tôi & đội cần duyệt'},
  {ten:'Nguyên liệu',Icon:IconPackageAdmin,tab:'warehouse',mau:'#a16207',nen:'#fdf4dd',phu:'Yêu cầu & tồn kho'},
  {ten:'Báo cáo ngày',Icon:IconReport,sheet:'baoCao',mau:'#be185d',nen:'#fdeaf2',phu:'Đội bếp hôm nay'},
@@ -526,6 +530,7 @@ function LeadHome({orders,tasks,onNavigate,profile}){
   <SectionHead title="TIẾN ĐỘ SẢN XUẤT" value={`${tasks.length} việc`}/>
   <TaskQueue tasks={tasks}/>
   <div className="sumi-flow-note">Bếp trưởng duyệt "Hoàn thành" thì hệ thống mới nhập kho thành phẩm. Nhân viên báo làm xong chưa tự cộng kho.</div>
+  {sheetMo==='bangLuong'&&<LeadSheet title="💰 Bảng lương của tôi" onClose={()=>setSheetMo(null)}><div style={{padding:12}}><BangLuongCaNhan staffId={profile?.id}/></div></LeadSheet>}
   {sheetMo==='donTu'&&<DonTuXinNghiSheet hoSo={profile} onClose={()=>setSheetMo(null)}/>}
   {sheetMo==='baoCao'&&<BaoCaoNgaySheet hoSo={profile} onClose={()=>setSheetMo(null)}/>}
   {sheetMo==='khoTP'&&<div style={{position:'fixed',inset:0,zIndex:1400,background:'#fdf9f2',overflowY:'auto',padding:16,boxSizing:'border-box'}}><FinishedGoodsInventoryV2 onBack={()=>setSheetMo(null)}/></div>}
