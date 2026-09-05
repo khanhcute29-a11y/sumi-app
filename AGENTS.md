@@ -7,7 +7,8 @@
 > **Hệ thống thật KHÔNG dùng bất kỳ thứ nào trong số đó.** Tệp này mới là sự thật.
 > Khi hai tệp mâu thuẫn, **tệp này thắng**.
 
-Cập nhật: 26/08/2026 · Nhánh chính: `main` · Bản đang chạy thật: commit `fd51510`
+Nhánh chính: `main`. Không ghi cứng ngày/commit ở đây — dễ lỗi thời; chạy
+`git log -1` nếu cần biết bản đang chạy thật.
 
 ---
 
@@ -45,10 +46,10 @@ Biến môi trường (đặt trong `.env.local`, **không bao giờ commit**):
 sumi-app/
 ├── api/send-push.js              # Hàm serverless Vercel — gửi Web Push
 ├── public/version.json           # ⚠️ Cổng chặn phiên bản APK (xem §6)
-├── supabase/migrations/          # 105 tệp .sql — nguồn sự thật của database
+├── supabase/migrations/          # nguồn sự thật của database (xem §5.4 quy ước tên)
 └── src/
     ├── App.jsx                   # Định tuyến màn hình + realtime toàn cục
-    ├── screens/                  # 33 màn hình — mỗi tab một tệp
+    ├── screens/                  # mỗi tab một tệp
     ├── components/
     │   ├── Messenger/            # 🔒 CHAT — của đồng đội, xem §4
     │   ├── EmployeeDashboard/     # 🔒 Màn hình "Hôm nay" — của đồng đội, xem §4
@@ -105,14 +106,18 @@ Tách ra là chuông kêu hai lần hoặc câm hẳn.
 **D. Màn hình "Hôm nay" của nhân viên** — do đồng đội phụ trách (mới, 26/08)
 
 ```
-src/components/EmployeeDashboard/EmployeeOverviewV4.jsx
-src/components/EmployeeDashboard/employee-overview-v4.css
+src/components/mockups/EmployeeDashboard/EmployeeOverviewV4.jsx
+src/components/mockups/EmployeeDashboard/employee-overview-v4.css
 src/lib/employeeOverviewV4.js
 supabase/migrations/202608260150_staff_violations_rewards_shift_reports.sql
 ```
 
-Đây đã **thay thế** `src/screens/MobileHomeScreen.jsx` làm tab "Hôm nay" thật.
-Xem `?mockup=employee-v4` để chạy thử riêng lẻ.
+`MobileHomeScreen.jsx` **vẫn là file thật được `App.jsx` gọi** cho tab "Hôm nay"
+— nó KHÔNG bị thay thế. Bên trong nó tự định tuyến theo vai trò: Giám đốc/Phó GĐ
+→ `DirectorHome`, Bếp trưởng → `LeadHome`, nhân viên thường → `EmployeeOverviewV4Inner`
+(nhánh này mới là phần "của đồng đội" ở trên). Đừng tưởng `MobileHomeScreen.jsx`
+đã chết rồi bỏ qua khi sửa — 2 nhánh Director/Lead vẫn sống trong đúng file đó.
+Xem `?mockup=employee-v4` để chạy thử riêng `EmployeeOverviewV4` (không qua vai trò).
 
 **C. Web Push nền** — `src/lib/push.js` · `api/send-push.js` · Service Worker
 
@@ -233,7 +238,10 @@ Việc       create_general_task · start_task_v2 · complete_task_v2
 Nhân sự    is_business_director · get_staff_kpi_v2
            submit_expense_claim · submit_salary_advance
 
-Chát 🔒    get_or_create_dm_room
+Thanh toán / công nợ
+           verify_order_payment · record_customer_debt_payment
+
+Chát 🔒    get_or_create_dm_room · create_chat_group · notify_chat_mentions
 ```
 
 Muốn đổi tham số của một RPC → **báo cả nhóm trước.** Giao diện gọi thẳng bằng tên;
@@ -263,3 +271,17 @@ Muốn đổi tham số của một RPC → **báo cả nhóm trước.** Giao d
 4. Kiểm tra chuông và thông báo nền **vẫn kêu** sau thay đổi của mình.
 5. Nếu có sửa database: chạy lại truy vấn đối chiếu, dán số liệu thật vào báo cáo.
    Không nói "đã sửa xong" nếu chưa nhìn thấy số.
+
+---
+
+## Agent skills
+
+### Issue tracker
+
+Issues/spec cho sumi-app lưu dạng markdown local dưới `.scratch/<tính-năng>/` —
+không dùng GitHub Issues dù repo có remote GitHub thật. Xem
+`docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` + `docs/adr/` ở gốc repo. Xem `docs/agents/domain.md`.
