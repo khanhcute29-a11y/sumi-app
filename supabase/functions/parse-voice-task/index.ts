@@ -72,8 +72,8 @@ ${staffListText}
 Phân tích văn bản nói dưới đây và trích xuất:
 - title: Tên ngắn gọn của công việc (bắt buộc phải có, không được để trống nếu văn bản có nội dung)
 - description: Mô tả/yêu cầu chi tiết thêm nếu có (khác với title, có thể null nếu không có gì thêm)
-- deadline: Hạn chót phải xong, suy ra giờ TUYỆT ĐỐI từ giờ hiện tại ở trên (vd "5 giờ chiều nay", "trước 5h chiều", "mai 8 giờ sáng"), định dạng ISO 8601 có timezone +07:00, hoặc null nếu không nói tới hạn chót
-- reminderAt: Giờ nhắc chuông nếu người nói có nhắc riêng (vd "nhắc trước 30 phút", "nhắc lúc 4 giờ chiều") — ISO 8601 +07:00, hoặc null nếu không nói tới
+- deadline: Hạn chót phải xong, suy ra giờ TUYỆT ĐỐI từ giờ hiện tại ở trên (vd "5 giờ chiều nay", "trước 5h chiều", "mai 8 giờ sáng"), định dạng ISO 8601 có timezone +07:00, hoặc null nếu không nói tới hạn chót. TUYỆT ĐỐI không suy ra deadline PHẢI Ở TƯƠNG LAI so với giờ hiện tại — nếu giờ suy ra được lại rơi vào QUÁ KHỨ so với giờ hiện tại ở trên, đó là hiểu sai (vd nhầm giờ sáng/chiều), phải cộng thêm 12 tiếng hoặc chuyển sang ngày hôm sau cho hợp lý, không bao giờ trả về deadline trong quá khứ. Đặc biệt: SỐ LƯỢNG sản phẩm (vd "10 ổ bánh", "5 cái bánh") KHÔNG PHẢI là giờ — không được nhầm số lượng thành giờ hạn chót.
+- reminderAt: Giờ nhắc chuông nếu người nói có nhắc riêng (vd "nhắc trước 30 phút", "nhắc lúc 4 giờ chiều") — ISO 8601 +07:00, hoặc null nếu không nói tới. Cùng lưu ý: không bao giờ để reminderAt rơi vào quá khứ so với giờ hiện tại.
 - orderCode: Mã đơn hàng nếu có nhắc tới (dạng SUMI-xxxxxxxx-xxx), hoặc null
 - assigneeNames: Mảng TÊN THẬT (đúng chữ trong danh sách nhân viên ở trên) của (những) người được giao việc nếu văn bản có nhắc tới tên ai, hoặc mảng rỗng [] nếu không nhắc tên ai
 
@@ -124,11 +124,24 @@ Trả về đúng JSON hợp lệ theo mẫu:
       .map((n) => String(n || "").trim())
       .filter((n) => n && staffNames.some((s) => s.trim().toLowerCase() === n.toLowerCase()));
 
+    // Chốt an toàn: dù đã dặn trong prompt, Gemini vẫn có thể nhầm giờ (vd lẫn
+    // AM/PM, hoặc lẫn SỐ LƯỢNG sản phẩm với GIỜ — thực tế đã gặp: "10 ổ bánh"
+    // bị hiểu thành "10 giờ" rồi trả về hạn chót đã QUA giờ hiện tại). Loại bỏ
+    // thẳng bất kỳ deadline/reminderAt nào rơi vào quá khứ thay vì tin theo
+    // model, để không gán một hạn chót vô nghĩa vào việc.
+    const nowMs = Date.parse(nowIso);
+    const bothTuongLai = (iso: string | null) => {
+      if (!iso) return null;
+      const ms = Date.parse(iso);
+      if (Number.isNaN(ms) || ms < nowMs) return null;
+      return iso;
+    };
+
     const response_data = {
       title: typeof result.title === "string" ? result.title : null,
       description: typeof result.description === "string" ? result.description : null,
-      deadline: typeof result.deadline === "string" ? result.deadline : null,
-      reminderAt: typeof result.reminderAt === "string" ? result.reminderAt : null,
+      deadline: bothTuongLai(typeof result.deadline === "string" ? result.deadline : null),
+      reminderAt: bothTuongLai(typeof result.reminderAt === "string" ? result.reminderAt : null),
       orderCode: typeof result.orderCode === "string" ? result.orderCode : null,
       assigneeNames: matchedNames,
     };
