@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { createAssignedTasks } from '../../../lib/queries';
-import { supabase } from '../../../lib/supabaseClient';
 import { VoiceMicButton } from '../../VoiceMicButton';
 import { OrderCodePicker } from '../../OrderCodePicker';
+import { parseVoiceTaskAssign } from '../../../lib/parseVoiceTaskAssign';
 
 // Chuyển ISO (có timezone) thành định dạng input type="datetime-local"
 // (YYYY-MM-DDTHH:mm, giờ tường thuật theo múi giờ máy đang chạy — cả tiệm
@@ -43,7 +43,6 @@ export default function GiaoViecModal({ hoSo, danhSachTho = [], khauMacDinh, onC
   const [timTho, setTimTho] = useState('');
   const [dangLuu, setDangLuu] = useState(false);
   const [loi, setLoi] = useState('');
-  const [dangXuLyGiongNoi, setDangXuLyGiongNoi] = useState(false);
 
   // Bỏ dấu để gõ "nghia" cũng tìm ra "Nghĩa".
   const boDau = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -99,66 +98,32 @@ export default function GiaoViecModal({ hoSo, danhSachTho = [], khauMacDinh, onC
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
           <h3 style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>➕ Giao việc mới</h3>
           <VoiceMicButton
-            // LỖI THẬT vừa tìm ra: VoiceMicButton không truyền onInterim riêng thì
-            // useVoiceInput.start() coi luôn onTranscript LÀM CẢ onInterim (xem
-            // VoiceMicButton.jsx: `onInterim || onTranscript`) — nghĩa là MỖI đoạn
-            // giọng nói TẠM (chưa nói xong, isFinal=false) cũng gọi thẳng hàm bên
-            // dưới, tức là gọi Gemini nhiều lần cho CÙNG MỘT câu nói (mỗi lần dừng
-            // để lấy hơi lại bắn thêm 1 request với transcript CHƯA đầy đủ). Đây là
-            // nguyên nhân thật của cả 2 lỗi hôm nay: (1) tốn quota Gemini rất nhanh
-            // (nói 1 câu = nhiều request thay vì 1), và (2) kết quả vào sai ô — vì
-            // nhiều request bắn đi gần như cùng lúc, request nào trả về SAU cùng
-            // thắng chứ không phải request ứng với câu nói ĐẦY ĐỦ. Chặn bằng cách
-            // truyền onInterim rỗng để CHỈ xử lý khi nói xong (isFinal=true).
-            onInterim={() => {}}
-            onTranscript={async (t) => {
-            if (!t?.trim()) return;
-            setDangXuLyGiongNoi(true); setLoi('');
-            try {
-              const { data, error } = await supabase.functions.invoke('parse-voice-task', {
-                body: {
-                  transcript: t.trim(),
-                  now: new Date().toISOString(),
-                  staffNames: (danhSachTho || []).map((p) => p.full_name).filter(Boolean),
-                  locale: 'vi-VN',
-                },
-              });
-              if (error) throw error;
-              if (data?.title) setTieuDe(data.title);
-              if (data?.description) setMoTa(data.description);
-              if (data?.orderCode) setMaDon(data.orderCode);
-              if (data?.deadline) setHanChot(isoToDatetimeLocal(data.deadline));
-              if (data?.reminderAt) setNhacLuc(isoToDatetimeLocal(data.reminderAt));
-              if (Array.isArray(data?.assigneeNames) && data.assigneeNames.length) {
+            // Không còn gọi AI (Gemini) nữa — phân tích local bằng
+            // parseVoiceTaskAssign, chạy tức thì, không phụ thuộc quota/mạng
+            // (theo yêu cầu chủ tiệm 05/09/2026, sau khi dính hết quota Gemini
+            // 2 lần trong 1 ngày). Đánh đổi: không tách "Tên việc"/"Mô tả"
+            // thông minh như AI — gộp hết vào Tên việc, Mô tả để trống.
+            onTranscript={(t) => {
+              if (!t?.trim()) return;
+              setLoi('');
+              const staffNames = (danhSachTho || []).map((p) => p.full_name).filter(Boolean);
+              const data = parseVoiceTaskAssign(t, { now: new Date().toISOString(), staffNames });
+              if (data.title) setTieuDe(data.title);
+              if (data.orderCode) setMaDon(data.orderCode);
+              if (data.deadline) setHanChot(isoToDatetimeLocal(data.deadline));
+              if (data.reminderAt) setNhacLuc(isoToDatetimeLocal(data.reminderAt));
+              if (data.assigneeNames.length) {
                 const boDauCuc = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
                 const idsKhop = (danhSachTho || [])
                   .filter((p) => data.assigneeNames.some((n) => boDauCuc(n) === boDauCuc(p.full_name)))
                   .map((p) => p.id);
                 if (idsKhop.length) setChon((prev) => [...new Set([...prev, ...idsKhop])]);
               }
-              if (!data?.title && !data?.description) {
+              if (!data.title) {
                 setLoi('Không trích xuất được nội dung việc. Nói rõ hơn giúp em?');
               }
-            } catch (e) {
-              // supabase.functions.invoke ném FunctionsHttpError khi Edge Function trả
-              // non-2xx — e.message lúc đó CHỈ là chuỗi chung "Edge Function returned
-              // a non-2xx status code", không phải lỗi thật. Lỗi thật (vd Gemini quá
-              // tải, hết quota...) nằm trong body JSON, đọc qua e.context (Response).
-              let chiTiet = e?.message || 'Không phân tích được giọng nói. Thử lại giúp em?';
-              try {
-                if (e?.context?.json) {
-                  const body = await e.context.json();
-                  if (body?.error) chiTiet = body.error;
-                }
-              } catch { /* body không phải JSON hoặc đã đọc rồi — giữ nguyên message chung */ }
-              setLoi(chiTiet);
-            } finally {
-              setDangXuLyGiongNoi(false);
-            }
-          }} />
-          {dangXuLyGiongNoi && (
-            <span style={{ fontSize: 12, color: 'var(--cv-muted)' }}>Đang phân tích…</span>
-          )}
+            }}
+          />
         </div>
 
         <label style={o.nhan}>Tên công việc <span style={{ color: '#d03027' }}>*</span></label>
