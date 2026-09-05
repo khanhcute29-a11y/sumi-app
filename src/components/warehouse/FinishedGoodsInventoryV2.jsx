@@ -423,7 +423,7 @@ export default function FinishedGoodsInventoryV2({ onBack }) {
       {onBack && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button onClick={onBack} style={{ width: 44, height: 44, border: '1px solid #e2cdb6', borderRadius: 14, background: '#fff', fontSize: 20, cursor: 'pointer' }}>‹</button>
-          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 900, color: '#2d1b10' }}>🏬 Kho Thành Phẩm</h1>
+          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 900, color: '#2d1b10' }}>📦 Kho Thành Phẩm</h1>
         </div>
       )}
 

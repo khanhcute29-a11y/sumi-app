@@ -1297,19 +1297,14 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
                 cursor: 'pointer',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
                 display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                minHeight: 88,
+                alignItems: 'center',
+                gap: 10,
+                minHeight: 64,
                 boxSizing: 'border-box'
               }}
             >
-              <div>
-                <Zap size={22} color="#b87a48" strokeWidth={1.6} />
-              </div>
-              <div style={{ marginTop: 6 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>1. Giao việc</div>
-                <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>Giao việc 30+ NV</div>
-              </div>
+              <Zap size={22} color="#b87a48" strokeWidth={1.6} />
+              <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>Giao việc</div>
             </div>
 
             {/* Ô 2: Trạng Thái Nhân Sự Thời Gian Thực — thay cho "Bảng tin" cũ
@@ -1327,19 +1322,14 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
                 cursor: 'pointer',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
                 display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                minHeight: 88,
+                alignItems: 'center',
+                gap: 10,
+                minHeight: 64,
                 boxSizing: 'border-box'
               }}
             >
-              <div>
-                <Radio size={22} color="#b87a48" strokeWidth={1.6} />
-              </div>
-              <div style={{ marginTop: 6 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>2. Trạng Thái</div>
-                <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>Nhân sự đang làm gì</div>
-              </div>
+              <Radio size={22} color="#b87a48" strokeWidth={1.6} />
+              <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>Trạng Thái</div>
             </div>
 
             {/* Ô 3: Báo cáo ca ngày (Tạm ứng/Xin nghỉ đã gom vào ô "Yêu Cầu Duyệt"
@@ -1354,19 +1344,14 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
                 cursor: 'pointer',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
                 display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                minHeight: 88,
+                alignItems: 'center',
+                gap: 10,
+                minHeight: 64,
                 boxSizing: 'border-box'
               }}
             >
-              <div>
-                <ClipboardList size={22} color="#b87a48" strokeWidth={1.6} />
-              </div>
-              <div style={{ marginTop: 6 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>3. Báo cáo ngày</div>
-                <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>{completedTasksToday.length} việc xong · {shiftReports.length} báo cáo ca</div>
-              </div>
+              <ClipboardList size={22} color="#b87a48" strokeWidth={1.6} />
+              <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>Báo cáo ngày</div>
             </div>
 
             {/* Ô 6: Lịch phân ca */}
@@ -1380,19 +1365,14 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
                 cursor: 'pointer',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
                 display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                minHeight: 88,
+                alignItems: 'center',
+                gap: 10,
+                minHeight: 64,
                 boxSizing: 'border-box'
               }}
             >
-              <div>
-                <Calendar size={22} color="#b87a48" strokeWidth={1.6} />
-              </div>
-              <div style={{ marginTop: 6 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>4. Lịch làm</div>
-                <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>{weeklySchedule.totalAssignments} lượt phân ca tuần này</div>
-              </div>
+              <Calendar size={22} color="#b87a48" strokeWidth={1.6} />
+              <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>Lịch làm</div>
             </div>
 
             {/* Ô 7: Kho Thành Phẩm — mở FinishedGoodsInventoryV2 thật (đã có sẵn từ
@@ -1408,19 +1388,14 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
                 cursor: 'pointer',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
                 display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                minHeight: 88,
+                alignItems: 'center',
+                gap: 10,
+                minHeight: 64,
                 boxSizing: 'border-box'
               }}
             >
-              <div>
-                <Package size={22} color="#b87a48" strokeWidth={1.6} />
-              </div>
-              <div style={{ marginTop: 6 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>5. Kho Thành Phẩm</div>
-                <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>Tồn kho, hạn dùng, nhập kho</div>
-              </div>
+              <Package size={22} color="#b87a48" strokeWidth={1.6} />
+              <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>Kho Thành Phẩm</div>
             </div>
 
             {/* Ô 8: Nhân viên — mở StaffScreen thật (đã có sẵn từ Sidebar desktop):
@@ -1435,19 +1410,14 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
                 cursor: 'pointer',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
                 display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                minHeight: 88,
+                alignItems: 'center',
+                gap: 10,
+                minHeight: 64,
                 boxSizing: 'border-box'
               }}
             >
-              <div>
-                <Users size={22} color="#b45309" strokeWidth={1.6} />
-              </div>
-              <div style={{ marginTop: 6 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>6. Nhân viên</div>
-                <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>Duyệt tài khoản, vai trò, khâu</div>
-              </div>
+              <Users size={22} color="#b45309" strokeWidth={1.6} />
+              <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>Nhân viên</div>
             </div>
 
             {/* Ô 9: Khách Hàng — mở CustomersScreen thật (đã có sẵn từ Sidebar
@@ -1462,19 +1432,14 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
                 cursor: 'pointer',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
                 display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                minHeight: 88,
+                alignItems: 'center',
+                gap: 10,
+                minHeight: 64,
                 boxSizing: 'border-box'
               }}
             >
-              <div>
-                <Contact size={22} color="#b87a48" strokeWidth={1.6} />
-              </div>
-              <div style={{ marginTop: 6 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>7. Khách Hàng</div>
-                <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>Điểm tin cậy, lịch sử mua</div>
-              </div>
+              <Contact size={22} color="#b87a48" strokeWidth={1.6} />
+              <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>Khách Hàng</div>
             </div>
 
             {/* Ô 10: Gieo Hạt — lịch sử Cộng/Trừ sao toàn công ty (ai được
@@ -1491,17 +1456,14 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
                 cursor: 'pointer',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
                 display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                minHeight: 88,
+                alignItems: 'center',
+                gap: 10,
+                minHeight: 64,
                 boxSizing: 'border-box'
               }}
             >
-              <div style={{ fontSize: 22 }}>🌱</div>
-              <div style={{ marginTop: 6 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>8. Gieo Hạt</div>
-                <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>Lịch sử tặng/trừ sao</div>
-              </div>
+              <div style={{ fontSize: 22, lineHeight: 1 }}>🌱</div>
+              <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>Gieo Hạt</div>
             </div>
           </div>
 
