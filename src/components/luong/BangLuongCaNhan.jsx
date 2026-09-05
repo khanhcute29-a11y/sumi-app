@@ -65,15 +65,39 @@ export default function BangLuongCaNhan({ staffId, thang, tieuDe = 'Bảng lươ
       <Dong nhan={`Lương ngày công (${d.ngay_cong_thuc_te} ngày)`} gia_tri={tien(d.luong_ngay_cong)} />
       <Dong nhan={`Tiền cơm (${d.ngay_cong_thuc_te} × 30.000đ)`} gia_tri={tien(d.tien_com)} />
       <Dong nhan={`Tăng ca (${d.gio_tang_ca} giờ × ${tien(d.don_gia_gio_tang_ca)})`} gia_tri={tien(d.tien_tang_ca)} />
-      <Dong nhan="Thưởng sao (Gieo hạt)" gia_tri={`+${tien(d.thuong_sao)}`} mau="#1e7e4c" />
-      <Dong nhan={`Chuyên cần (${d.so_vi_pham} lỗi)`} gia_tri={tien(d.chuyen_can)} mau={d.so_vi_pham ? '#b45309' : '#1e7e4c'} />
-      <Dong nhan="Phạt sao" gia_tri={`-${tien(d.phat_sao)}`} mau="#b42318" />
+      {/* CHUYÊN CẦN là một QUỸ, không phải khoản thưởng cố định:
+          quỹ gốc 500⭐ + sao được cộng trong tháng, rồi mỗi lần bị trừ sao
+          hoặc ghi vi phạm sẽ trừ ra từ quỹ chung đó. Vì vậy thưởng sao KHÔNG
+          cộng riêng và phạt KHÔNG trừ riêng ở chỗ khác — làm vậy là tính hai
+          lần (xem migration 202609042100). */}
+      <Dong nhan={`Quỹ chuyên cần gốc (${d.quy_chuyen_can_sao}⭐)`} gia_tri={tien(d.quy_chuyen_can_goc)} />
+      <Dong
+        nhan={`Cộng sao trong tháng (Gieo hạt${d.thuong_so_sao ? ` +${d.thuong_so_sao}⭐` : ''})`}
+        gia_tri={`+${tien(d.thuong_sao)}`}
+        mau={d.thuong_so_sao ? '#1e7e4c' : '#725f50'}
+      />
+      <Dong nhan="Tổng quỹ chuyên cần" gia_tri={tien(d.quy_chuyen_can)} />
+      <Dong
+        nhan={`Trừ sao / vi phạm (${d.phat_so_sao}⭐ · ${d.so_vi_pham} lần)`}
+        gia_tri={`-${tien(Math.min(d.phat_tien, d.quy_chuyen_can))}`}
+        mau={d.phat_so_sao ? '#b42318' : '#725f50'}
+      />
+      <Dong nhan="Chuyên cần còn lại" gia_tri={tien(d.chuyen_can)} mau={d.chuyen_can > 0 ? '#1e7e4c' : '#b42318'} />
+
+      {d.phat_vuot_chuyen_can > 0 && (
+        <div style={{ margin: '6px 0', padding: '8px 10px', borderRadius: 10, background: '#fff1f0', border: '1px solid #ffccc7', fontSize: 12, color: '#b42318' }}>
+          ⚠️ Bị trừ vượt quá tổng quỹ chuyên cần {tien(d.phat_vuot_chuyen_can)} — phần vượt này CHƯA trừ thêm vào lương, chờ Giám đốc quyết.
+        </div>
+      )}
+
       <Dong nhan="Tạm ứng đã nhận" gia_tri={`-${tien(d.tam_ung)}`} mau="#b42318" />
       <Dong nhan="TẠM TÍNH THỰC NHẬN" gia_tri={tien(d.tong_du_kien)} mau="#087f5b" dam />
 
       {!gonGang && (
         <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed #eadcca', fontSize: 11.5, color: '#725f50', lineHeight: 1.6 }}>
-          Số này tự cập nhật mỗi ngày theo chấm công, tăng ca đã duyệt, sao thưởng/phạt và vi phạm thực tế.
+          Chuyên cần mỗi tháng là một quỹ: 500⭐ (500.000đ) cấp sẵn, cộng thêm sao được thưởng trong tháng.
+          Mỗi lần bị trừ sao hoặc ghi vi phạm sẽ trừ ra từ quỹ chung này — thưởng không cộng riêng, phạt không
+          trừ riêng ở chỗ khác. Số liệu tự cập nhật mỗi ngày theo chấm công, tăng ca đã duyệt và đánh giá thực tế.
           Số tiền chính thức là bảng lương do Kế toán chốt cuối tháng.
         </div>
       )}
