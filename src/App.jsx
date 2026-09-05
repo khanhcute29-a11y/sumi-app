@@ -41,6 +41,7 @@ import ProductsScreen from './screens/ProductsScreen';
 import ShiftsScreen from './screens/ShiftsScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import StaffScreen from './screens/StaffScreen';
+import StaffDeactivatedScreen from './screens/StaffDeactivatedScreen';
 import ApprovalRequestsScreen from './screens/ApprovalRequestsScreen';
 import TasksScreen from './screens/TasksScreen';
 import IncidentsScreen from './screens/IncidentsScreen';
@@ -60,7 +61,7 @@ import CompanyFeedScreen from './screens/CompanyFeedScreen';
 import VisualGuidesScreen from './screens/VisualGuidesScreen';
 import { applyUiScale, getUiScale } from './lib/uiScale';
 import { NavBadge } from './components/navigation/NavBadge';
-import { IconDashboard, IconShipping, IconProducts, IconShifts, IconReports, IconCustomers, IconStaff, IconSettings, IconCheck, IconWarning, IconClipboard, IconMoney, IconReceipt } from './components/icons/FrogIcons';
+import { IconDashboard, IconShipping, IconProducts, IconShifts, IconReports, IconCustomers, IconStaff, IconSettings, IconCheck, IconWarning, IconClipboard, IconMoney, IconReceipt, IconBan } from './components/icons/FrogIcons';
 
 // Vai trò được xử lý thu-chi thật (khớp is_finance_operator() phía database) —
 // chỉ nhóm này mới thấy mục "Kế Toán Tổng Quan" trong menu.
@@ -365,12 +366,20 @@ function OpsApp({ onSignOut }) {
   const screens = {
     home: <MobileHomeScreen onNavigate={setTab} />, feed: <CompanyFeedScreen />, chat: <ChatScreen profile={profile} />,
     dashboard: <DashboardScreen />, orders: <OrdersV2Screen />, kds: <KdsScreen initialStation={kdsStation} />, warehouse: <WarehouseScreen branch={warehouseBranch} onBranchChange={setWarehouseBranch} />, cashbook: <CashbookScreen />,
-    shipping: featureFlags.delivery_v2 ? <ShippingV2Screen /> : <ShippingScreen />, products: <ProductsScreen />, shifts: <ShiftsScreen />, compensation: <CompensationScreen />, financeRequests: <FinanceRequestsScreen />, accountantOverview: <AccountantOverviewV1Inner />, approvals: <ApprovalRequestsScreen />, tasks: <TasksScreen />, incidents: <IncidentsScreen />, reports: <ReportsScreen />, kpi: featureFlags.kpi_v2 ? <KpiV2Screen /> : <KpiScreen />, inbox: <InboxV2Screen />, crm: <CustomersScreen />, staff: <StaffScreen />, settings: <SettingsScreen onSignOut={onSignOut} />, visualGuides: <VisualGuidesScreen />, staffTasks: <StaffTasksAssignedScreen />, kpiDashboard: <KpiDashboardScreen />, schoolRevenue: <SchoolRevenueScreen />, customerDebt: <CustomerDebtScreen />, profile: <MobileProfileScreen onSignOut={onSignOut} onNavigate={setTab} />,
+    shipping: featureFlags.delivery_v2 ? <ShippingV2Screen /> : <ShippingScreen />, products: <ProductsScreen />, shifts: <ShiftsScreen />, compensation: <CompensationScreen />, financeRequests: <FinanceRequestsScreen />, accountantOverview: <AccountantOverviewV1Inner />, approvals: <ApprovalRequestsScreen />, tasks: <TasksScreen />, incidents: <IncidentsScreen />, reports: <ReportsScreen />, kpi: featureFlags.kpi_v2 ? <KpiV2Screen /> : <KpiScreen />, inbox: <InboxV2Screen />, crm: <CustomersScreen />, staff: <StaffScreen />, staffDeactivated: <StaffDeactivatedScreen />, settings: <SettingsScreen onSignOut={onSignOut} />, visualGuides: <VisualGuidesScreen />, staffTasks: <StaffTasksAssignedScreen />, kpiDashboard: <KpiDashboardScreen />, schoolRevenue: <SchoolRevenueScreen />, customerDebt: <CustomerDebtScreen />, profile: <MobileProfileScreen onSignOut={onSignOut} onNavigate={setTab} />,
   };
   const isBottomKey = (k) => ['home', 'feed', 'orders', 'tasks', 'chat', 'profile'].includes(k);
   // Chỉ Kế toán/Thu ngân/Quản lý/Giám đốc thấy mục "Kế Toán Tổng Quan" — khớp
   // is_finance_operator() chặn ở RPC phía database.
   const isFinanceRole = hasAnyRole(profile, FINANCE_ROLES);
+  // Mục "Nhân sự đã nghỉ việc" — tách riêng khỏi màn Nhân Viên chính (yêu cầu
+  // Giám đốc 04/09/2026), chỉ owner/admin thấy vì cùng quyền Khoá/Mở lại tài
+  // khoản (canDeactivate) ở StaffScreen.jsx.
+  const canManageStaff = hasAnyRole(profile, ['owner', 'admin']);
+  const desktopExtraItems = [
+    ...(isFinanceRole ? [{ key: 'accountantOverview', label: 'Kế Toán Tổng Quan', Icon: IconReceipt }] : []),
+    ...(canManageStaff ? [{ key: 'staffDeactivated', label: 'Nhân Sự Đã Nghỉ', Icon: IconBan }] : []),
+  ];
   const moreItems = isFinanceRole
     ? [...MORE_ITEMS, { key: 'accountantOverview', label: 'Kế Toán Tổng Quan', Icon: IconReceipt }]
     : MORE_ITEMS;
@@ -381,7 +390,7 @@ function OpsApp({ onSignOut }) {
       <UpdateRequiredModal />
       <ConnectivityBanner />
       <div className="sb-body">
-        <div className="sb-sidebar"><Sidebar active={tab} activeStation={kdsStation} onSelectStation={setKdsStation} activeBranch={warehouseBranch} onSelectBranch={setWarehouseBranch} onSelect={setTab} badges={badgeCounts} extraItems={isFinanceRole ? [{ key: 'accountantOverview', label: 'Kế Toán Tổng Quan', Icon: IconReceipt }] : []} /></div>
+        <div className="sb-sidebar"><Sidebar active={tab} activeStation={kdsStation} onSelectStation={setKdsStation} activeBranch={warehouseBranch} onSelectBranch={setWarehouseBranch} onSelect={setTab} badges={badgeCounts} extraItems={desktopExtraItems} /></div>
         <div className="sb-content">
           {screens[tab]}
         </div>

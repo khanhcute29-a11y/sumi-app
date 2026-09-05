@@ -554,26 +554,6 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, canResetPassword, danhSachC
   );
 }
 
-function DeactivatedStaffRow({ s, canDeactivate, onReactivate }) {
-  const [busy, setBusy] = useState(false);
-  const handleReactivate = async () => {
-    setBusy(true);
-    try { await onReactivate(s.id); } finally { setBusy(false); }
-  };
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '10px 0', flexWrap: 'wrap' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ font: 'var(--text-body)', color: 'var(--text-muted)' }}>{s.full_name || '(chưa đặt tên)'}</span>
-        <Badge tone={ROLE_META[s.role]?.tone || 'neutral'}>{ROLE_META[s.role]?.label || s.role}</Badge>
-        <Badge tone="danger">Đã khoá</Badge>
-      </div>
-      {canDeactivate && (
-        <Button variant="secondary" size="sm" onClick={handleReactivate} disabled={busy}>{busy ? 'Đang mở...' : 'Mở lại'}</Button>
-      )}
-    </div>
-  );
-}
-
 // Thứ tự phân luồng phòng ban cố định — khớp đúng thứ tự dùng ở Chấm công/Báo
 // cáo ngày (Bakery → Xưởng 41 → Xưởng 42 → Vận tải → Khác).
 const BO_PHAN_ORDER = ['bep_lanh', 'bep_nong', 'thu_ngan', 'ban_hang', 'xuong41', 'xuong42', 'van_tai', '_khac'];
@@ -633,8 +613,11 @@ export default function StaffScreen() {
     return ['kitchen_lead', 'deputy_director_x41', 'deputy_director_x42'].includes(me?.role);
   };
   const pending = staff.filter((s) => s.approved === false);
+  // Tài khoản đã khoá (nghỉ việc) KHÔNG hiện ở đây nữa — chuyển hẳn sang màn
+  // "Nhân sự đã nghỉ việc" riêng (StaffDeactivatedScreen, mục riêng trên
+  // sidebar desktop) theo yêu cầu Giám đốc 04/09/2026: màn Nhân Viên chính
+  // chỉ hiện người đang làm, đỡ rối mắt khi tiệm có nhiều người đã nghỉ.
   const approved = staff.filter((s) => s.approved !== false && s.active !== false);
-  const deactivated = staff.filter((s) => s.approved !== false && s.active === false);
 
   // Phân luồng theo phòng ban — dùng đúng boPhanCuaHoSo() của Chấm công, để
   // luồng ở đây khớp với luồng toàn hệ thống (Báo cáo ngày, Chấm công...).
@@ -651,11 +634,6 @@ export default function StaffScreen() {
 
   const handleDeactivate = async (id) => {
     await updateProfileActive(id, false);
-    load();
-  };
-
-  const handleReactivate = async (id) => {
-    await updateProfileActive(id, true);
     load();
   };
 
@@ -756,15 +734,6 @@ export default function StaffScreen() {
           })}
           {approved.length === 0 && (
             <Card><div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>Chưa có nhân viên nào.</div></Card>
-          )}
-
-          {deactivated.length > 0 && (
-            <Card style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>Đã khoá tài khoản ({deactivated.length})</div>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {deactivated.map((s) => <DeactivatedStaffRow key={s.id} s={s} canDeactivate={canDeactivate} onReactivate={handleReactivate} />)}
-              </div>
-            </Card>
           )}
         </React.Fragment>
       )}
