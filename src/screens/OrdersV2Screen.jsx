@@ -70,6 +70,10 @@ export default function OrdersV2Screen() {
   const [selectedId, setSelectedId] = useState(null);
   const [error, setError] = useState('');
   const [showKho, setShowKho] = useState(false);
+  // Luồng Trường học tách biệt hoàn toàn khỏi 6 thẻ tổng quan chung (yêu cầu
+  // chủ tiệm 05/09/2026) — đơn trường học không còn tính vào 6 thẻ
+  // chung/luồng phân loại nữa, có hẳn 1 khối 6 thẻ riêng dưới Kho Thành Phẩm.
+  const [schoolMode, setSchoolMode] = useState(false);
   // ── Thả tim (đánh dấu đã xem) + số lượng bình luận trên thẻ đơn ──
   const [orderHearts, setOrderHearts] = useState({});
   const [noteCounts, setNoteCounts] = useState({});
@@ -168,10 +172,11 @@ export default function OrdersV2Screen() {
 
   const roleCanCreate = ['owner', 'admin', 'cashier', 'sale', 'kitchen_lead'].includes(profile?.role) || (profile?.extra_roles || []).some(r => ['owner', 'admin', 'cashier', 'sale', 'kitchen_lead'].includes(r));
 
-  // Lọc luồng có sẵn dựa trên quyền của user
+  // Lọc luồng có sẵn dựa trên quyền của user — bỏ 'school' vì giờ có khối 6
+  // thẻ riêng, không còn hiện như 1 lựa chọn luồng trong Màn hình 2 chung nữa.
   const userWorkflows = useMemo(() => getUserWorkflows(profile), [profile]);
   const availableFlowGroups = useMemo(
-    () => FLOW_GROUPS.filter(fg => fg.key === 'mixed' || userWorkflows.includes(fg.key)),
+    () => FLOW_GROUPS.filter(fg => fg.key !== 'school' && (fg.key === 'mixed' || userWorkflows.includes(fg.key))),
     [userWorkflows]
   );
 
@@ -185,11 +190,19 @@ export default function OrdersV2Screen() {
     [orders, profile]
   );
 
-  // Lọc theo trạng thái trước + visibility rules
+  // Tách riêng đơn Trường học khỏi đơn thường — 6 thẻ tổng quan chung và
+  // khối Trường học giờ đếm/lọc trên 2 tập KHÔNG GIAO NHAU (yêu cầu chủ tiệm
+  // 05/09/2026: đơn trường học không còn lẫn vào 6 thẻ chung nữa).
+  const generalVisible = useMemo(() => visibleOrders.filter(o => o.order_type !== 'school'), [visibleOrders]);
+  const schoolVisible = useMemo(() => visibleOrders.filter(o => o.order_type === 'school'), [visibleOrders]);
+
+  // Lọc theo trạng thái trước + visibility rules — dùng tập school hay
+  // general tuỳ đang ở khối nào (schoolMode).
   const statusOrders = useMemo(() => {
     if (!filter) return [];
-    return visibleOrders.filter(FILTERS.find(x => x.key === filter)?.match || (() => true));
-  }, [visibleOrders, filter]);
+    const base = schoolMode ? schoolVisible : generalVisible;
+    return base.filter(FILTERS.find(x => x.key === filter)?.match || (() => true));
+  }, [schoolMode, schoolVisible, generalVisible, filter]);
 
   // Lọc tiếp theo 5 luồng và tìm kiếm
   const shownOrders = useMemo(() => {
@@ -345,7 +358,7 @@ export default function OrdersV2Screen() {
         <div>
           <small>THEO DÕI XUYÊN SUỐT</small>
           <h1>Đơn hàng</h1>
-          <p>{visibleOrders.length} đơn đang hiển thị</p>
+          <p>{(schoolMode ? schoolVisible : generalVisible).length} đơn đang hiển thị</p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {drafts.length > 0 && (
@@ -397,8 +410,9 @@ export default function OrdersV2Screen() {
         </div>
       )}
 
-      {/* Màn hình 1: Tổng quan 6 trạng thái */}
-      {!filter && (
+      {/* Màn hình 1: Tổng quan 6 trạng thái — CHỈ đơn thường, không còn tính
+          đơn Trường học vào đây nữa (xem khối Trường học riêng bên dưới). */}
+      {!filter && !schoolMode && (
         <div className="mock-order-overview">
           {FILTERS.map(item => (
             <button
@@ -408,7 +422,7 @@ export default function OrdersV2Screen() {
             >
               <span><item.Icon size={22} /></span>
               <strong>{item.label}</strong>
-              <b>{visibleOrders.filter(item.match).length}</b>
+              <b>{generalVisible.filter(item.match).length}</b>
             </button>
           ))}
 
@@ -427,11 +441,60 @@ export default function OrdersV2Screen() {
             </span>
             <span style={{ color: '#b93e13', fontWeight: 800 }}>Xem →</span>
           </button>
+
+          {/* Trường học — luồng riêng biệt hoàn toàn, cùng kiểu khung dài như
+              Kho Thành Phẩm ở trên (yêu cầu chủ tiệm 05/09/2026). Chỉ hiện
+              cho ai được xem đơn trường học (canViewSchoolOrder đã lọc sẵn
+              vào userWorkflows qua getUserWorkflows). */}
+          {userWorkflows.includes('school') && (
+            <button className="mock-order-overview-kho" onClick={() => setSchoolMode(true)}
+              style={{
+                gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '14px 16px', borderRadius: 16, border: '1.5px solid #eadcca', background: '#fffaf3',
+                cursor: 'pointer', font: 'inherit', textAlign: 'left',
+              }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <IconSchool size={22} />
+                <strong style={{ color: '#2d1c10', fontSize: 18 }}>Trường học</strong>
+              </span>
+              <span style={{ color: '#b93e13', fontWeight: 800 }}>Xem →</span>
+            </button>
+          )}
         </div>
       )}
 
-      {/* Màn hình 2: Phân loại 5 luồng trong 1 trạng thái */}
-      {filter && !flowGroup && (
+      {/* Màn hình 1 (khối riêng): Tổng quan 6 trạng thái CHỈ đơn Trường học —
+          bấm vào thẳng danh sách luôn (flowGroup='school'), không qua bước
+          chọn luồng như đơn thường vì chỉ có đúng 1 luồng. */}
+      {schoolMode && !filter && (
+        <>
+          {/* Đặt NGOÀI .mock-order-overview — CSS ".mock-order-overview
+              button" áp cho MỌI button con cháu (không chỉ con trực tiếp),
+              nếu để nút "Về Đơn hàng" lồng bên trong sẽ bị ăn nhầm style thẻ
+              lưới (min-height 92px, border, shadow...) tạo ra 1 khung rỗng
+              kỳ dị — lỗi thật gặp phải khi build khối này lần đầu. */}
+          <div className="mock-list-head">
+            <button onClick={() => setSchoolMode(false)}>← Về Đơn hàng</button>
+            <strong style={{ fontSize: 16 }}>🏫 Trường học ({schoolVisible.length} đơn)</strong>
+          </div>
+          <div className="mock-order-overview">
+          {FILTERS.map(item => (
+            <button
+              key={item.key}
+              onClick={() => { setFilter(item.key); setFlowGroup('school'); setSearchQuery(''); setHistoryFrom(''); setHistoryTo(''); setHistoryKeyword(''); }}
+            >
+              <span><item.Icon size={22} /></span>
+              <strong>{item.label}</strong>
+              <b>{schoolVisible.filter(item.match).length}</b>
+            </button>
+          ))}
+          </div>
+        </>
+      )}
+
+      {/* Màn hình 2: Phân loại 5 luồng trong 1 trạng thái — chỉ áp dụng cho
+          đơn thường, khối Trường học bấm thẳng vào danh sách (xem trên). */}
+      {filter && !flowGroup && !schoolMode && (
         <div className="mock-flow-section">
           <div className="mock-list-head">
             <button onClick={() => { setFilter(null); setFlowGroup(null); }}>
@@ -480,8 +543,12 @@ export default function OrdersV2Screen() {
       {filter && flowGroup && (
         <div>
           <div className="mock-list-head">
-            <button onClick={() => setFlowGroup(null)}>
-              ← Quay lại phân loại
+            {/* Trường học bấm thẳng từ khối 6 thẻ riêng vào đây (bỏ qua Màn
+                hình 2), nên lùi lại phải về ĐÚNG khối 6 thẻ Trường học (reset
+                cả filter lẫn flowGroup) — chỉ reset flowGroup thôi sẽ lọt vào
+                khoảng trắng vì Màn hình 2 chung đã bị chặn khi schoolMode. */}
+            <button onClick={() => { if (schoolMode) { setFilter(null); setFlowGroup(null); } else { setFlowGroup(null); } }}>
+              {schoolMode ? '← Về Trường học' : '← Quay lại phân loại'}
             </button>
             <strong>
               {currentFilterLabel} {currentFlowMeta ? `· ${currentFlowMeta.label}` : '· Tất cả'}
