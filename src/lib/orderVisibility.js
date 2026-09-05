@@ -39,6 +39,20 @@ function hasRoleOrExtra(userProfile, role) {
   return userProfile?.role === role || (userProfile?.extra_roles || []).includes(role);
 }
 
+// Vai trò THẬT của Đội Vận Tải trong database (đối chiếu trực tiếp qua
+// Supabase, không đoán) — 'driver_logistics' trong CLAUDE.md là tên đặc tả
+// gốc, KHÔNG PHẢI role thật nào từng tồn tại (0 tài khoản). Role thật là
+// shipper/shipper_school/transport_lead (lib/roles.js). Dùng sai tên khiến
+// canUserViewOrder()/getUserWorkflows() rơi tài xế vào nhánh "nhân viên
+// thường không có khâu" — chỉ còn thấy 'mixed' (luôn hiện) và 'school' (nếu
+// có role shipper_school) — đúng lỗi "chỉ thấy Trường học & Đơn tổng hợp"
+// báo cáo 04/09/2026.
+const DRIVER_ROLES = ['shipper', 'shipper_school', 'transport_lead'];
+function isDriverRole(userProfile) {
+  return DRIVER_ROLES.includes(userProfile?.role) ||
+    (userProfile?.extra_roles || []).some(r => DRIVER_ROLES.includes(r));
+}
+
 // Đơn Trường học (X42): CHỈ owner/admin và Trợ Lý Giám Đốc Xưởng 42 được xem —
 // không phải "nhân viên X42" nói chung nữa (khác Macaron), theo yêu cầu bảo
 // mật riêng cho đơn trường học ("không ai được xem cả" ngoài 2 vai trò này).
@@ -65,8 +79,7 @@ export function canUserViewOrder(order, userProfile) {
   if (isOwnerOrAdmin(userProfile)) return true;
 
   // Driver/Logistics can see all
-  const isDriver = userProfile.role === 'driver_logistics';
-  if (isDriver) return true;
+  if (isDriverRole(userProfile)) return true;
 
   // Bếp phối hợp: có work package thật cho đúng bếp của mình -> luôn thấy,
   // bất kể order_type gì (xem ghi chú đầu file).
@@ -126,8 +139,7 @@ export function getUserWorkflows(userProfile) {
   if (!userProfile) return [];
 
   // Owner/Admin/Driver can see all
-  if (['owner', 'admin', 'driver_logistics'].includes(userProfile.role) ||
-      (userProfile.extra_roles || []).some(r => ['owner', 'admin', 'driver_logistics'].includes(r))) {
+  if (isOwnerOrAdmin(userProfile) || isDriverRole(userProfile)) {
     return ['bakery', 'cake', 'teabreak', 'macaron', 'school', 'mixed'];
   }
 
