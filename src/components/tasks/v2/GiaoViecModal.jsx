@@ -140,15 +140,19 @@ export default function GiaoViecModal({ hoSo, danhSachTho = [], khauMacDinh, onC
           <OrderCodePicker label="Mã đơn liên quan" value={maDon} onChange={setMaDon} placeholder="VD: SUMI-20260826-001" />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+        {/* Trên điện thoại, ô datetime-local hiện đủ "07:00 06/09/2026" khá dài
+            — 2 cột cố định 1fr/1fr bị bóp chật, chữ tràn khỏi khung. Dùng
+            auto-fit + minmax để tự xuống 1 cột (full width) trên màn hẹp,
+            vẫn 2 cột trên màn rộng (tablet/desktop). */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 10, marginBottom: 12 }}>
           <div>
             <label style={o.nhan}>🎯 Hạn chót</label>
-            <input type="datetime-local" style={o.o} value={hanChot}
+            <input type="datetime-local" style={{ ...o.o, fontSize: 14, padding: '10px 8px' }} value={hanChot}
               onChange={(e) => setHanChot(e.target.value)} />
           </div>
           <div>
             <label style={o.nhan}>⏰ Nhắc chuông lúc</label>
-            <input type="datetime-local" style={o.o} value={nhacLuc}
+            <input type="datetime-local" style={{ ...o.o, fontSize: 14, padding: '10px 8px' }} value={nhacLuc}
               onChange={(e) => setNhacLuc(e.target.value)} />
           </div>
         </div>
