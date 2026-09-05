@@ -285,7 +285,6 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
    if(range&&(Number(it.quantity)<range[0]||Number(it.quantity)>range[1]))throw new Error(`"${it.name}": số lượng ${it.quantity} không khớp mức giá đã chọn (${it.specification.priceTier}). Chọn lại đúng mức giá.`);
   }
   const key=newId();
-  const {data: {user}} = await supabase.auth.getUser();
   const now = new Date();
   const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
   const timeStr = String(now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()).padStart(5,'0');
@@ -317,7 +316,17 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
       cust = data;
     }
     if(!cust) {
-      const {data: newCust} = await supabase.from('customers').insert({name: trimmedName || null, phone: trimmedPhone || null, created_by: user?.id}).select('id').single();
+      // LỖI THẬT đã vá: trước đây insert kèm `created_by` — cột KHÔNG tồn tại
+      // trên bảng `customers` (chỉ `orders`/`customer_debt_entries` mới có),
+      // nên lệnh này luôn thất bại; đã vậy còn không đọc `error` trả về, nên
+      // customerId âm thầm về null và đơn vẫn được tạo — thiếu hẳn khách hàng
+      // dù "Ghi chú đơn" vẫn hiện đúng tên/SĐT (ghép từ state riêng, không phụ
+      // thuộc insert có thành công hay không). Hậu quả: đơn không hoàn thành
+      // giao được vì màn đó đọc tên/SĐT từ khách hàng liên kết, không phải từ
+      // ghi chú. Chỉ xảy ra với khách ĐẶT LẦN ĐẦU (khách cũ khớp được ở nhánh
+      // trên, không đi vào đây).
+      const {data: newCust, error: newCustErr} = await supabase.from('customers').insert({name: trimmedName || null, phone: trimmedPhone || null}).select('id').single();
+      if(newCustErr) throw new Error(`Không lưu được thông tin khách hàng: ${newCustErr.message}`);
       customerId = newCust?.id || null;
     } else {
       customerId = cust?.id || null;
