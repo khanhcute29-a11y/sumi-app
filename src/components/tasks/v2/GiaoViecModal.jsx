@@ -1,8 +1,19 @@
 import React, { useMemo, useState } from 'react';
 import { createAssignedTasks } from '../../../lib/queries';
+import { supabase } from '../../../lib/supabaseClient';
 import { VoiceMicButton } from '../../VoiceMicButton';
-import { parseVoiceByContext } from '../../../lib/parseVoiceContext';
 import { OrderCodePicker } from '../../OrderCodePicker';
+
+// Chuyển ISO (có timezone) thành định dạng input type="datetime-local"
+// (YYYY-MM-DDTHH:mm, giờ tường thuật theo múi giờ máy đang chạy — cả tiệm
+// dùng chung giờ VN nên không cần quy đổi thêm).
+function isoToDatetimeLocal(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 // Form GIAO VIỆC của giao diện mới.
 //
@@ -32,6 +43,7 @@ export default function GiaoViecModal({ hoSo, danhSachTho = [], khauMacDinh, onC
   const [timTho, setTimTho] = useState('');
   const [dangLuu, setDangLuu] = useState(false);
   const [loi, setLoi] = useState('');
+  const [dangXuLyGiongNoi, setDangXuLyGiongNoi] = useState(false);
 
   // Bỏ dấu để gõ "nghia" cũng tìm ra "Nghĩa".
   const boDau = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -84,15 +96,45 @@ export default function GiaoViecModal({ hoSo, danhSachTho = [], khauMacDinh, onC
         width: '100%', maxWidth: 600, background: '#FAF6F0',
         borderRadius: '20px 20px 0 0', padding: 20, paddingBottom: 'calc(20px + env(safe-area-inset-bottom))', maxHeight: '92dvh', overflowY: 'auto',
       }}>
-        <h3 style={{ margin: '0 0 14px', fontSize: 18, fontWeight: 900 }}>➕ Giao việc mới</h3>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-          <VoiceMicButton onTranscript={(t) => {
-            const { title, description } = parseVoiceByContext('task', t);
-            setTieuDe(title);
-            if (description) setMoTa(description);
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>➕ Giao việc mới</h3>
+          <VoiceMicButton onTranscript={async (t) => {
+            if (!t?.trim()) return;
+            setDangXuLyGiongNoi(true); setLoi('');
+            try {
+              const { data, error } = await supabase.functions.invoke('parse-voice-task', {
+                body: {
+                  transcript: t.trim(),
+                  now: new Date().toISOString(),
+                  staffNames: (danhSachTho || []).map((p) => p.full_name).filter(Boolean),
+                  locale: 'vi-VN',
+                },
+              });
+              if (error) throw error;
+              if (data?.title) setTieuDe(data.title);
+              if (data?.description) setMoTa(data.description);
+              if (data?.orderCode) setMaDon(data.orderCode);
+              if (data?.deadline) setHanChot(isoToDatetimeLocal(data.deadline));
+              if (data?.reminderAt) setNhacLuc(isoToDatetimeLocal(data.reminderAt));
+              if (Array.isArray(data?.assigneeNames) && data.assigneeNames.length) {
+                const boDauCuc = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+                const idsKhop = (danhSachTho || [])
+                  .filter((p) => data.assigneeNames.some((n) => boDauCuc(n) === boDauCuc(p.full_name)))
+                  .map((p) => p.id);
+                if (idsKhop.length) setChon((prev) => [...new Set([...prev, ...idsKhop])]);
+              }
+              if (!data?.title && !data?.description) {
+                setLoi('Không trích xuất được nội dung việc. Nói rõ hơn giúp em?');
+              }
+            } catch (e) {
+              setLoi(e?.message || 'Không phân tích được giọng nói. Thử lại giúp em?');
+            } finally {
+              setDangXuLyGiongNoi(false);
+            }
           }} />
-          <span style={{ fontSize: 12, color: 'var(--cv-muted)' }}>Nói VD: "Chuẩn bị 2 cốt bánh kem lạnh size 18, giao trước 5 giờ chiều"</span>
+          {dangXuLyGiongNoi && (
+            <span style={{ fontSize: 12, color: 'var(--cv-muted)' }}>Đang phân tích…</span>
+          )}
         </div>
 
         <label style={o.nhan}>Tên công việc <span style={{ color: '#d03027' }}>*</span></label>
