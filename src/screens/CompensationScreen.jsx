@@ -4,6 +4,7 @@ import { useAuth } from '../lib/AuthContext';
 import { hasAnyRole } from '../lib/roles';
 import { OrderCodePicker } from '../components/OrderCodePicker';
 import { fetchMyStarsSummary } from '../lib/employeeOverviewV4';
+import { fetchLuongDuKien, fetchSalaryConfigs, saveSalaryConfig } from '../lib/luongDuKien';
 
 const money=n=>Number(n||0).toLocaleString('vi-VN')+'đ';
 const monthKey=()=>new Date().toISOString().slice(0,7);
@@ -19,11 +20,18 @@ export default function CompensationScreen(){
  const [month,setMonth]=useState(monthKey()); const [period,setPeriod]=useState(null); const [entries,setEntries]=useState([]); const [overtime,setOvertime]=useState([]);
  const [minutes,setMinutes]=useState(60); const [reason,setReason]=useState(''); const [orderCode,setOrderCode]=useState(''); const [error,setError]=useState(''); const [busy,setBusy]=useState(false);
  const [starsSummary,setStarsSummary]=useState(null);
+ // Lương DỰ KIẾN (tính on-the-fly) — tách hẳn khỏi payroll_entries (số chính
+ // thức do Kế toán chốt). Ai cũng xem được của chính mình, không cần đợi Kế
+ // toán lập bảng lương tháng.
+ const [duKien,setDuKien]=useState(null);
+ const [salaryConfigs,setSalaryConfigs]=useState([]);
  const load=async()=>{setError('');try{
   const p=await supabase.from('payroll_periods').select('*').eq('period_month',`${month}-01`).maybeSingle();if(p.error)throw p.error;setPeriod(p.data||null);
   if(p.data){const q=await supabase.from('payroll_entries').select('*,employee:profiles!employee_id(id,full_name,role,station)').eq('period_id',p.data.id).order('employee_id');if(q.error)throw q.error;setEntries(q.data||[])}else setEntries([]);
   const o=await supabase.from('overtime_requests').select('*,employee:profiles!employee_id(id,full_name,role,station)').gte('work_date',`${month}-01`).lt('work_date',nextMonthStart(month)).order('created_at',{ascending:false});if(o.error)throw o.error;setOvertime(o.data||[]);
   if(profile?.id){fetchMyStarsSummary(profile.id,`${month}-01`,nextMonthStart(month)).then(setStarsSummary).catch(()=>{})}
+  if(profile?.id){fetchLuongDuKien(profile.id,month).then(setDuKien).catch(()=>setDuKien(null))}
+  if(manager){fetchSalaryConfigs().then(setSalaryConfigs).catch(()=>setSalaryConfigs([]))}
  }catch(e){setError(e.message||'Không thể tải dữ liệu lương và tăng ca');}};
  useEffect(()=>{load()},[month,profile?.id]);
  const requestOvertime=async()=>{if(!reason.trim())return setError('Cần nhập lý do tăng ca.');setBusy(true);setError('');try{const r=await supabase.from('overtime_requests').insert({employee_id:profile.id,work_date:localDate(),planned_minutes:Number(minutes),reason:reason.trim(),related_order_code:orderCode.trim()||null});if(r.error)throw r.error;setReason('');setOrderCode('');await load()}catch(e){setError(e.message)}finally{setBusy(false)}};
@@ -38,14 +46,79 @@ export default function CompensationScreen(){
  const myEntry=useMemo(()=>entries.find(x=>x.employee_id===profile?.id),[entries,profile?.id]);
  return <div className="sumi-comp-page"><header><small>NHÂN SỰ SUMI</small><h1>Tăng ca & lương tháng</h1><p>KPI là dữ liệu tham khảo. Kế toán và Giám đốc xác nhận số tiền cuối cùng.</p></header>
   <label className="sumi-month-picker">Xem tháng<input type="month" value={month} onChange={e=>setMonth(e.target.value)}/></label>
+  {duKien&&<LuongDuKienCard d={duKien}/>}
   {!manager&&<section className="sumi-overtime-request"><div><span>⏱️</span><h2>Yêu cầu tăng ca</h2></div><label>Thời gian dự kiến<select value={minutes} onChange={e=>setMinutes(e.target.value)}><option value="30">30 phút</option><option value="60">1 giờ</option><option value="90">1 giờ 30 phút</option><option value="120">2 giờ</option><option value="180">3 giờ</option></select></label><label>Lý do<textarea value={reason} onChange={e=>setReason(e.target.value)} placeholder="Ví dụ: hoàn thành đơn giao sáng mai"/></label><div className="sumi-order-code-picker"><OrderCodePicker label="Mã đơn nếu có" value={orderCode} onChange={setOrderCode} placeholder="Ví dụ: SUMI-0822-001"/></div><button disabled={busy} onClick={requestOvertime}>GỬI YÊU CẦU DUYỆT</button></section>}
   <section className="sumi-comp-section"><div className="sumi-comp-title"><h2>{manager?'Yêu cầu tăng ca':'Tăng ca của tôi'}</h2><b>{overtime.filter(x=>x.status==='pending').length} chờ</b></div>{overtime.length===0?<p className="sumi-comp-empty">Chưa có yêu cầu tăng ca trong tháng này.</p>:overtime.map(x=><article className="sumi-overtime-row" key={x.id}><div><strong>{manager?x.employee?.full_name:'Ngày '+new Date(x.work_date).toLocaleDateString('vi-VN')}</strong><small>{x.planned_minutes} phút · {x.reason}{x.related_order_code?` · ${x.related_order_code}`:''}</small></div><em className={x.status}>{statusLabel[x.status]}</em>{manager&&x.status==='pending'&&<div className="actions"><button onClick={()=>review(x,'rejected')}>Từ chối</button><button onClick={()=>review(x,'approved')}>Duyệt</button></div>}</article>)}</section>
   <section className="sumi-comp-section"><div className="sumi-comp-title"><h2>Bảng lương tháng</h2><b>{period?statusLabel[period.status]:'Chưa lập'}</b></div>
    {!period&&manager&&<button className="sumi-create-payroll" disabled={busy} onClick={createPeriod}>＋ LẬP BẢNG LƯƠNG THÁNG NÀY</button>}
    {!period&&!manager&&<p className="sumi-comp-empty">Kế toán chưa chốt bảng lương tháng này.</p>}
    {period&&!manager&&myEntry&&<PayrollSummary entry={myEntry} stars={starsSummary}/>} {period&&!manager&&!myEntry&&<p className="sumi-comp-empty">Bảng lương của bạn chưa được công bố.</p>}
+   {manager&&<CauHinhLuongCoBan configs={salaryConfigs} entries={entries} profileId={profile?.id} onSaved={load}/>}
    {manager&&period&&<><div className="sumi-payroll-actions"><button onClick={()=>setPeriodStatus('draft')}>Nháp</button><button onClick={()=>setPeriodStatus('review')}>Chờ duyệt</button><button className="lock" onClick={()=>setPeriodStatus('locked')}>Khóa & công bố</button></div>{entries.map(row=><PayrollEditor key={row.id} row={row} onChange={change} onSave={save} busy={busy}/>)}</>}
   </section>{error&&<div className="sumi-comp-error">{error.includes('does not exist')||error.includes('schema cache')||error.includes('payroll_')||error.includes('overtime_requests')?'Chức năng đang chờ kích hoạt dữ liệu nhân sự trên Supabase.':error}</div>}
+ </div>;
+}
+
+// Lương DỰ KIẾN — cộng dồn theo ngày, ai cũng tự xem được của mình mà không
+// cần đợi Kế toán lập bảng lương. Nhấn mạnh "DỰ KIẾN" ngay trên đầu: tiền
+// thật vẫn là số Kế toán/Giám đốc chốt sổ ở khối "Bảng lương tháng" bên dưới.
+function LuongDuKienCard({d}){
+ if(!d?.co_cau_hinh) return <div style={{padding:'12px 14px',borderRadius:14,background:'#FFF8F0',border:'1px solid #F0DFC8',fontSize:13,color:'#8C5A3C'}}>
+  💡 {d?.thong_bao||'Chưa cấu hình lương cơ bản nên chưa tính được lương dự kiến.'}
+ </div>;
+ const dong=(nhan,tien,mau)=><div style={{display:'flex',justifyContent:'space-between',padding:'5px 0',fontSize:13.5}}>
+  <span style={{color:'#725f50'}}>{nhan}</span><b style={{color:mau||'#2d1c10'}}>{tien}</b></div>;
+ return <section style={{padding:14,borderRadius:16,background:'#fff',border:'1.5px solid #eadcca'}}>
+  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8,marginBottom:8}}>
+   <div><div style={{fontSize:11,fontWeight:900,letterSpacing:1,color:'#b8692f'}}>DỰ KIẾN — CHƯA CHỐT</div>
+    <div style={{fontSize:15,fontWeight:900,color:'#2d1c10'}}>Lương tạm tính tháng {d.thang}</div></div>
+   <div style={{textAlign:'right'}}><div style={{fontSize:20,fontWeight:900,color:'#087f5b'}}>{money(d.tong_du_kien)}</div>
+    <div style={{fontSize:11,color:'#725f50'}}>{d.ngay_cong_thuc_te}/{d.ngay_cong_chuan} ngày công</div></div>
+  </div>
+  {dong('Lương ngày công',money(d.luong_ngay_cong))}
+  {dong('Tiền cơm',money(d.tien_com))}
+  {dong(`Tăng ca (${d.gio_tang_ca} giờ × ${money(d.don_gia_gio_tang_ca)})`,money(d.tien_tang_ca))}
+  {dong('Thưởng sao (Gieo hạt)','+'+money(d.thuong_sao),'#1e7e4c')}
+  {dong(`Chuyên cần (${d.so_vi_pham} lỗi)`,money(d.chuyen_can),d.so_vi_pham?'#b45309':'#1e7e4c')}
+  {dong('Phạt sao','-'+money(d.phat_sao),'#b42318')}
+  {dong('Tạm ứng đã nhận','-'+money(d.tam_ung),'#b42318')}
+  <div style={{marginTop:8,paddingTop:8,borderTop:'1px dashed #eadcca',fontSize:11.5,color:'#725f50',lineHeight:1.6}}>
+   Số này tự cập nhật mỗi ngày theo chấm công, tăng ca đã duyệt, sao thưởng/phạt và vi phạm thực tế.
+   Số tiền chính thức là bảng lương do Kế toán chốt cuối tháng.
+  </div>
+ </section>;
+}
+
+// Cấu hình lương cơ bản cố định — chỉ Giám đốc/Kế toán (RLS chặn sẵn dưới
+// database). Nạp sẵn 8 người khớp chắc chắn từ file bảng lương 2026; số còn
+// lại nhập tại đây.
+function CauHinhLuongCoBan({configs,entries,profileId,onSaved}){
+ const [mo,setMo]=useState(false); const [nhap,setNhap]=useState({}); const [busy,setBusy]=useState(''); const [loi,setLoi]=useState('');
+ const map=new Map(configs.map(c=>[c.staff_id,c]));
+ const luu=async id=>{setBusy(id);setLoi('');
+  try{await saveSalaryConfig({staffId:id,luongCoBan:nhap[id],updatedBy:profileId});setNhap(x=>({...x,[id]:undefined}));await onSaved()}
+  catch(e){setLoi(e.message||'Không lưu được lương cơ bản.')}finally{setBusy('')}};
+ if(!mo) return <button onClick={()=>setMo(true)} style={{border:'1px solid #eadcca',background:'#fff',color:'#b8692f',fontWeight:800,fontSize:13,borderRadius:12,padding:'10px 14px',cursor:'pointer',width:'100%'}}>
+  ⚙️ Cấu hình lương cơ bản ({configs.length} người đã có)</button>;
+ return <div style={{padding:14,borderRadius:16,background:'#FFF8F0',border:'1.5px solid #F0DFC8',marginBottom:10}}>
+  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+   <b style={{fontSize:13.5,color:'#2d1c10'}}>⚙️ Lương cơ bản cố định (dùng để tính lương dự kiến)</b>
+   <button onClick={()=>setMo(false)} style={{border:0,background:'none',color:'#725f50',fontWeight:700,cursor:'pointer'}}>Đóng</button>
+  </div>
+  <div style={{fontSize:12,color:'#725f50',marginBottom:8}}>Chỉ Giám đốc/Kế toán thấy mục này. Nhân viên không xem được lương của nhau.</div>
+  {loi&&<div style={{color:'#b42318',fontSize:12.5,marginBottom:6}}>⚠️ {loi}</div>}
+  {entries.length===0&&<div style={{fontSize:12.5,color:'#725f50'}}>Lập bảng lương tháng trước để hiện danh sách nhân sự tại đây.</div>}
+  {entries.map(e=>{const cfg=map.get(e.employee_id);const val=nhap[e.employee_id];
+   return <div key={e.employee_id} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 0',borderTop:'1px solid #F0DFC8',flexWrap:'wrap'}}>
+    <span style={{flex:1,minWidth:140,fontSize:13}}>{e.employee?.full_name||'Nhân viên'}
+     {cfg?<b style={{color:'#087f5b'}}> · {money(cfg.luong_co_ban)}</b>:<span style={{color:'#b45309'}}> · chưa có</span>}</span>
+    <input type="number" inputMode="numeric" placeholder={cfg?String(cfg.luong_co_ban):'VD 6000000'}
+     value={val??''} onChange={ev=>setNhap(x=>({...x,[e.employee_id]:ev.target.value}))}
+     style={{width:130,minHeight:36,borderRadius:8,border:'1px solid #eadcca',padding:'0 8px',fontSize:13}}/>
+    <button disabled={busy===e.employee_id||val===undefined||val===''} onClick={()=>luu(e.employee_id)}
+     style={{minHeight:36,padding:'0 12px',borderRadius:8,border:0,background:'#D96B43',color:'#fff',fontWeight:800,fontSize:12.5,cursor:'pointer'}}>
+     {busy===e.employee_id?'…':'Lưu'}</button>
+   </div>})}
  </div>;
 }
 
