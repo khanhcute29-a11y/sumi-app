@@ -53,10 +53,19 @@ function isDriverRole(userProfile) {
     (userProfile?.extra_roles || []).some(r => DRIVER_ROLES.includes(r));
 }
 
+// Ngoại lệ CHẶN theo từng người (không phải theo role) — tài khoản có cờ
+// profiles.hide_school_orders bị chặn khỏi đơn trường học dù role/station gì
+// đi nữa. Yêu cầu chủ tiệm 05/09/2026 cho 1 tài khoản cụ thể (Đào Thị Bích
+// Nga, Trợ Lý Giám Đốc Xưởng 41, role admin) — không áp dụng cho cả role.
+function isBlockedFromSchoolOrders(userProfile) {
+  return userProfile?.hide_school_orders === true;
+}
+
 // Đơn Trường học (X42): CHỈ owner/admin và Trợ Lý Giám Đốc Xưởng 42 được xem —
 // không phải "nhân viên X42" nói chung nữa (khác Macaron), theo yêu cầu bảo
 // mật riêng cho đơn trường học ("không ai được xem cả" ngoài 2 vai trò này).
 export function canViewSchoolOrder(userProfile) {
+  if (isBlockedFromSchoolOrders(userProfile)) return false;
   return isOwnerOrAdmin(userProfile)
     || hasRoleOrExtra(userProfile, 'deputy_director_x42')
     || hasRoleOrExtra(userProfile, 'shipper_school')
@@ -75,8 +84,16 @@ export function canViewMacaronPrice(userProfile) {
 export function canUserViewOrder(order, userProfile) {
   if (!order || !userProfile) return false;
 
-  // Owner/Admin can see all
-  if (isOwnerOrAdmin(userProfile)) return true;
+  // Owner/Admin can see all — TRỪ tài khoản bị chặn riêng khỏi trường học
+  // (isBlockedFromSchoolOrders), vì nhánh này chạy trước khi tới nhánh
+  // order_type === 'school' bên dưới nên phải chặn ngay ở đây.
+  if (isOwnerOrAdmin(userProfile)) {
+    if (isBlockedFromSchoolOrders(userProfile) &&
+        (order.order_type === 'school' || order.confidentiality === 'school_restricted')) {
+      return false;
+    }
+    return true;
+  }
 
   // Driver/Logistics can see all
   if (isDriverRole(userProfile)) return true;
@@ -138,9 +155,11 @@ export function canUserViewOrder(order, userProfile) {
 export function getUserWorkflows(userProfile) {
   if (!userProfile) return [];
 
-  // Owner/Admin/Driver can see all
+  // Owner/Admin/Driver can see all — TRỪ tài khoản bị chặn riêng khỏi
+  // trường học (xem isBlockedFromSchoolOrders).
   if (isOwnerOrAdmin(userProfile) || isDriverRole(userProfile)) {
-    return ['bakery', 'cake', 'teabreak', 'macaron', 'school', 'mixed'];
+    const all = ['bakery', 'cake', 'teabreak', 'macaron', 'school', 'mixed'];
+    return isBlockedFromSchoolOrders(userProfile) ? all.filter((w) => w !== 'school') : all;
   }
 
   const userStation = (userProfile.station || '').toLowerCase();

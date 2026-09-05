@@ -156,6 +156,7 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, canResetPassword, danhSachC
   const [role, setRole] = useState(initialUiRole);
   const [station, setStation] = useState(initialStation);
   const [extraRoles, setExtraRoles] = useState(s.extra_roles || []);
+  const [hideSchoolOrders, setHideSchoolOrders] = useState(!!s.hide_school_orders);
   const [responsibilities, setResponsibilities] = useState(s.responsibilities || '');
   const [startDate, setStartDate] = useState(s.start_date || '');
   const [saving, setSaving] = useState(false);
@@ -173,9 +174,10 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, canResetPassword, danhSachC
     setRole(getUiRole(s.role, s.station));
     setStation(normalizeStationForDb(s.station) || '');
     setExtraRoles(s.extra_roles || []);
+    setHideSchoolOrders(!!s.hide_school_orders);
     setResponsibilities(s.responsibilities || '');
     setStartDate(s.start_date || '');
-  }, [s.role, s.station, JSON.stringify(s.extra_roles), s.responsibilities, s.start_date]);
+  }, [s.role, s.station, JSON.stringify(s.extra_roles), s.hide_school_orders, s.responsibilities, s.start_date]);
 
   const handleRoleChange = (newRoleKey) => {
     setRole(newRoleKey);
@@ -215,6 +217,7 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, canResetPassword, danhSachC
         role: mappedRole,
         station: mappedStation || null,
         extraRoles: safeExtraRoles,
+        hideSchoolOrders,
         responsibilities,
         startDate: startDate || null,
       });
@@ -254,6 +257,7 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, canResetPassword, danhSachC
 
   const isDirty = role !== initialUiRole || station !== (s.station || '')
     || JSON.stringify(extraRoles.sort()) !== JSON.stringify((s.extra_roles || []).sort())
+    || hideSchoolOrders !== !!s.hide_school_orders
     || responsibilities !== (s.responsibilities || '') || startDate !== (s.start_date || '');
 
   return (
@@ -338,6 +342,15 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, canResetPassword, danhSachC
         <div>💼 Vị trí: <strong>{staffMeta.label}</strong>{s.start_date && <> · Từ ngày <strong>{new Date(s.start_date).toLocaleDateString('vi-VN')}</strong></>}</div>
         <div>📝 Trách nhiệm: {s.responsibilities || <span style={{ color: 'var(--text-muted)' }}>Chưa mô tả</span>}</div>
         <div>⏰ Ca quy định: <CaQuyDinh hoSo={s} danhSachCa={danhSachCa} /></div>
+        {/* CHỈ owner thật được thấy dòng này — kể cả chính tài khoản đang bị
+            ẩn (nếu họ cũng có role admin nên tự mở được màn Nhân Viên) cũng
+            KHÔNG được thấy, vì thấy dòng này là biết ngay có "đơn trường học"
+            tồn tại và mình đang bị chặn — lộ đúng thứ cần giấu. */}
+        {isOwner && s.hide_school_orders && (
+          <div style={{ color: 'var(--status-danger, #e03131)', fontWeight: 700 }}>
+            🏫 Đã ẩn đơn Trường học khỏi tài khoản này
+          </div>
+        )}
       </div>
 
       {expanded && (
@@ -456,6 +469,31 @@ function StaffRow({ s, isOwner, isMe, canDeactivate, canResetPassword, danhSachC
                   })}
                 </div>
               </div>
+
+              {/* Chặn riêng tài khoản này khỏi đơn Trường học — ngoại lệ theo
+                  từng người, không đổi role/station của họ, không ảnh hưởng
+                  người khác cùng role/station.
+                  CHỈ owner thật (không phải admin thường, dù canDeactivate
+                  cho phép admin mở Phân quyền) được thấy/sửa ô này — tài
+                  khoản admin đang bị ẩn (vd chính người này) mở Phân quyền
+                  của MÌNH cũng không được thấy khái niệm này tồn tại, nếu
+                  không họ tự bỏ tick được để gỡ chặn cho chính mình. */}
+              {isOwner && (
+                <div>
+                  <label style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+                    font: 'var(--text-caption)', fontWeight: 700, color: 'var(--text-primary)',
+                  }}>
+                    <input
+                      type="checkbox"
+                      checked={hideSchoolOrders}
+                      onChange={(e) => { setHideSchoolOrders(e.target.checked); setSuccessMsg(''); }}
+                      style={{ margin: 0 }}
+                    />
+                    🏫 Ẩn toàn bộ đơn Trường học khỏi tài khoản này
+                  </label>
+                </div>
+              )}
 
               {/* Nút lưu 1 chạm duy nhất */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4, flexWrap: 'wrap' }}>
@@ -642,8 +680,8 @@ export default function StaffScreen() {
     load();
   };
 
-  const handleSavePermissions = async (id, { role, station, extraRoles, responsibilities, startDate }) => {
-    await updateStaffPermissions(id, { role, station, extraRoles });
+  const handleSavePermissions = async (id, { role, station, extraRoles, hideSchoolOrders, responsibilities, startDate }) => {
+    await updateStaffPermissions(id, { role, station, extraRoles, hideSchoolOrders });
     await updateStaffWorkInfo(id, { responsibilities, startDate });
     load();
   };

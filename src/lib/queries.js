@@ -957,11 +957,12 @@ export async function updateProfileStation(id, station) {
   if (error) throw error;
 }
 
-export async function updateStaffPermissions(id, { role, station, extraRoles }) {
+export async function updateStaffPermissions(id, { role, station, extraRoles, hideSchoolOrders }) {
   const { error } = await supabase.from('profiles').update({
     role: role || null,
     station: station || null,
-    extra_roles: extraRoles || []
+    extra_roles: extraRoles || [],
+    hide_school_orders: !!hideSchoolOrders,
   }).eq('id', id);
   if (error) throw error;
 }
