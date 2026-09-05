@@ -49,6 +49,7 @@ import FinishedGoodsInventoryV2 from '../../warehouse/FinishedGoodsInventoryV2';
 // dựng lại màn quản lý nhân sự khác ở đây.
 import StaffScreen from '../../../screens/StaffScreen';
 import CustomersScreen from '../../../screens/CustomersScreen';
+import GieoHatHistoryScreen from '../../../screens/GieoHatHistoryScreen';
 import UserAvatar from '../../UserAvatar';
 import StarRateBar from '../../StarRateBar';
 import { supabase } from '../../../lib/supabaseClient';
@@ -378,7 +379,7 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
 
   // ── States Quản Lý Bottom Sheets & Bộ Lọc Đơn Hàng ──
   const [activeSheet, setActiveSheet] = useState<
-    'revenue_detail' | 'expense_detail' | 'order_drawer' | 'staff_detail' | 'staff_overview_v2' | 'approval_center' | 'feed_sheet' | 'advance_sheet' | 'leave_sheet' | 'report_sheet' | 'schedule_sheet' | 'warehouse_sheet' | 'staff_screen_sheet' | 'live_status_sheet' | 'customers_sheet' | null
+    'revenue_detail' | 'expense_detail' | 'order_drawer' | 'staff_detail' | 'staff_overview_v2' | 'approval_center' | 'feed_sheet' | 'advance_sheet' | 'leave_sheet' | 'report_sheet' | 'schedule_sheet' | 'warehouse_sheet' | 'staff_screen_sheet' | 'live_status_sheet' | 'customers_sheet' | 'gieo_hat_sheet' | null
   >(null);
   const [selectedOrderFilter, setSelectedOrderFilter] = useState<string>('all');
   // Tab LUỒNG bên trong sheet "Danh Sách Đơn Hàng" — THAY THẾ thanh lọc
@@ -1280,7 +1281,7 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
             <span style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10', display: 'flex', alignItems: 'center', gap: 6 }}>
               👤 TÔI (QUẢN TRỊ & TIỆN ÍCH ĐIỀU HÀNH)
             </span>
-            <span style={{ fontSize: 11, fontWeight: 800, color: '#c28c4e' }}>7 mục điều hành</span>
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#c28c4e' }}>8 mục điều hành</span>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
@@ -1473,6 +1474,33 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
               <div style={{ marginTop: 6 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>7. Khách Hàng</div>
                 <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>Điểm tin cậy, lịch sử mua</div>
+              </div>
+            </div>
+
+            {/* Ô 10: Gieo Hạt — lịch sử Cộng/Trừ sao toàn công ty (ai được
+                tặng, ai tặng, mấy sao, liên quan đơn nào). Chỉ xem tại đây —
+                tặng/sửa/xoá sao vẫn làm đúng chỗ cũ (StarRateBar gắn trong
+                từng đơn/việc/chấm công cụ thể), không trùng chức năng. */}
+            <div
+              onClick={() => setActiveSheet('gieo_hat_sheet')}
+              style={{
+                background: '#ffffff',
+                border: '1.5px solid #eadcca',
+                borderRadius: 18,
+                padding: '12px 14px',
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                minHeight: 88,
+                boxSizing: 'border-box'
+              }}
+            >
+              <div style={{ fontSize: 22 }}>🌱</div>
+              <div style={{ marginTop: 6 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 800, color: '#2d1c10' }}>8. Gieo Hạt</div>
+                <div style={{ fontSize: 11, color: '#725f50', marginTop: 1 }}>Lịch sử tặng/trừ sao</div>
               </div>
             </div>
           </div>
@@ -2985,6 +3013,23 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
             </div>
             <div style={{ padding: 16, boxSizing: 'border-box' }}>
               <CustomersScreen />
+            </div>
+          </div>
+        )}
+
+        {/* Ô 10: Gieo Hạt — GieoHatHistoryScreen không tự vẽ header/nút quay
+            lại (giống StaffScreen/CustomersScreen), tự bọc header ở đây theo
+            đúng mẫu. Bấm 1 dòng có đơn liên quan -> dùng lại đúng cơ chế
+            selectedOrderId/OrderV2DetailModal đã có sẵn phía trên, không dựng
+            lại màn chi tiết đơn riêng. */}
+        {activeSheet === 'gieo_hat_sheet' && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 1400, background: '#fdf9f2', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px', borderBottom: '1.5px solid #eadcca', position: 'sticky', top: 0, background: '#fdf9f2', zIndex: 1 }}>
+              <button onClick={() => setActiveSheet(null)} aria-label="Quay lại" style={{ width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer', flexShrink: 0 }}>‹</button>
+              <div style={{ fontSize: 15, fontWeight: 900, color: '#2d1c10' }}>🌱 Gieo Hạt</div>
+            </div>
+            <div style={{ padding: 16, boxSizing: 'border-box' }}>
+              <GieoHatHistoryScreen onOpenOrder={setSelectedOrderId} />
             </div>
           </div>
         )}
