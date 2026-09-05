@@ -243,8 +243,15 @@ function DispatchPanel({ onCreated, setError }) {
     const [o, d] = await Promise.all([
       supabase
         .from('order_operations_list')
-        .select('id,order_code,address,required_at,status_v2')
+        // ⚠️ BẮT BUỘC lọc fulfillment_method_v2='delivery' — thiếu điều kiện
+        // này khiến đơn KHÁCH TỰ ĐẾN LẤY (pickup) lẫn vào hàng chờ điều phối
+        // giao hàng (bug thật, đã kiểm tra dữ liệu 04/09/2026: 7/20 đơn
+        // "ready_for_fulfillment" là pickup). RPC create_delivery_run_v3 giờ
+        // cũng chặn cứng lại lần nữa (migration 202609041700) — đây là lớp
+        // lọc hiển thị, không phải lớp chặn duy nhất.
+        .select('id,order_code,address,required_at,status_v2,fulfillment_method_v2,customer_name,customer_phone')
         .eq('status_v2', 'ready_for_fulfillment')
+        .eq('fulfillment_method_v2', 'delivery')
         .order('required_at'),
       supabase
         .from('profiles')
@@ -320,10 +327,10 @@ function DispatchPanel({ onCreated, setError }) {
               onChange={e => setSelected(x => e.target.checked ? [...x, o.id] : x.filter(id => id !== o.id))}
             />
             <span style={{ fontSize: 14 }}>
-              <b>{o.order_code}</b>
+              <b>{o.order_code}</b>{o.customer_name ? ` · ${o.customer_name}` : ''}
               <br />
               <small style={{ color: 'var(--text-muted)' }}>
-                {o.address || 'Nhận tại quầy'} · {o.required_at ? new Date(o.required_at).toLocaleString('vi-VN') : ''}
+                {o.address || 'Chưa có địa chỉ'}{o.customer_phone ? ` · ${o.customer_phone}` : ''} · {o.required_at ? new Date(o.required_at).toLocaleString('vi-VN') : ''}
               </small>
             </span>
           </label>
