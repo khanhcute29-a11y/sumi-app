@@ -1,0 +1,43 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "node -e \"let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);const fp=(j.tool_input&&j.tool_input.file_path)||'';if(/(^|[\\\\\\\\\\/])\\.env\\.local$/.test(fp)){console.log(JSON.stringify({hookSpecificOutput:{hookEventName:'PreToolUse',permissionDecision:'deny',permissionDecisionReason:'Bị chặn: .env.local chứa Supabase URL/anon key đang sống, không cho Claude Code sửa trực tiếp file này.'}}));}}catch(e){}});\""
+          },
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "node -e \"const fs=require('fs');let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);const fp=(j.tool_input&&j.tool_input.file_path)||'';if(/[\\\\\\\\\\/]supabase[\\\\\\\\\\/]migrations[\\\\\\\\\\/].*\\.sql$/i.test(fp)&&fs.existsSync(fp)){console.log(JSON.stringify({hookSpecificOutput:{hookEventName:'PreToolUse',permissionDecision:'deny',permissionDecisionReason:'Bị chặn: '+fp+' là migration đã tồn tại trong supabase/migrations/ (nhiều khả năng đã chạy trên Supabase production). Không sửa lại file cũ — hãy tạo migration MỚI với tên/số thứ tự mới cho thay đổi này.'}}));}}catch(e){}});\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "node -e \"let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);const fp=(j.tool_response&&j.tool_response.filePath)||(j.tool_input&&j.tool_input.file_path)||'';const base=fp.split(/[\\\\\\\\\\/]/).pop();if(/^CHAY_TRONG_SQL_EDITOR_.*\\.sql$/i.test(base)){console.log(JSON.stringify({systemMessage:'Nhắc: vừa tạo file SQL rời '+base+' (file này bị .gitignore, chỉ để dán vào Supabase SQL Editor). Nhớ: (1) đã chạy nó trong Supabase SQL Editor chưa, (2) nếu là thay đổi schema lâu dài thì cân nhắc thêm 1 file tương ứng vào supabase/migrations/ để không bị thất lạc.'}));}}catch(e){}});\""
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "node -e \"let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);const cmd=(j.tool_input&&j.tool_input.command)||'';if(/git\\s+push\\b/.test(cmd)&&/\\bmain\\b/.test(cmd)){console.log(JSON.stringify({systemMessage:'Đã push lên main -> Vercel sẽ tự deploy. App có bọc PWA/service-worker: nhớ ĐÓNG HẲN app/tab rồi mở lại trước khi test bản mới, tránh test nhầm bản cache cũ. Nếu diff vừa đụng màn hình theo vai trò (POS/Bếp/Kho/Giao hàng/Kế toán/Giám đốc), nhớ đăng nhập đúng vai trò đó để test lại, không chỉ test bằng tài khoản Owner.'}));}}catch(e){}});\""
+          }
+        ]
+      }
+    ]
+  }
+}
