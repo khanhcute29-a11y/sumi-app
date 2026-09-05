@@ -13,8 +13,8 @@ import {
 import { navBadgeVisibility, hasAnyRole } from './lib/roles';
 import { initAudioUnlock } from './lib/sound';
 import { useOrderNotifications } from './lib/useOrderNotifications';
-import { requestNotificationPermission, playAlertSound, preloadAlertAudio } from './lib/alarmSound';
-import { playKitchenReceiveSound, playKitchenCompleteSound, playShipperReceiveSound, playShipperCompleteSound, playTaskAssignedSound, playNotificationSound, playOnce } from './lib/sound';
+import { requestNotificationPermission, playAlertSound, preloadAlertAudio, playViecVoiceSound } from './lib/alarmSound';
+import { playKitchenReceiveSound, playKitchenCompleteSound, playShipperReceiveSound, playShipperCompleteSound, playNotificationSound, playOnce } from './lib/sound';
 import { setupAutoRefresh, cleanupAllSubscriptions, subscribeToMultipleTables, subscribeToBroadcast, BroadcastEvents } from './lib/realtimeSync';
 import { ConnectivityBanner } from './components/ConnectivityBanner';
 import ToastHost from './components/ToastHost';
@@ -228,7 +228,7 @@ function OpsApp({ onSignOut }) {
 
           if (n.notification_type === 'task_assigned' || n.notification_type === 'task_reminder') {
             playOnce('task:' + n.id, () => {
-              playTaskAssignedSound();
+              playViecVoiceSound();
               // Đích đến lấy theo LOẠI ĐỐI TƯỢNG, không cứng theo loại tin:
               //  - việc giao trong đơn  -> entity_type 'order' -> mở chi tiết đơn
               //    (đầu việc loại order_work chỉ hiện trong hộp chi tiết đơn,

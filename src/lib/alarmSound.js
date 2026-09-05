@@ -28,6 +28,7 @@ const SOUND_FUNCTIONS = {
 let audioContext = null;
 let contextResumePromise = null;
 let alertAudioBuffer = null;
+let viecVoiceAudioBuffer = null;
 
 function getAudioContext() {
   if (!audioContext) {
@@ -103,6 +104,49 @@ async function playAlertSoundFile() {
   }
 }
 
+// Chuông "Giao việc" / "Nhắc việc" — bản ghi âm giọng thật của chủ (yêu cầu
+// 05/09/2026), phát LẶP 5 LẦN liên tiếp cho chắc ai cũng nghe thấy, to hơn
+// mức bình thường (gain 1.3 — file gốc đã được chuẩn hoá + giới hạn đỉnh sẵn
+// lúc xử lý bằng ffmpeg nên nhân thêm không bị vỡ tiếng). Cùng cơ chế
+// fetch + decodeAudioData + cache buffer như playAlertSoundFile ở trên,
+// KHÔNG đụng gì tới bộ oscillator dùng chung trong sound.js.
+async function playViecVoiceSound() {
+  try {
+    const resumed = await resumeAudioContext();
+    if (!resumed) throw new Error('Context resume failed');
+
+    const ctx = getAudioContext();
+    if (!ctx) throw new Error('No audio context');
+
+    if (!viecVoiceAudioBuffer) {
+      console.log('[playViecVoiceSound] Fetching /nhac-viec.mp3...');
+      const response = await fetch('/nhac-viec.mp3?t=' + Date.now());
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const arrayBuffer = await response.arrayBuffer();
+      viecVoiceAudioBuffer = await ctx.decodeAudioData(arrayBuffer);
+      console.log('[playViecVoiceSound] ✓ nhac-viec.mp3 loaded, duration:', viecVoiceAudioBuffer.duration);
+    }
+
+    const soLanLap = 5;
+    const khoangCach = 0.3; // giây nghỉ giữa 2 lần lặp
+    const buoc = viecVoiceAudioBuffer.duration + khoangCach;
+    const batDau = ctx.currentTime;
+    for (let i = 0; i < soLanLap; i++) {
+      const source = ctx.createBufferSource();
+      source.buffer = viecVoiceAudioBuffer;
+      const gain = ctx.createGain();
+      gain.gain.value = 1.3;
+      source.connect(gain);
+      gain.connect(ctx.destination);
+      source.start(batDau + i * buoc);
+    }
+
+    console.log('[playViecVoiceSound] ✓ Playing x' + soLanLap);
+  } catch (e) {
+    console.error('[playViecVoiceSound] Failed:', e.message);
+  }
+}
+
 // Main play sound function
 export const playSound = (soundType = SoundEvents.ANNOUNCEMENT) => {
   console.log(`[playSound] Playing ${soundType}`);
@@ -118,6 +162,8 @@ export const playSound = (soundType = SoundEvents.ANNOUNCEMENT) => {
 
 // Keep backward compatibility
 export const playAlertSound = () => playSound(SoundEvents.ANNOUNCEMENT);
+
+export { playViecVoiceSound };
 
 export const notifyCompany = async (title, body, severity = 'normal') => {
   try {
@@ -170,6 +216,17 @@ export const preloadAlertAudio = async () => {
       console.log('[preloadAlertAudio] ✓ alert.mp3 preloaded');
     } catch (e) {
       console.warn('[preloadAlertAudio] Could not preload alert.mp3:', e.message);
+    }
+
+    // Pre-load nhac-viec.mp3 cho chuông Giao việc/Nhắc việc
+    try {
+      const response = await fetch('/nhac-viec.mp3');
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const arrayBuffer = await response.arrayBuffer();
+      viecVoiceAudioBuffer = await ctx.decodeAudioData(arrayBuffer);
+      console.log('[preloadAlertAudio] ✓ nhac-viec.mp3 preloaded');
+    } catch (e) {
+      console.warn('[preloadAlertAudio] Could not preload nhac-viec.mp3:', e.message);
     }
 
     console.log('[preloadAlertAudio] ✓ Audio system ready');
