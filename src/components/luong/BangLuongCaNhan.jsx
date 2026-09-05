@@ -84,9 +84,19 @@ export default function BangLuongCaNhan({ staffId, thang, tieuDe = 'Bảng lươ
       />
       <Dong nhan="Chuyên cần còn lại" gia_tri={tien(d.chuyen_can)} mau={d.chuyen_can > 0 ? '#1e7e4c' : '#b42318'} />
 
+      {/* Phạt vượt quá quỹ: hiện ĐỎ như một khoản ÂM để Giám đốc thấy ngay,
+          nhưng KHÔNG cộng vào `tong_du_kien` — chủ tiệm quyết sau (yêu cầu
+          04/09/2026). Cố ý không tự trừ: trừ tiền người ta mà chưa có luật rõ
+          ràng là sai nghiêm trọng. */}
       {d.phat_vuot_chuyen_can > 0 && (
-        <div style={{ margin: '6px 0', padding: '8px 10px', borderRadius: 10, background: '#fff1f0', border: '1px solid #ffccc7', fontSize: 12, color: '#b42318' }}>
-          ⚠️ Bị trừ vượt quá tổng quỹ chuyên cần {tien(d.phat_vuot_chuyen_can)} — phần vượt này CHƯA trừ thêm vào lương, chờ Giám đốc quyết.
+        <div style={{ margin: '8px 0', padding: '10px 12px', borderRadius: 10, background: '#fff1f0', border: '1.5px solid #ffa39e' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+            <span style={{ fontSize: 13, fontWeight: 900, color: '#b42318' }}>🔴 Âm quỹ chuyên cần</span>
+            <b style={{ fontSize: 16, fontWeight: 900, color: '#b42318', whiteSpace: 'nowrap' }}>−{tien(d.phat_vuot_chuyen_can)}</b>
+          </div>
+          <div style={{ marginTop: 4, fontSize: 11.5, color: '#b42318', lineHeight: 1.55 }}>
+            Bị trừ vượt quá tổng quỹ. Phần âm này <b>CHƯA trừ vào lương</b> — đang chờ Giám đốc quyết định.
+          </div>
         </div>
       )}
 
