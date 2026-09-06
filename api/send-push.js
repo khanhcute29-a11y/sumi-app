@@ -70,11 +70,15 @@ export default async function handler(req, res) {
   if (sb.loi) return res.status(503).json({ loi: sb.loi });
   const supabase = sb.client;
 
-  const { title, body, url, staffId } = req.body || {};
+  const { title, body, url, staffId, staffIds } = req.body || {};
   if (!title) return res.status(400).json({ error: 'Thiếu title' });
 
+  // staffIds (mảng, dùng cho tin nhắn Chat — báo NHIỀU người cùng lúc trong
+  // 1 lượt gọi thay vì mỗi trigger DB gọi HTTP riêng cho từng người) — vẫn
+  // giữ nguyên staffId (1 người, dùng cho giao việc) để không đổi API cũ.
   let query = supabase.from('push_subscriptions').select('*');
   if (staffId) query = query.eq('staff_id', staffId);
+  else if (Array.isArray(staffIds) && staffIds.length) query = query.in('staff_id', staffIds);
   const { data: subs, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
 

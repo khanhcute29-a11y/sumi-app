@@ -4,7 +4,7 @@ import { supabase } from './supabaseClient';
 export async function fetchChatDirectory() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, full_name, role, station')
+    .select('id, full_name, role, station, avatar_path')
     .eq('approved', true)
     .neq('active', false)
     .order('full_name');
@@ -24,16 +24,28 @@ export async function getOrCreateDmRoom(otherProfileId) {
 // khai trương, tin hôm nay hoàn toàn biến mất cho tới khi có realtime đẩy
 // tin mới vào. Sửa: sắp giảm dần (mới nhất trước) rồi cắt, xong đảo lại để
 // hiển thị đúng thứ tự cũ→mới như khung chat bình thường.
-// `before` (ISO timestamp, optional) hỗ trợ TẢI THÊM tin CŨ HƠN khi cuộn lên
-// đầu (phân trang) — không truyền thì lấy đúng N tin mới nhất.
-export async function fetchRoomMessages(roomId, { limit = 50, before } = {}) {
+// `before`/`beforeId` (optional) hỗ trợ TẢI THÊM tin CŨ HƠN khi cuộn lên đầu
+// (phân trang) — không truyền thì lấy đúng N tin mới nhất.
+// LỖI THẬT đã vá: trước đây chỉ cắt trang bằng `created_at < before` — nếu
+// 2 tin trong CÙNG phòng ghi trùng y hệt 1 mili-giây (gửi dồn dập/insert
+// hàng loạt), tin nào có created_at BẰNG mốc `before` sẽ bị RỚT MẤT vĩnh
+// viễn khỏi cả 2 trang (trang trước không có vì đã cắt ở limit, trang sau
+// không có vì bị `lt` loại). Giờ sắp thêm `id` làm tiêu chí phụ (đồng nhất
+// khi tie) và cắt trang bằng cặp (created_at, id) qua `.or()` — không tin
+// nào lọt qua kẽ hở giữa 2 trang nữa.
+export async function fetchRoomMessages(roomId, { limit = 50, before, beforeId } = {}) {
   let q = supabase
     .from('chat_messages')
-    .select('id, room_id, sender_id, content, attachment_url, order_code, created_at, profiles(full_name, role)')
+    .select('id, room_id, sender_id, content, attachment_url, order_code, created_at, profiles(full_name, role, avatar_path)')
     .eq('room_id', roomId)
     .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
     .limit(limit);
-  if (before) q = q.lt('created_at', before);
+  if (before) {
+    q = beforeId
+      ? q.or(`created_at.lt.${before},and(created_at.eq.${before},id.lt.${beforeId})`)
+      : q.lt('created_at', before);
+  }
   const { data, error } = await q;
   if (error) throw error;
   return (data || []).reverse();
@@ -85,10 +97,10 @@ export function subscribeToRooms(roomIds, onInsert) {
 // toàn công ty) và cho màn "Thành viên nhóm".
 export async function fetchRoomParticipants(roomId) {
   const { data, error } = await supabase.from('chat_participants')
-    .select('profile_id, profiles(id, full_name, role)')
+    .select('profile_id, profiles(id, full_name, role, avatar_path)')
     .eq('room_id', roomId);
   if (error) throw error;
-  return (data || []).map((r) => ({ id: r.profile_id, full_name: r.profiles?.full_name || '', role: r.profiles?.role || '' }));
+  return (data || []).map((r) => ({ id: r.profile_id, full_name: r.profiles?.full_name || '', role: r.profiles?.role || '', avatarPath: r.profiles?.avatar_path || null }));
 }
 
 // LỖI THẬT đã vá: trước đây quét TOÀN BỘ chat_messages của MỌI phòng (không
@@ -112,7 +124,7 @@ export async function fetchAllConversations(myId) {
   if (directRoomIds.length) {
     const { data: peers, error: peerErr } = await supabase
       .from('chat_participants')
-      .select('room_id, profiles(id, full_name, role, station)')
+      .select('room_id, profiles(id, full_name, role, station, avatar_path)')
       .in('room_id', directRoomIds)
       .neq('profile_id', myId);
     if (peerErr) throw peerErr;
@@ -127,10 +139,11 @@ export async function fetchAllConversations(myId) {
         roomId: r.id,
         roomType: r.room_type,
         peerId: peer?.id || null,
+        peerAvatarPath: isDirect ? (peer?.avatar_path || null) : null,
         createdBy: r.created_by || null,
         title: isDirect ? (peer?.full_name || 'Người dùng') : (r.name || 'Nhóm chat'),
         subtitle: isDirect ? (peer?.role || '') : (r.topic || ''),
-        avatarEmoji: isDirect ? '👤' : (r.avatar_emoji || '💬'),
+        avatarEmoji: isDirect ? null : (r.avatar_emoji || '💬'),
         lastMessage: r.last_message_preview || '',
         lastAt: r.last_message_at || null,
         lastSenderId: r.last_message_sender_id || null,
@@ -209,6 +222,21 @@ export async function markRoomRead(roomId, myId) {
   const { error } = await supabase
     .from('chat_participants')
     .update({ last_read_at: new Date().toISOString() })
+    .eq('room_id', roomId)
+    .eq('profile_id', myId);
+  if (error) throw error;
+}
+
+// "Đánh dấu chưa đọc" (menu ngữ cảnh, kiểu Zalo) — lùi last_read_at về TRƯỚC
+// đúng 1ms so với tin cuối cùng, để CHỈ tin cuối hiện lại "chưa đọc" (không
+// lùi về null, vì null sẽ tính TOÀN BỘ lịch sử phòng là chưa đọc nếu phòng
+// đã có sẵn rất nhiều tin cũ — sai số đếm không cần thiết).
+export async function markRoomUnread(roomId, myId, lastMessageAt) {
+  if (!lastMessageAt) return;
+  const before = new Date(new Date(lastMessageAt).getTime() - 1).toISOString();
+  const { error } = await supabase
+    .from('chat_participants')
+    .update({ last_read_at: before })
     .eq('room_id', roomId)
     .eq('profile_id', myId);
   if (error) throw error;

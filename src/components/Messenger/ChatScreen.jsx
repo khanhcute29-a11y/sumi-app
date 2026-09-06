@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import './chat-screen.css';
+import 'emoji-picker-element';
+import UserAvatar from '../UserAvatar';
 import {
   fetchAllConversations,
   fetchChatDirectory,
@@ -10,6 +12,7 @@ import {
   notifyChatMentions,
   subscribeToRooms,
   markRoomRead,
+  markRoomUnread,
   extractOrderCode,
   setConversationPinned,
   createChatGroup,
@@ -21,7 +24,7 @@ import {
 } from '../../lib/chat';
 import { uploadFile } from '../../lib/queries';
 import { toWebSafeImage } from '../../lib/imageConvert';
-import { IconChat, IconCamera, IconTag, IconUser, IconStaff } from '../icons/FrogIcons';
+import { IconChat, IconCamera, IconTag, IconStaff } from '../icons/FrogIcons';
 
 // Trang Chat kiểu Zalo, gắn vào thanh điều hướng (tab riêng — cửa sổ chat nổi
 // ChatWindowModal/ChatLauncher cũ đã gộp hẳn vào đây và xoá, không còn song
@@ -54,12 +57,17 @@ function stripDiacritics(text) {
   return (text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, (m) => (m === 'đ' ? 'd' : 'D')).toLowerCase();
 }
 
+// LỖI THẬT đã vá: extractOrderCode (lib/chat.js) đã nhận cả mã đơn viết
+// thường từ vòng sửa trước, nhưng regex TÔ MÀU ở đây vẫn chỉ khớp chữ HOA
+// ([A-Z]) — gõ "#sumi-001" thì lưu order_code đúng (hoa hoá khi lưu) nhưng
+// bong bóng chat không tô màu chữ gõ tay, chỉ có ô "📦 Mã đơn" riêng bên
+// dưới là đúng. Giờ regex nhận cả hai, không đổi cách lưu.
 function renderFormattedMessage(text) {
   if (!text) return null;
-  const parts = text.split(/(@\S+|#[A-Z]+-[A-Z0-9-]+)/g);
+  const parts = text.split(/(@\S+|#[A-Za-z]+-[A-Za-z0-9-]+)/g);
   return parts.map((part, i) => {
     if (part.startsWith('@')) return <span key={i} className="cs-mention-tag">{part}</span>;
-    if (part.startsWith('#')) return <span key={i} style={{ color: '#0284C7', fontWeight: 700 }}>{part}</span>;
+    if (part.startsWith('#')) return <span key={i} className="cs-order-inline">{part}</span>;
     return part;
   });
 }
@@ -145,6 +153,23 @@ export default function ChatScreen({ profile }) {
   const [inputText, setInputText] = useState('');
   const [pendingPhoto, setPendingPhoto] = useState(null);
   const [sending, setSending] = useState(false);
+  // LỖI THẬT đã vá (review vòng 2, mục 2.7): nút "👍 Like" trước đây chỉ chèn
+  // đúng 1 emoji cố định — không có cách chọn emoji khác. emoji-picker-element
+  // là web component (custom element chuẩn, không phải thư viện React) nên
+  // gắn/gỡ sự kiện "emoji-click" bằng ref + useEffect thay vì prop JSX.
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const emojiPickerRef = useRef(null);
+  useEffect(() => {
+    const el = emojiPickerRef.current;
+    if (!el) return undefined;
+    const onPick = (e) => {
+      setInputText((p) => `${p}${e.detail.unicode}`);
+      inputRef.current?.focus();
+    };
+    el.addEventListener('emoji-click', onPick);
+    return () => el.removeEventListener('emoji-click', onPick);
+  }, [showEmojiPicker]);
+
   const [showMentionPopup, setShowMentionPopup] = useState(false);
   const [mentionFilter, setMentionFilter] = useState('');
   const [selectedMentionIds, setSelectedMentionIds] = useState([]); // có thể chứa sentinel TAG_ALL_ID
@@ -287,8 +312,8 @@ export default function ChatScreen({ profile }) {
     const el = feedRef.current;
     const prevScrollHeight = el?.scrollHeight || 0;
     try {
-      const oldest = messages[0]?.created_at;
-      const older = await fetchRoomMessages(activeRoomId, { limit: MESSAGES_PAGE_SIZE, before: oldest });
+      const oldest = messages[0];
+      const older = await fetchRoomMessages(activeRoomId, { limit: MESSAGES_PAGE_SIZE, before: oldest?.created_at, beforeId: oldest?.id });
       if (older.length < MESSAGES_PAGE_SIZE) setHasMoreOlder(false);
       if (older.length) {
         setMessages((prev) => [...older, ...prev]);
@@ -315,8 +340,8 @@ export default function ChatScreen({ profile }) {
     try {
       const roomId = await getOrCreateDmRoom(user.id);
       setActiveConvo({
-        roomId, roomType: 'direct', peerId: user.id, createdBy: null,
-        title: user.full_name, subtitle: user.role || '', avatarEmoji: '👤',
+        roomId, roomType: 'direct', peerId: user.id, peerAvatarPath: user.avatar_path || null, createdBy: null,
+        title: user.full_name, subtitle: user.role || '', avatarEmoji: null,
       });
       setActiveRoomId(roomId);
       setRefreshTick((t) => t + 1);
@@ -327,8 +352,7 @@ export default function ChatScreen({ profile }) {
 
   // Ghim tại chỗ trước (lạc quan) rồi mới lưu DB — ghim chỉ ảnh hưởng cách
   // CHÍNH MÌNH sắp xếp danh sách, không đụng gì tới người khác.
-  const togglePin = async (e, convo) => {
-    e.stopPropagation();
+  const togglePin = async (convo) => {
     if (!profile?.id) return;
     const nextPinned = !convo.pinned;
     setConversations((prev) => {
@@ -341,6 +365,37 @@ export default function ChatScreen({ profile }) {
       setConversations((prev) => prev.map((c) => (c.roomId === convo.roomId ? { ...c, pinned: convo.pinned } : c)));
       setError(err.message);
     }
+  };
+
+  const handleMarkUnread = async (convo) => {
+    if (!profile?.id || !convo.lastAt) return;
+    setUnreadCounts((prev) => ({ ...prev, [convo.roomId]: Math.max(prev[convo.roomId] || 0, 1) }));
+    try {
+      await markRoomUnread(convo.roomId, profile.id, convo.lastAt);
+      window.dispatchEvent(new CustomEvent('sumi-badges-changed'));
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  // LỖI THẬT đã vá (review vòng 2, mục 2.5): trước đây nút ghim 📌 LUÔN LỘ
+  // RA trên MỌI dòng hội thoại (mờ khi chưa ghim, đậm khi đã ghim) — Zalo
+  // không có nút nào lộ sẵn như vậy, thao tác ghim/đánh dấu chưa đọc nằm
+  // trong menu bấm giữ (mobile) / chuột phải (desktop). Giờ menu này mở
+  // bằng bấm giữ 500ms hoặc chuột phải, đóng khi bấm ra ngoài; dòng ĐÃ ghim
+  // vẫn hiện icon 📌 nhỏ cạnh giờ gửi (không phải nút bấm) để biết là đã ghim.
+  const [convoMenu, setConvoMenu] = useState(null); // { convo, x, y }
+  const longPressTimerRef = useRef(null);
+  const openConvoMenu = (convo, x, y) => setConvoMenu({ convo, x, y });
+  const closeConvoMenu = () => setConvoMenu(null);
+  const handleConvoTouchStart = (e, convo) => {
+    const { clientX, clientY } = e.touches[0] || {};
+    longPressTimerRef.current = setTimeout(() => openConvoMenu(convo, clientX, clientY), 500);
+  };
+  const handleConvoTouchEnd = () => clearTimeout(longPressTimerRef.current);
+  const handleConvoContextMenu = (e, convo) => {
+    e.preventDefault();
+    openConvoMenu(convo, e.clientX, e.clientY);
   };
 
   const toggleGroupMember = (userId) => {
@@ -448,6 +503,14 @@ export default function ChatScreen({ profile }) {
       || 'Nhân viên';
   };
 
+  // Tin nhắn tới qua realtime (payload.new thô, không có join profiles) vẫn
+  // cần avatar đúng người — tra theo cùng thứ tự ưu tiên với nameFor ở trên.
+  const avatarPathFor = (senderId) => (
+    directory.find((u) => u.id === senderId)?.avatar_path
+    ?? roomParticipants.find((u) => u.id === senderId)?.avatarPath
+    ?? null
+  );
+
   const handleInputChange = (e) => {
     const val = e.target.value;
     setInputText(val);
@@ -544,7 +607,11 @@ export default function ChatScreen({ profile }) {
   useEffect(() => () => { if (pendingPhotoUrl) URL.revokeObjectURL(pendingPhotoUrl); }, [pendingPhotoUrl]);
 
   const handleSendMessage = async () => {
-    const text = inputText.trim();
+    // LỖI THẬT đã vá: bấm "Tag người" tự chèn "@" vào ô soạn để mở popup gợi
+    // ý; nếu đóng popup mà KHÔNG chọn ai rồi lỡ bấm gửi, "@" trơ trọi (không
+    // rỗng) vẫn lọt qua điều kiện bên dưới và bị gửi đi thành 1 tin chỉ có
+    // ký tự "@" — xoá "@" cụt cuối câu (không có tên theo sau) trước khi xét.
+    const text = inputText.trim().replace(/@\s*$/, '').trim();
     if (!text && !pendingPhoto) return;
     if (!activeRoomId || !profile?.id) return;
     setSending(true);
@@ -580,8 +647,13 @@ export default function ChatScreen({ profile }) {
       // (mergeIncomingMessage ở effect subscribe xử lý), tempId không còn
       // tồn tại trong mảng nữa -> map dưới đây không đổi gì, KHÔNG tạo bản
       // trùng thứ 2 (đúng hướng còn lại của lỗi đua #4).
+      // LỖI THẬT đã vá: KHÔNG setRefreshTick ở đây nữa — effect subscribe
+      // realtime (subscribeToRooms) đã tự cập nhật `conversations` tại chỗ
+      // (lastMessage/lastAt/sort) mỗi khi có tin insert, kể cả tin của
+      // chính mình. Gọi lại refreshTick ở đây chỉ tải lại TOÀN BỘ danh sách
+      // hội thoại + danh bạ + số chưa đọc (3 query thừa) VÀ làm cột trái
+      // nháy "Đang tải..." mỗi lần bấm Enter.
       setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...saved } : m)));
-      setRefreshTick((t) => t + 1);
       if (mentionIdsAtSend.length) {
         notifyChatMentions({ roomId: roomIdAtSend, messageId: saved.id, mentionedProfileIds: mentionIdsAtSend, preview: text }).catch(() => {});
       }
@@ -647,25 +719,32 @@ export default function ChatScreen({ profile }) {
             )}
             {!loadingList && visibleConversations.map((c) => {
               const unread = unreadCounts[c.roomId] || 0;
+              // 2.4 — Zalo hiện "Bạn: " trước preview khi tin cuối là CHÍNH
+              // MÌNH gửi (dễ nhận ra "mình vừa nhắn, chưa thấy trả lời").
+              const previewPrefix = c.lastMessage && c.lastSenderId === profile?.id ? 'Bạn: ' : '';
               return (
-                <button key={c.roomId} className={`cs-convo-item ${activeRoomId === c.roomId ? 'active' : ''} ${c.pinned ? 'pinned' : ''}`} onClick={() => openConversation(c)}>
-                  <div className="cs-convo-avatar">{c.avatarEmoji}</div>
+                <button
+                  key={c.roomId}
+                  className={`cs-convo-item ${activeRoomId === c.roomId ? 'active' : ''} ${c.pinned ? 'pinned' : ''} ${unread > 0 ? 'unread' : ''}`}
+                  onClick={() => openConversation(c)}
+                  onContextMenu={(e) => handleConvoContextMenu(e, c)}
+                  onTouchStart={(e) => handleConvoTouchStart(e, c)}
+                  onTouchEnd={handleConvoTouchEnd}
+                  onTouchMove={handleConvoTouchEnd}
+                >
+                  {c.roomType === 'direct'
+                    ? <UserAvatar profile={{ full_name: c.title, avatar_path: c.peerAvatarPath }} size={44} />
+                    : <div className="cs-convo-avatar">{c.avatarEmoji}</div>}
                   <div className="cs-convo-info">
                     <div className="cs-convo-row-top">
                       <strong>{c.title}</strong>
-                      {c.lastAt && <span className="cs-convo-time">{formatListTime(c.lastAt)}</span>}
+                      <span className="cs-convo-time">{c.pinned && '📌 '}{c.lastAt ? formatListTime(c.lastAt) : ''}</span>
                     </div>
                     <div className="cs-convo-row-top">
-                      <span className="cs-convo-preview">{c.lastMessage || c.subtitle || 'Bấm để xem hội thoại'}</span>
+                      <span className="cs-convo-preview">{c.lastMessage ? `${previewPrefix}${c.lastMessage}` : (c.subtitle || 'Bấm để xem hội thoại')}</span>
                       {unread > 0 && <span className="cs-unread-badge">{unread > 99 ? '99+' : unread}</span>}
                     </div>
                   </div>
-                  <span
-                    className={`cs-pin-btn ${c.pinned ? 'pinned' : ''}`}
-                    onClick={(e) => togglePin(e, c)}
-                    title={c.pinned ? 'Bỏ ghim' : 'Ghim hội thoại'}
-                    role="button"
-                  >📌</span>
                 </button>
               );
             })}
@@ -687,7 +766,9 @@ export default function ChatScreen({ profile }) {
                   style={{ cursor: canManageActiveGroup ? 'pointer' : 'default' }}
                   disabled={!canManageActiveGroup}
                 >
-                  <div className="cs-convo-avatar">{activeConvo?.avatarEmoji || '💬'}</div>
+                  {activeConvo?.roomType === 'direct'
+                    ? <UserAvatar profile={{ full_name: activeConvo?.title, avatar_path: activeConvo?.peerAvatarPath }} size={44} />
+                    : <div className="cs-convo-avatar">{activeConvo?.avatarEmoji || '💬'}</div>}
                   <div className="cs-thread-title">
                     <h4>{activeConvo?.title || 'Hội thoại'}</h4>
                     <p>{canManageActiveGroup ? `${roomParticipants.length} thành viên · Bấm để xem` : (activeConvo?.subtitle || '')}</p>
@@ -706,9 +787,10 @@ export default function ChatScreen({ profile }) {
                 {messages.map((msg) => {
                   const isMe = msg.sender_id === profile?.id;
                   const senderName = msg.profiles?.full_name || nameFor(msg.sender_id);
+                  const senderAvatarPath = msg.profiles?.avatar_path ?? avatarPathFor(msg.sender_id);
                   return (
                     <div key={msg.id} className={`cs-msg-row ${isMe ? 'me' : ''}`}>
-                      {!isMe && <div className="cs-msg-avatar"><IconUser size={16} /></div>}
+                      {!isMe && <UserAvatar profile={{ full_name: senderName, avatar_path: senderAvatarPath }} size={28} />}
                       <div className="cs-msg-body">
                         {!isMe && <span className="cs-sender-label">{senderName}</span>}
                         <div className="cs-msg-bubble">
@@ -763,6 +845,13 @@ export default function ChatScreen({ profile }) {
                   </div>
                 )}
 
+                {showEmojiPicker && (
+                  <div className="cs-emoji-picker-wrap">
+                    {/* eslint-disable-next-line react/no-unknown-property */}
+                    <emoji-picker ref={emojiPickerRef} class="cs-emoji-picker" />
+                  </div>
+                )}
+
                 <form className="cs-input-form" onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}>
                   <textarea
                     ref={inputRef} rows={1} placeholder="Gõ tin nhắn (@ để tag tên)..."
@@ -777,11 +866,29 @@ export default function ChatScreen({ profile }) {
                   <input ref={photoInputRef} type="file" accept="image/*" hidden onChange={handlePickPhoto} />
                   <button type="button" onClick={() => photoInputRef.current?.click()}><IconCamera size={16} /> Gửi ảnh</button>
                   <button type="button" onClick={() => { setInputText((p) => `${p}@`); setShowMentionPopup(true); setMentionFilter(''); setSelectedMentionIds([]); inputRef.current?.focus(); }}><IconTag size={16} /> Tag người</button>
+                  <button type="button" onClick={() => setShowEmojiPicker((v) => !v)}>😊 Emoji</button>
                   <button type="button" onClick={() => setInputText((p) => `${p}👍`)}>👍 Like</button>
                 </div>
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {convoMenu && (
+        <div className="cs-convo-menu-overlay" onClick={closeConvoMenu} onContextMenu={(e) => e.preventDefault()}>
+          <div
+            className="cs-convo-menu"
+            style={{ left: Math.min(convoMenu.x, window.innerWidth - 200), top: Math.min(convoMenu.y, window.innerHeight - 120) }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button type="button" onClick={() => { togglePin(convoMenu.convo); closeConvoMenu(); }}>
+              {convoMenu.convo.pinned ? '📌 Bỏ ghim' : '📌 Ghim hội thoại'}
+            </button>
+            <button type="button" onClick={() => { handleMarkUnread(convoMenu.convo); closeConvoMenu(); }}>
+              🔵 Đánh dấu chưa đọc
+            </button>
+          </div>
         </div>
       )}
 
@@ -795,7 +902,7 @@ export default function ChatScreen({ profile }) {
             <div className="cs-new-chat-list">
               {directory.map((u) => (
                 <button key={u.id} className="cs-new-chat-item" onClick={() => startDirectChat(u)}>
-                  <div className="cs-convo-avatar">👤</div>
+                  <UserAvatar profile={u} size={44} />
                   <div><strong>{u.full_name}</strong><span>{u.role}</span></div>
                 </button>
               ))}
@@ -822,7 +929,7 @@ export default function ChatScreen({ profile }) {
                 const checked = groupMemberIds.includes(u.id);
                 return (
                   <button key={u.id} className={`cs-new-chat-item cs-group-member-item ${checked ? 'checked' : ''}`} onClick={() => toggleGroupMember(u.id)}>
-                    <div className="cs-convo-avatar">{checked ? '✓' : '👤'}</div>
+                    {checked ? <div className="cs-avatar cs-avatar-checked">✓</div> : <UserAvatar profile={u} size={44} />}
                     <div><strong>{u.full_name}</strong><span>{u.role}</span></div>
                   </button>
                 );
@@ -863,7 +970,7 @@ export default function ChatScreen({ profile }) {
             <div className="cs-new-chat-list cs-group-member-list">
               {roomParticipants.map((u) => (
                 <div key={u.id} className="cs-new-chat-item cs-group-member-row">
-                  <div className="cs-convo-avatar">👤</div>
+                  <UserAvatar profile={{ full_name: u.full_name, avatar_path: u.avatarPath }} size={44} />
                   <div style={{ flex: 1 }}><strong>{u.full_name}{u.id === profile?.id ? ' (Bạn)' : ''}</strong><span>{u.role}</span></div>
                   {(u.id === profile?.id || isCreatorOfActiveGroup) && (
                     <button type="button" className="cs-group-remove-btn" disabled={savingGroupInfo} onClick={() => handleRemoveMember(u.id)}>
@@ -890,7 +997,7 @@ export default function ChatScreen({ profile }) {
                 return (
                   <button key={u.id} className={`cs-new-chat-item cs-group-member-item ${checked ? 'checked' : ''}`}
                     onClick={() => setAddMemberIds((prev) => (prev.includes(u.id) ? prev.filter((id) => id !== u.id) : [...prev, u.id]))}>
-                    <div className="cs-convo-avatar">{checked ? '✓' : '👤'}</div>
+                    {checked ? <div className="cs-avatar cs-avatar-checked">✓</div> : <UserAvatar profile={u} size={44} />}
                     <div><strong>{u.full_name}</strong><span>{u.role}</span></div>
                   </button>
                 );

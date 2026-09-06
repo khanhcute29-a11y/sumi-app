@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.0",
+    "emoji-picker-element": "^1.29.1",
     "heic2any": "^0.0.4",
     "lucide-react": "^1.34.0",
     "react": "^18.3.1",

@@ -350,6 +350,27 @@ function OpsApp({ onSignOut }) {
         chat: Object.values(chatUnread || {}).reduce((s, n) => s + n, 0),
       })).catch(() => {});
     };
+    // LỖI THẬT đã vá: trước đây MỌI tin nhắn chat_messages INSERT (của BẤT
+    // KỲ AI, phòng nào) đều kích `loadBadges` — chạy lại CẢ 5 QUERY (orders,
+    // kds, approvals, incidents, chat) trên MÁY MỌI NGƯỜI ĐANG MỞ APP, dù 4
+    // trong 5 query đó chẳng liên quan gì tới chat. 1 công ty chat nhiều là
+    // hàng nghìn query thừa/ngày. Giờ tin nhắn chỉ tải lại ĐÚNG phần badge
+    // chat (1 RPC, không đụng 4 query kia) + debounce 800ms — gõ/gửi dồn
+    // dập nhiều tin liền chỉ tính 1 lần khi ngừng, không tính từng tin.
+    const loadChatBadgeOnly = () => {
+      if (!profile?.id) return;
+      fetchUnreadCounts()
+        .then((m) => setBadgeCounts((prev) => ({
+          ...prev,
+          chat: Object.values(m || {}).reduce((s, n) => s + n, 0),
+        })))
+        .catch(() => {});
+    };
+    let chatBadgeTimer;
+    const debouncedChatBadge = () => {
+      clearTimeout(chatBadgeTimer);
+      chatBadgeTimer = setTimeout(loadChatBadgeOnly, 800);
+    };
     loadBadges();
     window.addEventListener('sumi-badges-changed', loadBadges);
     const channel = supabase
@@ -357,9 +378,13 @@ function OpsApp({ onSignOut }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, loadBadges)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'approval_requests' }, loadBadges)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'incident_reports' }, loadBadges)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, loadBadges)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, debouncedChatBadge)
       .subscribe();
-    return () => { window.removeEventListener('sumi-badges-changed', loadBadges); supabase.removeChannel(channel); };
+    return () => {
+      clearTimeout(chatBadgeTimer);
+      window.removeEventListener('sumi-badges-changed', loadBadges);
+      supabase.removeChannel(channel);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id, profile?.role, (profile?.extra_roles || []).join(',')]);
 
