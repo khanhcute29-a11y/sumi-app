@@ -344,7 +344,7 @@ function OpsApp({ onSignOut }) {
         vis.kds ? countKitchenActiveOrders() : 0,
         vis.approvals ? countPendingApprovals() : 0,
         vis.incidents ? countOpenIncidents(vis.incidentCategories ? { categories: vis.incidentCategories } : {}) : 0,
-        profile?.id ? fetchUnreadCounts(profile.id) : {},
+        profile?.id ? fetchUnreadCounts() : {},
       ]).then(([orders, kds, approvals, incidents, chatUnread]) => setBadgeCounts({
         orders, kds, approvals, incidents,
         chat: Object.values(chatUnread || {}).reduce((s, n) => s + n, 0),

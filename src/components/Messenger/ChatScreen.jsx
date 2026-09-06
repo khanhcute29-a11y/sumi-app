@@ -8,11 +8,16 @@ import {
   fetchRoomMessages,
   sendChatMessage,
   notifyChatMentions,
-  subscribeToRoomMessages,
+  subscribeToRooms,
   markRoomRead,
   extractOrderCode,
   setConversationPinned,
   createChatGroup,
+  renameChatGroup,
+  addChatGroupMembers,
+  removeChatGroupMember,
+  fetchUnreadCounts,
+  sortConversations,
 } from '../../lib/chat';
 import { uploadFile } from '../../lib/queries';
 import { toWebSafeImage } from '../../lib/imageConvert';
@@ -23,7 +28,12 @@ import { IconChat, IconCamera, IconTag, IconUser, IconStaff } from '../icons/Fro
 // song nữa). Desktop: 2 cột (danh sách trái, luồng tin phải) luôn hiện cùng
 // lúc. Mobile: 1 cột, bấm vào hội thoại mới chuyển sang xem luồng tin, có nút
 // quay lại.
+//
+// Bản 06/09/2026 sửa 4 lỗi nghiêm trọng + nhiều lỗi hạng 2 phát hiện qua
+// review kỹ code (xem CHAT_FEATURE_CODE.md) — mỗi chỗ sửa đều có ghi chú
+// "LỖI THẬT đã vá" ngay tại chỗ, không dọn hết vào 1 đoạn dài ở đây.
 const DESKTOP_BREAKPOINT = 860;
+const MESSAGES_PAGE_SIZE = 50;
 // Sentinel id (không phải uuid thật) cho lựa chọn "Mọi người" trong popup tag
 // — chọn xong sẽ mở rộng ra ID thật của mọi thành viên đang có trong ĐÚNG
 // phòng đang chat (không phải toàn công ty).
@@ -54,6 +64,48 @@ function renderFormattedMessage(text) {
   });
 }
 
+// LỖI THẬT đã vá: trước đây check "người bị tag còn được báo không" bằng
+// text.includes(token) — khớp NHẦM chuỗi con, vd token "@NguyenVanA" là 1
+// chuỗi con nằm ngay trong "@NguyenVanAnh" nên câu chỉ nhắc "Anh" vẫn báo
+// nhầm cho người tên "A". Sửa bằng cách xét token DÀI NHẤT trước, "xoá" khỏi
+// bản nháp câu sau khi khớp để token ngắn hơn không còn khớp nhầm vào đúng
+// phần chữ đã dùng cho token dài hơn (giống cách tách tên nhân viên khỏi
+// câu nói ở parseVoiceTaskAssign.js — cùng 1 dạng lỗi, cùng 1 cách vá).
+function matchMentionTokens(mentions, text) {
+  const sorted = [...mentions].sort((a, b) => b.token.length - a.token.length);
+  let remaining = text;
+  const matched = [];
+  for (const m of sorted) {
+    const idx = remaining.indexOf(m.token);
+    if (idx !== -1) {
+      matched.push(m);
+      remaining = remaining.slice(0, idx) + ' '.repeat(m.token.length) + remaining.slice(idx + m.token.length);
+    }
+  }
+  return matched;
+}
+
+// Gộp 1 tin nhắn mới (từ realtime) vào mảng đang có, có dedupe 2 chiều.
+// LỖI THẬT đã vá: trước đây bong bóng "tạm" (id: temp-xxx) lúc gửi tin và
+// tin thật từ realtime dội về CÙNG được thêm riêng lẻ nếu realtime tới
+// TRƯỚC KHI sendChatMessage() kịp trả lời — ra 2 bong bóng trùng nhau. Giờ
+// nếu là tin CỦA CHÍNH MÌNH và có sẵn 1 bong bóng tạm khớp nội dung y hệt,
+// THAY nó bằng bản thật thay vì thêm mới; ngược lại (tin thật đã có sẵn
+// đúng id) thì bỏ qua — cả 2 hướng của cuộc đua đều không tạo bản trùng.
+function mergeIncomingMessage(prev, msg, myId) {
+  if (prev.some((m) => m.id === msg.id)) return prev;
+  if (msg.sender_id === myId) {
+    const tempIdx = prev.findIndex((m) => typeof m.id === 'string' && m.id.startsWith('temp-')
+      && m.content === msg.content && m.attachment_url === msg.attachment_url);
+    if (tempIdx !== -1) {
+      const next = prev.slice();
+      next[tempIdx] = msg;
+      return next;
+    }
+  }
+  return [...prev, msg];
+}
+
 export default function ChatScreen({ profile }) {
   const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= DESKTOP_BREAKPOINT);
   useEffect(() => {
@@ -64,6 +116,11 @@ export default function ChatScreen({ profile }) {
 
   const [conversations, setConversations] = useState([]);
   const [directory, setDirectory] = useState([]);
+  // LỖI THẬT đã vá: fetchUnreadCounts đã viết sẵn trong lib/chat.js nhưng
+  // ChatScreen chưa bao giờ import — danh sách hội thoại không có huy hiệu
+  // số tin chưa đọc trên từng dòng (chỉ có tổng số ở icon Chat dưới thanh
+  // điều hướng, không biết PHÒNG NÀO đang có tin mới).
+  const [unreadCounts, setUnreadCounts] = useState({});
   const [loadingList, setLoadingList] = useState(true);
   const [error, setError] = useState('');
   const [showNewChat, setShowNewChat] = useState(false);
@@ -79,6 +136,11 @@ export default function ChatScreen({ profile }) {
   const [activeConvo, setActiveConvo] = useState(null); // metadata hiển thị header (title/avatar) — không phải lúc nào cũng có sẵn trong `conversations` (vd DM vừa tạo lần đầu)
   const [messages, setMessages] = useState([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  // Phân trang tin cũ — LỖI THẬT đã vá: trước đây tải cứng 100 tin ĐẦU (xem
+  // fetchRoomMessages) và không có cách nào xem thêm tin cũ hơn. Giờ tải 50
+  // tin MỚI NHẤT trước, cuộn lên đầu bấm "Tải tin cũ hơn" mới tải thêm.
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasMoreOlder, setHasMoreOlder] = useState(true);
 
   const [inputText, setInputText] = useState('');
   const [pendingPhoto, setPendingPhoto] = useState(null);
@@ -91,27 +153,81 @@ export default function ChatScreen({ profile }) {
   // không (fix lỗi thật: xoá tay "@Tên" khỏi ô soạn rồi gửi thì người đó vẫn
   // bị báo "được nhắc đến" dù tên không còn xuất hiện trong tin gửi đi).
   const [pendingMentions, setPendingMentions] = useState([]); // [{ token, ids }]
-  const [roomParticipantIds, setRoomParticipantIds] = useState([]); // thành viên phòng đang mở, cho "@Mọi người"
+  const [roomParticipants, setRoomParticipants] = useState([]); // [{id, full_name, role}] — thành viên phòng đang mở
+
+  // Quản lý nhóm tự tạo — LỖI THẬT đã vá: trước đây tạo nhóm xong không có
+  // cách nào đổi tên/thêm/xoá thành viên/rời nhóm.
+  const [showGroupInfo, setShowGroupInfo] = useState(false);
+  const [groupInfoName, setGroupInfoName] = useState('');
+  const [savingGroupInfo, setSavingGroupInfo] = useState(false);
+  const [showAddMembers, setShowAddMembers] = useState(false);
+  const [addMemberIds, setAddMemberIds] = useState([]);
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const photoInputRef = useRef(null);
-  const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const feedRef = useRef(null);
+  const activeRoomIdRef = useRef(null);
+  // Chỉ tự cuộn xuống đáy khi ĐANG Ở GẦN ĐÁY sẵn (hoặc chính mình vừa gửi) —
+  // LỖI THẬT đã vá: trước đây MỌI tin mới đều ép cuộn xuống đáy, kể cả đang
+  // cuộn lên đọc tin cũ, giật người dùng xuống giữa chừng.
+  const isNearBottomRef = useRef(true);
+  const justSentRef = useRef(false);
+  const scrollToBottom = (smooth = true) => messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
+
+  useEffect(() => { activeRoomIdRef.current = activeRoomId; }, [activeRoomId]);
 
   useEffect(() => {
     if (!profile?.id) return;
     let cancelled = false;
     setLoadingList(true);
-    Promise.all([fetchAllConversations(profile.id), fetchChatDirectory()])
-      .then(([convos, dir]) => {
+    Promise.all([fetchAllConversations(profile.id), fetchChatDirectory(), fetchUnreadCounts()])
+      .then(([convos, dir, unread]) => {
         if (cancelled) return;
         setConversations(convos);
         setDirectory(dir.filter((u) => u.id !== profile.id));
+        setUnreadCounts(unread);
       })
       .catch((e) => setError(e.message))
       .finally(() => { if (!cancelled) setLoadingList(false); });
     return () => { cancelled = true; };
   }, [profile?.id, refreshTick]);
+
+  // LỖI THẬT đã vá: trước đây CHỈ subscribe realtime cho phòng đang mở — tin
+  // nhắn của các phòng KHÁC hoàn toàn im lặng cho tới khi bấm vào lại (badge
+  // không nhảy, preview không cập nhật). Giờ subscribe MỘT LẦN cho TẤT CẢ
+  // phòng mình đang tham gia, tự định tuyến: đúng phòng đang mở -> đẩy vào
+  // luồng tin; phòng khác + không phải tin của mình -> tăng số chưa đọc +
+  // cập nhật preview tại chỗ (không gọi lại fetchAllConversations).
+  const roomIdsKey = useMemo(() => conversations.map((c) => c.roomId).sort().join(','), [conversations]);
+  useEffect(() => {
+    const roomIds = roomIdsKey ? roomIdsKey.split(',') : [];
+    if (!roomIds.length || !profile?.id) return undefined;
+    const unsubscribe = subscribeToRooms(roomIds, (msg) => {
+      setConversations((prev) => {
+        const idx = prev.findIndex((c) => c.roomId === msg.room_id);
+        if (idx === -1) return prev;
+        const updated = {
+          ...prev[idx],
+          lastMessage: msg.content || (msg.attachment_url ? '📷 Đã gửi ảnh' : ''),
+          lastAt: msg.created_at,
+          lastSenderId: msg.sender_id,
+        };
+        const rest = prev.filter((_, i) => i !== idx);
+        return [updated, ...rest].sort(sortConversations);
+      });
+
+      if (msg.room_id === activeRoomIdRef.current) {
+        setMessages((prev) => mergeIncomingMessage(prev, msg, profile.id));
+        if (msg.sender_id !== profile.id) {
+          markRoomRead(msg.room_id, profile.id).then(() => window.dispatchEvent(new CustomEvent('sumi-badges-changed'))).catch(() => {});
+        }
+      } else if (msg.sender_id !== profile.id) {
+        setUnreadCounts((prev) => ({ ...prev, [msg.room_id]: (prev[msg.room_id] || 0) + 1 }));
+      }
+    });
+    return unsubscribe;
+  }, [roomIdsKey, profile?.id]);
 
   // Bấm vào toast "Tin nhắn nội bộ mới" / "Bạn được nhắc đến" -> App.jsx đổi
   // tab sang 'chat' rồi bắn sự kiện này để mở thẳng đúng phòng (xem App.jsx).
@@ -132,29 +248,62 @@ export default function ChatScreen({ profile }) {
     let cancelled = false;
     setLoadingMessages(true);
     setMessages([]);
-    setRoomParticipantIds([]);
-    fetchRoomMessages(activeRoomId)
-      .then((data) => { if (!cancelled) setMessages(data); })
+    setRoomParticipants([]);
+    setHasMoreOlder(true);
+    isNearBottomRef.current = true;
+    fetchRoomMessages(activeRoomId, { limit: MESSAGES_PAGE_SIZE })
+      .then((data) => { if (!cancelled) { setMessages(data); if (data.length < MESSAGES_PAGE_SIZE) setHasMoreOlder(false); } })
       .catch((e) => setError(e.message))
       .finally(() => { if (!cancelled) setLoadingMessages(false); });
     fetchRoomParticipants(activeRoomId)
-      .then((ids) => { if (!cancelled) setRoomParticipantIds(ids); })
+      .then((rows) => { if (!cancelled) setRoomParticipants(rows); })
       .catch(() => {});
 
     if (profile?.id) {
-      markRoomRead(activeRoomId, profile.id).then(() => window.dispatchEvent(new CustomEvent('sumi-badges-changed'))).catch(() => {});
+      markRoomRead(activeRoomId, profile.id).then(() => {
+        setUnreadCounts((prev) => ({ ...prev, [activeRoomId]: 0 }));
+        window.dispatchEvent(new CustomEvent('sumi-badges-changed'));
+      }).catch(() => {});
     }
-
-    const unsubscribe = subscribeToRoomMessages(activeRoomId, (msg) => {
-      setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
-      if (msg.sender_id !== profile?.id && profile?.id) {
-        markRoomRead(activeRoomId, profile.id).then(() => window.dispatchEvent(new CustomEvent('sumi-badges-changed'))).catch(() => {});
-      }
-    });
-    return () => { cancelled = true; unsubscribe(); };
+    return () => { cancelled = true; };
   }, [activeRoomId]);
 
-  useEffect(() => { scrollToBottom(); }, [messages]);
+  useEffect(() => {
+    if (isNearBottomRef.current || justSentRef.current) {
+      scrollToBottom(!justSentRef.current);
+      justSentRef.current = false;
+    }
+  }, [messages]);
+
+  const handleFeedScroll = () => {
+    const el = feedRef.current;
+    if (!el) return;
+    isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+  };
+
+  const loadOlderMessages = async () => {
+    if (!activeRoomId || loadingOlder || !hasMoreOlder || !messages.length) return;
+    setLoadingOlder(true);
+    const el = feedRef.current;
+    const prevScrollHeight = el?.scrollHeight || 0;
+    try {
+      const oldest = messages[0]?.created_at;
+      const older = await fetchRoomMessages(activeRoomId, { limit: MESSAGES_PAGE_SIZE, before: oldest });
+      if (older.length < MESSAGES_PAGE_SIZE) setHasMoreOlder(false);
+      if (older.length) {
+        setMessages((prev) => [...older, ...prev]);
+        // Giữ đúng vị trí đang đọc — không để màn hình giật khi tin cũ chèn
+        // thêm phía trên làm tăng chiều cao khung cuộn.
+        requestAnimationFrame(() => {
+          if (el) el.scrollTop += (el.scrollHeight - prevScrollHeight);
+        });
+      }
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoadingOlder(false);
+    }
+  };
 
   const openConversation = (convo) => {
     setActiveConvo(convo);
@@ -166,7 +315,7 @@ export default function ChatScreen({ profile }) {
     try {
       const roomId = await getOrCreateDmRoom(user.id);
       setActiveConvo({
-        roomId, roomType: 'direct', peerId: user.id,
+        roomId, roomType: 'direct', peerId: user.id, createdBy: null,
         title: user.full_name, subtitle: user.role || '', avatarEmoji: '👤',
       });
       setActiveRoomId(roomId);
@@ -184,13 +333,7 @@ export default function ChatScreen({ profile }) {
     const nextPinned = !convo.pinned;
     setConversations((prev) => {
       const next = prev.map((c) => (c.roomId === convo.roomId ? { ...c, pinned: nextPinned } : c));
-      return next.sort((a, b) => {
-        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-        if (a.lastAt && b.lastAt) return new Date(b.lastAt) - new Date(a.lastAt);
-        if (a.lastAt) return -1;
-        if (b.lastAt) return 1;
-        return a.title.localeCompare(b.title);
-      });
+      return next.sort(sortConversations);
     });
     try {
       await setConversationPinned(convo.roomId, profile.id, nextPinned);
@@ -212,7 +355,7 @@ export default function ChatScreen({ profile }) {
       const roomId = await createChatGroup(groupName, groupMemberIds);
       setShowCreateGroup(false);
       setActiveConvo({
-        roomId, roomType: 'group', peerId: null,
+        roomId, roomType: 'group', peerId: null, createdBy: profile?.id || null,
         title: groupName.trim() || 'Nhóm chat mới', subtitle: '', avatarEmoji: '👥',
       });
       setActiveRoomId(roomId);
@@ -226,6 +369,71 @@ export default function ChatScreen({ profile }) {
     }
   };
 
+  // ── Quản lý nhóm tự tạo (đổi tên/thêm-xoá thành viên/rời nhóm) ───────────
+  // Chỉ nhóm created_by khác null mới cho sửa (chặn thật ở RPC, đây chỉ ẩn
+  // nút cho gọn giao diện) — 4 nhóm mặc định toàn công ty không đổi được.
+  const canManageActiveGroup = activeConvo?.roomType === 'group' && !!activeConvo?.createdBy;
+  const isCreatorOfActiveGroup = canManageActiveGroup && activeConvo?.createdBy === profile?.id;
+
+  const openGroupInfo = () => {
+    setGroupInfoName(activeConvo?.title || '');
+    setShowGroupInfo(true);
+  };
+
+  const handleRenameGroup = async () => {
+    if (!activeRoomId) return;
+    const name = groupInfoName.trim();
+    if (!name) { setError('Tên nhóm không được để trống.'); return; }
+    setSavingGroupInfo(true); setError('');
+    try {
+      await renameChatGroup(activeRoomId, name);
+      setActiveConvo((prev) => (prev ? { ...prev, title: name } : prev));
+      setConversations((prev) => prev.map((c) => (c.roomId === activeRoomId ? { ...c, title: name } : c)));
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSavingGroupInfo(false);
+    }
+  };
+
+  const handleAddMembers = async () => {
+    if (!activeRoomId || !addMemberIds.length) return;
+    setSavingGroupInfo(true); setError('');
+    try {
+      await addChatGroupMembers(activeRoomId, addMemberIds);
+      const rows = await fetchRoomParticipants(activeRoomId);
+      setRoomParticipants(rows);
+      setAddMemberIds([]);
+      setShowAddMembers(false);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSavingGroupInfo(false);
+    }
+  };
+
+  const handleRemoveMember = async (memberId) => {
+    if (!activeRoomId) return;
+    const isSelf = memberId === profile?.id;
+    if (!window.confirm(isSelf ? 'Rời nhóm này?' : 'Xoá người này khỏi nhóm?')) return;
+    setSavingGroupInfo(true); setError('');
+    try {
+      await removeChatGroupMember(activeRoomId, memberId);
+      if (isSelf) {
+        setShowGroupInfo(false);
+        setActiveRoomId(null);
+        setActiveConvo(null);
+        setRefreshTick((t) => t + 1);
+      } else {
+        setRoomParticipants((prev) => prev.filter((p) => p.id !== memberId));
+      }
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSavingGroupInfo(false);
+    }
+  };
+
   const visibleConversations = useMemo(() => {
     const q = stripDiacritics(searchQuery.trim());
     if (!q) return conversations;
@@ -235,6 +443,7 @@ export default function ChatScreen({ profile }) {
   const nameFor = (senderId) => {
     if (senderId === profile?.id) return profile?.full_name || 'Tôi';
     return directory.find((u) => u.id === senderId)?.full_name
+      || roomParticipants.find((u) => u.id === senderId)?.full_name
       || conversations.find((c) => c.peerId === senderId)?.title
       || 'Nhân viên';
   };
@@ -266,9 +475,23 @@ export default function ChatScreen({ profile }) {
     });
   };
 
+  const roomParticipantIds = useMemo(() => roomParticipants.map((p) => p.id), [roomParticipants]);
+
+  // LỖI THẬT đã vá: trước đây gợi ý tag lấy từ `directory` (TOÀN BỘ nhân
+  // viên công ty), không lọc theo người thật sự trong phòng — nhóm 3 người
+  // vẫn gõ "@" ra gợi ý cả người thứ 10 không hề ở trong nhóm, tag nhầm thì
+  // họ bị báo "được nhắc đến" một tin họ không có quyền đọc (dù DB
+  // notify_chat_mentions đã tự chặn không gửi thông báo cho người ngoài
+  // phòng — vẫn nên sửa để KHÔNG GỢI Ý nhầm ngay từ đầu, tránh gây hiểu lầm
+  // "sao tag không thấy báo"). Giờ chỉ gợi ý đúng người đang có trong phòng.
+  const roomMemberOptions = useMemo(() => {
+    const idSet = new Set(roomParticipantIds);
+    return directory.filter((u) => idSet.has(u.id));
+  }, [directory, roomParticipantIds]);
+
   const filteredMentionUsers = useMemo(() => (
-    directory.filter((u) => (u.full_name || '').toLowerCase().includes(mentionFilter) || (u.role || '').toLowerCase().includes(mentionFilter))
-  ), [directory, mentionFilter]);
+    roomMemberOptions.filter((u) => (u.full_name || '').toLowerCase().includes(mentionFilter) || (u.role || '').toLowerCase().includes(mentionFilter))
+  ), [roomMemberOptions, mentionFilter]);
 
   const selectAllMentions = () => {
     const ids = filteredMentionUsers.map((u) => u.id);
@@ -312,6 +535,14 @@ export default function ChatScreen({ profile }) {
     }
   };
 
+  // LỖI THẬT đã vá: trước đây gọi thẳng URL.createObjectURL(pendingPhoto)
+  // NGAY TRONG JSX — mỗi lần component re-render (gõ thêm 1 chữ trong ô
+  // nhập chẳng hạn) lại tạo 1 URL blob MỚI mà không bao giờ revoke URL cũ,
+  // rò bộ nhớ dần theo thời gian dùng app. Giờ tính 1 lần bằng useMemo (chỉ
+  // đổi khi pendingPhoto đổi) + revoke đúng lúc dọn dẹp.
+  const pendingPhotoUrl = useMemo(() => (pendingPhoto ? URL.createObjectURL(pendingPhoto) : null), [pendingPhoto]);
+  useEffect(() => () => { if (pendingPhotoUrl) URL.revokeObjectURL(pendingPhotoUrl); }, [pendingPhotoUrl]);
+
   const handleSendMessage = async () => {
     const text = inputText.trim();
     if (!text && !pendingPhoto) return;
@@ -322,11 +553,12 @@ export default function ChatScreen({ profile }) {
     const roomIdAtSend = activeRoomId;
     const photoAtSend = pendingPhoto;
     // Chỉ báo "được nhắc đến" cho những mention mà token @Tên VẪN CÒN trong
-    // chữ thật sự gửi đi — người đã bị xoá tay khỏi ô soạn thì không báo nữa.
-    const mentionIdsAtSend = [...new Set(
-      pendingMentions.filter((m) => text.includes(m.token)).flatMap((m) => m.ids)
-    )];
+    // chữ thật sự gửi đi — người đã bị xoá tay khỏi ô soạn thì không báo
+    // nữa, và dùng matchMentionTokens (không phải includes thô) để tránh
+    // khớp nhầm chuỗi con giữa 2 tên gần giống nhau.
+    const mentionIdsAtSend = [...new Set(matchMentionTokens(pendingMentions, text).flatMap((m) => m.ids))];
     let attachmentUrl = null;
+    justSentRef.current = true;
     try {
       if (pendingPhoto) attachmentUrl = (await uploadFile(pendingPhoto, `chat-attachments/${profile.id}`)).url;
       const optimisticMsg = {
@@ -344,6 +576,10 @@ export default function ChatScreen({ profile }) {
       const saved = await sendChatMessage({
         roomId: roomIdAtSend, senderId: profile.id, content: text || null, attachmentUrl, orderCode: extractOrderCode(text),
       });
+      // Nếu realtime đã dội về trước và thay tempId bằng bản thật rồi
+      // (mergeIncomingMessage ở effect subscribe xử lý), tempId không còn
+      // tồn tại trong mảng nữa -> map dưới đây không đổi gì, KHÔNG tạo bản
+      // trùng thứ 2 (đúng hướng còn lại của lỗi đua #4).
       setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...saved } : m)));
       setRefreshTick((t) => t + 1);
       if (mentionIdsAtSend.length) {
@@ -372,6 +608,18 @@ export default function ChatScreen({ profile }) {
 
   return (
     <div className="sumi-chat-page">
+      {/* LỖI THẬT đã vá: trước đây lỗi (setError) chỉ hiện BÊN TRONG khung
+          nhập tin — nếu tải danh sách hội thoại/danh bạ lỗi ngay từ đầu, lúc
+          CHƯA mở phòng nào, không ai thấy thông báo gì cả (màn hình trông
+          như đang tải mãi). Giờ có 1 dòng lỗi LUÔN HIỆN Ở ĐẦU TRANG bất kể
+          đang ở đâu. */}
+      {error && (
+        <div className="cs-top-error" role="alert">
+          ⚠️ {error}
+          <button type="button" onClick={() => setError('')}>✕</button>
+        </div>
+      )}
+
       {showList && (
         <div className="cs-list-pane">
           <div className="cs-list-header">
@@ -397,24 +645,30 @@ export default function ChatScreen({ profile }) {
             {!loadingList && conversations.length > 0 && visibleConversations.length === 0 && (
               <div className="cs-list-empty">Không tìm thấy hội thoại nào khớp "{searchQuery}"</div>
             )}
-            {!loadingList && visibleConversations.map((c) => (
-              <button key={c.roomId} className={`cs-convo-item ${activeRoomId === c.roomId ? 'active' : ''} ${c.pinned ? 'pinned' : ''}`} onClick={() => openConversation(c)}>
-                <div className="cs-convo-avatar">{c.avatarEmoji}</div>
-                <div className="cs-convo-info">
-                  <div className="cs-convo-row-top">
-                    <strong>{c.title}</strong>
-                    {c.lastAt && <span className="cs-convo-time">{formatListTime(c.lastAt)}</span>}
+            {!loadingList && visibleConversations.map((c) => {
+              const unread = unreadCounts[c.roomId] || 0;
+              return (
+                <button key={c.roomId} className={`cs-convo-item ${activeRoomId === c.roomId ? 'active' : ''} ${c.pinned ? 'pinned' : ''}`} onClick={() => openConversation(c)}>
+                  <div className="cs-convo-avatar">{c.avatarEmoji}</div>
+                  <div className="cs-convo-info">
+                    <div className="cs-convo-row-top">
+                      <strong>{c.title}</strong>
+                      {c.lastAt && <span className="cs-convo-time">{formatListTime(c.lastAt)}</span>}
+                    </div>
+                    <div className="cs-convo-row-top">
+                      <span className="cs-convo-preview">{c.lastMessage || c.subtitle || 'Bấm để xem hội thoại'}</span>
+                      {unread > 0 && <span className="cs-unread-badge">{unread > 99 ? '99+' : unread}</span>}
+                    </div>
                   </div>
-                  <div className="cs-convo-preview">{c.lastMessage || c.subtitle || 'Bấm để xem hội thoại'}</div>
-                </div>
-                <span
-                  className={`cs-pin-btn ${c.pinned ? 'pinned' : ''}`}
-                  onClick={(e) => togglePin(e, c)}
-                  title={c.pinned ? 'Bỏ ghim' : 'Ghim hội thoại'}
-                  role="button"
-                >📌</span>
-              </button>
-            ))}
+                  <span
+                    className={`cs-pin-btn ${c.pinned ? 'pinned' : ''}`}
+                    onClick={(e) => togglePin(e, c)}
+                    title={c.pinned ? 'Bỏ ghim' : 'Ghim hội thoại'}
+                    role="button"
+                  >📌</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -427,15 +681,27 @@ export default function ChatScreen({ profile }) {
             <>
               <div className="cs-thread-header">
                 {!isDesktop && <button className="cs-back-btn" onClick={backToList}>←</button>}
-                <div className="cs-convo-avatar">{activeConvo?.avatarEmoji || '💬'}</div>
-                <div className="cs-thread-title">
-                  <h4>{activeConvo?.title || 'Hội thoại'}</h4>
-                  <p>{activeConvo?.subtitle || ''}</p>
-                </div>
+                <button
+                  className="cs-thread-header-info"
+                  onClick={canManageActiveGroup ? openGroupInfo : undefined}
+                  style={{ cursor: canManageActiveGroup ? 'pointer' : 'default' }}
+                  disabled={!canManageActiveGroup}
+                >
+                  <div className="cs-convo-avatar">{activeConvo?.avatarEmoji || '💬'}</div>
+                  <div className="cs-thread-title">
+                    <h4>{activeConvo?.title || 'Hội thoại'}</h4>
+                    <p>{canManageActiveGroup ? `${roomParticipants.length} thành viên · Bấm để xem` : (activeConvo?.subtitle || '')}</p>
+                  </div>
+                </button>
               </div>
 
-              <div className="cs-thread-feed">
+              <div className="cs-thread-feed" ref={feedRef} onScroll={handleFeedScroll}>
                 {loadingMessages && <div className="cs-list-empty">Đang tải tin nhắn...</div>}
+                {!loadingMessages && hasMoreOlder && messages.length > 0 && (
+                  <button type="button" className="cs-load-older" onClick={loadOlderMessages} disabled={loadingOlder}>
+                    {loadingOlder ? 'Đang tải…' : '⬆️ Tải tin cũ hơn'}
+                  </button>
+                )}
                 {!loadingMessages && messages.length === 0 && <div className="cs-list-empty">Chưa có tin nhắn nào — gửi lời chào đầu tiên nhé!</div>}
                 {messages.map((msg) => {
                   const isMe = msg.sender_id === profile?.id;
@@ -491,7 +757,7 @@ export default function ChatScreen({ profile }) {
 
                 {pendingPhoto && (
                   <div className="cs-pending-photo">
-                    <img src={URL.createObjectURL(pendingPhoto)} alt="preview" />
+                    <img src={pendingPhotoUrl} alt="preview" />
                     <span>Ảnh sẽ gửi kèm tin nhắn</span>
                     <button type="button" onClick={() => setPendingPhoto(null)}>✕</button>
                   </div>
@@ -513,8 +779,6 @@ export default function ChatScreen({ profile }) {
                   <button type="button" onClick={() => { setInputText((p) => `${p}@`); setShowMentionPopup(true); setMentionFilter(''); setSelectedMentionIds([]); inputRef.current?.focus(); }}><IconTag size={16} /> Tag người</button>
                   <button type="button" onClick={() => setInputText((p) => `${p}👍`)}>👍 Like</button>
                 </div>
-
-                {error && <div className="cs-error">⚠️ {error}</div>}
               </div>
             </>
           )}
@@ -569,6 +833,75 @@ export default function ChatScreen({ profile }) {
                 className="cs-create-group-confirm" onClick={handleCreateGroup} disabled={creatingGroup || !groupMemberIds.length}
               >
                 {creatingGroup ? 'Đang tạo...' : `Tạo nhóm${groupMemberIds.length ? ` (${groupMemberIds.length} người)` : ''}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Thông tin nhóm — LỖI THẬT đã vá: trước đây tạo nhóm xong không sửa
+          được gì cả. Chỉ hiện cho nhóm TỰ TẠO (canManageActiveGroup). */}
+      {showGroupInfo && (
+        <div className="cs-new-chat-overlay" onClick={() => setShowGroupInfo(false)}>
+          <div className="cs-new-chat-sheet cs-create-group-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="cs-new-chat-head">
+              <strong>Thông tin nhóm</strong>
+              <button onClick={() => setShowGroupInfo(false)}>✕</button>
+            </div>
+            <div className="cs-group-name-field" style={{ display: 'flex', gap: 8 }}>
+              <input
+                type="text" placeholder="Tên nhóm" value={groupInfoName}
+                onChange={(e) => setGroupInfoName(e.target.value)}
+                style={{ flex: 1 }}
+              />
+              <button type="button" className="cs-group-save-btn" onClick={handleRenameGroup} disabled={savingGroupInfo}>Lưu</button>
+            </div>
+            <div className="cs-group-section-head">
+              <span>Thành viên ({roomParticipants.length})</span>
+              <button type="button" onClick={() => setShowAddMembers(true)}>+ Thêm người</button>
+            </div>
+            <div className="cs-new-chat-list cs-group-member-list">
+              {roomParticipants.map((u) => (
+                <div key={u.id} className="cs-new-chat-item cs-group-member-row">
+                  <div className="cs-convo-avatar">👤</div>
+                  <div style={{ flex: 1 }}><strong>{u.full_name}{u.id === profile?.id ? ' (Bạn)' : ''}</strong><span>{u.role}</span></div>
+                  {(u.id === profile?.id || isCreatorOfActiveGroup) && (
+                    <button type="button" className="cs-group-remove-btn" disabled={savingGroupInfo} onClick={() => handleRemoveMember(u.id)}>
+                      {u.id === profile?.id ? 'Rời nhóm' : 'Xoá'}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAddMembers && (
+        <div className="cs-new-chat-overlay" onClick={() => setShowAddMembers(false)}>
+          <div className="cs-new-chat-sheet cs-create-group-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="cs-new-chat-head">
+              <strong>Thêm người vào nhóm</strong>
+              <button onClick={() => setShowAddMembers(false)}>✕</button>
+            </div>
+            <div className="cs-new-chat-list cs-group-member-list">
+              {directory.filter((u) => !roomParticipantIds.includes(u.id)).map((u) => {
+                const checked = addMemberIds.includes(u.id);
+                return (
+                  <button key={u.id} className={`cs-new-chat-item cs-group-member-item ${checked ? 'checked' : ''}`}
+                    onClick={() => setAddMemberIds((prev) => (prev.includes(u.id) ? prev.filter((id) => id !== u.id) : [...prev, u.id]))}>
+                    <div className="cs-convo-avatar">{checked ? '✓' : '👤'}</div>
+                    <div><strong>{u.full_name}</strong><span>{u.role}</span></div>
+                  </button>
+                );
+              })}
+              {directory.filter((u) => !roomParticipantIds.includes(u.id)).length === 0 && (
+                <div className="cs-list-empty">Mọi người đã ở trong nhóm rồi.</div>
+              )}
+            </div>
+            <div className="cs-create-group-footer">
+              <button className="cs-create-group-confirm" onClick={handleAddMembers} disabled={savingGroupInfo || !addMemberIds.length}>
+                {savingGroupInfo ? 'Đang thêm...' : `Thêm${addMemberIds.length ? ` (${addMemberIds.length} người)` : ''}`}
               </button>
             </div>
           </div>
