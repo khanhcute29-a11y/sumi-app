@@ -173,9 +173,19 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
   const [quyenSua, setQuyenSua] = useState(null);
 
   const load = async () => {
-    const [o, i, p, u, e, kpi, ops, att, changes, qs, ship] = await Promise.all([
-      supabase.from('orders').select('id,order_code,order_type,status_v2,required_at,fulfillment_method_v2,address,note,created_by,created_by_name,created_at,confidentiality,version,ship_fee,deposit,payment_method,total,is_internal,target_store,discount_amount,promotion_note,tax_code,vat_amount,payment_verified,payment_verified_at,payment_proof_url,customers(name,phone)').eq('id', orderId).single(),
-      supabase.from('order_items').select('id,name_snapshot,quantity,unit,specification,unit_price,display_order').eq('order_id', orderId).order('display_order'),
+    // LỖI THẬT đã vá (quét codebase 06/09/2026): trước đây câu select này lấy
+    // thẳng CẢ cột tài chính (ship_fee, deposit, payment_method, total,
+    // discount_amount, vat_amount, payment_verified...) trong CÙNG 1 lần gọi
+    // — mà modal này MỞ ĐƯỢC BỞI MỌI VAI TRÒ (bếp, kho, shipper... xem
+    // ShippingV2Screen/EmployeeOverviewV4/DonSanXuatTab), nên toàn bộ số tiền
+    // của đơn bị gửi thẳng về trình duyệt của những vai trò lẽ ra không được
+    // thấy, bất kể giao diện có hiện ra hay không (mở DevTools là thấy hết).
+    // Cột tài chính giờ đã bị khoá ở tầng DB, tách riêng qua RPC
+    // get_order_financials — DB tự trả đúng phần được phép theo vai trò gọi
+    // (đầy đủ / chỉ COD / rỗng), không cần đoán ở client.
+    const [o, i, p, u, e, kpi, ops, att, changes, qs, ship, fin, itemPrices] = await Promise.all([
+      supabase.from('orders').select('id,order_code,order_type,status_v2,required_at,fulfillment_method_v2,address,note,created_by,created_by_name,created_at,confidentiality,version,is_internal,target_store,promotion_note,tax_code,customers(name,phone)').eq('id', orderId).single(),
+      supabase.from('order_items').select('id,name_snapshot,quantity,unit,specification,display_order').eq('order_id', orderId).order('display_order'),
       supabase.from('order_work_packages_readable').select('id,unit_id,status,due_at,accepted_at,completed_at,version,is_collaborative,assigned_to_staff_id,assigned_to_staff_name,organization_units(name,code),work_package_items(order_item_id,quantity)').eq('order_id', orderId),
       supabase.from('organization_units').select('id,name,code').eq('unit_type', 'kitchen').eq('active', true),
       supabase.from('domain_events').select('id,event_type,occurred_at,payload').eq('entity_type', 'order').eq('entity_id', orderId).order('occurred_at', { ascending: false }),
@@ -188,11 +198,20 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       // chỉ có driver_name (text), không có id. Có thể ra nhiều dòng nếu đơn có
       // nhiều mẻ bếp, nhưng thông tin shipper là như nhau ở mọi dòng nên lấy dòng đầu.
       supabase.from('order_lateness_detail').select('shipper_staff_id,shipper_staff_name,shipper_delivered_at').eq('order_id', orderId).limit(1),
+      supabase.rpc('get_order_financials', { p_order_id: orderId }),
+      supabase.rpc('get_order_item_prices', { p_order_id: orderId }),
     ]);
 
     setQuyenSua(qs?.data || null);
 
     if (o.error) throw o.error;
+
+    // fin.data là mảng 0-1 dòng (rỗng nếu vai trò không được thấy gì cả —
+    // xem get_order_financials) — gộp lại vào object đơn như trước khi tách.
+    const finRow = fin?.data?.[0] || {};
+    o.data = { ...o.data, ...finRow };
+    const priceByItemId = Object.fromEntries((itemPrices?.data || []).map((r) => [r.item_id, r.unit_price]));
+    if (i.data) i.data = i.data.map((it) => ({ ...it, unit_price: priceByItemId[it.id] ?? null }));
 
     // Lấy URL xem ảnh cho các file đính kèm
     const resolvedAttachments = await Promise.all((att.data || []).map(async (a) => {

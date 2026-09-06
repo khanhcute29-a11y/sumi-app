@@ -52,23 +52,36 @@ export default function EditOrderModal({ orderId, onClose, onSaved }) {
     setDangTai(true);
     setLoi('');
     try {
-      const [q, o, m] = await Promise.all([
+      // LỖI THẬT đã vá (quét codebase 06/09/2026): trước đây select thẳng
+      // ship_fee/deposit/payment_method/total và order_items.unit_price —
+      // các cột này giờ đã bị khoá ở tầng DB (đã có 3 lỗ hổng thật xác nhận
+      // qua query trực tiếp), tách riêng qua RPC get_order_financials/
+      // get_order_item_prices. Modal này chỉ mở được bởi owner/admin ở giao
+      // diện hiện tại, nhưng khoá cả ở DB cho chắc (phòng thân sau này có
+      // màn khác gọi lại đúng modal này cho vai trò rộng hơn).
+      const [q, o, m, fin, itemPrices] = await Promise.all([
         supabase.rpc('sumi_quyen_sua_don', { p_order_id: orderId }),
         supabase.from('orders')
-          .select('id,order_code,address,note,required_at,ship_fee,deposit,payment_method,total,version,created_at,status_v2,customer_id,customers(name,phone)')
+          .select('id,order_code,address,note,required_at,version,created_at,status_v2,customer_id,customers(name,phone)')
           .eq('id', orderId).single(),
         supabase.from('order_items')
-          .select('id,product_id,name,name_snapshot,quantity,unit,unit_price,specification,display_order')
+          .select('id,product_id,name,name_snapshot,quantity,unit,specification,display_order')
           .eq('order_id', orderId).order('display_order'),
+        supabase.rpc('get_order_financials', { p_order_id: orderId }),
+        supabase.rpc('get_order_item_prices', { p_order_id: orderId }),
       ]);
       if (q.error) throw q.error;
       if (o.error) throw o.error;
       if (m.error) throw m.error;
 
+      const finRow = fin?.data?.[0] || {};
+      const priceByItemId = Object.fromEntries((itemPrices?.data || []).map((r) => [r.item_id, r.unit_price]));
+
       setQuyen(q.data);
       setConLai(Number(q.data?.con_lai_giay) || 0);
       setDon({
         ...o.data,
+        ...finRow,
         required_at_may: sangGioMay(o.data.required_at),
         ten_khach: o.data.customers?.name || '',
         sdt_khach: o.data.customers?.phone || '',
@@ -79,7 +92,7 @@ export default function EditOrderModal({ orderId, onClose, onSaved }) {
         name: x.name_snapshot || x.name || 'Sản phẩm',
         quantity: Number(x.quantity) || 0,
         unit: x.unit || 'cái',
-        unit_price: Number(x.unit_price) || 0,
+        unit_price: Number(priceByItemId[x.id]) || 0,
         specification: x.specification || {},
         display_order: x.display_order ?? i,
       })));

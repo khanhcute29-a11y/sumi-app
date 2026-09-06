@@ -24,16 +24,15 @@ const monthStart = () => { const d = new Date(); return `${d.getFullYear()}-${St
 // bật qua RPC verify_order_payment sau bước chụp ảnh/chuyển khoản — xem
 // OrderV2DetailModal.jsx). Đơn đã giao nhưng chưa xác minh KHÔNG nằm ở đây,
 // dù status_v2 đã là 'completed' — nó thuộc "Doanh thu dự tính" bên dưới.
+// LỖI THẬT đã vá (quét codebase 06/09/2026): trước đây lọc trực tiếp
+// .eq('total'/'payment_verified'...) — các cột này giờ đã bị khoá ở tầng DB
+// (đọc CẢ so sánh trong WHERE cũng cần quyền SELECT trên cột, không chỉ trả
+// về). Thay bằng RPC orders_revenue_by_channel_rows (chỉ owner/admin, khớp
+// đúng is_business_director() — đây vốn là màn hình CHỈ Giám đốc dùng).
 export async function fetchRevenueByChannel({ from, to } = {}) {
   const fromIso = from || `${todayStr()}T00:00:00`;
   const toIso = to || new Date().toISOString();
-  const { data, error } = await supabase
-    .from('orders')
-    .select('id, order_code, order_type, total, completed_at, target_store, customers(name)')
-    .eq('status_v2', 'completed')
-    .eq('payment_verified', true)
-    .gte('completed_at', fromIso)
-    .lte('completed_at', toIso);
+  const { data, error } = await supabase.rpc('orders_revenue_by_channel_rows', { p_from: fromIso, p_to: toIso });
   if (error) throw error;
   const rows = data || [];
   const byKey = {};
@@ -44,7 +43,7 @@ export async function fetchRevenueByChannel({ from, to } = {}) {
     bucket.amount += Number(o.total) || 0;
     bucket.count += 1;
     bucket.orders.push({
-      id: o.id, orderCode: o.order_code, customerName: o.customers?.name || '—',
+      id: o.id, orderCode: o.order_code, customerName: o.customer_name || '—',
       amount: Number(o.total) || 0, branch: o.target_store || null, when: o.completed_at,
     });
   });
@@ -70,20 +69,16 @@ export async function fetchRevenueByChannel({ from, to } = {}) {
 //     đã nằm trong bucket "Tiền đặt cọc" ở trên rồi, tránh cộng đôi.
 // 4 luồng độc lập, có thể chồng một phần lên nhau (VD: đặt cọc của 1 đơn đang
 // giao) — đây là con số ƯỚC TÍNH tổng quan, không phải sổ kế toán đối soát.
+// LỖI THẬT đã vá (quét codebase 06/09/2026): 3/4 câu bên dưới lọc trực tiếp
+// theo deposit/total/payment_verified — cột đã khoá ở DB. Thay bằng 3 RPC
+// tương ứng (chỉ owner/admin, khớp is_business_director()) — debtRes không
+// đụng bảng orders nên giữ nguyên.
 export async function fetchDoanhThuDuTinh() {
   const [depositRes, debtRes, deliveryRes, congNoRes] = await Promise.all([
-    supabase.from('orders')
-      .select('id, order_code, order_type, deposit, target_store, customers(name)')
-      .gt('deposit', 0)
-      .or('status_v2.neq.completed,payment_verified.eq.false'),
+    supabase.rpc('orders_pending_deposit_rows'),
     supabase.from('customer_debt_balances').select('customer_id, name, balance').gt('balance', 0),
-    supabase.from('orders')
-      .select('id, order_code, order_type, total, target_store, customers(name)')
-      .eq('status_v2', 'in_delivery'),
-    supabase.from('orders')
-      .select('id, order_code, order_type, total, deposit, target_store, completed_at, customers(name)')
-      .eq('status_v2', 'completed')
-      .neq('payment_verified', true),
+    supabase.rpc('orders_in_delivery_rows'),
+    supabase.rpc('orders_unverified_completed_rows'),
   ]);
   if (depositRes.error) throw depositRes.error;
   if (debtRes.error) throw debtRes.error;
@@ -96,7 +91,7 @@ export async function fetchDoanhThuDuTinh() {
     amount: (depositRes.data || []).reduce((s, o) => s + (Number(o.deposit) || 0), 0),
     count: (depositRes.data || []).length,
     orders: (depositRes.data || []).map((o) => ({
-      id: o.id, orderCode: o.order_code, customerName: o.customers?.name || '—',
+      id: o.id, orderCode: o.order_code, customerName: o.customer_name || '—',
       amount: Number(o.deposit) || 0, branch: o.target_store || null,
     })),
   };
@@ -116,7 +111,7 @@ export async function fetchDoanhThuDuTinh() {
     amount: (deliveryRes.data || []).reduce((s, o) => s + (Number(o.total) || 0), 0),
     count: (deliveryRes.data || []).length,
     orders: (deliveryRes.data || []).map((o) => ({
-      id: o.id, orderCode: o.order_code, customerName: o.customers?.name || '—',
+      id: o.id, orderCode: o.order_code, customerName: o.customer_name || '—',
       amount: Number(o.total) || 0, branch: o.target_store || null,
     })),
   };
@@ -131,7 +126,7 @@ export async function fetchDoanhThuDuTinh() {
     amount: (congNoRes.data || []).reduce((s, o) => s + Math.max(0, (Number(o.total) || 0) - (Number(o.deposit) || 0)), 0),
     count: (congNoRes.data || []).length,
     orders: (congNoRes.data || []).map((o) => ({
-      id: o.id, orderCode: o.order_code, customerName: o.customers?.name || '—',
+      id: o.id, orderCode: o.order_code, customerName: o.customer_name || '—',
       amount: Math.max(0, (Number(o.total) || 0) - (Number(o.deposit) || 0)),
       branch: o.target_store || null, when: o.completed_at,
     })),
@@ -146,21 +141,21 @@ export async function fetchDoanhThuDuTinh() {
 // theo bucket như fetchDoanhThuDuTinh ở trên, trả nguyên thông tin đơn để
 // Kế toán mở thẳng từng đơn xác minh — dùng RPC verify_order_payment sẵn có
 // trong OrderV2DetailModal.jsx, không thêm luồng ghi dữ liệu nào mới). ----
+// LỖI THẬT đã vá (quét codebase 06/09/2026): cùng shape với
+// orders_unverified_completed_rows (RPC đã tạo cho fetchDoanhThuDuTinh ở
+// trên) — dùng lại luôn, không cần RPC riêng.
 export async function fetchCongNoCanThu() {
-  const { data, error } = await supabase
-    .from('orders')
-    .select('id, order_code, order_type, total, deposit, payment_method, target_store, completed_at, customers(name, phone)')
-    .eq('status_v2', 'completed')
-    .neq('payment_verified', true)
-    .order('completed_at', { ascending: true });
+  const { data, error } = await supabase.rpc('orders_unverified_completed_rows');
   if (error) throw error;
-  return (data || []).map((o) => ({
-    id: o.id, orderCode: o.order_code, orderType: o.order_type,
-    total: Number(o.total) || 0, deposit: Number(o.deposit) || 0,
-    conLai: Math.max(0, (Number(o.total) || 0) - (Number(o.deposit) || 0)),
-    paymentMethod: o.payment_method, branch: o.target_store || null,
-    completedAt: o.completed_at, customerName: o.customers?.name || '—', customerPhone: o.customers?.phone || null,
-  }));
+  return (data || [])
+    .sort((a, b) => new Date(a.completed_at) - new Date(b.completed_at))
+    .map((o) => ({
+      id: o.id, orderCode: o.order_code, orderType: o.order_type,
+      total: Number(o.total) || 0, deposit: Number(o.deposit) || 0,
+      conLai: Math.max(0, (Number(o.total) || 0) - (Number(o.deposit) || 0)),
+      paymentMethod: o.payment_method, branch: o.target_store || null,
+      completedAt: o.completed_at, customerName: o.customer_name || '—', customerPhone: o.customer_phone || null,
+    }));
 }
 
 // ---- 2. Sổ cái khoản chi (expense_claims) ----

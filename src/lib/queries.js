@@ -220,7 +220,35 @@ export async function deleteProductVariant(id) {
 
 // ---- Orders ----
 
-const ORDER_SELECT = '*, customer:customers(id, name, phone, trust_score, vip, locked), order_items(*), order_stages(*)';
+// LỖI THẬT đã vá (quét codebase 06/09/2026): ORDER_SELECT dùng `select('*')`
+// — kéo theo CẢ cột tài chính (total, deposit, paid_amount, ship_fee,
+// payment_method...) về MỌI nơi gọi fetchOrders()/fetchOrderById(), mà 2 hàm
+// này được dùng ở ~10 màn hình khác nhau (Dashboard, Báo cáo, Sổ cái công
+// nợ, Khách hàng, Duyệt chi, Vận chuyển bản cũ...) không phân biệt vai trò
+// gì đang xem. Các cột này giờ đã bị khoá ở tầng DB (migration
+// 202609062100/202609062110) — vá ĐÚNG 1 CHỖ ở đây (gắn thêm dữ liệu tài
+// chính qua RPC get_orders_financials_bulk SAU KHI lấy phần an toàn) để mọi
+// màn hình gọi qua 2 hàm này tự động được vá theo, không cần sửa từng file.
+// RPC tự trả đúng phần được phép theo vai trò người gọi (đầy đủ/chỉ COD/
+// rỗng) — Sổ cái công nợ (owner/admin/kế toán) vẫn tính đúng, Vận chuyển
+// (shipper) vẫn thấy đúng số cần thu COD, các vai trò khác nhận null.
+const ORDER_SELECT = 'id,customer_id,channel,status,sla_label,flagged,address,delivery_date,delivery_time,delivery_photo_url,note,created_at,kitchen_staff_name,kitchen_photo_url,shipper_staff_name,pickup_photo_url,order_code,delivery_method,cancel_reason,cancel_photo_url,cancel_staff_name,pickup_lat,pickup_lng,delivery_lat,delivery_lng,completed_at,late_reason,created_by_name,order_type,created_by,required_at,fulfillment_method_v2,status_v2,confidentiality,version,allow_partial_fulfillment,partial_fulfillment_approved_by,partial_fulfillment_approved_at,cancelled_at,cancelled_by,legacy_status,legacy_import_key,signed_doc_photo_url,branch_id,is_internal,target_store,promotion_note,tax_code,customer:customers(id, name, phone, trust_score, vip, locked), order_items(id,order_id,name,qty,size,cot,vi,product_id,ref_photo_url,category,content,candle,quantity,unit,specification,name_snapshot,display_order), order_stages(*)';
+
+async function ganDuLieuTaiChinh(orders) {
+  if (!orders?.length) return orders || [];
+  const ids = orders.map((o) => o.id);
+  const [{ data: fin }, { data: gia }] = await Promise.all([
+    supabase.rpc('get_orders_financials_bulk', { p_order_ids: ids }),
+    supabase.rpc('get_order_item_prices_bulk', { p_order_ids: ids }),
+  ]);
+  const finById = Object.fromEntries((fin || []).map((r) => [r.order_id, r]));
+  const priceByItemId = Object.fromEntries((gia || []).map((r) => [r.item_id, r.unit_price]));
+  return orders.map((o) => ({
+    ...o,
+    ...(finById[o.id] || {}),
+    order_items: (o.order_items || []).map((it) => ({ ...it, unit_price: priceByItemId[it.id] ?? null })),
+  }));
+}
 
 export async function fetchOrders({ statuses, from, to, dateField = 'created_at', excludeOrderTypes } = {}) {
   let q = supabase.from('orders').select(ORDER_SELECT).order('created_at', { ascending: false });
@@ -230,7 +258,7 @@ export async function fetchOrders({ statuses, from, to, dateField = 'created_at'
   if (to) q = q.lte(dateField, `${to}T23:59:59.999+07:00`);
   const { data, error } = await q;
   if (error) throw error;
-  return data;
+  return ganDuLieuTaiChinh(data);
 }
 
 // Tìm nhanh đơn hàng theo mã đơn HOẶC tên khách — trả về danh sách gọn để
@@ -270,7 +298,9 @@ export async function fetchRecentOpenOrdersForPicker(limit = 8) {
 export async function fetchOrderById(id) {
   const { data, error } = await supabase.from('orders').select(ORDER_SELECT).eq('id', id).maybeSingle();
   if (error) throw error;
-  return data;
+  if (!data) return data;
+  const [merged] = await ganDuLieuTaiChinh([data]);
+  return merged;
 }
 
 async function nextOrderCode() {
@@ -461,8 +491,12 @@ export async function deleteOrder(id, { reason, photoUrl, staffName, snapshot } 
   notifyBadgesChanged();
 }
 
+// LỖI THẬT đã vá (quét codebase 06/09/2026): trước đây UPDATE thẳng
+// paid_amount trên bảng orders — cột này giờ đã bị khoá ở tầng DB (chỉ
+// mở qua RPC kiểm tra đúng vai trò/đúng shipper đang giao đơn) vì migration
+// cũ (202608230042) từng vô tình mở cột tiền cho MỌI nhân viên đọc/sửa.
 export async function markOrderPaid(id, total) {
-  const { error } = await supabase.from('orders').update({ paid_amount: total }).eq('id', id);
+  const { error } = await supabase.rpc('mark_order_paid', { p_order_id: id, p_amount: total });
   if (error) throw error;
 }
 
@@ -482,13 +516,16 @@ export async function uploadPhoto(blob, pathPrefix) {
 }
 
 export async function fetchSchoolRevenue({ from, to } = {}) {
-  let q = supabase.from('orders').select('id,order_code,total,created_at,completed_at,status_v2,address')
+  let q = supabase.from('orders').select('id,order_code,created_at,completed_at,status_v2,address')
     .eq('order_type', 'school').neq('status_v2', 'cancelled').order('created_at', { ascending: true });
   if (from) q = q.gte('created_at', `${from}T00:00:00+07:00`);
   if (to) q = q.lte('created_at', `${to}T23:59:59.999+07:00`);
   const { data, error } = await q;
   if (error) throw error;
-  return data;
+  // LỖI THẬT đã vá (quét codebase 06/09/2026): `total` giờ đã bị khoá ở tầng
+  // DB — ghép lại qua RPC bulk, chỉ deputy_director_x42/owner/admin (đúng
+  // vai trò được xem đơn Trường học) mới nhận được giá trị thật.
+  return ganDuLieuTaiChinh(data);
 }
 
 export async function uploadFile(file, pathPrefix) {

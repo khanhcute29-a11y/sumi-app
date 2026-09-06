@@ -96,7 +96,11 @@ function useRevenue(period,customFrom,customTo,enabled=true){
   const {from,to}=periodRange(period,customFrom,customTo);
   if(!from){setRows([]);setLoading(false);return}
   setLoading(true);
-  supabase.from('orders').select('order_type,total').eq('status_v2','completed').gte('completed_at',from.toISOString()).lte('completed_at',to.toISOString()).then(({data,error})=>{setRows(!error&&data?data:[]);setLoading(false)});
+  // LỖI THẬT đã vá (quét codebase 06/09/2026): trước đây select thẳng cột
+  // `total` trên orders — giờ cột này đã bị khoá ở DB (chỉ owner/admin đọc
+  // được qua RPC fetch_revenue_by_order_type, đúng widget doanh thu chỉ
+  // hiện cho 2 vai trò này ở giao diện).
+  supabase.rpc('fetch_revenue_by_order_type',{p_from:from.toISOString(),p_to:to.toISOString()}).then(({data,error})=>{setRows(!error&&data?data:[]);setLoading(false)});
  },[period,customFrom,customTo,enabled]);
  const byFlow=useMemo(()=>{
   const map={}; ORDER_FLOWS.forEach(f=>map[f.key]={...f,revenue:0,count:0}); map.other={key:'other',icon:'🧺',Icon:IconMixed,title:'Khác',revenue:0,count:0};
