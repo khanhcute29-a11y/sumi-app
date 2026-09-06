@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { FifoTag } from '../components/feedback/FifoTag';
 import { Badge } from '../components/feedback/Badge';
 import { Button } from '../components/forms/Button';
@@ -33,6 +33,12 @@ function AddStockForm({ onAdded, onQueued, onClose, defaultBranch, lockedBranch,
   const [expiryDate, setExpiryDate] = useState('');
   const [branch, setBranch] = useState(lockedBranch || defaultBranch || 'bakery');
   const [photoBlob, setPhotoBlob] = useState(null);
+  // LỖI THẬT đã vá (quét codebase 06/09/2026): URL.createObjectURL(photoBlob)
+  // trước đây gọi thẳng trong JSX — mỗi lần form re-render (gõ tên/số
+  // lượng/giá...) lại tạo 1 URL blob mới không revoke, rò bộ nhớ suốt lúc
+  // đang điền form.
+  const photoBlobUrl = useMemo(() => (photoBlob ? URL.createObjectURL(photoBlob) : null), [photoBlob]);
+  useEffect(() => () => { if (photoBlobUrl) URL.revokeObjectURL(photoBlobUrl); }, [photoBlobUrl]);
   const [showCamera, setShowCamera] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -93,7 +99,7 @@ function AddStockForm({ onAdded, onQueued, onClose, defaultBranch, lockedBranch,
         options={[{ value: 'fresh', label: 'Còn hạn' }, { value: 'soon', label: 'Sắp hết hạn' }, { value: 'expired', label: 'Quá hạn' }]} />
       <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
         <Button variant="secondary" size="sm" icon={<IconCamera size={16} />} disabled={offline} onClick={() => setShowCamera(true)}>{photoBlob ? 'Chụp lại ảnh tem/bill' : 'Chụp ảnh tem/bill'}</Button>
-        {photoBlob && <img src={URL.createObjectURL(photoBlob)} alt="preview" style={{ width: 40, height: 40, borderRadius: 'var(--radius-sm)', objectFit: 'cover' }} />}
+        {photoBlob && <img src={photoBlobUrl} alt="preview" style={{ width: 40, height: 40, borderRadius: 'var(--radius-sm)', objectFit: 'cover' }} />}
       </div>
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
         <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>Hủy</Button>

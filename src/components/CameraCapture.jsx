@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from './forms/Button';
 
 export function CameraCapture({ onCapture, onClose, facingMode = 'environment' }) {
@@ -6,6 +6,13 @@ export function CameraCapture({ onCapture, onClose, facingMode = 'environment' }
   const streamRef = useRef(null);
   const [error, setError] = useState('');
   const [captured, setCaptured] = useState(null);
+  // LỖI THẬT đã vá (quét codebase 06/09/2026): trước đây gọi thẳng
+  // URL.createObjectURL(captured) NGAY TRONG JSX — mỗi lần component
+  // re-render lại tạo 1 URL blob MỚI mà không revoke URL cũ, rò bộ nhớ. Bấm
+  // "Chụp lại" nhiều lần trong 1 ca làm (hay gặp khi ánh sáng/góc chụp chưa
+  // ưng) cộng dồn ngày càng nhiều blob không bao giờ giải phóng.
+  const capturedUrl = useMemo(() => (captured ? URL.createObjectURL(captured) : null), [captured]);
+  useEffect(() => () => { if (capturedUrl) URL.revokeObjectURL(capturedUrl); }, [capturedUrl]);
 
   useEffect(() => {
     navigator.mediaDevices?.getUserMedia?.({ video: { facingMode } })
@@ -40,7 +47,7 @@ export function CameraCapture({ onCapture, onClose, facingMode = 'environment' }
         {!captured ? (
           <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', borderRadius: 'var(--radius-md)', background: '#000', aspectRatio: '4/3', objectFit: 'cover' }} />
         ) : (
-          <img src={URL.createObjectURL(captured)} alt="Ảnh đã chụp" style={{ width: '100%', borderRadius: 'var(--radius-md)' }} />
+          <img src={capturedUrl} alt="Ảnh đã chụp" style={{ width: '100%', borderRadius: 'var(--radius-md)' }} />
         )}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <Button variant="secondary" size="sm" onClick={onClose}>Hủy</Button>

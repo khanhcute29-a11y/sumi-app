@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useOrderDraftAutosave, DraftSaveIndicator, listOrderDrafts, deleteOrderDraft } from '../lib/useDraftAutosave';
 import { supabase } from '../lib/supabaseClient';
 import { createOrderV2 } from '../lib/featureFlags';
@@ -118,6 +118,15 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
  // trùng nhau kẻo đá nhau.
  const [viTriXuong,setViTriXuong]=useState('Quốc Lộ 13'); const [viTriKhac,setViTriKhac]=useState('');
  const [items,setItems]=useState([]); const [photos,setPhotos]=useState([]); const [saving,setSaving]=useState(false); const [error,setError]=useState('');
+ // LỖI THẬT đã vá (quét codebase 06/09/2026): trước đây gọi
+ // URL.createObjectURL(file) NGAY TRONG .map() lúc render — modal này có rất
+ // nhiều state khác (voice, thuế, sản phẩm...) nên re-render liên tục, mỗi
+ // lần re-render tạo THÊM 1 URL blob mới cho CÙNG 1 file dù ảnh không đổi,
+ // các URL cũ không bao giờ được revoke (chỉ URL đang hiện tại lúc bấm ✕ mới
+ // được revoke). Giờ tính 1 lần bằng useMemo (chỉ đổi khi mảng `photos` thật
+ // sự đổi — thêm/bớt ảnh) + revoke đúng lúc dọn dẹp.
+ const photoUrls=useMemo(()=>photos.map(f=>URL.createObjectURL(f)),[photos]);
+ useEffect(()=>()=>{photoUrls.forEach(u=>URL.revokeObjectURL(u));},[photoUrls]);
  const [showLibraryPicker,setShowLibraryPicker]=useState(false); const [libraryPhotos,setLibraryPhotos]=useState([]); const [libraryLoading,setLibraryLoading]=useState(false); const [selectedLibraryPhotos,setSelectedLibraryPhotos]=useState([]); const [libraryUploading,setLibraryUploading]=useState(false);
  const [isReadyStock, setIsReadyStock] = useState(false);
  const [tonKho,setTonKho]=useState(null);
@@ -558,12 +567,12 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
    </div>
    {photos.length>0&&(
      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(80px,1fr))',gap:8,marginTop:10}}>
-       {photos.map((file,idx)=>{const blobUrl=URL.createObjectURL(file);return(
+       {photos.map((file,idx)=>(
          <div key={`photo-${idx}`} style={{position:'relative',width:80,height:80,borderRadius:12,overflow:'hidden',border:'1.5px solid var(--border-default)',background:'#000'}}>
-           <img src={blobUrl} alt="Ảnh mẫu" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
-           <button type="button" onClick={(e)=>{e.preventDefault();setPhotos(photos.filter((_,n)=>n!==idx));URL.revokeObjectURL(blobUrl);}} style={{position:'absolute',top:3,right:3,minHeight:44,minWidth:44,borderRadius:'50%',background:'rgba(0,0,0,0.7)',color:'#fff',border:0,fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900}}>✕</button>
+           <img src={photoUrls[idx]} alt="Ảnh mẫu" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+           <button type="button" onClick={(e)=>{e.preventDefault();setPhotos(photos.filter((_,n)=>n!==idx));}} style={{position:'absolute',top:3,right:3,minHeight:44,minWidth:44,borderRadius:'50%',background:'rgba(0,0,0,0.7)',color:'#fff',border:0,fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900}}>✕</button>
          </div>
-       );})}</div>
+       ))}</div>
    )}
    {selectedLibraryPhotos.length>0&&(
      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(80px,1fr))',gap:8,marginTop:10}}>
