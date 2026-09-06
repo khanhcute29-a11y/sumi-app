@@ -300,6 +300,97 @@
   background: #C88A4B;
   color: #fff;
 }
+.cs-msg-bubble.uploading {
+  opacity: 0.55;
+}
+.cs-msg-bubble.failed {
+  border: 1.5px solid #E11D48;
+}
+.cs-msg-retry {
+  border: none;
+  background: none;
+  color: #E11D48;
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+.cs-msg-bubble.recalled {
+  background: transparent;
+  box-shadow: none;
+  padding: 4px 0;
+}
+.cs-msg-recalled-label {
+  font-size: 12.5px;
+  font-style: italic;
+  color: #8C7A6B;
+}
+.cs-msg-reply-quote {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border-left: 3px solid rgba(0,0,0,0.15);
+  padding: 3px 8px;
+  margin-bottom: 5px;
+  font-size: 11.5px;
+  opacity: 0.85;
+}
+.cs-msg-row.me .cs-msg-reply-quote {
+  border-left-color: rgba(255,255,255,0.5);
+}
+.cs-msg-reply-quote strong {
+  font-size: 11px;
+}
+.cs-msg-reply-quote span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+}
+.cs-msg-seen {
+  color: #0284C7;
+}
+.cs-online-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #22C55E;
+  margin-right: 4px;
+}
+.cs-reply-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  background: #FAF6F0;
+  border-left: 3px solid #C88A4B;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+.cs-reply-preview > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.cs-reply-preview strong {
+  font-size: 11px;
+  color: #C88A4B;
+}
+.cs-reply-preview span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #4A3B2C;
+}
+.cs-reply-preview button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
 .cs-order-chip {
   display: inline-block;
   background: #E0F2FE;

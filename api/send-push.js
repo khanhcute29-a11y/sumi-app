@@ -47,10 +47,17 @@ function chuanBiVapid() {
   }
 }
 
+// LỖI THẬT đã vá (review vòng 3, P0.2): trước đây dùng ANON_KEY — key này
+// công khai, nhúng sẵn trong bundle client, nên MỌI quyền hạn của nó (kể cả
+// đọc push_subscriptions) đều là quyền công khai theo RLS. Giờ dùng
+// SERVICE_ROLE_KEY (bí mật, chỉ server biết) — bỏ qua RLS hoàn toàn, đúng
+// bản chất "đây là code server, không phải code client" — đi cùng việc khoá
+// chặt RLS của push_subscriptions lại (migration 202609061800) để dù lỡ lộ
+// ANON_KEY ở đâu đó, không ai đọc được bảng này qua đường client nữa.
 function laySupabase() {
   const url = process.env.VITE_SUPABASE_URL;
-  const key = process.env.VITE_SUPABASE_ANON_KEY;
-  if (!url || !key) return { loi: 'Thiếu VITE_SUPABASE_URL hoặc VITE_SUPABASE_ANON_KEY' };
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return { loi: 'Thiếu VITE_SUPABASE_URL hoặc SUPABASE_SERVICE_ROLE_KEY' };
   return { client: createClient(url, key, { auth: { persistSession: false } }) };
 }
 
@@ -63,6 +70,17 @@ export default async function handler(req, res) {
 
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  // LỖI THẬT đã vá (review vòng 3, P0.1): endpoint này trước đây KHÔNG xác
+  // thực gì cả — bất kỳ ai trên Internet biết URL là gửi được push tuỳ ý
+  // nội dung, tuỳ ý người nhận (kể cả staffId của người khác). Giờ bắt buộc
+  // header x-push-secret khớp đúng PUSH_API_SECRET (đặt trên Vercel) —
+  // chỉ trigger DB (biết khoá qua private.get_push_secret()) mới gọi được.
+  const secret = (process.env.PUSH_API_SECRET || '').trim();
+  if (!secret) return res.status(503).json({ error: 'Chưa cấu hình PUSH_API_SECRET' });
+  if (req.headers['x-push-secret'] !== secret) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
   const loiVapid = chuanBiVapid();
   if (loiVapid) return res.status(503).json(loiVapid);
 
@@ -70,19 +88,27 @@ export default async function handler(req, res) {
   if (sb.loi) return res.status(503).json({ loi: sb.loi });
   const supabase = sb.client;
 
-  const { title, body, url, staffId, staffIds } = req.body || {};
+  const { title, body, url, staffId, staffIds, broadcast, tag } = req.body || {};
   if (!title) return res.status(400).json({ error: 'Thiếu title' });
 
   // staffIds (mảng, dùng cho tin nhắn Chat — báo NHIỀU người cùng lúc trong
   // 1 lượt gọi thay vì mỗi trigger DB gọi HTTP riêng cho từng người) — vẫn
   // giữ nguyên staffId (1 người, dùng cho giao việc) để không đổi API cũ.
+  // LỖI THẬT đã vá (review vòng 3, P0.1): trước đây KHÔNG truyền staffId lẫn
+  // staffIds thì query không lọc gì cả — gửi cho TOÀN BỘ subscription trong
+  // bảng. Giờ bắt buộc phải nêu rõ `broadcast: true` mới cho gửi diện rộng
+  // (dùng có chủ đích cho Bảng tin) — thiếu cả 3 thì từ chối luôn, không để
+  // lỡ tay/lỗi code phía gọi biến thành broadcast toàn công ty.
   let query = supabase.from('push_subscriptions').select('*');
   if (staffId) query = query.eq('staff_id', staffId);
   else if (Array.isArray(staffIds) && staffIds.length) query = query.in('staff_id', staffIds);
+  else if (broadcast !== true) {
+    return res.status(400).json({ error: 'Phải có staffId, staffIds, hoặc broadcast:true' });
+  }
   const { data: subs, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
 
-  const payload = JSON.stringify({ title, body: body || '', url: url || '/' });
+  const payload = JSON.stringify({ title, body: body || '', url: url || '/', tag: tag || undefined });
 
   const results = await Promise.allSettled(
     (subs || []).map((s) =>

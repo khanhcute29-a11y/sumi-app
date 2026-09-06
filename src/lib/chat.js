@@ -36,7 +36,7 @@ export async function getOrCreateDmRoom(otherProfileId) {
 export async function fetchRoomMessages(roomId, { limit = 50, before, beforeId } = {}) {
   let q = supabase
     .from('chat_messages')
-    .select('id, room_id, sender_id, content, attachment_url, order_code, created_at, profiles(full_name, role, avatar_path)')
+    .select('id, room_id, sender_id, content, attachment_url, order_code, created_at, reply_to_id, recalled_at, profiles(full_name, role, avatar_path)')
     .eq('room_id', roomId)
     .order('created_at', { ascending: false })
     .order('id', { ascending: false })
@@ -48,17 +48,41 @@ export async function fetchRoomMessages(roomId, { limit = 50, before, beforeId }
   }
   const { data, error } = await q;
   if (error) throw error;
-  return (data || []).reverse();
+  const rows = (data || []).reverse();
+
+  // P2.1 (trả lời trích dẫn) — PostgREST không tự phân biệt được chiều
+  // "cha/con" khi embed self-join (chat_messages tham chiếu chính nó qua
+  // reply_to_id), trả về sai hướng (mảng "ai trả lời tin NÀY" thay vì "tin
+  // NÀY trả lời ai"). Query riêng, ghép ở client — chắc chắn đúng chiều,
+  // chỉ tốn thêm 1 lượt gọi khi trang có tin trả lời (thường không nhiều).
+  const replyIds = [...new Set(rows.map((r) => r.reply_to_id).filter(Boolean))];
+  if (replyIds.length) {
+    const { data: parents } = await supabase
+      .from('chat_messages')
+      .select('id, content, sender_id, attachment_url, recalled_at')
+      .in('id', replyIds);
+    const byId = Object.fromEntries((parents || []).map((p) => [p.id, p]));
+    for (const r of rows) r.reply_to = r.reply_to_id ? byId[r.reply_to_id] || null : null;
+  }
+  return rows;
 }
 
-export async function sendChatMessage({ roomId, senderId, content, attachmentUrl = null, orderCode = null }) {
+export async function sendChatMessage({ roomId, senderId, content, attachmentUrl = null, orderCode = null, replyToId = null }) {
   const { data, error } = await supabase
     .from('chat_messages')
-    .insert({ room_id: roomId, sender_id: senderId, content: content || null, attachment_url: attachmentUrl, order_code: orderCode })
-    .select('id, room_id, sender_id, content, attachment_url, order_code, created_at')
+    .insert({ room_id: roomId, sender_id: senderId, content: content || null, attachment_url: attachmentUrl, order_code: orderCode, reply_to_id: replyToId })
+    .select('id, room_id, sender_id, content, attachment_url, order_code, created_at, reply_to_id')
     .single();
   if (error) throw error;
   return data;
+}
+
+// Thu hồi tin nhắn (chỉ người gửi, trong 24h — chặn thật ở RPC/DB, xem
+// migration 202609062000). Xoá THẬT nội dung/ảnh khỏi CSDL, không chỉ ẩn ở
+// client — đúng nghĩa "thu hồi" chứ không phải "xoá phía tôi".
+export async function recallChatMessage(messageId) {
+  const { error } = await supabase.rpc('recall_chat_message', { p_message_id: messageId });
+  if (error) throw error;
 }
 
 // Báo riêng cho từng người bị "@Tên" trong tin nhắn — best-effort, không
@@ -78,7 +102,10 @@ export async function notifyChatMentions({ roomId, messageId, mentionedProfileId
 // Realtime hỗ trợ filter "room_id=in.(...)"), gọi callback cho MỌI tin nhắn
 // mới bất kể đang mở phòng nào — ChatScreen tự định tuyến vào đúng chỗ
 // (đẩy vào luồng đang xem, hoặc chỉ cập nhật preview/số chưa đọc).
-export function subscribeToRooms(roomIds, onInsert) {
+// `onUpdate` (P2.2, thu hồi tin) — trước đây chỉ lắng INSERT, tin bị thu hồi
+// (UPDATE recalled_at) không đẩy realtime cho người khác đang mở đúng phòng
+// đó, họ chỉ thấy sau khi tự tải lại. Giờ lắng cả 2 sự kiện trên cùng kênh.
+export function subscribeToRooms(roomIds, onInsert, onUpdate) {
   if (!roomIds?.length) return () => {};
   const ids = [...roomIds].sort();
   const channel = supabase
@@ -86,8 +113,41 @@ export function subscribeToRooms(roomIds, onInsert) {
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `room_id=in.(${ids.join(',')})` }, (payload) => {
       onInsert(payload.new);
     })
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_messages', filter: `room_id=in.(${ids.join(',')})` }, (payload) => {
+      onUpdate?.(payload.new);
+    })
     .subscribe();
   return () => supabase.removeChannel(channel);
+}
+
+// LỖI THẬT đã vá (review vòng 3, P1.6): trước đây danh sách hội thoại chỉ
+// tải lại khi `refreshTick` đổi (tự mình tạo nhóm/DM mới) — nếu NGƯỜI KHÁC
+// thêm mình vào 1 nhóm, mình không hề biết cho tới khi tự F5 lại trang.
+// Subscribe riêng, chỉ lắng đúng dòng chat_participants CỦA CHÍNH MÌNH.
+export function subscribeToMyRoomMemberships(myId, onJoin) {
+  if (!myId) return () => {};
+  const channel = supabase
+    .channel(`chat-memberships-${myId}`)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_participants', filter: `profile_id=eq.${myId}` }, onJoin)
+    .subscribe();
+  return () => supabase.removeChannel(channel);
+}
+
+// Online/"đang soạn tin" (P2.4) — dùng Supabase Realtime Presence, KHÔNG ghi
+// gì vào bảng Postgres (đúng yêu cầu review: mỗi phím gõ mà ghi DB thì tốn
+// vô lý). Presence tự phát/thu trạng thái qua WebSocket, biến mất khi rời
+// kênh (đóng tab/mất mạng) — không cần dọn dẹp thủ công như cách ghi bảng.
+export function subscribeToRoomPresence(roomId, myId, myName, onChange) {
+  if (!roomId || !myId) return { unsubscribe: () => {}, setTyping: () => {} };
+  const channel = supabase.channel(`presence-room-${roomId}`, { config: { presence: { key: myId } } });
+  channel.on('presence', { event: 'sync' }, () => onChange(channel.presenceState()));
+  channel.subscribe((status) => {
+    if (status === 'SUBSCRIBED') channel.track({ name: myName || '', typing: false });
+  });
+  return {
+    unsubscribe: () => supabase.removeChannel(channel),
+    setTyping: (isTyping) => channel.track({ name: myName || '', typing: isTyping }),
+  };
 }
 
 // ---- Danh sách hội thoại kiểu Messenger + huy hiệu tin chưa đọc ----
@@ -97,10 +157,25 @@ export function subscribeToRooms(roomIds, onInsert) {
 // toàn công ty) và cho màn "Thành viên nhóm".
 export async function fetchRoomParticipants(roomId) {
   const { data, error } = await supabase.from('chat_participants')
-    .select('profile_id, profiles(id, full_name, role, avatar_path)')
+    .select('profile_id, last_read_at, profiles(id, full_name, role, avatar_path)')
     .eq('room_id', roomId);
   if (error) throw error;
-  return (data || []).map((r) => ({ id: r.profile_id, full_name: r.profiles?.full_name || '', role: r.profiles?.role || '', avatarPath: r.profiles?.avatar_path || null }));
+  return (data || []).map((r) => ({ id: r.profile_id, full_name: r.profiles?.full_name || '', role: r.profiles?.role || '', avatarPath: r.profiles?.avatar_path || null, lastReadAt: r.last_read_at || null }));
+}
+
+// "Đã xem" ✓✓ (P2.3) — CHỈ áp dụng Chat riêng 1-1 (2 người): so created_at
+// của tin mình gửi với last_read_at của NGƯỜI KIA. Không làm cho nhóm — với
+// N người, "đã xem" kiểu Zalo phải liệt kê "đã xem bởi X, Y" phức tạp hơn
+// nhiều so với lợi ích, để dành nếu thật sự cần sau này.
+export function subscribeToPeerReadReceipt(roomId, peerId, onChange) {
+  if (!roomId || !peerId) return () => {};
+  const channel = supabase
+    .channel(`chat-read-${roomId}-${peerId}`)
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_participants', filter: `room_id=eq.${roomId}` }, (payload) => {
+      if (payload.new.profile_id === peerId) onChange(payload.new.last_read_at);
+    })
+    .subscribe();
+  return () => supabase.removeChannel(channel);
 }
 
 // LỖI THẬT đã vá: trước đây quét TOÀN BỘ chat_messages của MỌI phòng (không
@@ -221,22 +296,25 @@ export async function fetchUnreadCounts() {
 export async function markRoomRead(roomId, myId) {
   const { error } = await supabase
     .from('chat_participants')
-    .update({ last_read_at: new Date().toISOString() })
+    // manually_unread tắt luôn khi mở phòng đọc thật — nếu không, đánh dấu
+    // chưa đọc xong rồi tự mở lại phòng đó vẫn còn báo chưa đọc mãi.
+    .update({ last_read_at: new Date().toISOString(), manually_unread: false })
     .eq('room_id', roomId)
     .eq('profile_id', myId);
   if (error) throw error;
 }
 
-// "Đánh dấu chưa đọc" (menu ngữ cảnh, kiểu Zalo) — lùi last_read_at về TRƯỚC
-// đúng 1ms so với tin cuối cùng, để CHỈ tin cuối hiện lại "chưa đọc" (không
-// lùi về null, vì null sẽ tính TOÀN BỘ lịch sử phòng là chưa đọc nếu phòng
-// đã có sẵn rất nhiều tin cũ — sai số đếm không cần thiết).
-export async function markRoomUnread(roomId, myId, lastMessageAt) {
-  if (!lastMessageAt) return;
-  const before = new Date(new Date(lastMessageAt).getTime() - 1).toISOString();
+// "Đánh dấu chưa đọc" (menu ngữ cảnh, kiểu Zalo).
+// LỖI THẬT đã vá: bản cũ chỉ lùi last_read_at về trước tin cuối — nhưng
+// get_chat_unread_counts() luôn loại trừ tin do CHÍNH MÌNH gửi khi đếm, nên
+// nếu tin CUỐI CÙNG trong phòng lại là tin mình gửi, đếm ra 0 ngay lập tức,
+// badge tự biến mất ở lần tải lại kế tiếp dù vừa bấm. Giờ dùng cờ riêng
+// `manually_unread` — không phụ thuộc ai gửi tin cuối, chỉ tắt khi
+// markRoomRead() thật sự chạy (mở phòng ra đọc).
+export async function markRoomUnread(roomId, myId) {
   const { error } = await supabase
     .from('chat_participants')
-    .update({ last_read_at: before })
+    .update({ manually_unread: true })
     .eq('room_id', roomId)
     .eq('profile_id', myId);
   if (error) throw error;

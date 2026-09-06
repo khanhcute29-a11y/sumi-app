@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import './chat-screen.css';
-import 'emoji-picker-element';
 import UserAvatar from '../UserAvatar';
 import {
   fetchAllConversations,
@@ -9,8 +8,12 @@ import {
   getOrCreateDmRoom,
   fetchRoomMessages,
   sendChatMessage,
+  recallChatMessage,
   notifyChatMentions,
   subscribeToRooms,
+  subscribeToMyRoomMemberships,
+  subscribeToPeerReadReceipt,
+  subscribeToRoomPresence,
   markRoomRead,
   markRoomUnread,
   extractOrderCode,
@@ -152,13 +155,20 @@ export default function ChatScreen({ profile }) {
 
   const [inputText, setInputText] = useState('');
   const [pendingPhoto, setPendingPhoto] = useState(null);
-  const [sending, setSending] = useState(false);
   // LỖI THẬT đã vá (review vòng 2, mục 2.7): nút "👍 Like" trước đây chỉ chèn
   // đúng 1 emoji cố định — không có cách chọn emoji khác. emoji-picker-element
   // là web component (custom element chuẩn, không phải thư viện React) nên
   // gắn/gỡ sự kiện "emoji-click" bằng ref + useEffect thay vì prop JSX.
+  // LỖI THẬT đã vá (review vòng 3, P1.10): trước đây `import
+  // 'emoji-picker-element'` nằm ở ĐẦU FILE — thư viện (~40KB) tải về ngay
+  // khi mở màn Chat, kể cả người không bao giờ bấm nút Emoji. Giờ chỉ
+  // import() động đúng lúc bấm nút lần đầu tiên.
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const emojiPickerRef = useRef(null);
+  const openEmojiPicker = async () => {
+    if (!showEmojiPicker) await import('emoji-picker-element');
+    setShowEmojiPicker((v) => !v);
+  };
   useEffect(() => {
     const el = emojiPickerRef.current;
     if (!el) return undefined;
@@ -180,6 +190,19 @@ export default function ChatScreen({ profile }) {
   const [pendingMentions, setPendingMentions] = useState([]); // [{ token, ids }]
   const [roomParticipants, setRoomParticipants] = useState([]); // [{id, full_name, role}] — thành viên phòng đang mở
 
+  // P2.1 — trả lời trích dẫn: tin đang được chọn để trả lời (null = không).
+  const [replyTarget, setReplyTarget] = useState(null);
+  // P2.3 — "Đã xem" (chỉ Chat riêng 1-1): last_read_at của NGƯỜI KIA.
+  const [peerLastReadAt, setPeerLastReadAt] = useState(null);
+  // P2.4 — online/đang soạn (Realtime Presence, không ghi DB).
+  const [presenceState, setPresenceState] = useState({});
+  const presenceRef = useRef(null);
+  const typingTimerRef = useRef(null);
+  // Menu ngữ cảnh cho 1 tin nhắn cụ thể (Trả lời / Thu hồi) — cùng kiểu bấm
+  // giữ/chuột phải như menu hội thoại ở danh sách bên trái.
+  const [msgMenu, setMsgMenu] = useState(null); // { msg, x, y }
+  const msgLongPressRef = useRef(null);
+
   // Quản lý nhóm tự tạo — LỖI THẬT đã vá: trước đây tạo nhóm xong không có
   // cách nào đổi tên/thêm/xoá thành viên/rời nhóm.
   const [showGroupInfo, setShowGroupInfo] = useState(false);
@@ -198,9 +221,51 @@ export default function ChatScreen({ profile }) {
   // cuộn lên đọc tin cũ, giật người dùng xuống giữa chừng.
   const isNearBottomRef = useRef(true);
   const justSentRef = useRef(false);
+  // LỖI THẬT đã vá: tempId chỉ dùng Date.now() — gửi 2 tin trong CÙNG 1
+  // mili-giây (double-tap nút gửi, hoặc máy chạy nhanh) ra 2 id "temp-..."
+  // giống hệt nhau, React key trùng + logic thay tempId bằng bản thật
+  // (mergeIncomingMessage/handleSendMessage) thay nhầm bong bóng.
+  const tempSeqRef = useRef(0);
   const scrollToBottom = (smooth = true) => messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
 
   useEffect(() => { activeRoomIdRef.current = activeRoomId; }, [activeRoomId]);
+
+  // Tab vừa quay lại hiển thị trong lúc đang mở sẵn 1 phòng -> đọc bù những
+  // tin đã cộng dồn vào unreadCounts trong lúc tab ẩn (xem nhánh
+  // visibilityState !== 'visible' ở effect subscribeToRooms bên trên).
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible' || !activeRoomId || !profile?.id) return;
+      markRoomRead(activeRoomId, profile.id).then(() => {
+        setUnreadCounts((prev) => ({ ...prev, [activeRoomId]: 0 }));
+        window.dispatchEvent(new CustomEvent('sumi-badges-changed'));
+      }).catch(() => {});
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [activeRoomId, profile?.id]);
+
+  // Báo cho Service Worker biết đang mở đúng phòng nào (và có thật sự đang
+  // nhìn màn hình hay không) để nó khỏi bắn push cho tin vừa hiện ngay trên
+  // màn hình — xem chú thích chi tiết trong src/sw.js.
+  useEffect(() => {
+    const postActiveRoom = () => {
+      if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) return;
+      navigator.serviceWorker.controller.postMessage({
+        type: 'SUMI_ACTIVE_CHAT_ROOM',
+        roomId: document.visibilityState === 'visible' ? activeRoomId : null,
+      });
+    };
+    postActiveRoom();
+    document.addEventListener('visibilitychange', postActiveRoom);
+    return () => {
+      document.removeEventListener('visibilitychange', postActiveRoom);
+      // Rời màn Chat hẳn (unmount) -> báo lại "không có phòng nào đang mở".
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'SUMI_ACTIVE_CHAT_ROOM', roomId: null });
+      }
+    };
+  }, [activeRoomId]);
 
   useEffect(() => {
     if (!profile?.id) return;
@@ -244,15 +309,39 @@ export default function ChatScreen({ profile }) {
 
       if (msg.room_id === activeRoomIdRef.current) {
         setMessages((prev) => mergeIncomingMessage(prev, msg, profile.id));
+        // LỖI THẬT đã vá: trước đây tin tới trong lúc phòng đang "mở" (theo
+        // state của app) là tự markRoomRead ngay — kể cả khi TAB ĐANG ẨN
+        // (đổi sang tab khác/màn hình khoá) hoặc app đang chạy nền, nhân
+        // viên chưa hề nhìn thấy tin đó nhưng đã bị tính là đã đọc, không
+        // còn cách nào biết mình còn tin chưa xem. Giờ chỉ đánh dấu đã đọc
+        // khi document THẬT SỰ đang hiển thị; ẩn thì tính là chưa đọc như
+        // phòng khác, đọc lại khi quay lại tab (xem effect visibilitychange
+        // bên dưới).
         if (msg.sender_id !== profile.id) {
-          markRoomRead(msg.room_id, profile.id).then(() => window.dispatchEvent(new CustomEvent('sumi-badges-changed'))).catch(() => {});
+          if (document.visibilityState === 'visible') {
+            markRoomRead(msg.room_id, profile.id).then(() => window.dispatchEvent(new CustomEvent('sumi-badges-changed'))).catch(() => {});
+          } else {
+            setUnreadCounts((prev) => ({ ...prev, [msg.room_id]: (prev[msg.room_id] || 0) + 1 }));
+          }
         }
       } else if (msg.sender_id !== profile.id) {
         setUnreadCounts((prev) => ({ ...prev, [msg.room_id]: (prev[msg.room_id] || 0) + 1 }));
       }
+    }, (updatedMsg) => {
+      // P2.2 — tin bị thu hồi (UPDATE recalled_at) ở phòng ĐANG MỞ phải cập
+      // nhật ngay cho người khác đang xem, không đợi họ tự tải lại.
+      if (updatedMsg.room_id === activeRoomIdRef.current) {
+        setMessages((prev) => prev.map((m) => (m.id === updatedMsg.id ? { ...m, ...updatedMsg } : m)));
+      }
     });
     return unsubscribe;
   }, [roomIdsKey, profile?.id]);
+
+  // LỖI THẬT đã vá: NGƯỜI KHÁC thêm mình vào 1 nhóm mới thì trước đây mình
+  // hoàn toàn không biết cho tới khi tự F5 lại trang (danh sách hội thoại
+  // chỉ tải lại khi refreshTick đổi, mà refreshTick chỉ đổi khi CHÍNH MÌNH
+  // tự tạo nhóm/DM). Subscribe riêng đúng dòng chat_participants của mình.
+  useEffect(() => subscribeToMyRoomMemberships(profile?.id, () => setRefreshTick((t) => t + 1)), [profile?.id]);
 
   // Bấm vào toast "Tin nhắn nội bộ mới" / "Bạn được nhắc đến" -> App.jsx đổi
   // tab sang 'chat' rồi bắn sự kiện này để mở thẳng đúng phòng (xem App.jsx).
@@ -275,13 +364,22 @@ export default function ChatScreen({ profile }) {
     setMessages([]);
     setRoomParticipants([]);
     setHasMoreOlder(true);
+    setReplyTarget(null);
+    setPeerLastReadAt(null);
     isNearBottomRef.current = true;
     fetchRoomMessages(activeRoomId, { limit: MESSAGES_PAGE_SIZE })
       .then((data) => { if (!cancelled) { setMessages(data); if (data.length < MESSAGES_PAGE_SIZE) setHasMoreOlder(false); } })
       .catch((e) => setError(e.message))
       .finally(() => { if (!cancelled) setLoadingMessages(false); });
     fetchRoomParticipants(activeRoomId)
-      .then((rows) => { if (!cancelled) setRoomParticipants(rows); })
+      .then((rows) => {
+        if (cancelled) return;
+        setRoomParticipants(rows);
+        // P2.3 — nạp sẵn last_read_at của người kia (Chat riêng 1-1) trước
+        // khi realtime kịp báo cập nhật gì.
+        const peer = rows.find((r) => r.id !== profile?.id);
+        if (peer) setPeerLastReadAt(peer.lastReadAt);
+      })
       .catch(() => {});
 
     if (profile?.id) {
@@ -292,6 +390,37 @@ export default function ChatScreen({ profile }) {
     }
     return () => { cancelled = true; };
   }, [activeRoomId]);
+
+  // P2.3 — Chat riêng 1-1: cập nhật ✓✓ "Đã xem" ngay khi người kia mở phòng
+  // đọc, không cần tự tải lại. peerId lấy từ activeConvo (đã có sẵn cho DM).
+  const activePeerId = activeConvo?.roomType === 'direct' ? activeConvo?.peerId : null;
+  useEffect(() => {
+    if (!activeRoomId || !activePeerId) return undefined;
+    return subscribeToPeerReadReceipt(activeRoomId, activePeerId, setPeerLastReadAt);
+  }, [activeRoomId, activePeerId]);
+
+  // P2.4 — online/đang soạn tin (Realtime Presence, không ghi DB).
+  useEffect(() => {
+    if (!activeRoomId || !profile?.id) { presenceRef.current = null; return undefined; }
+    const p = subscribeToRoomPresence(activeRoomId, profile.id, profile.full_name, setPresenceState);
+    presenceRef.current = p;
+    return () => {
+      p.unsubscribe();
+      presenceRef.current = null;
+      setPresenceState({});
+    };
+  }, [activeRoomId, profile?.id]);
+
+  // Người khác (không phải mình) đang gõ, theo trạng thái Presence hiện tại.
+  const typingNames = useMemo(() => {
+    const names = [];
+    for (const [pid, metas] of Object.entries(presenceState)) {
+      if (pid === profile?.id) continue;
+      const meta = metas?.[metas.length - 1];
+      if (meta?.typing) names.push(meta.name || 'Ai đó');
+    }
+    return names;
+  }, [presenceState, profile?.id]);
 
   useEffect(() => {
     if (isNearBottomRef.current || justSentRef.current) {
@@ -368,10 +497,10 @@ export default function ChatScreen({ profile }) {
   };
 
   const handleMarkUnread = async (convo) => {
-    if (!profile?.id || !convo.lastAt) return;
+    if (!profile?.id) return;
     setUnreadCounts((prev) => ({ ...prev, [convo.roomId]: Math.max(prev[convo.roomId] || 0, 1) }));
     try {
-      await markRoomUnread(convo.roomId, profile.id, convo.lastAt);
+      await markRoomUnread(convo.roomId, profile.id);
       window.dispatchEvent(new CustomEvent('sumi-badges-changed'));
     } catch (err) {
       setError(err.message);
@@ -396,6 +525,20 @@ export default function ChatScreen({ profile }) {
   const handleConvoContextMenu = (e, convo) => {
     e.preventDefault();
     openConvoMenu(convo, e.clientX, e.clientY);
+  };
+
+  // Menu ngữ cảnh cho 1 tin nhắn — cùng kiểu bấm giữ/chuột phải như trên,
+  // để "Trả lời"/"Thu hồi" không cần thêm nút lộ sẵn trên mỗi bong bóng.
+  const openMsgMenu = (msg, x, y) => setMsgMenu({ msg, x, y });
+  const closeMsgMenu = () => setMsgMenu(null);
+  const handleMsgTouchStart = (e, msg) => {
+    const { clientX, clientY } = e.touches[0] || {};
+    msgLongPressRef.current = setTimeout(() => openMsgMenu(msg, clientX, clientY), 500);
+  };
+  const handleMsgTouchEnd = () => clearTimeout(msgLongPressRef.current);
+  const handleMsgContextMenu = (e, msg) => {
+    e.preventDefault();
+    openMsgMenu(msg, e.clientX, e.clientY);
   };
 
   const toggleGroupMember = (userId) => {
@@ -514,6 +657,15 @@ export default function ChatScreen({ profile }) {
   const handleInputChange = (e) => {
     const val = e.target.value;
     setInputText(val);
+    // P2.4 — báo "đang soạn tin" qua Presence, tự tắt sau 2.5s ngừng gõ
+    // (không cần người dùng tự báo hết soạn — behaviour giống Zalo/Messenger).
+    if (presenceRef.current) {
+      presenceRef.current.setTyping(val.length > 0);
+      clearTimeout(typingTimerRef.current);
+      if (val.length > 0) {
+        typingTimerRef.current = setTimeout(() => presenceRef.current?.setTyping(false), 2500);
+      }
+    }
     const lastAtPos = val.lastIndexOf('@');
     if (lastAtPos !== -1 && lastAtPos === val.length - 1) {
       setShowMentionPopup(true);
@@ -606,6 +758,75 @@ export default function ChatScreen({ profile }) {
   const pendingPhotoUrl = useMemo(() => (pendingPhoto ? URL.createObjectURL(pendingPhoto) : null), [pendingPhoto]);
   useEffect(() => () => { if (pendingPhotoUrl) URL.revokeObjectURL(pendingPhotoUrl); }, [pendingPhotoUrl]);
 
+  // Gửi thật sự (dùng chung cho gửi lần đầu VÀ bấm "↻ Gửi lại" ở tin lỗi).
+  // LỖI THẬT đã vá (P1.8): trước đây đợi uploadFile() xong MỚI tạo bong bóng
+  // tạm — gửi ảnh mạng chậm là màn hình đứng im vài giây không phản hồi gì,
+  // trông như treo. Giờ tạo bong bóng NGAY (dùng ảnh xem trước tại chỗ, cờ
+  // `uploading:true`), upload xong mới thay bằng URL thật.
+  // LỖI THẬT đã vá (P1.9): trước đây gửi lỗi là XOÁ hẳn bong bóng, mất luôn
+  // nội dung đã gõ — giờ giữ lại bong bóng với cờ `failed:true` + nút
+  // "↻ Gửi lại" thay vì bắt gõ lại từ đầu.
+  const attemptSend = async ({ tempId, text, photoFile, photoPreviewUrl, mentionIds, roomIdAtSend, replyToId, replySnapshot }) => {
+    let attachmentUrl = photoPreviewUrl || null;
+    try {
+      if (photoFile) {
+        attachmentUrl = (await uploadFile(photoFile, `chat-attachments/${profile.id}`)).url;
+        // Đổi từ ảnh xem trước tạm (blob: URL riêng cho bong bóng này, KHÔNG
+        // dùng chung với pendingPhotoUrl của ô soạn — ô soạn đã bị xoá ngay
+        // lúc gửi, dùng chung sẽ bị revoke sớm làm vỡ ảnh đang hiện) sang URL
+        // thật rồi mới revoke, tránh vỡ ảnh giữa chừng lúc đang tải lên.
+        if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl);
+        setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, attachment_url: attachmentUrl, uploading: false } : m)));
+      }
+      const saved = await sendChatMessage({
+        roomId: roomIdAtSend, senderId: profile.id, content: text || null, attachmentUrl, orderCode: extractOrderCode(text), replyToId,
+      });
+      // Nếu realtime đã dội về trước và thay tempId bằng bản thật rồi
+      // (mergeIncomingMessage ở effect subscribe xử lý), tempId không còn
+      // tồn tại trong mảng nữa -> map dưới đây không đổi gì, KHÔNG tạo bản
+      // trùng thứ 2 (đúng hướng còn lại của lỗi đua #4).
+      // reply_to: gắn lại snapshot đã có sẵn ở client (tin gốc đang hiện
+      // trên màn hình ngay lúc bấm Trả lời) — sendChatMessage() không trả
+      // kèm bản embed reply_to, khỏi phải chờ round-trip riêng.
+      setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...saved, reply_to: replySnapshot || null } : m)));
+      if (mentionIds.length) {
+        notifyChatMentions({ roomId: roomIdAtSend, messageId: saved.id, mentionedProfileIds: mentionIds, preview: text }).catch(() => {});
+      }
+    } catch (e) {
+      setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, uploading: false, failed: true } : m)));
+      setError(e.message);
+    }
+  };
+
+  const handleRetryMessage = (msg) => {
+    justSentRef.current = true;
+    setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, failed: false, uploading: !!m._photoFile } : m)));
+    attemptSend({
+      tempId: msg.id, text: msg.content, photoFile: msg._photoFile || null, photoPreviewUrl: msg.attachment_url,
+      mentionIds: msg._mentionIds || [], roomIdAtSend: msg.room_id,
+      replyToId: msg.reply_to_id || null, replySnapshot: msg.reply_to || null,
+    });
+  };
+
+  const handleReplyToMessage = (msg) => {
+    setReplyTarget(msg);
+    inputRef.current?.focus();
+  };
+
+  // P2.2 — Thu hồi tin (lạc quan: xoá nội dung tại chỗ trước, khớp giao
+  // diện với những gì RPC sẽ làm thật trong DB; hoàn tác nếu RPC từ chối,
+  // vd đã quá 24h — người dùng KHÔNG cần đợi round-trip mới thấy đổi).
+  const handleRecallMessage = async (msg) => {
+    const prevSnapshot = { content: msg.content, attachment_url: msg.attachment_url, order_code: msg.order_code };
+    setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, content: null, attachment_url: null, order_code: null, recalled_at: new Date().toISOString() } : m)));
+    try {
+      await recallChatMessage(msg.id);
+    } catch (e) {
+      setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, ...prevSnapshot, recalled_at: null } : m)));
+      setError(e.message);
+    }
+  };
+
   const handleSendMessage = async () => {
     // LỖI THẬT đã vá: bấm "Tag người" tự chèn "@" vào ô soạn để mở popup gợi
     // ý; nếu đóng popup mà KHÔNG chọn ai rồi lỡ bấm gửi, "@" trơ trọi (không
@@ -614,60 +835,47 @@ export default function ChatScreen({ profile }) {
     const text = inputText.trim().replace(/@\s*$/, '').trim();
     if (!text && !pendingPhoto) return;
     if (!activeRoomId || !profile?.id) return;
-    setSending(true);
     setError('');
-    const tempId = `temp-${Date.now()}`;
+    const tempId = `temp-${Date.now()}-${tempSeqRef.current++}`;
     const roomIdAtSend = activeRoomId;
     const photoAtSend = pendingPhoto;
+    // URL riêng cho bong bóng tin nhắn (KHÔNG dùng pendingPhotoUrl của ô
+    // soạn) — ô soạn bị xoá ngay dòng dưới nên URL đó sẽ bị revoke gần như
+    // ngay lập tức, trong khi bong bóng này còn cần hiện ảnh xem trước suốt
+    // lúc đang tải lên.
+    const photoPreviewAtSend = photoAtSend ? URL.createObjectURL(photoAtSend) : null;
     // Chỉ báo "được nhắc đến" cho những mention mà token @Tên VẪN CÒN trong
     // chữ thật sự gửi đi — người đã bị xoá tay khỏi ô soạn thì không báo
     // nữa, và dùng matchMentionTokens (không phải includes thô) để tránh
     // khớp nhầm chuỗi con giữa 2 tên gần giống nhau.
     const mentionIdsAtSend = [...new Set(matchMentionTokens(pendingMentions, text).flatMap((m) => m.ids))];
-    let attachmentUrl = null;
     justSentRef.current = true;
-    try {
-      if (pendingPhoto) attachmentUrl = (await uploadFile(pendingPhoto, `chat-attachments/${profile.id}`)).url;
-      const optimisticMsg = {
-        id: tempId, room_id: roomIdAtSend, sender_id: profile.id,
-        content: text || null, attachment_url: attachmentUrl, order_code: extractOrderCode(text),
-        created_at: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, optimisticMsg]);
-      setInputText('');
-      setPendingPhoto(null);
-      setShowMentionPopup(false);
-      setSelectedMentionIds([]);
-      setPendingMentions([]);
 
-      const saved = await sendChatMessage({
-        roomId: roomIdAtSend, senderId: profile.id, content: text || null, attachmentUrl, orderCode: extractOrderCode(text),
-      });
-      // Nếu realtime đã dội về trước và thay tempId bằng bản thật rồi
-      // (mergeIncomingMessage ở effect subscribe xử lý), tempId không còn
-      // tồn tại trong mảng nữa -> map dưới đây không đổi gì, KHÔNG tạo bản
-      // trùng thứ 2 (đúng hướng còn lại của lỗi đua #4).
-      // LỖI THẬT đã vá: KHÔNG setRefreshTick ở đây nữa — effect subscribe
-      // realtime (subscribeToRooms) đã tự cập nhật `conversations` tại chỗ
-      // (lastMessage/lastAt/sort) mỗi khi có tin insert, kể cả tin của
-      // chính mình. Gọi lại refreshTick ở đây chỉ tải lại TOÀN BỘ danh sách
-      // hội thoại + danh bạ + số chưa đọc (3 query thừa) VÀ làm cột trái
-      // nháy "Đang tải..." mỗi lần bấm Enter.
-      setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...saved } : m)));
-      if (mentionIdsAtSend.length) {
-        notifyChatMentions({ roomId: roomIdAtSend, messageId: saved.id, mentionedProfileIds: mentionIdsAtSend, preview: text }).catch(() => {});
-      }
-    } catch (e) {
-      setMessages((prev) => prev.filter((m) => m.id !== tempId));
-      setInputText(text);
-      // Ảnh đã chọn (và có thể đã tải lên storage xong) không được để mất —
-      // trước đây setPendingPhoto(null) chạy trước khi biết gửi có thành
-      // công hay không, lỗi giữa chừng thì mất luôn ảnh, phải chọn lại từ đầu.
-      if (photoAtSend) setPendingPhoto(photoAtSend);
-      setError(e.message);
-    } finally {
-      setSending(false);
-    }
+    const replyToIdAtSend = replyTarget?.id || null;
+    const replySnapshotAtSend = replyTarget;
+
+    const optimisticMsg = {
+      id: tempId, room_id: roomIdAtSend, sender_id: profile.id,
+      content: text || null, attachment_url: photoPreviewAtSend, order_code: extractOrderCode(text),
+      created_at: new Date().toISOString(),
+      uploading: !!photoAtSend, failed: false,
+      _photoFile: photoAtSend || null, _mentionIds: mentionIdsAtSend,
+      reply_to_id: replyToIdAtSend, reply_to: replySnapshotAtSend,
+    };
+    setMessages((prev) => [...prev, optimisticMsg]);
+    setInputText('');
+    setPendingPhoto(null);
+    setShowMentionPopup(false);
+    setSelectedMentionIds([]);
+    setPendingMentions([]);
+    setReplyTarget(null);
+    clearTimeout(typingTimerRef.current);
+    presenceRef.current?.setTyping(false);
+
+    attemptSend({
+      tempId, text, photoFile: photoAtSend, photoPreviewUrl: photoPreviewAtSend, mentionIds: mentionIdsAtSend,
+      roomIdAtSend, replyToId: replyToIdAtSend, replySnapshot: replySnapshotAtSend,
+    });
   };
 
   const backToList = useCallback(() => {
@@ -771,7 +979,15 @@ export default function ChatScreen({ profile }) {
                     : <div className="cs-convo-avatar">{activeConvo?.avatarEmoji || '💬'}</div>}
                   <div className="cs-thread-title">
                     <h4>{activeConvo?.title || 'Hội thoại'}</h4>
-                    <p>{canManageActiveGroup ? `${roomParticipants.length} thành viên · Bấm để xem` : (activeConvo?.subtitle || '')}</p>
+                    <p>
+                      {typingNames.length > 0
+                        ? `${typingNames.join(', ')} đang soạn tin…`
+                        : canManageActiveGroup
+                          ? `${roomParticipants.length} thành viên · Bấm để xem`
+                          : activeConvo?.roomType === 'direct' && activePeerId && presenceState[activePeerId]?.length
+                            ? <><span className="cs-online-dot" /> Đang hoạt động</>
+                            : (activeConvo?.subtitle || '')}
+                    </p>
                   </div>
                 </button>
               </div>
@@ -788,17 +1004,49 @@ export default function ChatScreen({ profile }) {
                   const isMe = msg.sender_id === profile?.id;
                   const senderName = msg.profiles?.full_name || nameFor(msg.sender_id);
                   const senderAvatarPath = msg.profiles?.avatar_path ?? avatarPathFor(msg.sender_id);
+                  const isRecalled = !!msg.recalled_at;
+                  // P2.3 — chỉ tính "đã xem" cho Chat riêng 1-1, tin của CHÍNH
+                  // MÌNH, chưa lỗi/chưa upload xong.
+                  const isSeen = isMe && activeConvo?.roomType === 'direct' && !msg.failed && !msg.uploading
+                    && peerLastReadAt && new Date(peerLastReadAt) >= new Date(msg.created_at);
+                  const canRecall = isMe && !isRecalled && !msg.failed && !msg.uploading
+                    && (Date.now() - new Date(msg.created_at).getTime()) < 24 * 60 * 60 * 1000;
                   return (
                     <div key={msg.id} className={`cs-msg-row ${isMe ? 'me' : ''}`}>
                       {!isMe && <UserAvatar profile={{ full_name: senderName, avatar_path: senderAvatarPath }} size={28} />}
                       <div className="cs-msg-body">
                         {!isMe && <span className="cs-sender-label">{senderName}</span>}
-                        <div className="cs-msg-bubble">
-                          {renderFormattedMessage(msg.content)}
-                          {msg.order_code && <div><span className="cs-order-chip">📦 Mã đơn: #{msg.order_code}</span></div>}
-                          {msg.attachment_url && <img src={msg.attachment_url} alt="Đính kèm" className="cs-msg-img" onClick={() => window.open(msg.attachment_url, '_blank')} />}
+                        <div
+                          className={`cs-msg-bubble ${msg.uploading ? 'uploading' : ''} ${msg.failed ? 'failed' : ''} ${isRecalled ? 'recalled' : ''}`}
+                          onContextMenu={(e) => !isRecalled && !msg.failed && !msg.uploading && handleMsgContextMenu(e, msg)}
+                          onTouchStart={(e) => !isRecalled && !msg.failed && !msg.uploading && handleMsgTouchStart(e, msg)}
+                          onTouchEnd={handleMsgTouchEnd}
+                          onTouchMove={handleMsgTouchEnd}
+                        >
+                          {isRecalled ? (
+                            <span className="cs-msg-recalled-label">🚫 Tin nhắn đã được thu hồi</span>
+                          ) : (
+                            <>
+                              {msg.reply_to && (
+                                <div className="cs-msg-reply-quote">
+                                  <strong>{msg.reply_to.sender_id === profile?.id ? 'Bạn' : nameFor(msg.reply_to.sender_id)}</strong>
+                                  <span>{msg.reply_to.recalled_at ? 'Tin nhắn đã được thu hồi' : (msg.reply_to.content || (msg.reply_to.attachment_url ? '📷 Ảnh' : ''))}</span>
+                                </div>
+                              )}
+                              {renderFormattedMessage(msg.content)}
+                              {msg.order_code && <div><span className="cs-order-chip">📦 Mã đơn: #{msg.order_code}</span></div>}
+                              {msg.attachment_url && <img src={msg.attachment_url} alt="Đính kèm" className="cs-msg-img" onClick={() => window.open(msg.attachment_url, '_blank')} />}
+                            </>
+                          )}
                         </div>
-                        <span className="cs-msg-timestamp">{new Date(msg.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
+                        <span className="cs-msg-timestamp">
+                          {msg.failed
+                            ? <button type="button" className="cs-msg-retry" onClick={() => handleRetryMessage(msg)}>↻ Gửi lại</button>
+                            : msg.uploading
+                              ? 'Đang gửi…'
+                              : new Date(msg.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                          {isSeen && <span className="cs-msg-seen"> · Đã xem</span>}
+                        </span>
                       </div>
                     </div>
                   );
@@ -837,6 +1085,16 @@ export default function ChatScreen({ profile }) {
                   </div>
                 )}
 
+                {replyTarget && (
+                  <div className="cs-reply-preview">
+                    <div>
+                      <strong>Trả lời {replyTarget.sender_id === profile?.id ? 'chính mình' : nameFor(replyTarget.sender_id)}</strong>
+                      <span>{replyTarget.recalled_at ? 'Tin nhắn đã được thu hồi' : (replyTarget.content || (replyTarget.attachment_url ? '📷 Ảnh' : ''))}</span>
+                    </div>
+                    <button type="button" onClick={() => setReplyTarget(null)}>✕</button>
+                  </div>
+                )}
+
                 {pendingPhoto && (
                   <div className="cs-pending-photo">
                     <img src={pendingPhotoUrl} alt="preview" />
@@ -857,16 +1115,16 @@ export default function ChatScreen({ profile }) {
                     ref={inputRef} rows={1} placeholder="Gõ tin nhắn (@ để tag tên)..."
                     value={inputText} onChange={handleInputChange}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
-                    disabled={sending || !activeRoomId}
+                    disabled={!activeRoomId}
                   />
-                  <button type="submit" title="Gửi" disabled={sending || !activeRoomId}>➤</button>
+                  <button type="submit" title="Gửi" disabled={!activeRoomId}>➤</button>
                 </form>
 
                 <div className="cs-tool-chips">
                   <input ref={photoInputRef} type="file" accept="image/*" hidden onChange={handlePickPhoto} />
                   <button type="button" onClick={() => photoInputRef.current?.click()}><IconCamera size={16} /> Gửi ảnh</button>
                   <button type="button" onClick={() => { setInputText((p) => `${p}@`); setShowMentionPopup(true); setMentionFilter(''); setSelectedMentionIds([]); inputRef.current?.focus(); }}><IconTag size={16} /> Tag người</button>
-                  <button type="button" onClick={() => setShowEmojiPicker((v) => !v)}>😊 Emoji</button>
+                  <button type="button" onClick={openEmojiPicker}>😊 Emoji</button>
                   <button type="button" onClick={() => setInputText((p) => `${p}👍`)}>👍 Like</button>
                 </div>
               </div>
@@ -891,6 +1149,25 @@ export default function ChatScreen({ profile }) {
           </div>
         </div>
       )}
+
+      {msgMenu && (() => {
+        const canRecall = msgMenu.msg.sender_id === profile?.id && !msgMenu.msg.recalled_at
+          && (Date.now() - new Date(msgMenu.msg.created_at).getTime()) < 24 * 60 * 60 * 1000;
+        return (
+          <div className="cs-convo-menu-overlay" onClick={closeMsgMenu} onContextMenu={(e) => e.preventDefault()}>
+            <div
+              className="cs-convo-menu"
+              style={{ left: Math.min(msgMenu.x, window.innerWidth - 200), top: Math.min(msgMenu.y, window.innerHeight - 120) }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button type="button" onClick={() => { handleReplyToMessage(msgMenu.msg); closeMsgMenu(); }}>↩ Trả lời</button>
+              {canRecall && (
+                <button type="button" onClick={() => { handleRecallMessage(msgMenu.msg); closeMsgMenu(); }}>🗑 Thu hồi</button>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {showNewChat && (
         <div className="cs-new-chat-overlay" onClick={() => setShowNewChat(false)}>

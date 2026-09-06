@@ -15,12 +15,32 @@ registerRoute(
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
 
+// LỖI THẬT đã vá (review vòng 3, P1.2): trước đây bấm mở đúng phòng chat rồi
+// vẫn ăn thông báo đẩy y hệt tin vừa đọc trên màn hình — vì app là SPA,
+// đường dẫn trình duyệt KHÔNG đổi theo từng phòng (chỉ đổi tab/state nội
+// bộ), nên không thể so `client.url` như cách thường làm. Giải pháp đúng
+// với kiến trúc này: ChatScreen.jsx tự báo cho Service Worker biết đang mở
+// phòng nào (và có đang thật sự nhìn màn hình hay không qua
+// document.visibilityState) — biến module-level này reset về null nếu SW bị
+// trình duyệt tắt giữa chừng (bình thường với SW), chấp nhận được vì hậu
+// quả chỉ là hiện thêm 1 thông báo thừa, không phải lỗi nghiêm trọng.
+let activeChatRoomId = null;
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SUMI_ACTIVE_CHAT_ROOM') {
+    activeChatRoomId = event.data.roomId || null;
+  }
+});
+
 self.addEventListener('push', (event) => {
   let payload = { title: 'Sumi Bakery', body: 'Có cập nhật mới.' };
   try {
     if (event.data) payload = { ...payload, ...event.data.json() };
   } catch (err) {
     // ignore malformed payload, dùng mặc định
+  }
+  const roomMatch = (payload.url || '').match(/^\/messenger\/([0-9a-f-]{36})/i);
+  if (roomMatch && roomMatch[1] === activeChatRoomId) {
+    return; // đang mở đúng phòng này trên màn hình — khỏi cần báo thêm
   }
   event.waitUntil(
     self.registration.showNotification(payload.title, {
