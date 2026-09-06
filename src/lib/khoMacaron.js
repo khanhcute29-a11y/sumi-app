@@ -109,9 +109,15 @@ export async function xuatMacaron({ ma, soCap, orderCode, ghiChu, ngaySx, hanSuD
  * màu, xem migration 202609042000), nên có thể còn hiện cả lô đã xuất hết.
  */
 export async function fetchLoNhapMacaron({ ma }) {
+  // Gộp cả 'nhap' (nhập thẳng, gõ tay Ngày SX) LẪN 'mix_nhap' (khay mix tạo
+  // ra từ Trộn màu, NSX tự tính = màu cũ nhất trong mẻ trộn — xem
+  // tronMacaron()) — để Xuất kho khay mix cũng chọn được lô như màu đơn
+  // (yêu cầu chủ tiệm 06/09/2026). 'mix_nhap' không bao giờ gắn `ma` của
+  // màu đơn (chỉ gắn mã mix), nên gộp vào đây an toàn, không ảnh hưởng lúc
+  // tra lô của macaron màu đơn.
   const { data, error } = await supabase.from('macaron_stock_log')
     .select('ngay_sx, han_su_dung')
-    .eq('ma', ma).eq('loai_gd', 'nhap').not('ngay_sx', 'is', null)
+    .eq('ma', ma).in('loai_gd', ['nhap', 'mix_nhap']).not('ngay_sx', 'is', null)
     .order('ngay_sx', { ascending: true });
   if (error) throw error;
   const thay = new Set();
@@ -130,10 +136,11 @@ export async function fetchLoNhapMacaron({ ma }) {
  * kieu: 'ton_kho' (trộn trước để sẵn) | 'theo_don' (trộn xong giao thẳng)
  * Trừ kho theo đúng công thức: tồn mới = tồn cũ − số cặp dùng − hao hụt.
  */
-export async function tronMacaron({ maMix, soKhay, kieu, chiTiet, orderCode, ghiChu }) {
+export async function tronMacaron({ maMix, soKhay, kieu, chiTiet, orderCode, ghiChu, ngaySx, hanSuDung }) {
   const { data, error } = await supabase.rpc('sumi_macaron_mix', {
     p_ma_mix: maMix, p_so_khay: soKhay, p_kieu: kieu, p_chi_tiet: chiTiet,
     p_order_code: orderCode || null, p_ghi_chu: ghiChu || null,
+    p_ngay_sx: ngaySx || null, p_han_su_dung: hanSuDung || null,
   });
   return nemLoi(data, error, 'Không trộn được.');
 }

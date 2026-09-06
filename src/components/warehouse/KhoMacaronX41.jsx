@@ -61,6 +61,10 @@ export default function KhoMacaronX41({ onBack }) {
   const mauDon = useMemo(() => ton.filter((t) => t.loai === 'mau_don'), [ton]);
   const cacMix = useMemo(() => ton.filter((t) => t.loai === 'mix'), [ton]);
   const tongCapMauDon = mauDon.reduce((s, t) => s + t.soCap, 0);
+  // Tổng gộp CẢ màu đơn lẫn khay mix — yêu cầu chủ tiệm 06/09/2026: "muốn có
+  // thêm 1 con số tổng gộp chung... để xem tổng kho một cái duy nhất", cạnh
+  // con số "Tổng tồn màu đơn" đã có sẵn (giữ nguyên, không thay).
+  const tongCapTatCa = tongCapMauDon + cacMix.reduce((s, t) => s + t.soCap, 0);
 
   const bao = (msg) => { setXong(msg); setTimeout(() => setXong(''), 3000); };
 
@@ -94,7 +98,7 @@ export default function KhoMacaronX41({ onBack }) {
       {dangTai && <div style={{ color: '#806a58', fontSize: 13, padding: '10px 0' }}>Đang tải…</div>}
 
       {!dangTai && tab === 'ton' && (
-        <TabTonKho mauDon={mauDon} cacMix={cacMix} tongCapMauDon={tongCapMauDon}
+        <TabTonKho mauDon={mauDon} cacMix={cacMix} tongCapMauDon={tongCapMauDon} tongCapTatCa={tongCapTatCa}
           onXong={(m) => { bao(m); taiLai(); }} onLoi={setLoi} />
       )}
       {!dangTai && tab === 'tron' && (
@@ -110,7 +114,7 @@ export default function KhoMacaronX41({ onBack }) {
 }
 
 // ── TAB 1: TỒN KHO + nhập nhanh ────────────────────────────────────────────
-function TabTonKho({ mauDon, cacMix, tongCapMauDon, onXong, onLoi }) {
+function TabTonKho({ mauDon, cacMix, tongCapMauDon, tongCapTatCa, onXong, onLoi }) {
   const [dangNhap, setDangNhap] = useState(null); // ma đang mở form nhập
   const [soKhay, setSoKhay] = useState('');
   const [soCapLe, setSoCapLe] = useState('');
@@ -191,21 +195,21 @@ function TabTonKho({ mauDon, cacMix, tongCapMauDon, onXong, onLoi }) {
             <input style={{ ...o.o, minHeight: 40 }} inputMode="numeric" placeholder="Khay" value={soKhay} onChange={(e) => setSoKhay(e.target.value)} />
             <input style={{ ...o.o, minHeight: 40 }} inputMode="numeric" placeholder="Cặp lẻ" value={soCapLe} onChange={(e) => setSoCapLe(e.target.value)} />
           </div>
-          {/* Ngày SX/HSD — bắt buộc bổ sung cho macaron MÀU ĐƠN (yêu cầu
-              04/09/2026), không bắt với khay mix trộn sẵn (không có lô SX
-              riêng, đã ghép từ nhiều màu/nhiều mẻ khác nhau). */}
-          {t.loai === 'mau_don' && (
-            <div style={{ display: 'flex', gap: 6, minWidth: 0 }}>
-              <label style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ ...o.nhan, marginBottom: 2 }}>Ngày SX</span>
-                <input type="date" style={{ ...o.o, minHeight: 40, fontSize: 12, padding: '0 4px', width: '100%', minWidth: 0 }} value={ngaySx} onChange={(e) => setNgaySx(e.target.value)} />
-              </label>
-              <label style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ ...o.nhan, marginBottom: 2 }}>Hạn SD</span>
-                <input type="date" style={{ ...o.o, minHeight: 40, fontSize: 12, padding: '0 4px', width: '100%', minWidth: 0 }} value={hanSuDung} onChange={(e) => setHanSuDung(e.target.value)} />
-              </label>
-            </div>
-          )}
+          {/* Ngày SX/HSD — trước đây chỉ bắt macaron MÀU ĐƠN (yêu cầu
+              04/09/2026), nay mở luôn cho khay mít nhập THẲNG (không qua
+              Trộn màu) — yêu cầu chủ tiệm 06/09/2026: "phần nhập mít cho
+              luôn NSX, HSD như bên màu đơn". Backend (sumi_macaron_nhap) đã
+              nhận 2 tham số này cho MỌI mã từ trước, chỉ là UI từng ẩn đi. */}
+          <div style={{ display: 'flex', gap: 6, minWidth: 0 }}>
+            <label style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ ...o.nhan, marginBottom: 2 }}>Ngày SX</span>
+              <input type="date" style={{ ...o.o, minHeight: 40, fontSize: 12, padding: '0 4px', width: '100%', minWidth: 0 }} value={ngaySx} onChange={(e) => setNgaySx(e.target.value)} />
+            </label>
+            <label style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ ...o.nhan, marginBottom: 2 }}>Hạn SD</span>
+              <input type="date" style={{ ...o.o, minHeight: 40, fontSize: 12, padding: '0 4px', width: '100%', minWidth: 0 }} value={hanSuDung} onChange={(e) => setHanSuDung(e.target.value)} />
+            </label>
+          </div>
           <input style={{ ...o.o, minHeight: 40 }} placeholder="Ghi chú (không bắt buộc)" value={ghiChu} onChange={(e) => setGhiChu(e.target.value)} />
           <div style={{ display: 'flex', gap: 6 }}>
             <button disabled={luu} onClick={nhap} style={{ ...o.nut, minHeight: 40, fontSize: 13 }}>{luu ? 'Đang lưu…' : '✓ Nhập'}</button>
@@ -220,21 +224,22 @@ function TabTonKho({ mauDon, cacMix, tongCapMauDon, onXong, onLoi }) {
           </div>
           {/* Ô CHỌN LÔ — thay vì gõ tay Ngày SX/HSD, xổ ra các lô đã từng
               nhập (sắp Ngày SX cũ nhất lên đầu) để thủ kho chọn, không phải
-              tự nhớ/gõ lại ngày (yêu cầu cô Kim Cúc 04/09/2026). Chỉ áp dụng
-              macaron MÀU ĐƠN — khay mix không có lô SX riêng. */}
-          {t.loai === 'mau_don' && (
-            <label style={{ display: 'block' }}>
-              <span style={{ ...o.nhan, marginBottom: 2 }}>Xuất từ lô (Ngày SX → HSD)</span>
-              <select style={{ ...o.o, minHeight: 40, fontSize: 12.5 }} value={loChon} onChange={(e) => setLoChon(e.target.value)} disabled={dangTaiLo}>
-                <option value="">{dangTaiLo ? 'Đang tải các lô…' : loNhap.length ? '— Chọn lô —' : 'Chưa có lô nào ghi Ngày SX'}</option>
-                {loNhap.map((l, i) => (
-                  <option key={`${l.ngaySx}|${l.hanSuDung}`} value={`${l.ngaySx}|${l.hanSuDung || ''}`}>
-                    {new Date(l.ngaySx).toLocaleDateString('vi-VN')} → HSD {l.hanSuDung ? new Date(l.hanSuDung).toLocaleDateString('vi-VN') : '—'}{i === 0 ? ' (cũ nhất — nên xuất trước)' : ''}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+              tự nhớ/gõ lại ngày (yêu cầu cô Kim Cúc 04/09/2026). Trước đây
+              chỉ áp dụng macaron MÀU ĐƠN — nay mở luôn cho khay mít, vì
+              fetchLoNhapMacaron giờ gộp cả lô nhập thẳng (nay có NSX/HSD) lẫn
+              lô tạo ra từ Trộn màu (NSX = màu cũ nhất trong mẻ trộn, yêu cầu
+              chủ tiệm 06/09/2026). */}
+          <label style={{ display: 'block' }}>
+            <span style={{ ...o.nhan, marginBottom: 2 }}>Xuất từ lô (Ngày SX → HSD)</span>
+            <select style={{ ...o.o, minHeight: 40, fontSize: 12.5 }} value={loChon} onChange={(e) => setLoChon(e.target.value)} disabled={dangTaiLo}>
+              <option value="">{dangTaiLo ? 'Đang tải các lô…' : loNhap.length ? '— Chọn lô —' : 'Chưa có lô nào ghi Ngày SX'}</option>
+              {loNhap.map((l, i) => (
+                <option key={`${l.ngaySx}|${l.hanSuDung}`} value={`${l.ngaySx}|${l.hanSuDung || ''}`}>
+                  {new Date(l.ngaySx).toLocaleDateString('vi-VN')} → HSD {l.hanSuDung ? new Date(l.hanSuDung).toLocaleDateString('vi-VN') : '—'}{i === 0 ? ' (cũ nhất — nên xuất trước)' : ''}
+                </option>
+              ))}
+            </select>
+          </label>
           <input style={{ ...o.o, minHeight: 40 }} placeholder="Mã đơn (không bắt buộc)" value={maDonXuat} onChange={(e) => setMaDonXuat(e.target.value)} />
           <input style={{ ...o.o, minHeight: 40 }} placeholder="Ghi chú (không bắt buộc)" value={ghiChuXuat} onChange={(e) => setGhiChuXuat(e.target.value)} />
           <div style={{ display: 'flex', gap: 6 }}>
@@ -257,6 +262,14 @@ function TabTonKho({ mauDon, cacMix, tongCapMauDon, onXong, onLoi }) {
 
   return (
     <>
+      {/* Tổng gộp cả màu đơn + mix — xem 1 con số tổng kho duy nhất (yêu cầu
+          chủ tiệm 06/09/2026), đứng TRƯỚC thẻ chi tiết "Tổng tồn màu đơn". */}
+      <div style={{ ...o.the, background: '#fdeee0', marginBottom: 10, border: '1.5px solid #f0c9a3' }}>
+        <div style={{ fontSize: 11.5, fontWeight: 900, color: '#806a58', textTransform: 'uppercase' }}>Tổng tồn kho (tất cả)</div>
+        <div style={{ fontSize: 24, fontWeight: 900, color: '#b7431e' }}>{chuKhay(tongCapTatCa)}</div>
+        <div style={{ fontSize: 11.5, color: '#806a58' }}>{tongCapTatCa} cặp · {tongCapTatCa * BANH_DON_MOI_CAP} bánh đơn</div>
+      </div>
+
       <div style={{ ...o.the, background: '#fff7ec', marginBottom: 12 }}>
         <div style={{ fontSize: 11.5, fontWeight: 900, color: '#806a58', textTransform: 'uppercase' }}>Tổng tồn màu đơn</div>
         <div style={{ fontSize: 24, fontWeight: 900, color: '#b7431e' }}>{chuKhay(tongCapMauDon)}</div>
@@ -317,9 +330,25 @@ function TabTronMau({ mauDon, cacMix, onXong, onLoi }) {
     if (kieu === 'theo_don' && !orderCode.trim()) { onLoi('Trộn theo đơn thì cần nhập mã đơn.'); return; }
     setLuu(true); onLoi('');
     try {
+      // NSX/HSD của khay mix vừa trộn = màu có NSX SỚM NHẤT trong các màu đã
+      // dùng để trộn (yêu cầu chủ tiệm 06/09/2026: "không trùng ngày SX của
+      // 12 màu đơn... nếu áp chỉ áp được 1 màu nào đó có NSX thấp nhất"). Chỉ
+      // cần tính khi trộn để NHẬP TỒN (kieu='ton_kho') — trộn giao thẳng theo
+      // đơn không cộng vào tồn mix nên không có gì để gắn ngày.
+      let ngaySxApDung = null, hanSuDungApDung = null;
+      if (kieu === 'ton_kho') {
+        const cacMaDaDung = chiTiet.filter((d) => d.cap > 0).map((d) => d.ma);
+        const cacLo = await Promise.all(cacMaDaDung.map((ma) => fetchLoNhapMacaron({ ma }).catch(() => [])));
+        let somNhat = null;
+        cacLo.forEach((lo) => {
+          if (lo.length && (!somNhat || lo[0].ngaySx < somNhat.ngaySx)) somNhat = lo[0];
+        });
+        if (somNhat) { ngaySxApDung = somNhat.ngaySx; hanSuDungApDung = somNhat.hanSuDung; }
+      }
       const kq = await tronMacaron({
         maMix, soKhay: Number(soKhay) || 1, kieu, chiTiet,
         orderCode: orderCode.trim() || null, ghiChu,
+        ngaySx: ngaySxApDung, hanSuDung: hanSuDungApDung,
       });
       onXong(kq?.thong_bao || 'Đã trộn xong.');
     } catch (e) { onLoi(e?.message || 'Không trộn được.'); }
