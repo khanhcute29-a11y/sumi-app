@@ -357,14 +357,22 @@ export async function updateOrderStatus(id, status) {
   notifyOtherTabs(BroadcastEvents.ORDER_STATUS_CHANGED, { orderId: id, status });
 }
 
-export async function updateOrder(id, fields) {
+export async function updateOrder(id, fields, expectedStatus) {
   // .select() để phân biệt "đã ghi" với "RLS lọc hết hàng ở mệnh đề USING" — trường hợp
   // sau PostgREST trả về thành công nhưng 0 dòng, không có lỗi. Gắn thêm mã lỗi để phía
   // giao diện coi đây là từ chối từ server (hiện lỗi) chứ không phải mất mạng (xếp hàng).
-  const { data, error } = await supabase.from('orders').update(fields).eq('id', id).select('id');
+  // expectedStatus (tuỳ chọn): khoá tranh chấp — chỉ ghi nếu đơn còn đúng trạng thái đó,
+  // để 2 người bấm "Nhận đơn" cùng lúc không ghi đè âm thầm lên nhau.
+  let query = supabase.from('orders').update(fields).eq('id', id);
+  if (expectedStatus) query = query.eq('status', expectedStatus);
+  const { data, error } = await query.select('id');
   if (error) throw error;
   if (!data || data.length === 0) {
-    const err = new Error('Không cập nhật được đơn hàng — bạn không có quyền hoặc đơn không còn ở trạng thái phù hợp.');
+    const err = new Error(
+      expectedStatus
+        ? 'Đơn đã được người khác nhận hoặc đổi trạng thái — vui lòng tải lại.'
+        : 'Không cập nhật được đơn hàng — bạn không có quyền hoặc đơn không còn ở trạng thái phù hợp.'
+    );
     err.code = 'RLS_NO_ROWS';
     throw err;
   }

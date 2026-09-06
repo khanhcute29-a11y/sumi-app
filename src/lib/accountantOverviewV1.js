@@ -174,8 +174,20 @@ export async function fetchWagesSummaryForMonth(monthKey = monthKeyOf()) {
   };
   (paidAdvancesRes.data || []).forEach((a) => { const row = ensure(a?.employee_id, a?.employee_name); if (row) row.advancePaid += Number(a?.amount) || 0; });
   (recordedClaimsRes.data || []).forEach((c) => { const row = ensure(c?.claimant_id, c?.claimant_name); if (row) row.expensesRecorded += Number(c?.amount) || 0; });
+
+  // payroll_entries không có employee_name — nhân viên chỉ có bản ghi lương
+  // (không tạm ứng/chi hộ trong tháng) trước đây bị bỏ sót hoàn toàn khỏi
+  // bảng vì ensure() chưa từng được gọi cho nhóm này. Gọi ensure() trước,
+  // rồi tra tên thật cho các id mới xuất hiện.
+  const newIds = entries.map((e) => e?.employee_id).filter((id) => id && !byEmployee[id]);
+  let namesById = {};
+  if (newIds.length > 0) {
+    const { data: profs, error: profsErr } = await supabase.from('profiles').select('id, full_name').in('id', [...new Set(newIds)]);
+    if (profsErr) throw profsErr;
+    namesById = Object.fromEntries((profs || []).map((p) => [p.id, p.full_name]));
+  }
   entries.forEach((e) => {
-    const row = byEmployee[e?.employee_id];
+    const row = ensure(e?.employee_id, namesById[e?.employee_id]);
     if (row) {
       row.netPay = (Number(e?.base_pay) || 0) + (Number(e?.overtime_pay) || 0) + (Number(e?.allowance) || 0) + (Number(e?.kpi_bonus) || 0)
         + (Number(e?.output_bonus) || 0) + (Number(e?.delegation_bonus) || 0) + (Number(e?.other_bonus) || 0)

@@ -214,19 +214,20 @@ export async function fetchMyRewardStarsThisMonth(profileId) {
 // Bảng Lương Tháng, khớp đúng kỳ lương (payroll_periods.period_month), KHÔNG
 // phải tháng dương lịch hiện tại như các hàm "ThisMonth" phía trên. ----
 export async function fetchMyStarsSummary(profileId, fromDate, toDate) {
-  const [rewardsRes, violationsRes] = await Promise.all([
-    supabase.from('staff_rewards').select('amount,so_sao').eq('staff_id', profileId)
-      .gte('awarded_on', fromDate).lt('awarded_on', toDate),
-    supabase.from('staff_violations').select('penalty_amount,so_sao').eq('staff_id', profileId)
-      .gte('occurred_on', fromDate).lt('occurred_on', toDate),
-  ]);
-  if (rewardsRes.error) throw rewardsRes.error;
-  if (violationsRes.error) throw violationsRes.error;
-  const thuong = (rewardsRes.data || []).reduce((acc, r) => ({
-    sao: acc.sao + (r.so_sao || Math.round((r.amount || 0) / 1000)), tien: acc.tien + Number(r.amount || 0),
+  // ⚠️ SỬA LỖI THẬT (06/09/2026): trước đọc thẳng staff_rewards/staff_violations
+  // — cùng loại lỗi "hiển thị trùng" đã vá ở fetchMyRewardsTotalThisMonth/
+  // fetchMyRewardStarsThisMonth phía trên (04/09/2026) nhưng bỏ sót hàm này.
+  // Đổi sang đọc cùng view star_transactions để Bảng Lương Tháng khớp số với
+  // Báo cáo ngày.
+  const { data, error } = await supabase
+    .from('star_transactions').select('loai,so_sao,so_tien').eq('staff_id', profileId)
+    .gte('ngay', fromDate).lt('ngay', toDate);
+  if (error) throw error;
+  const thuong = (data || []).filter((r) => r.loai === 'cong').reduce((acc, r) => ({
+    sao: acc.sao + (r.so_sao || 0), tien: acc.tien + Number(r.so_tien || 0),
   }), { sao: 0, tien: 0 });
-  const phat = (violationsRes.data || []).reduce((acc, r) => ({
-    sao: acc.sao + (r.so_sao || Math.round((r.penalty_amount || 0) / 1000)), tien: acc.tien + Number(r.penalty_amount || 0),
+  const phat = (data || []).filter((r) => r.loai === 'tru').reduce((acc, r) => ({
+    sao: acc.sao + (r.so_sao || 0), tien: acc.tien + Number(r.so_tien || 0),
   }), { sao: 0, tien: 0 });
   return { thuong, phat };
 }

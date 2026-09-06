@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button } from '../forms/Button';
 import { uploadFile, completeTask } from '../../lib/queries';
 import { useAuth } from '../../lib/AuthContext';
@@ -9,6 +9,9 @@ export function CompleteTaskModal({ task, onClose, onDone }) {
   const [photoPreview, setPhotoPreview] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // Đóng modal bằng Huỷ (không bấm ✕ xoá ảnh trước) từng làm rò blob URL — dọn khi unmount.
+  useEffect(() => () => { if (photoPreview) URL.revokeObjectURL(photoPreview); }, [photoPreview]);
 
   const handleSave = async () => {
     if (!photo) { setError('Bắt buộc chụp ảnh trước khi hoàn thành việc.'); return; }

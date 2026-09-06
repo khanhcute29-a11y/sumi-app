@@ -45,8 +45,20 @@ export async function processQueue(handlers, onChange) {
       if (handler) await handler(item.payload);
       removeItem(item.id);
       onChange?.();
-    } catch {
-      // Vẫn lỗi (có thể mất mạng lại giữa chừng) — dừng, thử lại ở lần sync kế tiếp.
+    } catch (err) {
+      // Lỗi có mã kèm theo trong lúc đang online (RLS chặn, dữ liệu không còn hợp
+      // lệ...) là từ chối THẬT từ server — thử lại mãi cũng không tự hết. Trước đây
+      // 1 thao tác lỗi kiểu này chặn đứng luôn mọi thao tác xếp sau, im lặng không
+      // báo ai. Bỏ riêng thao tác lỗi này, để các thao tác hợp lệ khác vẫn được đồng
+      // bộ tiếp.
+      const isServerRejection = navigator.onLine && !!err?.code;
+      if (isServerRejection) {
+        removeItem(item.id);
+        onChange?.({ failedItem: item, error: err });
+        continue;
+      }
+      // Lỗi không rõ nguyên nhân (nhiều khả năng mất mạng giữa chừng) — dừng hẳn,
+      // thử lại nguyên hàng đợi ở lần sync kế tiếp.
       break;
     }
   }

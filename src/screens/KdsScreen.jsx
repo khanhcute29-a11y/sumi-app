@@ -464,14 +464,16 @@ export default function KdsScreen({ initialStation }) {
   const isServerRejection = (err) => navigator.onLine && !!err?.code;
 
   // Trả về true nếu thay đổi đã được ghi (hoặc đã xếp hàng offline), false nếu bị từ chối.
-  const applyFields = async (order, fields) => {
+  // expectedStatus (tuỳ chọn): khoá tranh chấp — dùng cho "Nhận đơn" để 2 người bấm cùng
+  // lúc không ghi đè âm thầm lên nhau (xem updateOrder trong lib/queries.js).
+  const applyFields = async (order, fields, expectedStatus) => {
     if (!navigator.onLine) {
       enqueue('updateOrder', { id: order.id, fields });
       setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, ...fields } : o)));
       return true;
     }
     try {
-      await updateOrder(order.id, fields);
+      await updateOrder(order.id, fields, expectedStatus);
       setActionError('');
       load();
       return true;
@@ -491,7 +493,8 @@ export default function KdsScreen({ initialStation }) {
   // cùng lúc), nên các handler dưới đây không tự phát để khỏi kêu chồng.
   const handleAccept = async (order) => {
     const staffName = profile?.full_name || null;
-    await applyFields(order, { status: 'dang_lam', kitchen_staff_name: staffName });
+    const ok = await applyFields(order, { status: 'dang_lam', kitchen_staff_name: staffName }, order.status);
+    if (!ok) return;
 
     if (isUrgent(order) && staffName) {
       addOrderNote({

@@ -71,6 +71,8 @@ export function ProductionLogModal({ onClose, onSaved }) {
   const [error, setError] = useState('');
   const [photo, setPhoto] = useState(null);
   const [photoPreview, setPhotoPreview] = useState('');
+  // Đóng modal bằng Huỷ (không bấm ✕ xoá ảnh trước) từng làm rò blob URL — dọn khi unmount.
+  useEffect(() => () => { if (photoPreview) URL.revokeObjectURL(photoPreview); }, [photoPreview]);
 
   useEffect(() => {
     fetchProducts({ activeOnly: true }).then(setProducts).catch((err) => setError(err.message));
