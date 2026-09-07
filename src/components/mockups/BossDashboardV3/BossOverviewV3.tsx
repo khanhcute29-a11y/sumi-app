@@ -119,6 +119,17 @@ const formatDateTimeVN = (iso: string | null | undefined) => {
 // fetchExpenseAndAdvanceLedgerToday) thành object hiển thị dùng chung cho cả
 // danh sách Sổ Cái và trang chi tiết khoan sâu — giữ đủ dữ liệu thật (ảnh đại
 // diện, nguồn tiền, ảnh chứng từ) để không phải query lại khi bấm vào 1 dòng.
+// ⚠️ SỬA LỖI THẬT (07/09/2026): "Tổng chi"/"Chi hoạt động"/"Tạm ứng" trước
+// cộng dồn amount của MỌI dòng bất kể status — kể cả "⏳ Chờ Sếp duyệt" (chưa
+// duyệt) và "✕ Đã từ chối" (không hề chi) — làm số liệu bị thổi phồng. Khoản
+// chi (expense_claims) tới pending_accounting đã coi là chi thật (nhân viên
+// đã bỏ tiền túi ra mua, chỉ còn chờ kế toán ghi sổ/hoàn ứng), nhưng khoản
+// tạm ứng lương (salary_advance_requests, source='advance') ở pending_accounting
+// nghĩa là kế toán CHƯA chi tiền ra — chỉ tính khi đã 'recorded' (tức 'paid'
+// gốc, xem mapping status trong fetchExpenseAndAdvanceLedgerToday).
+const isCommittedSpend = (c: any) =>
+  c.status === 'recorded' || (c.source !== 'advance' && c.status === 'pending_accounting');
+
 const mapLedgerRow = (c: any) => ({
   id: c.id,
   title: c.description || c.note || 'Khoản chi',
@@ -134,6 +145,7 @@ const mapLedgerRow = (c: any) => ({
   paymentMethod: c.disbursed_payment_method || null,
   receiptUrl: c.disbursed_receipt_url || c.receipt_attachments?.[0]?.url || null,
   reasonText: c.source === 'advance' ? (c.reason || '—') : (c.note || c.description || '—'),
+  counted: isCommittedSpend(c),
 });
 
 // Một dòng nhãn/giá trị trong màn chi tiết yêu cầu duyệt — dùng chung cho cả
@@ -422,7 +434,7 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
         to: `${expenseHistoryTo}T23:59:59.999`,
       });
       setExpenseHistoryStreams(claims.map(mapLedgerRow));
-      setExpenseHistoryTotal(claims.reduce((s: number, c: any) => s + (Number(c.amount) || 0), 0));
+      setExpenseHistoryTotal(claims.filter(isCommittedSpend).reduce((s: number, c: any) => s + (Number(c.amount) || 0), 0));
     } catch (e: any) {
       setExpenseHistoryError(e.message || 'Không tải được lịch sử chi.');
     } finally {
@@ -673,7 +685,7 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
       setDuTinhTotal(duTinh.total);
 
       setExpenseStreams(claims.map(mapLedgerRow));
-      setTotalExpense(claims.reduce((s: number, c: any) => s + (Number(c.amount) || 0), 0));
+      setTotalExpense(claims.filter(isCommittedSpend).reduce((s: number, c: any) => s + (Number(c.amount) || 0), 0));
 
       const mapCommon = (p: any) => ({ id: p.id, name: p.full_name, role: p.role || 'Nhân viên', zone: p.station || 'Chưa gán khu vực', station: p.station || null, avatar: '👤' });
       setStaffList([
@@ -865,9 +877,11 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
     // không chờ round-trip RPC — bấm Duyệt/Từ chối cảm giác tức thì. Nếu RPC
     // lỗi thì phục hồi lại đúng danh sách trước đó (snapshot) và báo lỗi.
     const snapshot = expenseStreams;
-    setExpenseStreams((prev: any[]) => prev.map((e) => (
-      e.id === id ? { ...e, status: approve ? 'pending_accounting' : 'rejected', category: approve ? '✓ Đã duyệt · chờ ghi sổ' : '✕ Đã từ chối' } : e
-    )));
+    setExpenseStreams((prev: any[]) => prev.map((e) => {
+      if (e.id !== id) return e;
+      const patched = { ...e, status: approve ? 'pending_accounting' : 'rejected', category: approve ? '✓ Đã duyệt · chờ ghi sổ' : '✕ Đã từ chối' };
+      return { ...patched, counted: isCommittedSpend(patched) };
+    }));
     try {
       if (source === 'advance') await reviewSalaryAdvance(id, approve);
       else await reviewExpenseClaim(id, approve);
@@ -875,7 +889,7 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
       showToast(approve ? '✓ Sếp đã DUYỆT khoản chi' : '✕ Sếp đã từ chối khoản chi');
       const claims = await fetchExpenseAndAdvanceLedgerToday();
       setExpenseStreams(claims.map(mapLedgerRow));
-      setTotalExpense(claims.reduce((s: number, c: any) => s + (Number(c.amount) || 0), 0));
+      setTotalExpense(claims.filter(isCommittedSpend).reduce((s: number, c: any) => s + (Number(c.amount) || 0), 0));
       if (source === 'advance') setPendingAdvances(await fetchPendingSalaryAdvances());
     } catch (e: any) {
       setExpenseStreams(snapshot);
@@ -1871,8 +1885,8 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
           const activeTotal = expensePeriodTab === 'history' ? expenseHistoryTotal : totalExpense;
           const opStreams = activeStreams.filter((e: any) => e.source !== 'advance');
           const advStreams = activeStreams.filter((e: any) => e.source === 'advance');
-          const opTotal = opStreams.reduce((s: number, e: any) => s + e.amount, 0);
-          const advTotal = advStreams.reduce((s: number, e: any) => s + e.amount, 0);
+          const opTotal = opStreams.filter((e: any) => e.counted).reduce((s: number, e: any) => s + e.amount, 0);
+          const advTotal = advStreams.filter((e: any) => e.counted).reduce((s: number, e: any) => s + e.amount, 0);
           const shown = activeStreams.filter((e: any) => (ledgerTab === 'advance' ? e.source === 'advance' : e.source !== 'advance'));
           return (
             <div className="sheet-overlay" onClick={() => { setActiveSheet(null); setSelectedLedgerItem(null); }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
