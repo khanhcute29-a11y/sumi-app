@@ -21,7 +21,6 @@ const items = [
   { key: 'incidents', label: 'Báo Cáo Sự Cố', Icon: IconWarning },
   { key: 'reports', label: 'Báo Cáo', Icon: IconReports },
   { key: 'kpi', label: 'KPI', Icon: IconClipboard },
-  { key: 'kpiTongQuan', label: 'Tổng Quan KPI', Icon: IconClipboard },
   { key: 'schoolRevenue', label: 'Doanh Thu Trường Học', Icon: IconMoney },
   { key: 'crm', label: 'Khách Hàng', Icon: IconCustomers },
   { key: 'staff', label: 'Nhân Viên', Icon: IconStaff },
