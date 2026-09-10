@@ -189,6 +189,18 @@ export default function KpiTongQuanScreen() {
     <div style={{ padding: 16, maxWidth: 760, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ font: 'var(--text-display-sm)', color: 'var(--text-primary)' }}>📊 Tổng quan KPI</div>
 
+      {/* Chế độ chạy bóng (10/09/2026, theo đề xuất chống gian lận/giữ niềm
+          tin từ bên ngoài): số liệu KPI/thưởng chuyên cần hiện tại chỉ để
+          THAM KHẢO, chưa có nơi nào trong app tự động trừ vào lương thật
+          (fetchWagesSummaryForMonth không đọc star_transactions) — nói rõ
+          điều này ra màn hình để không ai hiểu nhầm đây là số đã chốt. */}
+      <div style={{
+        padding: '10px 14px', borderRadius: 12, background: 'var(--surface-warning-soft, #fff3cd)',
+        color: '#805000', font: 'var(--text-body-sm)', fontWeight: 700,
+      }}>
+        ⚠️ Đang chạy thử — số liệu này chưa dùng để tính thưởng/trừ lương chính thức. Thấy sai vui lòng báo lại.
+      </div>
+
       {laGiamDoc && (
         <div style={{ display: 'flex', gap: 8 }}>
           <button
