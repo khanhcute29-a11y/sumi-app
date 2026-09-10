@@ -91,7 +91,118 @@ function TheDiemKPI({ diem }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Ghi nhận bánh lỗi / khiếu nại khách — 2 nguồn dữ liệu KPI còn thiếu (đã
+// xác nhận trước đó không nơi nào trong app ghi lại việc này). Ai cũng tự
+// khai được cho chính mình (khuyến khích trung thực theo P6.3); gán cho
+// người khác thì RLS chỉ cho giám đốc (product_defect_logs, migration
+// 202609101210). CHƯA nối vào compute_kpi_score — cần vài tuần dữ liệu thật
+// để chốt target/floor, tránh bịa số.
+// ---------------------------------------------------------------------------
+const DANH_MUC_KHIEU_NAI = [
+  { value: 'giao_tre', label: 'Giao trễ' },
+  { value: 'sai_don', label: 'Sai đơn' },
+  { value: 'chat_luong', label: 'Chất lượng' },
+  { value: 'thai_do', label: 'Thái độ phục vụ' },
+  { value: 'khac', label: 'Khác' },
+];
+
+function inputStyle() {
+  return { width: '100%', minHeight: 44, borderRadius: 10, border: '1px solid var(--border-default)', padding: '0 10px', font: 'var(--text-body)' };
+}
+
+function GhiNhanBanhLoi({ staffId, myId, tuKhai, onDaGhi }) {
+  const [mo, setMo] = useState(false);
+  const [ten, setTen] = useState('');
+  const [soLuong, setSoLuong] = useState('1');
+  const [lyDo, setLyDo] = useState('');
+  const [dangLuu, setDangLuu] = useState(false);
+  const [loi, setLoi] = useState('');
+
+  const luu = async () => {
+    if (!ten.trim()) { setLoi('Nhập tên sản phẩm bị lỗi.'); return; }
+    setDangLuu(true); setLoi('');
+    const { error } = await supabase.from('product_defect_logs').insert({
+      staff_id: staffId, reported_by: myId, tu_khai: tuKhai,
+      product_name: ten.trim(), quantity: Number(soLuong) || 1, reason: lyDo.trim() || null,
+    });
+    setDangLuu(false);
+    if (error) { setLoi(error.message); return; }
+    setTen(''); setSoLuong('1'); setLyDo(''); setMo(false);
+    onDaGhi?.();
+  };
+
+  if (!mo) {
+    return (
+      <button onClick={() => setMo(true)} style={{ minHeight: 44, borderRadius: 12, border: '1px dashed var(--border-default)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 700, cursor: 'pointer' }}>
+        + Báo bánh lỗi {tuKhai ? '(tự khai)' : ''}
+      </button>
+    );
+  }
+  return (
+    <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <input placeholder="Tên sản phẩm" value={ten} onChange={(e) => setTen(e.target.value)} style={inputStyle()} />
+      <input type="number" min="1" placeholder="Số lượng" value={soLuong} onChange={(e) => setSoLuong(e.target.value)} style={inputStyle()} />
+      <input placeholder="Lý do (tuỳ chọn)" value={lyDo} onChange={(e) => setLyDo(e.target.value)} style={inputStyle()} />
+      {loi && <div style={{ color: 'var(--status-danger)', font: 'var(--text-body-sm)' }}>{loi}</div>}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button onClick={() => setMo(false)} style={{ flex: 1, minHeight: 40, borderRadius: 10, border: '1px solid var(--border-default)', background: 'transparent', cursor: 'pointer' }}>Huỷ</button>
+        <button onClick={luu} disabled={dangLuu} style={{ flex: 1, minHeight: 40, borderRadius: 10, border: 'none', background: 'var(--status-success)', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>
+          {dangLuu ? 'Đang lưu…' : 'Ghi nhận'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function GhiNhanKhieuNai({ staffId, myId, onDaGhi }) {
+  const [mo, setMo] = useState(false);
+  const [maDon, setMaDon] = useState('');
+  const [danhMuc, setDanhMuc] = useState('giao_tre');
+  const [moTa, setMoTa] = useState('');
+  const [dangLuu, setDangLuu] = useState(false);
+  const [loi, setLoi] = useState('');
+
+  const luu = async () => {
+    if (!moTa.trim()) { setLoi('Mô tả ngắn gọn khiếu nại.'); return; }
+    setDangLuu(true); setLoi('');
+    const { error } = await supabase.from('customer_complaints').insert({
+      staff_id: staffId, created_by: myId, order_code: maDon.trim() || null,
+      category: danhMuc, description: moTa.trim(),
+    });
+    setDangLuu(false);
+    if (error) { setLoi(error.message); return; }
+    setMaDon(''); setMoTa(''); setMo(false);
+    onDaGhi?.();
+  };
+
+  if (!mo) {
+    return (
+      <button onClick={() => setMo(true)} style={{ minHeight: 44, borderRadius: 12, border: '1px dashed var(--border-default)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 700, cursor: 'pointer' }}>
+        + Ghi khiếu nại khách
+      </button>
+    );
+  }
+  return (
+    <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <input placeholder="Mã đơn (tuỳ chọn)" value={maDon} onChange={(e) => setMaDon(e.target.value)} style={inputStyle()} />
+      <select value={danhMuc} onChange={(e) => setDanhMuc(e.target.value)} style={inputStyle()}>
+        {DANH_MUC_KHIEU_NAI.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+      </select>
+      <input placeholder="Mô tả ngắn gọn" value={moTa} onChange={(e) => setMoTa(e.target.value)} style={inputStyle()} />
+      {loi && <div style={{ color: 'var(--status-danger)', font: 'var(--text-body-sm)' }}>{loi}</div>}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button onClick={() => setMo(false)} style={{ flex: 1, minHeight: 40, borderRadius: 10, border: '1px solid var(--border-default)', background: 'transparent', cursor: 'pointer' }}>Huỷ</button>
+        <button onClick={luu} disabled={dangLuu} style={{ flex: 1, minHeight: 40, borderRadius: 10, border: 'none', background: 'var(--status-danger)', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>
+          {dangLuu ? 'Đang lưu…' : 'Ghi nhận'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ChiTietNhanVien({ staffId, from, to }) {
+  const { profile } = useAuth();
   const [data, setData] = useState(null);
   const [diem, setDiem] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -168,6 +279,16 @@ function ChiTietNhanVien({ staffId, from, to }) {
       {data.output_quantity > 0 && (
         <ThongKe label="Sản lượng ghi nhận" value={data.output_quantity} />
       )}
+
+      <div>
+        <div style={{ font: 'var(--text-body-sm)', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>
+          🔧 Ghi nhận dữ liệu mới (chưa tính điểm — đang gom dữ liệu)
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <GhiNhanBanhLoi staffId={staffId} myId={profile?.id} tuKhai={staffId === profile?.id} />
+          <GhiNhanKhieuNai staffId={staffId} myId={profile?.id} />
+        </div>
+      </div>
     </div>
   );
 }
