@@ -172,10 +172,45 @@ function ChiTietNhanVien({ staffId, from, to }) {
   );
 }
 
+const HUY_HIEU_HANG = ['🥇', '🥈', '🥉'];
+
+function DongNhanVien({ r, hang, onChonNhanVien }) {
+  return (
+    <button
+      onClick={() => onChonNhanVien(r.staff_id, r.full_name)}
+      style={{
+        ...cardStyle, textAlign: 'left', cursor: 'pointer', display: 'flex',
+        alignItems: 'center', justifyContent: 'space-between', gap: 10,
+        borderColor: hang <= 3 ? 'var(--status-success)' : undefined,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        {hang <= 3 && <span style={{ fontSize: 22 }}>{HUY_HIEU_HANG[hang - 1]}</span>}
+        <div>
+          <div style={{ fontWeight: 700 }}>{r.full_name}</div>
+          <div style={{ font: 'var(--text-caption)', color: 'var(--text-secondary)' }}>
+            {r.completed_tasks} việc xong{r.late_count > 0 ? ` · ${r.late_count} lần trễ` : ''}
+          </div>
+        </div>
+      </div>
+      <div style={{ textAlign: 'right' }}>
+        {/* Sao ròng đã kẹp sàn 0 ở RPC — không còn ca âm, bỏ nhánh màu đỏ. */}
+        <div style={{ fontWeight: 800, color: 'var(--status-success)' }}>+{r.star_rong_sao} sao</div>
+        <div style={{ font: 'var(--text-caption)', color: 'var(--text-secondary)' }}>{formatTien(r.star_rong_tien)}</div>
+      </div>
+    </button>
+  );
+}
+
 function BangXepHang({ from, to, onChonNhanVien }) {
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // Theo đề xuất bên ngoài (P7.2): chỉ "công khai" Top 3 mặc định — người
+  // xếp cuối không nên bị bêu ngay khi mở màn ra, dễ khiến người ta nản/nghỉ
+  // việc. Giám đốc vẫn xem được TẤT CẢ (họ là người quản lý, cần đủ dữ liệu),
+  // chỉ cần bấm "Xem thêm" chủ động thay vì thấy ngay từ đầu.
+  const [xemHet, setXemHet] = useState(false);
 
   useEffect(() => {
     let huy = false;
@@ -194,30 +229,34 @@ function BangXepHang({ from, to, onChonNhanVien }) {
   if (error) return <div style={{ padding: 12, color: 'var(--status-danger)' }}>⚠️ {error}</div>;
   if (list.length === 0) return <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-secondary)' }}>Chưa có dữ liệu.</div>;
 
+  const top3 = list.slice(0, 3);
+  const conLai = list.slice(3);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {list.map((r) => (
-        <button
-          key={r.staff_id}
-          onClick={() => onChonNhanVien(r.staff_id, r.full_name)}
-          style={{
-            ...cardStyle, textAlign: 'left', cursor: 'pointer', display: 'flex',
-            alignItems: 'center', justifyContent: 'space-between', gap: 10,
-          }}
-        >
-          <div>
-            <div style={{ fontWeight: 700 }}>{r.full_name}</div>
-            <div style={{ font: 'var(--text-caption)', color: 'var(--text-secondary)' }}>
-              {r.completed_tasks} việc xong{r.late_count > 0 ? ` · ${r.late_count} lần trễ` : ''}
-            </div>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            {/* Sao ròng đã kẹp sàn 0 ở RPC — không còn ca âm, bỏ nhánh màu đỏ. */}
-            <div style={{ fontWeight: 800, color: 'var(--status-success)' }}>+{r.star_rong_sao} sao</div>
-            <div style={{ font: 'var(--text-caption)', color: 'var(--text-secondary)' }}>{formatTien(r.star_rong_tien)}</div>
-          </div>
-        </button>
+      <div style={{ font: 'var(--text-body-sm)', fontWeight: 700, color: 'var(--text-secondary)' }}>🏆 Top 3</div>
+      {top3.map((r, i) => (
+        <DongNhanVien key={r.staff_id} r={r} hang={i + 1} onChonNhanVien={onChonNhanVien} />
       ))}
+
+      {conLai.length > 0 && !xemHet && (
+        <button
+          onClick={() => setXemHet(true)}
+          style={{
+            minHeight: 44, borderRadius: 12, border: '1px dashed var(--border-default)',
+            background: 'transparent', color: 'var(--text-secondary)', fontWeight: 700, cursor: 'pointer', marginTop: 6,
+          }}
+        >Xem thêm {conLai.length} người khác (chỉ giám đốc)</button>
+      )}
+
+      {xemHet && conLai.length > 0 && (
+        <>
+          <div style={{ font: 'var(--text-body-sm)', fontWeight: 700, color: 'var(--text-secondary)', marginTop: 6 }}>Còn lại</div>
+          {conLai.map((r, i) => (
+            <DongNhanVien key={r.staff_id} r={r} hang={i + 4} onChonNhanVien={onChonNhanVien} />
+          ))}
+        </>
+      )}
     </div>
   );
 }
