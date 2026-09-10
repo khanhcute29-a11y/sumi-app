@@ -289,17 +289,16 @@ function ChiTietNhanVien({ staffId, from, to }) {
 
       {data.shipper_order_count !== undefined && (
         <div>
+          {/* Nguồn: delivery_runs/delivery_stops (Vận Chuyển V2) — đổi từ
+              orders.shipper_staff_name (đã xác nhận 0 dữ liệu, không còn ai
+              dùng) sang đúng luồng giao hàng đang chạy thật (10/09/2026). */}
           <div style={{ font: 'var(--text-body-sm)', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>🛵 Giao hàng</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <ThongKe label="Số đơn đã giao" value={data.shipper_order_count} />
-            <ThongKe label="Quãng đường GPS" value={`${data.shipper_total_km} km`} />
+            <ThongKe label="Quãng đường" value={`${data.shipper_total_km} km`} />
+            <ThongKe label="Thời gian chạy chuyến" value={formatPhut(data.shipper_total_minutes)} />
             <ThongKe label="Đơn có ảnh chứng minh" value={`${data.shipper_orders_with_proof}/${data.shipper_order_count}`} />
           </div>
-          {data.shipper_order_count > 0 && data.shipper_total_km === 0 && (
-            <div style={{ font: 'var(--text-caption)', color: 'var(--text-secondary)', marginTop: 6 }}>
-              Chưa có toạ độ GPS cho các đơn này — có thể do giao qua luồng Vận Chuyển V2 (delivery_runs), chưa nối vào số liệu này.
-            </div>
-          )}
         </div>
       )}
 
