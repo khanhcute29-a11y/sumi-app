@@ -93,15 +93,21 @@ function ChiTietNhanVien({ staffId, from, to }) {
       </div>
 
       <div>
-        <div style={{ font: 'var(--text-body-sm)', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>🌟 Sao thưởng/phạt (Gieo Hạt)</div>
+        {/* ⚠️ Đổi khung hiển thị (10/09/2026): KHÔNG hiện số âm/"tiền bị trừ"
+            cho phần chưa đạt — tránh đọc như trừ lương (Điều 127 BLLĐ 2019
+            cấm phạt tiền/cắt lương thay kỷ luật lao động). "Chưa đạt" chỉ là
+            chưa đủ điều kiện nhận thưởng chuyên cần, không phải bị lấy lại
+            tiền đã có. Dữ liệu gốc (staff_violations) vẫn giữ nguyên, chỉ
+            đổi cách tổng hợp hiển thị ra đây. */}
+        <div style={{ font: 'var(--text-body-sm)', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>🌟 Thưởng chuyên cần (Gieo Hạt)</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          <ThongKe label="Tổng cộng sao" value={`+${data.star_cong_sao ?? 0} (${formatTien(data.star_cong_tien)})`} mau="var(--status-success)" />
-          <ThongKe label="Tổng trừ sao" value={`-${data.star_tru_sao ?? 0} (${formatTien(data.star_tru_tien)})`} mau="var(--status-danger)" />
+          <ThongKe label="Được cộng" value={`+${data.star_cong_sao ?? 0} sao (${formatTien(data.star_cong_tien)})`} mau="var(--status-success)" />
+          <ThongKe label="Chưa đạt (không trừ lương)" value={`${data.star_chua_dat_sao ?? 0} sao`} />
         </div>
         <div style={{ ...cardStyle, marginTop: 8, textAlign: 'center' }}>
-          <div style={{ font: 'var(--text-caption)', color: 'var(--text-secondary)' }}>Sao ròng</div>
-          <div style={{ font: 'var(--text-display-md)', color: data.star_rong_sao >= 0 ? 'var(--status-success)' : 'var(--status-danger)' }}>
-            {data.star_rong_sao >= 0 ? '+' : ''}{data.star_rong_sao ?? 0} sao · {formatTien(data.star_rong_tien)}
+          <div style={{ font: 'var(--text-caption)', color: 'var(--text-secondary)' }}>Thưởng chuyên cần thực nhận</div>
+          <div style={{ font: 'var(--text-display-md)', color: 'var(--status-success)' }}>
+            +{data.star_rong_sao ?? 0} sao · {formatTien(data.star_rong_tien)}
           </div>
         </div>
       </div>
@@ -153,9 +159,8 @@ function BangXepHang({ from, to, onChonNhanVien }) {
             </div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontWeight: 800, color: r.star_rong_sao >= 0 ? 'var(--status-success)' : 'var(--status-danger)' }}>
-              {r.star_rong_sao >= 0 ? '+' : ''}{r.star_rong_sao} sao
-            </div>
+            {/* Sao ròng đã kẹp sàn 0 ở RPC — không còn ca âm, bỏ nhánh màu đỏ. */}
+            <div style={{ fontWeight: 800, color: 'var(--status-success)' }}>+{r.star_rong_sao} sao</div>
             <div style={{ font: 'var(--text-caption)', color: 'var(--text-secondary)' }}>{formatTien(r.star_rong_tien)}</div>
           </div>
         </button>
