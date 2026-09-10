@@ -45,8 +45,55 @@ function ThongKe({ label, value, mau }) {
   );
 }
 
+// Điểm KPI tổng hợp theo vị trí (đánh giá bên ngoài lần 3) — thay "10 ô số
+// rời" bằng 1 điểm 0-100 giải trình được: chuẩn hoá từng chỉ số, chia lại
+// trọng số khi thiếu dữ liệu (không cho 0 điểm), kẹp trần/sàn. Xem hàm SQL
+// compute_kpi_score (migration 202609101100) để biết công thức đầy đủ.
+const MAU_DIEM = {
+  xanh_la: 'var(--status-success)', xanh_duong: '#2563eb', vang: '#ca8a04',
+  cam: 'var(--status-warning, #ea580c)', do: 'var(--status-danger)',
+};
+
+function TheDiemKPI({ diem }) {
+  if (!diem) return null;
+  if (diem.score === null || diem.score === undefined) {
+    return (
+      <div style={{ ...cardStyle, textAlign: 'center', padding: 20 }}>
+        <div style={{ font: 'var(--text-body)', color: 'var(--text-secondary)', fontWeight: 700 }}>Chưa đủ dữ liệu để tính điểm KPI tổng hợp</div>
+        <div style={{ font: 'var(--text-caption)', color: 'var(--text-secondary)', marginTop: 4 }}>Cần thêm dữ liệu chấm công/công việc trong kỳ này.</div>
+      </div>
+    );
+  }
+  const mau = MAU_DIEM[diem.mau] || 'var(--text-primary)';
+  return (
+    <div style={{ ...cardStyle, textAlign: 'center', padding: 20, borderColor: mau, borderWidth: 2 }}>
+      <div style={{ font: 'var(--text-display-lg)', fontWeight: 900, color: mau }}>{diem.score} / 100</div>
+      <div style={{ font: 'var(--text-body)', fontWeight: 800, color: mau, marginTop: 2 }}>{diem.label}</div>
+      <div style={{ font: 'var(--text-caption)', color: 'var(--text-secondary)', marginTop: 6 }}>
+        Dùng {diem.so_chi_so_dung}/{diem.tong_chi_so} chỉ số (chỉ số thiếu dữ liệu được loại, chia lại trọng số cho phần còn lại)
+      </div>
+      {(diem.chi_tiet || []).length > 0 && (
+        <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left' }}>
+          {diem.chi_tiet.map((c) => (
+            <div key={c.code}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', font: 'var(--text-body-sm)', marginBottom: 3 }}>
+                <span>{c.label} <span style={{ color: 'var(--text-secondary)' }}>(giá trị: {c.gia_tri})</span></span>
+                <span style={{ fontWeight: 700 }}>{c.diem}đ · ×{c.trong_so_thuc}%</span>
+              </div>
+              <div style={{ height: 8, borderRadius: 999, background: 'var(--surface-subtle, #eee)', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${c.diem}%`, background: c.diem < 40 ? 'var(--status-danger)' : mau, borderRadius: 999 }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ChiTietNhanVien({ staffId, from, to }) {
   const [data, setData] = useState(null);
+  const [diem, setDiem] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -54,13 +101,15 @@ function ChiTietNhanVien({ staffId, from, to }) {
     if (!staffId) return;
     let huy = false;
     setLoading(true); setError('');
-    supabase.rpc('get_employee_kpi_overview', { p_staff_id: staffId, p_from: from, p_to: to })
-      .then(({ data: d, error: e }) => {
-        if (huy) return;
-        if (e) setError(e.message || 'Không tải được KPI.');
-        else setData(d);
-      })
-      .finally(() => { if (!huy) setLoading(false); });
+    Promise.all([
+      supabase.rpc('get_employee_kpi_overview', { p_staff_id: staffId, p_from: from, p_to: to }),
+      supabase.rpc('compute_kpi_score', { p_staff_id: staffId, p_from: from, p_to: to }),
+    ]).then(([ov, sc]) => {
+      if (huy) return;
+      if (ov.error) setError(ov.error.message || 'Không tải được KPI.');
+      else setData(ov.data);
+      setDiem(sc.data || null);
+    }).finally(() => { if (!huy) setLoading(false); });
     return () => { huy = true; };
   }, [staffId, from, to]);
 
@@ -70,6 +119,10 @@ function ChiTietNhanVien({ staffId, from, to }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <TheDiemKPI diem={diem} />
+
+      <div style={{ font: 'var(--text-body-sm)', fontWeight: 700, color: 'var(--text-secondary)' }}>Dữ liệu tham khảo (chưa/không tính vào điểm tổng hợp)</div>
+
       <div>
         <div style={{ font: 'var(--text-body-sm)', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>📋 Công việc</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
