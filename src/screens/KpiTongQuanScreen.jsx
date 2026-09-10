@@ -276,8 +276,31 @@ function ChiTietNhanVien({ staffId, from, to }) {
         </div>
       </div>
 
-      {data.output_quantity > 0 && (
-        <ThongKe label="Sản lượng ghi nhận" value={data.output_quantity} />
+      {(data.output_quantity > 0 || data.leave_day_count > 0 || data.coworking_hours > 0) && (
+        <div>
+          <div style={{ font: 'var(--text-body-sm)', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>🧁 Sản xuất & phối hợp</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {data.output_quantity > 0 && <ThongKe label="Sản lượng ghi nhận" value={data.output_quantity} />}
+            {data.leave_day_count > 0 && <ThongKe label="Ngày nghỉ phép" value={data.leave_day_count} />}
+            {data.coworking_hours > 0 && <ThongKe label="Làm cùng nhau" value={`${data.coworking_hours} giờ`} />}
+          </div>
+        </div>
+      )}
+
+      {data.shipper_order_count !== undefined && (
+        <div>
+          <div style={{ font: 'var(--text-body-sm)', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>🛵 Giao hàng</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <ThongKe label="Số đơn đã giao" value={data.shipper_order_count} />
+            <ThongKe label="Quãng đường GPS" value={`${data.shipper_total_km} km`} />
+            <ThongKe label="Đơn có ảnh chứng minh" value={`${data.shipper_orders_with_proof}/${data.shipper_order_count}`} />
+          </div>
+          {data.shipper_order_count > 0 && data.shipper_total_km === 0 && (
+            <div style={{ font: 'var(--text-caption)', color: 'var(--text-secondary)', marginTop: 6 }}>
+              Chưa có toạ độ GPS cho các đơn này — có thể do giao qua luồng Vận Chuyển V2 (delivery_runs), chưa nối vào số liệu này.
+            </div>
+          )}
+        </div>
       )}
 
       <div>
