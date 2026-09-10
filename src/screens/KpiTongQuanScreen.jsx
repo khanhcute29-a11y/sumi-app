@@ -266,7 +266,7 @@ function ChiTietNhanVien({ staffId, from, to }) {
         <div style={{ font: 'var(--text-body-sm)', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>🌟 Thưởng chuyên cần (Gieo Hạt)</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           <ThongKe label="Được cộng" value={`+${data.star_cong_sao ?? 0} sao (${formatTien(data.star_cong_tien)})`} mau="var(--status-success)" />
-          <ThongKe label="Chưa đạt (không trừ lương)" value={`${data.star_chua_dat_sao ?? 0} sao`} />
+          <ThongKe label="Chưa đạt (không trừ lương)" value={`-${data.star_chua_dat_sao ?? 0} sao`} mau="var(--status-danger)" />
         </div>
         <div style={{ ...cardStyle, marginTop: 8, textAlign: 'center' }}>
           <div style={{ font: 'var(--text-caption)', color: 'var(--text-secondary)' }}>Thưởng chuyên cần thực nhận</div>
