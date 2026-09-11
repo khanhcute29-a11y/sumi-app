@@ -938,11 +938,11 @@ function tachToaDo(gpsCoords) {
   return { lat, lng };
 }
 
-export async function addShiftCheckin({ staffId, staffName, workDate, shiftLabel, branch, expectedStart, lateMinutes, wageEarned, reason, photoUrl, gpsCoords, gpsAccuracy }) {
+export async function addShiftCheckin({ staffId, staffName, workDate, shiftLabel, branch, expectedStart, lateMinutes, wageEarned, reason, photoUrl, gpsCoords, gpsAccuracy, checkinTime }) {
   const { lat, lng } = tachToaDo(gpsCoords);
   const { error } = await supabase.from('shift_logs').insert({
     staff_id: staffId, staff_name: staffName, work_date: workDate, shift_label: shiftLabel, branch: branch || null,
-    expected_start: expectedStart, type: 'checkin', checkin_time: new Date().toISOString(),
+    expected_start: expectedStart, type: 'checkin', checkin_time: checkinTime || new Date().toISOString(),
     late_minutes: lateMinutes || 0, wage_earned: wageEarned || 0, reason: reason || null, photo_url: photoUrl || null,
     gps_lat: lat, gps_lng: lng, gps_accuracy_m: Number.isFinite(gpsAccuracy) ? gpsAccuracy : null,
   });
@@ -961,11 +961,11 @@ export async function addLeaveRequest({ staffId, staffName, workDate, shiftLabel
   if (error) throw error;
 }
 
-export async function addShiftCheckout({ staffId, staffName, workDate, shiftLabel, branch, photoUrl, gpsCoords, gpsAccuracy }) {
+export async function addShiftCheckout({ staffId, staffName, workDate, shiftLabel, branch, photoUrl, gpsCoords, gpsAccuracy, checkoutTime }) {
   const { lat, lng } = tachToaDo(gpsCoords);
   const { error } = await supabase.from('shift_logs').insert({
     staff_id: staffId, staff_name: staffName, work_date: workDate, shift_label: shiftLabel, branch: branch || null,
-    type: 'checkout', checkin_time: new Date().toISOString(), photo_url: photoUrl || null,
+    type: 'checkout', checkin_time: checkoutTime || new Date().toISOString(), photo_url: photoUrl || null,
     gps_lat: lat, gps_lng: lng, gps_accuracy_m: Number.isFinite(gpsAccuracy) ? gpsAccuracy : null,
   });
   if (error) {
