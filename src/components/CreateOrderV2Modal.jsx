@@ -310,6 +310,10 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
   const timeStr = String(now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()).padStart(5,'0');
   const orderCode = `SUMI-${dateStr}-${timeStr}`;
   let customerId=null;
+  // Khách ĐÃ có địa chỉ hồ sơ chưa — dùng để quyết định có lưu địa chỉ đơn
+  // này ngược vào hồ sơ khách hay không (chỉ lưu khi hồ sơ đang trống, không
+  // ghi đè địa chỉ đã có — tránh 1 đơn giao chỗ khác làm sai hồ sơ khách).
+  let customerHasAddress=false;
   if(type==='school'){
     if(selectedSchool?.code){
       const {data: schoolCust} = await supabase.from('customers').select('id').eq('school_code', selectedSchool.code).maybeSingle();
@@ -329,12 +333,13 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
     const norm=(s)=>s.trim().toLowerCase().replace(/\s+/g,' ');
     let cust = null;
     if(trimmedPhone){
-      const {data: samePhone} = await supabase.from('customers').select('id,name').eq('phone', trimmedPhone);
+      const {data: samePhone} = await supabase.from('customers').select('id,name,address').eq('phone', trimmedPhone);
       cust = (samePhone||[]).find(c=>norm(c.name||'')===norm(trimmedName)) || null;
     } else if(trimmedName){
-      const {data} = await supabase.from('customers').select('id').eq('name', trimmedName).is('phone', null).maybeSingle();
+      const {data} = await supabase.from('customers').select('id,address').eq('name', trimmedName).is('phone', null).maybeSingle();
       cust = data;
     }
+    customerHasAddress=!!(cust?.address&&cust.address.trim());
     if(!cust) {
       // LỖI THẬT đã vá: trước đây insert kèm `created_by` — cột KHÔNG tồn tại
       // trên bảng `customers` (chỉ `orders`/`customer_debt_entries` mới có),
@@ -379,6 +384,15 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
 
   const {data: orderId, error: orderErr} = await supabase.rpc('create_order_v2',{p_idempotency_key:key,p_order_code:orderCode,p_order_type:isMixed?'mixed':type,p_customer_id:customerId,p_required_at:requiredAt?new Date(requiredAt).toISOString():null,p_fulfillment_method:fulfillment,p_address:fulfillment==='delivery'?address:null,p_note:customerNote||null,p_confidentiality:type==='school'?'school_restricted':'normal',p_items:normalizedItems,p_ship_fee:effectiveShipFee,p_deposit:Number(deposit)||0,p_payment_method:paymentMethod,p_total:grandTotal,p_discount_amount:discountVal,p_promotion_note:type!=='school'?(promotionNote||null):null,p_tax_code:type!=='school'?(taxCode||null):null,p_vat_amount:vatAmount});
   if(orderErr) throw orderErr;
+  // Lưu địa chỉ đơn này ngược vào hồ sơ khách hàng NẾU hồ sơ đang trống —
+  // để lần đặt sau, chọn khách từ gợi ý sẽ tự điền sẵn địa chỉ (chooseCustomer
+  // đã đọc customers.address từ trước, chỉ là trước giờ luôn trống với khách
+  // lẻ nên chưa bao giờ có tác dụng). Không chặn/báo lỗi tạo đơn nếu bước này
+  // thất bại — đơn đã tạo xong là việc chính, lưu địa chỉ chỉ là tiện ích thêm.
+  if(customerId&&fulfillment==='delivery'&&!customerHasAddress&&address&&address.trim()){
+    supabase.from('customers').update({address:address.trim()}).eq('id',customerId)
+      .then(({error:addrErr})=>{ if(addrErr) console.warn('Không lưu được địa chỉ vào hồ sơ khách hàng:',addrErr.message); });
+  }
   for(const file of photos){
     try {
       const cleanExt = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';

@@ -1,17 +1,72 @@
 import React, { useEffect, useState } from 'react';
 import { Input } from '../components/forms/Input';
+import { Button } from '../components/forms/Button';
 import { Tabs } from '../components/navigation/Tabs';
 import { Badge } from '../components/feedback/Badge';
 import { TrustScoreBadge } from '../components/feedback/TrustScoreBadge';
 import { Card } from '../components/data/Card';
-import { fetchCustomers, fetchOrders } from '../lib/queries';
+import { fetchCustomers, fetchOrders, updateCustomerProfile } from '../lib/queries';
 import { formatOrderItemLine } from '../lib/cakePricing';
 import { formatDeliveryDateTime } from '../lib/date';
 import { IconStar, IconClock } from '../components/icons/FrogIcons';
 
 const STATUS_LABELS = { moi: 'Mới', dang_lam: 'Đang làm', cho_giao: 'Chờ giao', dang_giao: 'Đang giao', hoan_thanh: 'Hoàn thành', huy: 'Đã huỷ' };
 
-function CustomerDetailModal({ customer, orders, onClose }) {
+// Form sửa tên/SĐT/địa chỉ khách hàng — trước đây KHÔNG có màn nào cho phép
+// sửa customers.address, nên mọi khách lẻ đều "Chưa có địa chỉ" vĩnh viễn dù
+// đã từng đặt đơn (chỉ tự động lưu được lúc tạo đơn MỚI, xem CreateOrderV2Modal).
+function SuaHoSoKhachHang({ customer, onLuuXong, onHuy }) {
+  const [name, setName] = useState(customer.name || '');
+  const [phone, setPhone] = useState(customer.phone || '');
+  const [address, setAddress] = useState(customer.address || '');
+  const [dangLuu, setDangLuu] = useState(false);
+  const [loi, setLoi] = useState('');
+
+  const luu = async () => {
+    if (!name.trim()) { setLoi('Tên khách hàng không được để trống.'); return; }
+    setDangLuu(true); setLoi('');
+    try {
+      await updateCustomerProfile(customer.id, { name, phone, address });
+      onLuuXong({ ...customer, name: name.trim(), phone: phone.trim() || null, address: address.trim() || null });
+    } catch (e) {
+      setLoi(e?.message || 'Không lưu được — thử lại giúp tôi.');
+    } finally {
+      setDangLuu(false);
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <Input label="Tên khách hàng" value={name} onChange={(e) => setName(e.target.value)} />
+      <Input label="Số điện thoại" value={phone} onChange={(e) => setPhone(e.target.value)} />
+      <Input label="Địa chỉ" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Địa chỉ giao hàng thường dùng" />
+      {loi && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>⚠️ {loi}</div>}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <Button variant="secondary" size="sm" onClick={onHuy} disabled={dangLuu} style={{ flex: 1 }}>Huỷ</Button>
+        <Button variant="primary" size="sm" onClick={luu} disabled={dangLuu} style={{ flex: 1 }}>{dangLuu ? 'Đang lưu…' : 'Lưu'}</Button>
+      </div>
+    </div>
+  );
+}
+
+function CustomerDetailModal({ customer, orders, onClose, onCustomerUpdated }) {
+  const [dangSua, setDangSua] = useState(false);
+
+  if (dangSua) {
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 16 }} onClick={onClose}>
+        <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: 480, maxWidth: '100%', padding: 20, boxShadow: 'var(--shadow-lg)' }} onClick={(e) => e.stopPropagation()}>
+          <div style={{ font: 'var(--text-title)', color: 'var(--text-primary)', marginBottom: 12 }}>Sửa hồ sơ khách hàng</div>
+          <SuaHoSoKhachHang
+            customer={customer}
+            onHuy={() => setDangSua(false)}
+            onLuuXong={(updated) => { onCustomerUpdated(updated); setDangSua(false); }}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 16 }} onClick={onClose}>
       <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: 480, maxWidth: '100%', maxHeight: '86vh', overflowY: 'auto', padding: 20, boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 12 }} onClick={(e) => e.stopPropagation()}>
@@ -21,8 +76,12 @@ function CustomerDetailModal({ customer, orders, onClose }) {
               {customer.name}{customer.vip && <Badge tone="primary" icon={<IconStar size={13} />}>VIP</Badge>}
             </div>
             <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>{customer.phone ? `SĐT: ${customer.phone}` : '—'}{customer.channel ? ` · ${customer.channel}` : ''}</div>
+            <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>{customer.address ? `📍 ${customer.address}` : '📍 Chưa có địa chỉ'}</div>
           </div>
-          <button onClick={onClose} style={{ border: 'none', background: 'none', color: 'var(--text-muted)', fontSize: 18, cursor: 'pointer' }}>✕</button>
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+            <button onClick={() => setDangSua(true)} style={{ border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-primary)', borderRadius: 'var(--radius-sm)', padding: '4px 10px', font: 'var(--text-body-sm)', cursor: 'pointer' }}>Sửa</button>
+            <button onClick={onClose} style={{ border: 'none', background: 'none', color: 'var(--text-muted)', fontSize: 18, cursor: 'pointer' }}>✕</button>
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <TrustScoreBadge score={customer.trust_score} locked={customer.locked} noData={orders.length === 0} />
@@ -134,7 +193,15 @@ export default function CustomersScreen() {
         </div>
       )}
       {selected && (
-        <CustomerDetailModal customer={selected} orders={orders.filter((o) => o.customer_id === selected.id)} onClose={() => setSelected(null)} />
+        <CustomerDetailModal
+          customer={selected}
+          orders={orders.filter((o) => o.customer_id === selected.id)}
+          onClose={() => setSelected(null)}
+          onCustomerUpdated={(updated) => {
+            setSelected(updated);
+            setCustomers((prev) => prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)));
+          }}
+        />
       )}
     </div>
   );
