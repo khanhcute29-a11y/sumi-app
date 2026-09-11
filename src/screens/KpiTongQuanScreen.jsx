@@ -4,6 +4,7 @@ import { useAuth } from '../lib/AuthContext';
 import { hasAnyRole } from '../lib/roles';
 import { localDateStr } from '../lib/date';
 import SoKetToanKpi from '../components/tasks/v2/SoKetToanKpi';
+import { IconDashboard, IconClipboard, IconClock, IconCake, IconTruck, IconStar, IconSettings, IconMapPin, IconWarning } from '../components/icons/FrogIcons';
 
 // Tổng quan KPI — 1 màn xem đủ mọi mặt của 1 nhân viên (việc, giờ làm/tăng
 // ca, chuyên cần, sao thưởng/phạt), theo khoảng ngày tự chọn. Giám đốc xem
@@ -29,6 +30,29 @@ function formatTien(n) {
 function formatPhut(m) {
   const so = Number(m || 0);
   return `${Math.floor(so / 60)} giờ ${so % 60} phút`;
+}
+
+function TieuDeMuc({ Icon, children }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, font: 'var(--text-body-sm)', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>
+      <Icon size={16} />
+      <span>{children}</span>
+    </div>
+  );
+}
+
+function formatGio(iso) {
+  if (!iso) return null;
+  return new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+}
+const TEN_THU_DAY_DU = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+function formatNgayNgan(ngay) {
+  if (!ngay) return '';
+  const d = new Date(`${ngay}T00:00:00`);
+  return `${TEN_THU_DAY_DU[d.getDay()]}, ${d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+}
+function linkBanDo(lat, lng) {
+  return `https://www.google.com/maps?q=${lat},${lng}`;
 }
 
 const cardStyle = {
@@ -69,9 +93,6 @@ function TheDiemKPI({ diem }) {
     <div style={{ ...cardStyle, textAlign: 'center', padding: 20, borderColor: mau, borderWidth: 2 }}>
       <div style={{ font: 'var(--text-display-lg)', fontWeight: 900, color: mau }}>{diem.score} / 100</div>
       <div style={{ font: 'var(--text-body)', fontWeight: 800, color: mau, marginTop: 2 }}>{diem.label}</div>
-      <div style={{ font: 'var(--text-caption)', color: 'var(--text-secondary)', marginTop: 6 }}>
-        Dùng {diem.so_chi_so_dung}/{diem.tong_chi_so} chỉ số (chỉ số thiếu dữ liệu được loại, chia lại trọng số cho phần còn lại)
-      </div>
       {(diem.chi_tiet || []).length > 0 && (
         <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left' }}>
           {diem.chi_tiet.map((c) => (
@@ -201,10 +222,87 @@ function GhiNhanKhieuNai({ staffId, myId, onDaGhi }) {
   );
 }
 
+const SO_DONG_MOI_LAN = 7;
+
+function DongChamCa({ d }) {
+  const dangThieuRa = d.trang_thai === 'missing_checkout';
+  const laNghi = d.trang_thai === 'leave';
+  return (
+    <div style={{ ...cardStyle, padding: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontWeight: 700, font: 'var(--text-body-sm)' }}>{formatNgayNgan(d.work_date)}</span>
+        <span style={{ font: 'var(--text-caption)', color: 'var(--text-secondary)' }}>{d.shift_label || ''}{d.branch ? ` · ${d.branch}` : ''}</span>
+      </div>
+      {laNghi ? (
+        <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-secondary)', fontWeight: 700 }}>🌴 Xin nghỉ</div>
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ font: 'var(--text-body)', fontWeight: 700 }}>
+            {formatGio(d.vao)} → {dangThieuRa ? <span style={{ color: 'var(--status-warning, #ca8a04)' }}>chưa chấm ra</span> : formatGio(d.ra)}
+          </span>
+          {d.late_minutes > 0 && (
+            <span style={{
+              font: 'var(--text-caption)', color: 'var(--status-danger)', fontWeight: 700,
+              background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 6, padding: '2px 8px',
+            }}>Trễ {d.late_minutes} phút</span>
+          )}
+          <span style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
+            {d.vao_lat != null && d.vao_lng != null && (
+              <a href={linkBanDo(d.vao_lat, d.vao_lng)} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 3, font: 'var(--text-caption)', color: 'var(--text-brand)', fontWeight: 700, textDecoration: 'none' }}><IconMapPin size={13} /> Vào</a>
+            )}
+            {d.ra_lat != null && d.ra_lng != null && (
+              <a href={linkBanDo(d.ra_lat, d.ra_lng)} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 3, font: 'var(--text-caption)', color: 'var(--text-brand)', fontWeight: 700, textDecoration: 'none' }}><IconMapPin size={13} /> Ra</a>
+            )}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChiTietChamCa({ list }) {
+  const [mo, setMo] = useState(false);
+  const [soHien, setSoHien] = useState(SO_DONG_MOI_LAN);
+  const soLuong = list?.length || 0;
+
+  return (
+    <div>
+      <button
+        onClick={() => setMo((v) => !v)}
+        style={{
+          width: '100%', minHeight: 44, borderRadius: 10, border: '1px solid var(--border-default)',
+          background: 'var(--surface-card)', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '0 12px', cursor: 'pointer', font: 'var(--text-body-sm)', fontWeight: 700, color: 'var(--text-primary)',
+        }}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><IconClock size={16} /> Chi tiết chấm ca {soLuong > 0 ? `(${soLuong})` : ''}</span>
+        <span style={{ color: 'var(--text-secondary)' }}>{mo ? '▲ Thu gọn' : '▼ Xem'}</span>
+      </button>
+
+      {mo && (
+        soLuong === 0 ? (
+          <div style={{ marginTop: 8, font: 'var(--text-body-sm)', color: 'var(--text-secondary)' }}>Chưa có dữ liệu chấm công trong khoảng ngày này.</div>
+        ) : (
+          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {list.slice(0, soHien).map((d) => <DongChamCa key={d.id || `${d.work_date}-${d.vao}`} d={d} />)}
+            {soHien < soLuong && (
+              <button
+                onClick={() => setSoHien((n) => n + SO_DONG_MOI_LAN)}
+                style={{ minHeight: 40, borderRadius: 10, border: '1px dashed var(--border-default)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 700, cursor: 'pointer' }}
+              >Xem thêm {Math.min(soLuong - soHien, SO_DONG_MOI_LAN)} ngày</button>
+            )}
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
 function ChiTietNhanVien({ staffId, from, to }) {
   const { profile } = useAuth();
   const [data, setData] = useState(null);
   const [diem, setDiem] = useState(null);
+  const [chamCa, setChamCa] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -215,17 +313,19 @@ function ChiTietNhanVien({ staffId, from, to }) {
     Promise.all([
       supabase.rpc('get_employee_kpi_overview', { p_staff_id: staffId, p_from: from, p_to: to }),
       supabase.rpc('compute_kpi_score', { p_staff_id: staffId, p_from: from, p_to: to }),
-    ]).then(([ov, sc]) => {
+      supabase.rpc('get_staff_attendance_detail', { p_staff_id: staffId, p_from: from, p_to: to }),
+    ]).then(([ov, sc, cc]) => {
       if (huy) return;
       if (ov.error) setError(ov.error.message || 'Không tải được KPI.');
       else setData(ov.data);
       setDiem(sc.data || null);
+      setChamCa(cc.data || []);
     }).finally(() => { if (!huy) setLoading(false); });
     return () => { huy = true; };
   }, [staffId, from, to]);
 
   if (loading) return <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-secondary)' }}>Đang tải…</div>;
-  if (error) return <div style={{ padding: 12, color: 'var(--status-danger)' }}>⚠️ {error}</div>;
+  if (error) return <div style={{ padding: 12, color: 'var(--status-danger)', display: 'flex', alignItems: 'center', gap: 6 }}><IconWarning size={16} /> {error}</div>;
   if (!data) return null;
 
   return (
@@ -235,7 +335,7 @@ function ChiTietNhanVien({ staffId, from, to }) {
       <div style={{ font: 'var(--text-body-sm)', fontWeight: 700, color: 'var(--text-secondary)' }}>Dữ liệu tham khảo (chưa/không tính vào điểm tổng hợp)</div>
 
       <div>
-        <div style={{ font: 'var(--text-body-sm)', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>📋 Công việc</div>
+        <TieuDeMuc Icon={IconClipboard}>Công việc</TieuDeMuc>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           <ThongKe label="Tỷ lệ hoàn thành" value={`${data.completion_rate ?? 0}%`} mau="var(--status-success)" />
           <ThongKe label="Việc được giao" value={data.assigned_tasks ?? 0} />
@@ -247,38 +347,21 @@ function ChiTietNhanVien({ staffId, from, to }) {
       </div>
 
       <div>
-        <div style={{ font: 'var(--text-body-sm)', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>⏱️ Giờ làm & Chuyên cần</div>
+        <TieuDeMuc Icon={IconClock}>Giờ làm & Chuyên cần</TieuDeMuc>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           <ThongKe label="Ngày làm việc" value={data.work_days ?? 0} />
           <ThongKe label="Tổng giờ làm" value={formatPhut(data.work_minutes)} />
           <ThongKe label="Tăng ca" value={formatPhut(data.overtime_minutes)} />
           <ThongKe label="Số lần đi trễ" value={data.late_count ?? 0} mau={data.late_count > 0 ? 'var(--status-danger)' : undefined} />
         </div>
-      </div>
-
-      <div>
-        {/* ⚠️ Đổi khung hiển thị (10/09/2026): KHÔNG hiện số âm/"tiền bị trừ"
-            cho phần chưa đạt — tránh đọc như trừ lương (Điều 127 BLLĐ 2019
-            cấm phạt tiền/cắt lương thay kỷ luật lao động). "Chưa đạt" chỉ là
-            chưa đủ điều kiện nhận thưởng chuyên cần, không phải bị lấy lại
-            tiền đã có. Dữ liệu gốc (staff_violations) vẫn giữ nguyên, chỉ
-            đổi cách tổng hợp hiển thị ra đây. */}
-        <div style={{ font: 'var(--text-body-sm)', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>🌟 Thưởng chuyên cần (Gieo Hạt)</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          <ThongKe label="Được cộng" value={`+${data.star_cong_sao ?? 0} sao (${formatTien(data.star_cong_tien)})`} mau="var(--status-success)" />
-          <ThongKe label="Chưa đạt (không trừ lương)" value={`-${data.star_chua_dat_sao ?? 0} sao`} mau="var(--status-danger)" />
-        </div>
-        <div style={{ ...cardStyle, marginTop: 8, textAlign: 'center' }}>
-          <div style={{ font: 'var(--text-caption)', color: 'var(--text-secondary)' }}>Thưởng chuyên cần thực nhận</div>
-          <div style={{ font: 'var(--text-display-md)', color: 'var(--status-success)' }}>
-            +{data.star_rong_sao ?? 0} sao · {formatTien(data.star_rong_tien)}
-          </div>
+        <div style={{ marginTop: 10 }}>
+          <ChiTietChamCa list={chamCa} />
         </div>
       </div>
 
       {(data.output_quantity > 0 || data.leave_day_count > 0 || data.coworking_hours > 0) && (
         <div>
-          <div style={{ font: 'var(--text-body-sm)', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>🧁 Sản xuất & phối hợp</div>
+          <TieuDeMuc Icon={IconCake}>Sản xuất & phối hợp</TieuDeMuc>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             {data.output_quantity > 0 && <ThongKe label="Sản lượng ghi nhận" value={data.output_quantity} />}
             {data.leave_day_count > 0 && <ThongKe label="Ngày nghỉ phép" value={data.leave_day_count} />}
@@ -292,7 +375,7 @@ function ChiTietNhanVien({ staffId, from, to }) {
           {/* Nguồn: delivery_runs/delivery_stops (Vận Chuyển V2) — đổi từ
               orders.shipper_staff_name (đã xác nhận 0 dữ liệu, không còn ai
               dùng) sang đúng luồng giao hàng đang chạy thật (10/09/2026). */}
-          <div style={{ font: 'var(--text-body-sm)', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>🛵 Giao hàng</div>
+          <TieuDeMuc Icon={IconTruck}>Giao hàng</TieuDeMuc>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <ThongKe label="Số đơn đã giao" value={data.shipper_order_count} />
             <ThongKe label="Quãng đường" value={`${data.shipper_total_km} km`} />
@@ -303,9 +386,30 @@ function ChiTietNhanVien({ staffId, from, to }) {
       )}
 
       <div>
-        <div style={{ font: 'var(--text-body-sm)', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>
-          🔧 Ghi nhận dữ liệu mới (chưa tính điểm — đang gom dữ liệu)
+        {/* ⚠️ Đổi khung hiển thị (10/09/2026): KHÔNG hiện số âm/"tiền bị trừ"
+            cho phần chưa đạt — tránh đọc như trừ lương (Điều 127 BLLĐ 2019
+            cấm phạt tiền/cắt lương thay kỷ luật lao động). "Chưa đạt" chỉ là
+            chưa đủ điều kiện nhận thưởng chuyên cần, không phải bị lấy lại
+            tiền đã có. Dữ liệu gốc (staff_violations) vẫn giữ nguyên, chỉ
+            đổi cách tổng hợp hiển thị ra đây.
+            (11/09/2026: chuyển xuống dưới cùng theo yêu cầu sếp, đứng trên
+            phần "Ghi nhận dữ liệu mới" — chỉ đổi thứ tự hiển thị, không đổi
+            số liệu/logic tính.) */}
+        <TieuDeMuc Icon={IconStar}>Thưởng chuyên cần (Gieo Hạt)</TieuDeMuc>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <ThongKe label="Được cộng" value={`+${data.star_cong_sao ?? 0} sao (${formatTien(data.star_cong_tien)})`} mau="var(--status-success)" />
+          <ThongKe label="Chưa đạt (không trừ lương)" value={`-${data.star_chua_dat_sao ?? 0} sao`} mau="var(--status-danger)" />
         </div>
+        <div style={{ ...cardStyle, marginTop: 8, textAlign: 'center' }}>
+          <div style={{ font: 'var(--text-caption)', color: 'var(--text-secondary)' }}>Thưởng chuyên cần thực nhận</div>
+          <div style={{ font: 'var(--text-display-md)', color: 'var(--status-success)' }}>
+            +{data.star_rong_sao ?? 0} sao · {formatTien(data.star_rong_tien)}
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <TieuDeMuc Icon={IconSettings}>Ghi nhận dữ liệu mới (chưa tính điểm — đang gom dữ liệu)</TieuDeMuc>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <GhiNhanBanhLoi staffId={staffId} myId={profile?.id} tuKhai={staffId === profile?.id} />
           <GhiNhanKhieuNai staffId={staffId} myId={profile?.id} />
@@ -369,7 +473,7 @@ function BangXepHang({ from, to, onChonNhanVien }) {
   }, [from, to]);
 
   if (loading) return <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-secondary)' }}>Đang tải…</div>;
-  if (error) return <div style={{ padding: 12, color: 'var(--status-danger)' }}>⚠️ {error}</div>;
+  if (error) return <div style={{ padding: 12, color: 'var(--status-danger)', display: 'flex', alignItems: 'center', gap: 6 }}><IconWarning size={16} /> {error}</div>;
   if (list.length === 0) return <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-secondary)' }}>Chưa có dữ liệu.</div>;
 
   const top3 = list.slice(0, 3);
@@ -422,7 +526,7 @@ export default function KpiTongQuanScreen() {
 
   return (
     <div style={{ padding: 16, maxWidth: 760, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ font: 'var(--text-display-sm)', color: 'var(--text-primary)' }}>📊 Tổng quan KPI</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, font: 'var(--text-display-sm)', color: 'var(--text-primary)' }}><IconDashboard size={22} /> Tổng quan KPI</div>
 
       {/* Chế độ chạy bóng (10/09/2026, theo đề xuất chống gian lận/giữ niềm
           tin từ bên ngoài): số liệu KPI/thưởng chuyên cần hiện tại chỉ để
@@ -432,8 +536,9 @@ export default function KpiTongQuanScreen() {
       <div style={{
         padding: '10px 14px', borderRadius: 12, background: 'var(--surface-warning-soft, #fff3cd)',
         color: '#805000', font: 'var(--text-body-sm)', fontWeight: 700,
+        display: 'flex', alignItems: 'center', gap: 6,
       }}>
-        ⚠️ Đang chạy thử — số liệu này chưa dùng để tính thưởng/trừ lương chính thức. Thấy sai vui lòng báo lại.
+        <IconWarning size={16} /> Đang chạy thử — số liệu này chưa dùng để tính thưởng/trừ lương chính thức. Thấy sai vui lòng báo lại.
       </div>
 
       {laGiamDoc && (
