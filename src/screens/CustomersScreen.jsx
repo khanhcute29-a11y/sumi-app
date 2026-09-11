@@ -129,6 +129,9 @@ function CustomerRow({ c, onOpen }) {
         <TrustScoreBadge score={c.trust_score} locked={c.locked} noData={c.orderCount === 0} style={{ flexShrink: 0, whiteSpace: 'nowrap' }} />
       </div>
       <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>{c.phone ? `SĐT: ${c.phone}` : '—'}{c.channel ? ` · ${c.channel}` : ''}</div>
+      <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        📍 {c.address || 'Chưa có địa chỉ'}
+      </div>
       <div style={{ font: 'var(--text-caption)', color: 'var(--text-muted)', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         <span>{c.orderCount} đơn</span>
         <span>·</span>
