@@ -354,6 +354,15 @@ function ChiTietNhanVien({ staffId, from, to }) {
           <ThongKe label="Tăng ca" value={formatPhut(data.overtime_minutes)} />
           <ThongKe label="Số lần đi trễ" value={data.late_count ?? 0} mau={data.late_count > 0 ? 'var(--status-danger)' : undefined} />
         </div>
+        {data.missing_checkout_count > 0 && (
+          <div style={{
+            marginTop: 10, padding: '10px 12px', borderRadius: 10, background: '#fee2e2', border: '1px solid #fca5a5',
+            color: '#b42318', font: 'var(--text-body-sm)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <IconWarning size={16} />
+            {data.missing_checkout_count} ca quên chấm ra trong khoảng ngày này — giờ làm phiên đó chưa được cộng vào tổng, nhắc nhân viên bổ sung.
+          </div>
+        )}
         <div style={{ marginTop: 10 }}>
           <ChiTietChamCa list={chamCa} />
         </div>
