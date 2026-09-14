@@ -51,6 +51,22 @@ function ProductNameField({item,products,flowType,onChange}){
  </div>;
 }
 
+const SCHOOL_SPEC_OPTIONS=['Bịch','Thùng'];
+function SchoolSpecField({value,onChange}){
+ const [open,setOpen]=useState(false); const wrap=useRef(null);
+ useEffect(()=>{if(!open)return;const close=e=>{if(wrap.current&&!wrap.current.contains(e.target))setOpen(false)};document.addEventListener('pointerdown',close);return()=>document.removeEventListener('pointerdown',close)},[open]);
+ const q=normalizeSearch(value||'');
+ const matches=SCHOOL_SPEC_OPTIONS.filter(o=>!q||normalizeSearch(o).includes(q));
+ return <div className="sumi-product-combobox" ref={wrap}>
+  <input style={fieldStyle} autoComplete="off" placeholder="Quy cách (Bịch/Thùng hoặc gõ tự do)" value={value||''} onFocus={()=>setOpen(true)} onChange={e=>{onChange(e.target.value);setOpen(true)}} aria-expanded={open}/>
+  {open&&<div className="sumi-product-options">
+   {matches.map(o=><button type="button" key={o} onClick={()=>{onChange(o);setOpen(false)}}><span>📦</span><b>{o}</b></button>)}
+   {value?.trim()&&!SCHOOL_SPEC_OPTIONS.includes(value.trim())&&<button type="button" className="manual" onClick={()=>setOpen(false)}><span>✍️</span><b>Dùng “{value.trim()}”</b><small>Chưa có trong danh sách · vẫn dùng bình thường</small></button>}
+   {!matches.length&&!value?.trim()&&<p>Gõ để tìm hoặc chọn Bịch/Thùng.</p>}
+  </div>}
+ </div>;
+}
+
 function OrderPreviewV2({type,customerName,customerPhone,selectedSchool,items,guestCount,fulfillment,address,requiredAt,note,itemsTotal,shipFee,paymentMethod,deposit,grandTotal,remaining,discountAmount,promotionNote,taxCode,vatAmount}){
  const itemSpecLine=(it)=>{
   const s=it.specification||{};
@@ -546,7 +562,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
       </div>
       <input style={{...fieldStyle,gridColumn:'1 / -1'}} placeholder="Ghi chú thêm về màu/nhân (VD: đỏ 4 khay, xanh 6 khay...)" value={it.specification?.color||''} onChange={e=>spec(itemIndex,'color',e.target.value)}/>
      </>}
-     {(it.flow_type||type)==='school'&&<>{it.variants?.length?<select style={fieldStyle} value={it.specification?.size||''} onChange={e=>{const v=it.variants.find(x=>x.label===e.target.value);changeMany(itemIndex,{unit_price:v?.price??null,specification:{...it.specification,size:e.target.value}})}}><option value="">Chọn trọng lượng...</option>{it.variants.map(v=><option key={v.id} value={v.label}>{v.label} — {Number(v.price).toLocaleString('vi-VN')}đ</option>)}</select>:<input style={fieldStyle} placeholder="Quy cách" value={it.specification?.spec||''} onChange={e=>spec(itemIndex,'spec',e.target.value)}/>}<input style={fieldStyle} inputMode="numeric" placeholder="Hoặc nhập giá tay (VD: 8.500)" value={fmtMoney(it.unit_price)} onChange={e=>change(itemIndex,'unit_price',parseMoney(e.target.value))}/><input style={fieldStyle} placeholder="Khối/lớp/ghi chú" value={it.specification?.grade_note||''} onChange={e=>spec(itemIndex,'grade_note',e.target.value)}/></>}
+     {(it.flow_type||type)==='school'&&<>{it.variants?.length?<select style={fieldStyle} value={it.specification?.size||''} onChange={e=>{const v=it.variants.find(x=>x.label===e.target.value);changeMany(itemIndex,{unit_price:v?.price??null,specification:{...it.specification,size:e.target.value}})}}><option value="">Chọn trọng lượng...</option>{it.variants.map(v=><option key={v.id} value={v.label}>{v.label} — {Number(v.price).toLocaleString('vi-VN')}đ</option>)}</select>:<SchoolSpecField value={it.specification?.spec} onChange={v=>spec(itemIndex,'spec',v)}/>}<input style={fieldStyle} inputMode="numeric" placeholder="Hoặc nhập giá tay (VD: 8.500)" value={fmtMoney(it.unit_price)} onChange={e=>change(itemIndex,'unit_price',parseMoney(e.target.value))}/></>}
      {(it.flow_type||type)!=='school'&&!((it.flow_type||type)==='bakery'&&it.specification?.product_line==='moon_cake')&&<input style={fieldStyle} inputMode="numeric" placeholder="Đơn giá (có thể để trống)" value={fmtMoney(it.unit_price)} onChange={e=>change(itemIndex,'unit_price',parseMoney(e.target.value))}/>}
     </div>{items.length>1&&<button onClick={()=>setItems(x=>x.filter((_,n)=>n!==itemIndex))} style={{marginTop:8,minHeight:44,color:'#b42318',border:0,background:'none',cursor:'pointer',fontWeight:600}}>✕ Xóa sản phẩm</button>}
    </div>;})}
