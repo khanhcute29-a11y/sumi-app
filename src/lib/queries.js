@@ -102,11 +102,13 @@ export async function findOrCreateCustomer({ name, phone, channel }) {
 // Sửa hồ sơ khách hàng (tên/SĐT/địa chỉ) — dùng ở màn Khách Hàng. RLS chỉ
 // cho owner/cashier/admin/sale được update bảng customers, các vai trò khác
 // gọi hàm này sẽ nhận lỗi quyền từ Supabase (ném ra để UI tự hiện thông báo).
-export async function updateCustomerProfile(id, { name, phone, address }) {
+export async function updateCustomerProfile(id, { name, phone, address, taxCode, schoolCode }) {
   const { error } = await supabase.from('customers').update({
     name: name?.trim() || null,
     phone: phone?.trim() || null,
     address: address?.trim() || null,
+    tax_code: taxCode?.trim() || null,
+    school_code: schoolCode?.trim() || null,
   }).eq('id', id);
   if (error) throw error;
 }

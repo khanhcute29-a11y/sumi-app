@@ -19,6 +19,8 @@ function SuaHoSoKhachHang({ customer, onLuuXong, onHuy }) {
   const [name, setName] = useState(customer.name || '');
   const [phone, setPhone] = useState(customer.phone || '');
   const [address, setAddress] = useState(customer.address || '');
+  const [taxCode, setTaxCode] = useState(customer.tax_code || '');
+  const [schoolCode, setSchoolCode] = useState(customer.school_code || '');
   const [dangLuu, setDangLuu] = useState(false);
   const [loi, setLoi] = useState('');
 
@@ -26,8 +28,11 @@ function SuaHoSoKhachHang({ customer, onLuuXong, onHuy }) {
     if (!name.trim()) { setLoi('Tên khách hàng không được để trống.'); return; }
     setDangLuu(true); setLoi('');
     try {
-      await updateCustomerProfile(customer.id, { name, phone, address });
-      onLuuXong({ ...customer, name: name.trim(), phone: phone.trim() || null, address: address.trim() || null });
+      await updateCustomerProfile(customer.id, { name, phone, address, taxCode, schoolCode });
+      onLuuXong({
+        ...customer, name: name.trim(), phone: phone.trim() || null, address: address.trim() || null,
+        tax_code: taxCode.trim() || null, school_code: schoolCode.trim() || null,
+      });
     } catch (e) {
       setLoi(e?.message || 'Không lưu được — thử lại giúp tôi.');
     } finally {
@@ -40,6 +45,10 @@ function SuaHoSoKhachHang({ customer, onLuuXong, onHuy }) {
       <Input label="Tên khách hàng" value={name} onChange={(e) => setName(e.target.value)} />
       <Input label="Số điện thoại" value={phone} onChange={(e) => setPhone(e.target.value)} />
       <Input label="Địa chỉ" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Địa chỉ giao hàng thường dùng" />
+      <Input label="Mã số thuế" value={taxCode} onChange={(e) => setTaxCode(e.target.value)} placeholder="Dùng khi xuất hoá đơn / đối chiếu công nợ trường" />
+      {customer.is_school && (
+        <Input label="Mã trường" value={schoolCode} onChange={(e) => setSchoolCode(e.target.value)} placeholder="Mã trường dùng nội bộ" />
+      )}
       {loi && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>⚠️ {loi}</div>}
       <div style={{ display: 'flex', gap: 8 }}>
         <Button variant="secondary" size="sm" onClick={onHuy} disabled={dangLuu} style={{ flex: 1 }}>Huỷ</Button>
@@ -77,6 +86,9 @@ function CustomerDetailModal({ customer, orders, onClose, onCustomerUpdated }) {
             </div>
             <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>{customer.phone ? `SĐT: ${customer.phone}` : '—'}{customer.channel ? ` · ${customer.channel}` : ''}</div>
             <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>{customer.address ? `📍 ${customer.address}` : '📍 Chưa có địa chỉ'}</div>
+            <div style={{ font: 'var(--text-body-sm)', color: 'var(--text-muted)' }}>
+              MST: {customer.tax_code || '—'}{customer.is_school ? ` · Mã trường: ${customer.school_code || '—'}` : ''}
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
             <button onClick={() => setDangSua(true)} style={{ border: '1px solid var(--border-default)', background: 'none', color: 'var(--text-primary)', borderRadius: 'var(--radius-sm)', padding: '4px 10px', font: 'var(--text-body-sm)', cursor: 'pointer' }}>Sửa</button>
