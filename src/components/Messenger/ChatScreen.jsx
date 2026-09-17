@@ -125,6 +125,26 @@ export default function ChatScreen({ profile }) {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
+  // LỖI THẬT đã vá (báo lại 17/9/2026): bàn phím iOS Safari mở lên không co
+  // lại layout viewport (100dvh không tự động trừ chiều cao bàn phím), làm
+  // thanh điều hướng dưới cùng (BottomNav — nằm ngoài file Chat) bị đẩy/nhảy
+  // lên giữa màn hình. Bám sát window.visualViewport để biết CHÍNH XÁC chiều
+  // cao còn hiển thị (đã trừ bàn phím) và tự đặt height bằng px cho khung
+  // chat trên mobile — không cần đụng tới BottomNav/App shell.
+  const [mobileViewportPx, setMobileViewportPx] = useState(null);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return undefined;
+    const onVvResize = () => setMobileViewportPx(vv.height);
+    vv.addEventListener('resize', onVvResize);
+    vv.addEventListener('scroll', onVvResize);
+    onVvResize();
+    return () => {
+      vv.removeEventListener('resize', onVvResize);
+      vv.removeEventListener('scroll', onVvResize);
+    };
+  }, []);
+
   const [conversations, setConversations] = useState([]);
   const [directory, setDirectory] = useState([]);
   // LỖI THẬT đã vá: fetchUnreadCounts đã viết sẵn trong lib/chat.js nhưng
@@ -669,7 +689,10 @@ export default function ChatScreen({ profile }) {
         typingTimerRef.current = setTimeout(() => presenceRef.current?.setTyping(false), 2500);
       }
     }
-    const lastAtPos = val.lastIndexOf('@');
+    // Tag người (@) chỉ có ý nghĩa trong Chat NHÓM — Chat riêng 1-1 chỉ có
+    // đúng 2 người nên hộp thoại "Chọn người để tag" là thừa, rườm rà.
+    const isGroupChat = activeConvo?.roomType !== 'direct';
+    const lastAtPos = isGroupChat ? val.lastIndexOf('@') : -1;
     if (lastAtPos !== -1 && lastAtPos === val.length - 1) {
       setShowMentionPopup(true);
       setMentionFilter('');
@@ -888,9 +911,13 @@ export default function ChatScreen({ profile }) {
 
   const showThread = isDesktop || !!activeRoomId;
   const showList = isDesktop || !activeRoomId;
+  const mobileThreadOpen = !isDesktop && !!activeRoomId;
 
   return (
-    <div className="sumi-chat-page">
+    <div
+      className={`sumi-chat-page ${mobileThreadOpen ? 'cs-mobile-thread-open' : ''}`}
+      style={mobileThreadOpen && mobileViewportPx ? { height: `${mobileViewportPx}px` } : undefined}
+    >
       {/* LỖI THẬT đã vá: trước đây lỗi (setError) chỉ hiện BÊN TRONG khung
           nhập tin — nếu tải danh sách hội thoại/danh bạ lỗi ngay từ đầu, lúc
           CHƯA mở phòng nào, không ai thấy thông báo gì cả (màn hình trông
@@ -1123,13 +1150,16 @@ export default function ChatScreen({ profile }) {
                 <div className="cs-input-toolbar">
                   <input ref={photoInputRef} type="file" accept="image/*" hidden onChange={handlePickPhoto} />
                   <button type="button" className="cs-icon-btn" title="Gửi ảnh" onClick={() => photoInputRef.current?.click()}><IconCamera size={19} /></button>
-                  <button
-                    type="button" className="cs-icon-btn" title="Tag người"
-                    onClick={() => { setInputText((p) => `${p}@`); setShowMentionPopup(true); setMentionFilter(''); setSelectedMentionIds([]); inputRef.current?.focus(); }}
-                  >
-                    <IconTag size={19} />
-                  </button>
-                  <button type="button" className="cs-icon-btn" title="Emoji" onClick={openEmojiPicker}>😊</button>
+                  {/* Tag người (@) chỉ áp dụng cho Chat NHÓM — Chat riêng 1-1
+                      chỉ có 2 người nên ẩn hẳn icon này cho gọn (chuẩn Zalo). */}
+                  {activeConvo?.roomType !== 'direct' && (
+                    <button
+                      type="button" className="cs-icon-btn" title="Tag người"
+                      onClick={() => { setInputText((p) => `${p}@`); setShowMentionPopup(true); setMentionFilter(''); setSelectedMentionIds([]); inputRef.current?.focus(); }}
+                    >
+                      <IconTag size={19} />
+                    </button>
+                  )}
 
                   <form className="cs-input-form" onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}>
                     <textarea
@@ -1138,6 +1168,7 @@ export default function ChatScreen({ profile }) {
                       onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
                       disabled={!activeRoomId}
                     />
+                    <button type="button" className="cs-icon-btn cs-emoji-btn" title="Emoji" onClick={openEmojiPicker}>😊</button>
                     {inputText.trim() || pendingPhoto ? (
                       <button type="submit" className="cs-send-btn" title="Gửi" disabled={!activeRoomId}>➤</button>
                     ) : (

@@ -27,6 +27,21 @@
   overflow: hidden;
 }
 
+/* Khi mở 1 hội thoại trên mobile, tách khung chat ra khỏi layout chính
+   (position: fixed phủ toàn màn hình) — tránh lỗi thanh điều hướng dưới
+   (BottomNav, nằm ngoài phạm vi file Chat) bị bàn phím đẩy lệch/nhảy lên
+   giữa màn hình do layout viewport 100dvh không co lại đúng lúc bàn phím
+   iOS mở. Height được ChatScreen.jsx ghi đè bằng px chính xác theo
+   window.visualViewport để bám sát viền trên bàn phím, mượt như Zalo. */
+@media (max-width: 859px) {
+  .sumi-chat-page.cs-mobile-thread-open {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    height: 100dvh;
+  }
+}
+
 /* ── Cột danh sách hội thoại ── */
 .cs-list-pane {
   display: flex;
@@ -91,7 +106,9 @@
   border: none;
   background: none;
   outline: none;
-  font-size: 13.5px;
+  /* 16px trở lên — dưới ngưỡng này Safari iOS tự động phóng to (zoom) cả
+     trang khi bấm vào ô nhập, đúng lỗi "nhảy/phóng to khung chat" báo lại. */
+  font-size: 16px;
   color: var(--zl-text-main);
   min-width: 0;
 }
@@ -576,13 +593,24 @@
   background: #f0f2f4;
   border-radius: 20px;
   padding: 10px 16px;
-  font-size: 14.5px;
+  /* 16px — dưới ngưỡng này Safari iOS tự động phóng to (zoom) cả trang khi
+     bấm vào ô nhập, đúng lỗi "nhảy/phóng to khung chat" báo lại. */
+  font-size: 16px;
   font-family: inherit;
   color: var(--zl-text-main);
   max-height: 100px;
   outline: none;
 }
 .cs-input-form textarea::placeholder { color: #9a9a9e; }
+.cs-emoji-btn {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  font-size: 19px;
+  color: inherit;
+  align-self: flex-end;
+  margin-bottom: 2px;
+}
 .cs-send-btn {
   width: 38px;
   height: 38px;
@@ -904,7 +932,7 @@ emoji-picker.cs-emoji-picker {
   border: 1px solid var(--zl-border);
   border-radius: 10px;
   padding: 9px 12px;
-  font-size: 13.5px;
+  font-size: 16px;
   font-family: inherit;
   outline: none;
 }
