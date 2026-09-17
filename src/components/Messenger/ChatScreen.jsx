@@ -155,6 +155,9 @@ export default function ChatScreen({ profile }) {
 
   const [inputText, setInputText] = useState('');
   const [pendingPhoto, setPendingPhoto] = useState(null);
+  // Xem ảnh tràn màn hình khi bấm vào ảnh trong tin nhắn — chỉ là state hiển
+  // thị cục bộ, không đụng gì tới dữ liệu/gửi nhận.
+  const [previewImageUrl, setPreviewImageUrl] = useState(null);
   // LỖI THẬT đã vá (review vòng 2, mục 2.7): nút "👍 Like" trước đây chỉ chèn
   // đúng 1 emoji cố định — không có cách chọn emoji khác. emoji-picker-element
   // là web component (custom element chuẩn, không phải thư viện React) nên
@@ -974,9 +977,14 @@ export default function ChatScreen({ profile }) {
                   style={{ cursor: canManageActiveGroup ? 'pointer' : 'default' }}
                   disabled={!canManageActiveGroup}
                 >
-                  {activeConvo?.roomType === 'direct'
-                    ? <UserAvatar profile={{ full_name: activeConvo?.title, avatar_path: activeConvo?.peerAvatarPath }} size={44} />
-                    : <div className="cs-convo-avatar">{activeConvo?.avatarEmoji || '💬'}</div>}
+                  <span className="cs-avatar-wrap">
+                    {activeConvo?.roomType === 'direct'
+                      ? <UserAvatar profile={{ full_name: activeConvo?.title, avatar_path: activeConvo?.peerAvatarPath }} size={44} />
+                      : <div className="cs-convo-avatar">{activeConvo?.avatarEmoji || '💬'}</div>}
+                    {activeConvo?.roomType === 'direct' && activePeerId && presenceState[activePeerId]?.length > 0 && (
+                      <span className="cs-avatar-online-dot" />
+                    )}
+                  </span>
                   <div className="cs-thread-title">
                     <h4>{activeConvo?.title || 'Hội thoại'}</h4>
                     <p>
@@ -1035,7 +1043,7 @@ export default function ChatScreen({ profile }) {
                               )}
                               {renderFormattedMessage(msg.content)}
                               {msg.order_code && <div><span className="cs-order-chip">📦 Mã đơn: #{msg.order_code}</span></div>}
-                              {msg.attachment_url && <img src={msg.attachment_url} alt="Đính kèm" className="cs-msg-img" onClick={() => window.open(msg.attachment_url, '_blank')} />}
+                              {msg.attachment_url && <img src={msg.attachment_url} alt="Đính kèm" className="cs-msg-img" onClick={() => setPreviewImageUrl(msg.attachment_url)} />}
                             </>
                           )}
                         </div>
@@ -1045,7 +1053,9 @@ export default function ChatScreen({ profile }) {
                             : msg.uploading
                               ? 'Đang gửi…'
                               : new Date(msg.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                          {isSeen && <span className="cs-msg-seen"> · Đã xem</span>}
+                          {isMe && !msg.failed && !msg.uploading && activeConvo?.roomType === 'direct' && (
+                            <span className={`cs-msg-status-tick ${isSeen ? 'seen' : ''}`}>{isSeen ? '✓✓' : '✓'}</span>
+                          )}
                         </span>
                       </div>
                     </div>
@@ -1110,22 +1120,30 @@ export default function ChatScreen({ profile }) {
                   </div>
                 )}
 
-                <form className="cs-input-form" onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}>
-                  <textarea
-                    ref={inputRef} rows={1} placeholder="Gõ tin nhắn (@ để tag tên)..."
-                    value={inputText} onChange={handleInputChange}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
-                    disabled={!activeRoomId}
-                  />
-                  <button type="submit" title="Gửi" disabled={!activeRoomId}>➤</button>
-                </form>
-
-                <div className="cs-tool-chips">
+                <div className="cs-input-toolbar">
                   <input ref={photoInputRef} type="file" accept="image/*" hidden onChange={handlePickPhoto} />
-                  <button type="button" onClick={() => photoInputRef.current?.click()}><IconCamera size={16} /> Gửi ảnh</button>
-                  <button type="button" onClick={() => { setInputText((p) => `${p}@`); setShowMentionPopup(true); setMentionFilter(''); setSelectedMentionIds([]); inputRef.current?.focus(); }}><IconTag size={16} /> Tag người</button>
-                  <button type="button" onClick={openEmojiPicker}>😊 Emoji</button>
-                  <button type="button" onClick={() => setInputText((p) => `${p}👍`)}>👍 Like</button>
+                  <button type="button" className="cs-icon-btn" title="Gửi ảnh" onClick={() => photoInputRef.current?.click()}><IconCamera size={19} /></button>
+                  <button
+                    type="button" className="cs-icon-btn" title="Tag người"
+                    onClick={() => { setInputText((p) => `${p}@`); setShowMentionPopup(true); setMentionFilter(''); setSelectedMentionIds([]); inputRef.current?.focus(); }}
+                  >
+                    <IconTag size={19} />
+                  </button>
+                  <button type="button" className="cs-icon-btn" title="Emoji" onClick={openEmojiPicker}>😊</button>
+
+                  <form className="cs-input-form" onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}>
+                    <textarea
+                      ref={inputRef} rows={1} placeholder="Nhập tin nhắn..."
+                      value={inputText} onChange={handleInputChange}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
+                      disabled={!activeRoomId}
+                    />
+                    {inputText.trim() || pendingPhoto ? (
+                      <button type="submit" className="cs-send-btn" title="Gửi" disabled={!activeRoomId}>➤</button>
+                    ) : (
+                      <button type="button" className="cs-send-btn like" title="Thích" disabled={!activeRoomId} onClick={() => setInputText((p) => `${p}👍`)}>👍</button>
+                    )}
+                  </form>
                 </div>
               </div>
             </>
@@ -1289,6 +1307,13 @@ export default function ChatScreen({ profile }) {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {previewImageUrl && (
+        <div className="cs-image-lightbox" onClick={() => setPreviewImageUrl(null)}>
+          <button type="button" className="cs-image-lightbox-close" onClick={() => setPreviewImageUrl(null)}>✕</button>
+          <img src={previewImageUrl} alt="Xem ảnh" onClick={(e) => e.stopPropagation()} />
         </div>
       )}
     </div>
