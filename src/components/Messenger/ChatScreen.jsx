@@ -249,6 +249,17 @@ export default function ChatScreen({ profile }) {
   // giống hệt nhau, React key trùng + logic thay tempId bằng bản thật
   // (mergeIncomingMessage/handleSendMessage) thay nhầm bong bóng.
   const tempSeqRef = useRef(0);
+  // LỖI THẬT đã vá (báo lại 18/9/2026): trên bàn phím di động (Gboard/bàn
+  // phím iOS có gợi ý từ), gõ xong từ cuối rồi bấm Gửi/Enter ngay lập tức
+  // đôi khi bắn tin thành 2 bong bóng tách rời - bong bóng thứ 2 chỉ còn
+  // đúng từ cuối cùng (vd "nhé"). Nguyên nhân: bàn phím còn đang "ghép từ"
+  // (composition) chưa chốt xong thì người dùng đã bấm gửi -> sự kiện
+  // compositionend bắn RA SAU, ghi đè lại từ cuối vào ô nhập (đã bị
+  // setInputText('') xoá) rồi Enter/onChange kích hoạt gửi lần 2.
+  // isSendingRef khoá chống gửi lặp trong 300ms; isComposingRef bỏ qua
+  // phím Enter trong lúc bàn phím còn đang ghép từ.
+  const isSendingRef = useRef(false);
+  const isComposingRef = useRef(false);
   const scrollToBottom = (smooth = true) => messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
 
   useEffect(() => { activeRoomIdRef.current = activeRoomId; }, [activeRoomId]);
@@ -862,6 +873,10 @@ export default function ChatScreen({ profile }) {
   };
 
   const handleSendMessage = async () => {
+    // Khoá chống gửi lặp trong lúc bàn phím di động còn đang chốt từ cuối
+    // (xem giải thích ở khai báo isSendingRef) — bấm gửi lần 2 gần như ngay
+    // lập tức (dưới 300ms) sau lần 1 bị chặn thẳng ở đây.
+    if (isSendingRef.current) return;
     // LỖI THẬT đã vá: bấm "Tag người" tự chèn "@" vào ô soạn để mở popup gợi
     // ý; nếu đóng popup mà KHÔNG chọn ai rồi lỡ bấm gửi, "@" trơ trọi (không
     // rỗng) vẫn lọt qua điều kiện bên dưới và bị gửi đi thành 1 tin chỉ có
@@ -869,6 +884,8 @@ export default function ChatScreen({ profile }) {
     const text = inputText.trim().replace(/@\s*$/, '').trim();
     if (!text && !pendingPhoto) return;
     if (!activeRoomId || !profile?.id) return;
+    isSendingRef.current = true;
+    setTimeout(() => { isSendingRef.current = false; }, 300);
     setError('');
     const tempId = `temp-${Date.now()}-${tempSeqRef.current++}`;
     const roomIdAtSend = activeRoomId;
@@ -898,6 +915,11 @@ export default function ChatScreen({ profile }) {
     };
     setMessages((prev) => [...prev, optimisticMsg]);
     setInputText('');
+    // Xoá thẳng luôn value DOM thật của textarea (không chỉ React state) -
+    // nếu bàn phím di động bắn compositionend TRỄ sau khi đã bấm gửi, nó ghi
+    // giá trị ghép từ dở dang thẳng vào DOM input trước, tránh trường hợp
+    // giá trị cũ còn sót lại dù state đã rỗng.
+    if (inputRef.current) inputRef.current.value = '';
     setPendingPhoto(null);
     setShowMentionPopup(false);
     setSelectedMentionIds([]);
@@ -1187,7 +1209,27 @@ export default function ChatScreen({ profile }) {
                     <textarea
                       ref={inputRef} rows={1} placeholder="Nhập tin nhắn..."
                       value={inputText} onChange={handleInputChange}
-                      onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
+                      onCompositionStart={() => { isComposingRef.current = true; }}
+                      onCompositionEnd={() => {
+                        isComposingRef.current = false;
+                        // Vừa gửi xong (isSendingRef còn khoá) mà bàn phím vẫn
+                        // bắn compositionend trễ, ghi lại từ cuối vào ô nhập -
+                        // dập luôn, không để nó tồn tại để bị gửi lần 2.
+                        if (isSendingRef.current) {
+                          if (inputRef.current) inputRef.current.value = '';
+                          setInputText('');
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter' || e.shiftKey) return;
+                        // Enter trong lúc bàn phím còn đang ghép từ (chọn từ
+                        // gợi ý/tiếng Việt Telex-VNI) chỉ để CHỐT TỪ, không
+                        // phải ý định gửi tin - bỏ qua, không gửi ở lần Enter
+                        // này (chuẩn hành vi bàn phím di động/IME).
+                        if (e.nativeEvent?.isComposing || isComposingRef.current) { e.preventDefault(); return; }
+                        e.preventDefault();
+                        handleSendMessage();
+                      }}
                       disabled={!activeRoomId}
                     />
                     <button type="button" className="cs-icon-btn cs-emoji-btn" title="Emoji" onClick={openEmojiPicker}>😊</button>
