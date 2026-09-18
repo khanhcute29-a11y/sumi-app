@@ -681,12 +681,19 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  flex: 1;
+  min-width: 0;
   border: none;
   background: none;
   padding: 0;
   text-align: left;
   font: inherit;
   color: inherit;
+}
+.cs-thread-menu-btn {
+  font-size: 22px;
+  font-weight: 900;
+  flex-shrink: 0;
 }
 
 .cs-group-section-head {

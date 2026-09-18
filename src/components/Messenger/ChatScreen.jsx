@@ -253,6 +253,14 @@ export default function ChatScreen({ profile }) {
 
   useEffect(() => { activeRoomIdRef.current = activeRoomId; }, [activeRoomId]);
 
+  // Bàn phím mobile mở lên (window.visualViewport thu nhỏ lại) -> tự cuộn
+  // xuống tin nhắn cuối cùng, giống Zalo, tránh cảm giác tin nhắn "biến mất"
+  // phía sau bàn phím khi đang xem gần đáy.
+  useEffect(() => {
+    if (mobileViewportPx && activeRoomIdRef.current) scrollToBottom(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mobileViewportPx]);
+
   // Tab vừa quay lại hiển thị trong lúc đang mở sẵn 1 phòng -> đọc bù những
   // tin đã cộng dồn vào unreadCounts trong lúc tab ẩn (xem nhánh
   // visibilityState !== 'visible' ở effect subscribeToRooms bên trên).
@@ -1025,6 +1033,12 @@ export default function ChatScreen({ profile }) {
                     </p>
                   </div>
                 </button>
+                {/* "⋮" chỉ hiện khi CÓ hành động thật (mở thông tin nhóm) -
+                    không thêm nút Gọi thoại/Gọi video vì app hiện chưa có
+                    tính năng đó, tránh tạo nút bấm vào không làm gì cả. */}
+                {canManageActiveGroup && (
+                  <button type="button" className="cs-icon-btn cs-thread-menu-btn" title="Thông tin nhóm" onClick={openGroupInfo}>⋮</button>
+                )}
               </div>
 
               <div className="cs-thread-feed" ref={feedRef} onScroll={handleFeedScroll}>
