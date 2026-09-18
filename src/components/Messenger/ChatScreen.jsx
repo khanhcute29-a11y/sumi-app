@@ -1138,23 +1138,27 @@ export default function ChatScreen({ profile }) {
   const showList = isDesktop || !activeRoomId;
   const mobileThreadOpen = !isDesktop && !!activeRoomId;
 
-  // LỖI THẬT đã vá (báo lại 3 lần, ảnh chụp thật 18/9/2026): phủ
-  // .sumi-chat-page bằng position:fixed (đợt sửa trước) không đủ triệt để
+  // LỖI THẬT đã vá (báo lại 4 lần, ảnh chụp thật thiết bị 18/9/2026): phủ
+  // .sumi-chat-page bằng position:fixed (đợt sửa đầu) không đủ triệt để
   // trên Safari iOS thật — bàn phím mềm không thu nhỏ layout viewport (chỉ
   // đổi window.visualViewport), và lúc focus ô nhập, Safari tự cuộn cả
-  // trang để đưa input lên trên bàn phím, kéo theo thanh Bottom Nav (vẫn
-  // đang NẰM TRONG DOM, chỉ bị che bằng CSS) lộ ra ngay sát mép trên bàn
-  // phím. Cách duy nhất chặn đứng dứt điểm mà KHÔNG sửa file ngoài Chat
-  // (App.jsx/BottomNav.jsx): tự tìm đúng DOM node thanh nav dùng chung của
-  // app và set display:none THẬT (không chỉ che bằng z-index) ngay khi mở
-  // 1 phòng chat trên mobile, trả lại y nguyên khi đóng phòng/rời tab Chat.
+  // trang để đưa input lên trên bàn phím, kéo theo thanh Bottom Nav lộ ra
+  // ngay sát mép trên bàn phím. Đợt sửa tiếp theo (set navEl.style.display
+  // = 'none' qua JS) VẪN KHÔNG ăn thua trên máy thật - lý do thật sự: file
+  // App.css có luật `.sb-bottomnav { display: flex !important }` trong
+  // @container query cho mobile — CSS !important trong stylesheet LUÔN
+  // THẮNG style JS thường, nên lệnh ẩn bị vô hiệu hoá âm thầm (không lỗi gì
+  // cả, style vẫn "được set" theo devtools nhưng trình duyệt không áp
+  // dụng). Không sửa App.css (ngoài phạm vi Chat) — thay vào đó set inline
+  // style CŨNG kèm !important bằng setProperty(), đây là cách DUY NHẤT
+  // inline style thắng được !important trong stylesheet theo đúng thứ tự
+  // ưu tiên CSS chuẩn.
   useEffect(() => {
     if (!mobileThreadOpen) return undefined;
     const navEl = document.querySelector('.sb-bottomnav');
     if (!navEl) return undefined;
-    const prevDisplay = navEl.style.display;
-    navEl.style.display = 'none';
-    return () => { navEl.style.display = prevDisplay; };
+    navEl.style.setProperty('display', 'none', 'important');
+    return () => { navEl.style.removeProperty('display'); };
   }, [mobileThreadOpen]);
 
   return (
