@@ -163,6 +163,42 @@ export async function fetchRoomParticipants(roomId) {
   return (data || []).map((r) => ({ id: r.profile_id, full_name: r.profiles?.full_name || '', role: r.profiles?.role || '', avatarPath: r.profiles?.avatar_path || null, lastReadAt: r.last_read_at || null }));
 }
 
+// Panel "Thông tin hội thoại" (kiểu Zalo) — thuần đọc dữ liệu ĐÃ CÓ SẴN
+// (attachment_url trong chat_messages, chat_participants), không thêm
+// bảng/cột nào mới.
+export async function fetchRoomMedia(roomId, { limit = 24 } = {}) {
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .select('id, attachment_url, created_at')
+    .eq('room_id', roomId)
+    .not('attachment_url', 'is', null)
+    .is('recalled_at', null)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
+// Số nhóm chung giữa mình và 1 người khác — dùng cho Chat riêng 1-1, giống
+// dòng "X nhóm chung" trong Zalo.
+export async function countSharedGroups(myId, peerId) {
+  const { data: mine, error: e1 } = await supabase
+    .from('chat_participants')
+    .select('room_id, chat_rooms!inner(room_type)')
+    .eq('profile_id', myId)
+    .eq('chat_rooms.room_type', 'group');
+  if (e1) throw e1;
+  const myGroupRoomIds = (mine || []).map((r) => r.room_id);
+  if (!myGroupRoomIds.length) return 0;
+  const { data: theirs, error: e2 } = await supabase
+    .from('chat_participants')
+    .select('room_id')
+    .eq('profile_id', peerId)
+    .in('room_id', myGroupRoomIds);
+  if (e2) throw e2;
+  return (theirs || []).length;
+}
+
 // "Đã xem" ✓✓ (P2.3) — CHỈ áp dụng Chat riêng 1-1 (2 người): so created_at
 // của tin mình gửi với last_read_at của NGƯỜI KIA. Không làm cho nhóm — với
 // N người, "đã xem" kiểu Zalo phải liệt kê "đã xem bởi X, Y" phức tạp hơn

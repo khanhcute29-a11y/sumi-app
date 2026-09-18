@@ -24,6 +24,8 @@ import {
   removeChatGroupMember,
   fetchUnreadCounts,
   sortConversations,
+  fetchRoomMedia,
+  countSharedGroups,
 } from '../../lib/chat';
 import { uploadFile } from '../../lib/queries';
 import { toWebSafeImage } from '../../lib/imageConvert';
@@ -246,6 +248,14 @@ export default function ChatScreen({ profile }) {
   const [savingGroupInfo, setSavingGroupInfo] = useState(false);
   const [showAddMembers, setShowAddMembers] = useState(false);
   const [addMemberIds, setAddMemberIds] = useState([]);
+
+  // Panel "Thông tin hội thoại" kiểu Zalo — mở được cho MỌI hội thoại (cả
+  // nhóm không tự tạo lẫn Chat riêng 1-1), khác với showGroupInfo (chỉ dành
+  // riêng cho việc QUẢN LÝ nhóm tự tạo: đổi tên/thêm/xoá thành viên).
+  const [showChatInfo, setShowChatInfo] = useState(false);
+  const [loadingChatInfo, setLoadingChatInfo] = useState(false);
+  const [chatInfoMedia, setChatInfoMedia] = useState([]);
+  const [chatInfoSharedGroups, setChatInfoSharedGroups] = useState(null);
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -631,6 +641,27 @@ export default function ChatScreen({ profile }) {
   const openGroupInfo = () => {
     setGroupInfoName(activeConvo?.title || '');
     setShowGroupInfo(true);
+  };
+
+  // Mở panel "Thông tin hội thoại" — tải Ảnh/Video đã gửi + (Chat riêng 1-1)
+  // số nhóm chung. Chỉ đọc dữ liệu có sẵn, không đổi logic gửi/nhận.
+  const openChatInfo = async () => {
+    if (!activeRoomId) return;
+    setShowChatInfo(true);
+    setLoadingChatInfo(true);
+    setChatInfoMedia([]);
+    setChatInfoSharedGroups(null);
+    try {
+      const media = await fetchRoomMedia(activeRoomId);
+      setChatInfoMedia(media);
+      if (activeConvo?.roomType === 'direct' && activePeerId && profile?.id) {
+        setChatInfoSharedGroups(await countSharedGroups(profile.id, activePeerId));
+      }
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoadingChatInfo(false);
+    }
   };
 
   const handleRenameGroup = async () => {
@@ -1087,12 +1118,11 @@ export default function ChatScreen({ profile }) {
                     </p>
                   </div>
                 </button>
-                {/* "⋮" chỉ hiện khi CÓ hành động thật (mở thông tin nhóm) -
-                    không thêm nút Gọi thoại/Gọi video vì app hiện chưa có
-                    tính năng đó, tránh tạo nút bấm vào không làm gì cả. */}
-                {canManageActiveGroup && (
-                  <button type="button" className="cs-icon-btn cs-thread-menu-btn" title="Thông tin nhóm" onClick={openGroupInfo}>⋮</button>
-                )}
+                {/* "⋮" mở panel "Thông tin hội thoại" (Ảnh/Video, nhóm
+                    chung, ghim/đánh dấu chưa đọc) - không thêm nút Gọi
+                    thoại/Gọi video vì app hiện chưa có tính năng đó, tránh
+                    tạo nút bấm vào không làm gì cả. */}
+                <button type="button" className="cs-icon-btn cs-thread-menu-btn" title="Thông tin hội thoại" onClick={openChatInfo}>⋮</button>
               </div>
 
               <div className="cs-thread-feed" ref={feedRef} onScroll={handleFeedScroll}>
@@ -1444,6 +1474,63 @@ export default function ChatScreen({ profile }) {
               <button className="cs-create-group-confirm" onClick={handleAddMembers} disabled={savingGroupInfo || !addMemberIds.length}>
                 {savingGroupInfo ? 'Đang thêm...' : `Thêm${addMemberIds.length ? ` (${addMemberIds.length} người)` : ''}`}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showChatInfo && (
+        <div className="cs-new-chat-overlay" onClick={() => setShowChatInfo(false)}>
+          <div className="cs-new-chat-sheet cs-chat-info-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="cs-new-chat-head">
+              <strong>Thông tin hội thoại</strong>
+              <button onClick={() => setShowChatInfo(false)}>✕</button>
+            </div>
+            <div className="cs-chat-info-body">
+              <div className="cs-chat-info-hero">
+                {activeConvo?.roomType === 'direct'
+                  ? <UserAvatar profile={{ full_name: activeConvo?.title, avatar_path: activeConvo?.peerAvatarPath }} size={64} />
+                  : <div className="cs-convo-avatar" style={{ width: 64, height: 64, fontSize: 28 }}>{activeConvo?.avatarEmoji || '💬'}</div>}
+                <strong>{activeConvo?.title || 'Hội thoại'}</strong>
+                {activeConvo?.roomType === 'group' && <span>{roomParticipants.length} thành viên</span>}
+              </div>
+
+              <div className="cs-chat-info-actions">
+                <button type="button" onClick={() => { togglePin(activeConvo); setShowChatInfo(false); }}>
+                  📌 {activeConvo?.pinned ? 'Bỏ ghim' : 'Ghim hội thoại'}
+                </button>
+                <button type="button" onClick={() => { handleMarkUnread(activeConvo); setShowChatInfo(false); }}>
+                  🔵 Đánh dấu chưa đọc
+                </button>
+                {canManageActiveGroup && (
+                  <button type="button" onClick={() => { setShowChatInfo(false); openGroupInfo(); }}>
+                    👥 Quản lý thành viên nhóm
+                  </button>
+                )}
+              </div>
+
+              {activeConvo?.roomType === 'direct' && chatInfoSharedGroups !== null && (
+                <div className="cs-chat-info-row">
+                  <span>👥 Nhóm chung</span>
+                  <strong>{chatInfoSharedGroups}</strong>
+                </div>
+              )}
+
+              <div className="cs-chat-info-section-head">Ảnh/Video</div>
+              {loadingChatInfo && <div className="cs-list-empty">Đang tải...</div>}
+              {!loadingChatInfo && chatInfoMedia.length === 0 && (
+                <div className="cs-list-empty">Chưa có ảnh/video nào trong hội thoại này.</div>
+              )}
+              {!loadingChatInfo && chatInfoMedia.length > 0 && (
+                <div className="cs-chat-info-media-grid">
+                  {chatInfoMedia.map((m) => (
+                    <img
+                      key={m.id} src={m.attachment_url} alt="Đính kèm"
+                      onClick={() => { setShowChatInfo(false); setPreviewImageUrl(m.attachment_url); }}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
