@@ -55,6 +55,19 @@ function formatListTime(iso) {
     : d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
 }
 
+// Nhãn phân cách ngày trong khung chat, kiểu Zalo: "Hôm nay" / "Hôm qua" /
+// "dd/mm/yyyy" cho ngày xa hơn.
+function formatDateDivider(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const now = new Date();
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (d.toDateString() === now.toDateString()) return 'Hôm nay';
+  if (d.toDateString() === yesterday.toDateString()) return 'Hôm qua';
+  return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
 // Bỏ dấu tiếng Việt để tìm kiếm không cần gõ dấu (vd "nghia" vẫn ra "Nghĩa").
 function stripDiacritics(text) {
   return (text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, (m) => (m === 'đ' ? 'd' : 'D')).toLowerCase();
@@ -1090,7 +1103,7 @@ export default function ChatScreen({ profile }) {
                   </button>
                 )}
                 {!loadingMessages && messages.length === 0 && <div className="cs-list-empty">Chưa có tin nhắn nào — gửi lời chào đầu tiên nhé!</div>}
-                {messages.map((msg) => {
+                {messages.map((msg, idx) => {
                   const isMe = msg.sender_id === profile?.id;
                   const senderName = msg.profiles?.full_name || nameFor(msg.sender_id);
                   const senderAvatarPath = msg.profiles?.avatar_path ?? avatarPathFor(msg.sender_id);
@@ -1101,8 +1114,19 @@ export default function ChatScreen({ profile }) {
                     && peerLastReadAt && new Date(peerLastReadAt) >= new Date(msg.created_at);
                   const canRecall = isMe && !isRecalled && !msg.failed && !msg.uploading
                     && (Date.now() - new Date(msg.created_at).getTime()) < 24 * 60 * 60 * 1000;
+                  // Chèn nhãn "Hôm nay/Hôm qua/dd-mm-yyyy" mỗi khi sang ngày
+                  // mới, kiểu Zalo — chỉ so ngày với tin ngay trước đó trong
+                  // mảng đang có (kể cả sau khi bấm "Tải tin cũ hơn"), không
+                  // cần dữ liệu/logic gì thêm ngoài created_at đã có sẵn.
+                  const prevMsg = messages[idx - 1];
+                  const showDateDivider = !prevMsg
+                    || new Date(prevMsg.created_at).toDateString() !== new Date(msg.created_at).toDateString();
                   return (
-                    <div key={msg.id} className={`cs-msg-row ${isMe ? 'me' : ''}`}>
+                    <React.Fragment key={msg.id}>
+                      {showDateDivider && (
+                        <div className="cs-date-divider"><span>{formatDateDivider(msg.created_at)}</span></div>
+                      )}
+                      <div className={`cs-msg-row ${isMe ? 'me' : ''}`}>
                       {!isMe && <UserAvatar profile={{ full_name: senderName, avatar_path: senderAvatarPath }} size={28} />}
                       <div className="cs-msg-body">
                         {!isMe && <span className="cs-sender-label">{senderName}</span>}
@@ -1140,7 +1164,8 @@ export default function ChatScreen({ profile }) {
                           )}
                         </span>
                       </div>
-                    </div>
+                      </div>
+                    </React.Fragment>
                   );
                 })}
                 <div ref={messagesEndRef} />

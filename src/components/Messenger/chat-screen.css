@@ -334,6 +334,22 @@
   gap: 6px;
 }
 
+/* Nhãn phân cách ngày (Hôm nay/Hôm qua/dd-mm-yyyy) giữa các tin nhắn -
+   chuẩn Zalo, dạng viên thuốc xám nhạt căn giữa. */
+.cs-date-divider {
+  display: flex;
+  justify-content: center;
+  margin: 6px 0 2px;
+}
+.cs-date-divider span {
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: #e4e6e9;
+  color: #66686c;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
 .cs-msg-row {
   display: flex;
   gap: 8px;
