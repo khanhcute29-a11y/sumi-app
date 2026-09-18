@@ -16,19 +16,48 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // LỖI THẬT đã vá (báo lại 18/9/2026, ảnh chụp thật "Chưa đăng nhập." dù
+  // đang đăng nhập bình thường): trước đây MỌI lỗi khi tải hồ sơ - kể cả
+  // lỗi mạng/API chập chờn thoáng qua (rất hay gặp trên di động khi đổi
+  // Wi-Fi/4G) - đều bị coi NGANG HÀNG với "hết phiên đăng nhập", xoá thẳng
+  // profile về null. Các màn Tổng quan (BossOverviewV3/EmployeeOverviewV4/
+  // AccountantOverviewV1) thấy profile null liền hiện "Chưa đăng nhập."
+  // dù session thật (App.jsx quản lý riêng, xem AuthGate) vẫn còn nguyên -
+  // chỉ cần tải lại trang là vào lại được ngay, gây hoang mang tưởng bị
+  // đăng xuất. Giờ khi tải hồ sơ lỗi, kiểm tra lại session thật trước:
+  // còn session thì thử lại 1 lần (bù lỗi mạng thoáng qua) và GIỮ NGUYÊN
+  // profile cũ nếu thử lại vẫn lỗi, chỉ xoá profile khi chắc chắn không
+  // còn phiên đăng nhập nào.
   const load = () => {
     setLoading(true);
     fetchMyProfile()
-      .then(setProfile)
-      .catch(() => setProfile(null))
-      .finally(() => setLoading(false));
+      .then((p) => { setProfile(p); setLoading(false); })
+      .catch(async (err) => {
+        console.error('[AuthContext] Tải hồ sơ lần đầu thất bại:', err);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          setProfile(null);
+          setLoading(false);
+          return;
+        }
+        try {
+          setProfile(await fetchMyProfile());
+        } catch (retryErr) {
+          console.error('[AuthContext] Thử lại vẫn thất bại (còn phiên đăng nhập, giữ nguyên dữ liệu cũ):', retryErr);
+        } finally {
+          setLoading(false);
+        }
+      });
   };
 
   useEffect(() => {
     load();
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
-        fetchMyProfile().then(setProfile).catch(() => setProfile(null));
+        // Sự kiện làm mới token/đăng nhập lại vẫn CÒN session hợp lệ - nếu
+        // tải hồ sơ lỗi thoáng qua, giữ nguyên profile đang có thay vì xoá
+        // về null (tránh hiện nhầm "Chưa đăng nhập." khi vẫn đang đăng nhập).
+        fetchMyProfile().then(setProfile).catch((err) => console.error('[AuthContext] Làm mới hồ sơ thất bại, giữ nguyên dữ liệu cũ:', err));
       } else {
         setProfile(null);
         setLoading(false);
