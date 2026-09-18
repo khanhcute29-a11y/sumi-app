@@ -1112,22 +1112,30 @@ export default function ChatScreen({ profile }) {
                       <span>👥 Chọn 1 hoặc nhiều người để tag:</span>
                       {filteredMentionUsers.length > 0 && <button type="button" onClick={selectAllMentions}>Chọn tất cả</button>}
                     </div>
-                    {activeConvo?.roomType !== 'direct' && roomParticipantIds.length > 1 && (
-                      <div className={`cs-mention-item ${selectedMentionIds.includes(TAG_ALL_ID) ? 'checked' : ''}`} onClick={() => toggleMentionSelect({ id: TAG_ALL_ID })}>
-                        <div className="cs-mention-avatar">{selectedMentionIds.includes(TAG_ALL_ID) ? '✓' : '🌐'}</div>
-                        <div className="cs-mention-info"><strong>Mọi người</strong><span>Tag toàn bộ {roomParticipantIds.length} người trong đoạn chat này</span></div>
-                      </div>
-                    )}
-                    {filteredMentionUsers.map((u) => {
-                      const checked = selectedMentionIds.includes(u.id);
-                      return (
-                        <div key={u.id} className={`cs-mention-item ${checked ? 'checked' : ''}`} onClick={() => toggleMentionSelect(u)}>
-                          <div className="cs-mention-avatar">{checked ? '✓' : '👤'}</div>
-                          <div className="cs-mention-info"><strong>{u.full_name}</strong><span>{u.role}</span></div>
+                    {/* LỖI THẬT đã vá (báo lại 18/9/2026): nhóm đông người (30+
+                        thành viên) làm danh sách tràn dài, đẩy nút "✓ Xong" ra
+                        khỏi màn hình/che mất — không bấm xác nhận được. Tách
+                        danh sách ra 1 vùng cuộn RIÊNG có giới hạn chiều cao,
+                        nút "✓ Xong" nằm NGOÀI vùng cuộn đó nên luôn cố định ở
+                        đáy popup dù nhóm 3 người hay 30+ người. */}
+                    <div className="cs-mention-list">
+                      {activeConvo?.roomType !== 'direct' && roomParticipantIds.length > 1 && (
+                        <div className={`cs-mention-item ${selectedMentionIds.includes(TAG_ALL_ID) ? 'checked' : ''}`} onClick={() => toggleMentionSelect({ id: TAG_ALL_ID })}>
+                          <div className="cs-mention-avatar">{selectedMentionIds.includes(TAG_ALL_ID) ? '✓' : '🌐'}</div>
+                          <div className="cs-mention-info"><strong>Mọi người</strong><span>Tag toàn bộ {roomParticipantIds.length} người trong đoạn chat này</span></div>
                         </div>
-                      );
-                    })}
-                    {filteredMentionUsers.length === 0 && roomParticipantIds.length <= 1 && <div className="cs-list-empty">Không tìm thấy</div>}
+                      )}
+                      {filteredMentionUsers.map((u) => {
+                        const checked = selectedMentionIds.includes(u.id);
+                        return (
+                          <div key={u.id} className={`cs-mention-item ${checked ? 'checked' : ''}`} onClick={() => toggleMentionSelect(u)}>
+                            <div className="cs-mention-avatar">{checked ? '✓' : '👤'}</div>
+                            <div className="cs-mention-info"><strong>{u.full_name}</strong><span>{u.role}</span></div>
+                          </div>
+                        );
+                      })}
+                      {filteredMentionUsers.length === 0 && roomParticipantIds.length <= 1 && <div className="cs-list-empty">Không tìm thấy</div>}
+                    </div>
                     <button type="button" className="cs-mention-confirm" onClick={confirmMentionSelection} disabled={!selectedMentionIds.length}>
                       ✓ Xong{selectedMentionIds.includes(TAG_ALL_ID)
                         ? ' (Mọi người)'

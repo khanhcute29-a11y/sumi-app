@@ -789,13 +789,17 @@ emoji-picker.cs-emoji-picker {
 }
 
 .cs-mention-menu {
+  display: flex;
+  flex-direction: column;
   background: #fff;
   border: 1px solid var(--zl-border);
   border-radius: 14px;
   padding: 8px;
   margin-bottom: 8px;
-  max-height: 220px;
-  overflow-y: auto;
+  /* Giới hạn chiều cao CẢ POPUP (không riêng danh sách) - nút "✓ Xong" ở
+     dưới cùng luôn nằm trong khung nhìn, không bị đẩy ra ngoài dù nhóm
+     30+ người (xem .cs-mention-list bên dưới). */
+  max-height: min(60vh, 420px);
 }
 .cs-mention-menu-head {
   display: flex;
@@ -805,6 +809,13 @@ emoji-picker.cs-emoji-picker {
   font-size: 10.5px;
   font-weight: 700;
   color: var(--zl-text-muted);
+  flex-shrink: 0;
+}
+.cs-mention-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .cs-mention-menu-head button {
   border: none;
@@ -850,14 +861,15 @@ emoji-picker.cs-emoji-picker {
 }
 .cs-mention-confirm {
   width: 100%;
+  flex-shrink: 0;
   margin-top: 6px;
-  padding: 8px 0;
+  padding: 10px 0;
   border-radius: 10px;
   border: none;
   background: var(--zl-primary);
   color: #fff;
   font-weight: 800;
-  font-size: 12.5px;
+  font-size: 13px;
   cursor: pointer;
 }
 .cs-mention-confirm:disabled {
