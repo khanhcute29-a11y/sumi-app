@@ -943,6 +943,25 @@ export default function ChatScreen({ profile }) {
   const showList = isDesktop || !activeRoomId;
   const mobileThreadOpen = !isDesktop && !!activeRoomId;
 
+  // LỖI THẬT đã vá (báo lại 3 lần, ảnh chụp thật 18/9/2026): phủ
+  // .sumi-chat-page bằng position:fixed (đợt sửa trước) không đủ triệt để
+  // trên Safari iOS thật — bàn phím mềm không thu nhỏ layout viewport (chỉ
+  // đổi window.visualViewport), và lúc focus ô nhập, Safari tự cuộn cả
+  // trang để đưa input lên trên bàn phím, kéo theo thanh Bottom Nav (vẫn
+  // đang NẰM TRONG DOM, chỉ bị che bằng CSS) lộ ra ngay sát mép trên bàn
+  // phím. Cách duy nhất chặn đứng dứt điểm mà KHÔNG sửa file ngoài Chat
+  // (App.jsx/BottomNav.jsx): tự tìm đúng DOM node thanh nav dùng chung của
+  // app và set display:none THẬT (không chỉ che bằng z-index) ngay khi mở
+  // 1 phòng chat trên mobile, trả lại y nguyên khi đóng phòng/rời tab Chat.
+  useEffect(() => {
+    if (!mobileThreadOpen) return undefined;
+    const navEl = document.querySelector('.sb-bottomnav');
+    if (!navEl) return undefined;
+    const prevDisplay = navEl.style.display;
+    navEl.style.display = 'none';
+    return () => { navEl.style.display = prevDisplay; };
+  }, [mobileThreadOpen]);
+
   return (
     <div
       className={`sumi-chat-page ${mobileThreadOpen ? 'cs-mobile-thread-open' : ''}`}
