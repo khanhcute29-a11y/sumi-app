@@ -26,6 +26,13 @@ import {
   sortConversations,
   fetchRoomMedia,
   countSharedGroups,
+  setConversationLabel,
+  setConversationMuted,
+  setConversationHidden,
+  reportConversation,
+  fetchRoomReactions,
+  toggleMessageReaction,
+  subscribeToRoomReactions,
 } from '../../lib/chat';
 import { uploadFile } from '../../lib/queries';
 import { toWebSafeImage } from '../../lib/imageConvert';
@@ -47,6 +54,34 @@ const MESSAGES_PAGE_SIZE = 50;
 // phòng đang chat (không phải toàn công ty).
 const TAG_ALL_ID = '__all__';
 const TAG_ALL_TOKEN = '@MọiNgười';
+
+// Thả cảm xúc nhanh trên tin nhắn, đúng bộ Zalo dùng.
+const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '😡'];
+
+// Phân loại hội thoại theo màu — key khớp check constraint label_color ở
+// migration 202609181410_chat_phan_loai_va_tat_thong_bao.sql.
+const LABEL_OPTIONS = [
+  { key: 'customer', label: 'Khách hàng', color: '#e94057' },
+  { key: 'family', label: 'Gia đình', color: '#e91e8c' },
+  { key: 'work', label: 'Công việc', color: '#f2994a' },
+  { key: 'friend', label: 'Bạn bè', color: '#f2c94c' },
+  { key: 'reply_later', label: 'Trả lời sau', color: '#27ae60' },
+  { key: 'colleague', label: 'Đồng nghiệp', color: '#2f80ed' },
+  { key: 'love', label: 'Yêuuu', color: '#eb34c8' },
+];
+
+// Tắt thông báo có hẹn giờ — trả về ISO string thời điểm hết hạn tắt.
+// "forever" dùng 1 mốc rất xa trong tương lai thay vì cột boolean riêng.
+const MUTE_OPTIONS = [
+  { key: '1h', label: 'Trong 1 giờ', getUntil: () => new Date(Date.now() + 60 * 60 * 1000).toISOString() },
+  { key: '4h', label: 'Trong 4 giờ', getUntil: () => new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString() },
+  {
+    key: '8am',
+    label: 'Cho đến 8:00 sáng mai',
+    getUntil: () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(8, 0, 0, 0); return d.toISOString(); },
+  },
+  { key: 'forever', label: 'Cho đến khi mở lại', getUntil: () => new Date('9999-12-31').toISOString() },
+];
 
 function formatListTime(iso) {
   if (!iso) return '';
@@ -476,6 +511,62 @@ export default function ChatScreen({ profile }) {
     };
   }, [activeRoomId, profile?.id]);
 
+  // Thả cảm xúc tin nhắn (👍❤️😂😮😢😡) — nạp toàn bộ cảm xúc của phòng đang
+  // mở 1 lần, sau đó bám Realtime để cập nhật tại chỗ (không tải lại cả
+  // phòng mỗi lần có người thả/bỏ cảm xúc).
+  const [reactionsByMessage, setReactionsByMessage] = useState({});
+  useEffect(() => {
+    if (!activeRoomId) { setReactionsByMessage({}); return undefined; }
+    let cancelled = false;
+    fetchRoomReactions(activeRoomId).then((rows) => {
+      if (cancelled) return;
+      const byMsg = {};
+      for (const r of rows) (byMsg[r.message_id] ||= []).push(r);
+      setReactionsByMessage(byMsg);
+    }).catch(() => {});
+    const unsubscribe = subscribeToRoomReactions(activeRoomId, (payload) => {
+      setReactionsByMessage((prev) => {
+        // LỖI THẬT đã vá (phát hiện qua test tay 18/9/2026): Supabase
+        // Realtime CHỈ gửi kèm "id" cho sự kiện DELETE khi bảng có RLS —
+        // dù đã bật REPLICA IDENTITY FULL, payload.old vẫn chỉ có {id},
+        // không có message_id (thiết kế bảo mật cố ý của Supabase, không
+        // phải lỗi cấu hình). Trước đây dựa vào payload.old.message_id nên
+        // không tìm đúng tin nhắn để xoá — cảm xúc xoá đúng trong DB nhưng
+        // vẫn còn hiện trên màn hình. Giờ dò khắp mọi tin nhắn để tìm đúng
+        // dòng có "id" trùng rồi xoá, không cần message_id.
+        if (payload.eventType === 'DELETE') {
+          const deletedId = payload.old.id;
+          const next = {};
+          for (const [mid, list] of Object.entries(prev)) next[mid] = list.filter((r) => r.id !== deletedId);
+          return next;
+        }
+        const next = { ...prev };
+        {
+          const row = payload.new;
+          const mid = row.message_id;
+          const list = (next[mid] || []).filter((r) => r.profile_id !== row.profile_id);
+          next[mid] = [...list, row];
+        }
+        return next;
+      });
+    });
+    return () => { cancelled = true; unsubscribe(); };
+  }, [activeRoomId]);
+
+  const handleToggleReaction = async (msg, emoji) => {
+    if (!profile?.id || !activeRoomId) return;
+    const current = (reactionsByMessage[msg.id] || []).find((r) => r.profile_id === profile.id);
+    try {
+      await toggleMessageReaction({
+        messageId: msg.id, roomId: activeRoomId, profileId: profile.id, emoji, currentEmoji: current?.emoji || null,
+      });
+      // Không cần tự cập nhật state ở đây — Realtime (subscribeToRoomReactions
+      // ở trên) sẽ tự dội về ngay, kể cả cho chính mình.
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
   // Người khác (không phải mình) đang gõ, theo trạng thái Presence hiện tại.
   const typingNames = useMemo(() => {
     const names = [];
@@ -572,6 +663,63 @@ export default function ChatScreen({ profile }) {
     }
   };
 
+  const handleSetLabel = async (convo, labelColor) => {
+    if (!profile?.id) return;
+    setConversations((prev) => prev.map((c) => (c.roomId === convo.roomId ? { ...c, labelColor } : c)));
+    try {
+      await setConversationLabel(convo.roomId, profile.id, labelColor);
+    } catch (err) {
+      setError(err.message);
+      setRefreshTick((t) => t + 1);
+    }
+  };
+
+  const handleSetMuted = async (convo, mutedUntil) => {
+    if (!profile?.id) return;
+    setConversations((prev) => prev.map((c) => (c.roomId === convo.roomId ? { ...c, mutedUntil } : c)));
+    try {
+      await setConversationMuted(convo.roomId, profile.id, mutedUntil);
+    } catch (err) {
+      setError(err.message);
+      setRefreshTick((t) => t + 1);
+    }
+  };
+
+  // "Ẩn trò chuyện" — ẩn khỏi danh sách của CHÍNH MÌNH, không xoá tin nhắn
+  // nào. Có tin mới tới thì tự hiện lại (xem fetchAllConversations).
+  const handleHideConversation = async (convo) => {
+    if (!profile?.id) return;
+    const hiddenAt = new Date().toISOString();
+    setConversations((prev) => prev.filter((c) => c.roomId !== convo.roomId));
+    if (activeRoomId === convo.roomId) backToList();
+    try {
+      await setConversationHidden(convo.roomId, profile.id, hiddenAt);
+    } catch (err) {
+      setError(err.message);
+      setRefreshTick((t) => t + 1);
+    }
+  };
+
+  // "Xoá hội thoại" — chat nhóm/1-1 dùng CHUNG dữ liệu nhiều người, xoá thật
+  // sẽ mất lịch sử của người khác nên KHÔNG xoá tin nhắn nào cả, chỉ ẩn
+  // khỏi danh sách của chính mình (giống Ẩn trò chuyện) — hỏi xác nhận
+  // trước vì chữ "Xoá" nghe có vẻ nghiêm trọng hơn thực tế.
+  const handleDeleteConversation = (convo) => {
+    if (!window.confirm(`Xoá hội thoại với "${convo.title}" khỏi danh sách của bạn?\n\nTin nhắn không bị xoá — nếu có tin mới, hội thoại sẽ tự hiện lại.`)) return;
+    handleHideConversation(convo);
+  };
+
+  const handleReportConversation = async (convo) => {
+    const reason = window.prompt(`Báo xấu hội thoại "${convo.title || ''}" — lý do (không bắt buộc):`);
+    if (reason === null || !profile?.id) return;
+    try {
+      await reportConversation(convo.roomId, profile.id, reason || null);
+      window.alert('Đã gửi báo cáo, cảm ơn bạn.');
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   // LỖI THẬT đã vá (review vòng 2, mục 2.5): trước đây nút ghim 📌 LUÔN LỘ
   // RA trên MỌI dòng hội thoại (mờ khi chưa ghim, đậm khi đã ghim) — Zalo
   // không có nút nào lộ sẵn như vậy, thao tác ghim/đánh dấu chưa đọc nằm
@@ -579,9 +727,12 @@ export default function ChatScreen({ profile }) {
   // bằng bấm giữ 500ms hoặc chuột phải, đóng khi bấm ra ngoài; dòng ĐÃ ghim
   // vẫn hiện icon 📌 nhỏ cạnh giờ gửi (không phải nút bấm) để biết là đã ghim.
   const [convoMenu, setConvoMenu] = useState(null); // { convo, x, y }
+  // Menu con lồng trong convoMenu — 'label' (Phân loại) hoặc 'mute' (Tắt
+  // thông báo), null = đang hiện danh sách hành động chính.
+  const [convoMenuSub, setConvoMenuSub] = useState(null);
   const longPressTimerRef = useRef(null);
-  const openConvoMenu = (convo, x, y) => setConvoMenu({ convo, x, y });
-  const closeConvoMenu = () => setConvoMenu(null);
+  const openConvoMenu = (convo, x, y) => { setConvoMenu({ convo, x, y }); setConvoMenuSub(null); };
+  const closeConvoMenu = () => { setConvoMenu(null); setConvoMenuSub(null); };
   const handleConvoTouchStart = (e, convo) => {
     const { clientX, clientY } = e.touches[0] || {};
     longPressTimerRef.current = setTimeout(() => openConvoMenu(convo, clientX, clientY), 500);
@@ -1068,8 +1219,17 @@ export default function ChatScreen({ profile }) {
                     : <div className="cs-convo-avatar">{c.avatarEmoji}</div>}
                   <div className="cs-convo-info">
                     <div className="cs-convo-row-top">
-                      <strong>{c.title}</strong>
-                      <span className="cs-convo-time">{c.pinned && '📌 '}{c.lastAt ? formatListTime(c.lastAt) : ''}</span>
+                      <strong>
+                        {c.labelColor && (
+                          <span className="cs-convo-menu-dot" style={{ background: LABEL_OPTIONS.find((o) => o.key === c.labelColor)?.color || '#ccc' }} />
+                        )}
+                        {c.title}
+                      </strong>
+                      <span className="cs-convo-time">
+                        {c.pinned && '📌 '}
+                        {c.mutedUntil && new Date(c.mutedUntil) > new Date() && '🔕 '}
+                        {c.lastAt ? formatListTime(c.lastAt) : ''}
+                      </span>
                     </div>
                     <div className="cs-convo-row-top">
                       <span className="cs-convo-preview">{c.lastMessage ? `${previewPrefix}${c.lastMessage}` : (c.subtitle || 'Bấm để xem hội thoại')}</span>
@@ -1183,6 +1343,25 @@ export default function ChatScreen({ profile }) {
                             </>
                           )}
                         </div>
+                        {!isRecalled && (reactionsByMessage[msg.id]?.length > 0) && (
+                          <div className="cs-msg-reactions">
+                            {Object.entries(
+                              reactionsByMessage[msg.id].reduce((acc, r) => {
+                                (acc[r.emoji] ||= []).push(r.profile_id);
+                                return acc;
+                              }, {})
+                            ).map(([emoji, profileIds]) => (
+                              <button
+                                key={emoji}
+                                type="button"
+                                className={`cs-msg-reaction-pill ${profileIds.includes(profile?.id) ? 'mine' : ''}`}
+                                onClick={() => handleToggleReaction(msg, emoji)}
+                              >
+                                {emoji} {profileIds.length}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                         <span className="cs-msg-timestamp">
                           {msg.failed
                             ? <button type="button" className="cs-msg-retry" onClick={() => handleRetryMessage(msg)}>↻ Gửi lại</button>
@@ -1324,15 +1503,60 @@ export default function ChatScreen({ profile }) {
         <div className="cs-convo-menu-overlay" onClick={closeConvoMenu} onContextMenu={(e) => e.preventDefault()}>
           <div
             className="cs-convo-menu"
-            style={{ left: Math.min(convoMenu.x, window.innerWidth - 200), top: Math.min(convoMenu.y, window.innerHeight - 120) }}
+            style={{ left: Math.min(convoMenu.x, window.innerWidth - 220), top: Math.min(convoMenu.y, window.innerHeight - 380) }}
             onClick={(e) => e.stopPropagation()}
           >
-            <button type="button" onClick={() => { togglePin(convoMenu.convo); closeConvoMenu(); }}>
-              {convoMenu.convo.pinned ? '📌 Bỏ ghim' : '📌 Ghim hội thoại'}
-            </button>
-            <button type="button" onClick={() => { handleMarkUnread(convoMenu.convo); closeConvoMenu(); }}>
-              🔵 Đánh dấu chưa đọc
-            </button>
+            {convoMenuSub === 'label' ? (
+              <>
+                <button type="button" className="cs-convo-menu-back" onClick={() => setConvoMenuSub(null)}>← Quay lại</button>
+                <button type="button" onClick={() => { handleSetLabel(convoMenu.convo, null); closeConvoMenu(); }}>
+                  ⚪ Không phân loại
+                </button>
+                {LABEL_OPTIONS.map((opt) => (
+                  <button key={opt.key} type="button" onClick={() => { handleSetLabel(convoMenu.convo, opt.key); closeConvoMenu(); }}>
+                    <span className="cs-convo-menu-dot" style={{ background: opt.color }} /> {opt.label}
+                  </button>
+                ))}
+              </>
+            ) : convoMenuSub === 'mute' ? (
+              <>
+                <button type="button" className="cs-convo-menu-back" onClick={() => setConvoMenuSub(null)}>← Quay lại</button>
+                {MUTE_OPTIONS.map((opt) => (
+                  <button key={opt.key} type="button" onClick={() => { handleSetMuted(convoMenu.convo, opt.getUntil()); closeConvoMenu(); }}>
+                    🔕 {opt.label}
+                  </button>
+                ))}
+                {convoMenu.convo.mutedUntil && (
+                  <button type="button" onClick={() => { handleSetMuted(convoMenu.convo, null); closeConvoMenu(); }}>
+                    🔔 Bật lại thông báo
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                <button type="button" onClick={() => { togglePin(convoMenu.convo); closeConvoMenu(); }}>
+                  {convoMenu.convo.pinned ? '📌 Bỏ ghim' : '📌 Ghim hội thoại'}
+                </button>
+                <button type="button" onClick={() => setConvoMenuSub('label')}>
+                  🏷️ Phân loại {convoMenu.convo.labelColor ? `(${LABEL_OPTIONS.find((o) => o.key === convoMenu.convo.labelColor)?.label || ''})` : ''} ›
+                </button>
+                <button type="button" onClick={() => { handleMarkUnread(convoMenu.convo); closeConvoMenu(); }}>
+                  🔵 Đánh dấu chưa đọc
+                </button>
+                <button type="button" onClick={() => setConvoMenuSub('mute')}>
+                  {convoMenu.convo.mutedUntil && new Date(convoMenu.convo.mutedUntil) > new Date() ? '🔕 Đã tắt thông báo' : '🔕 Tắt thông báo'} ›
+                </button>
+                <button type="button" onClick={() => { handleHideConversation(convoMenu.convo); closeConvoMenu(); }}>
+                  🙈 Ẩn trò chuyện
+                </button>
+                <button type="button" className="cs-convo-menu-danger" onClick={() => { handleDeleteConversation(convoMenu.convo); closeConvoMenu(); }}>
+                  🗑 Xoá hội thoại
+                </button>
+                <button type="button" className="cs-convo-menu-danger" onClick={() => { handleReportConversation(convoMenu.convo); closeConvoMenu(); }}>
+                  🚩 Báo xấu
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -1344,9 +1568,19 @@ export default function ChatScreen({ profile }) {
           <div className="cs-convo-menu-overlay" onClick={closeMsgMenu} onContextMenu={(e) => e.preventDefault()}>
             <div
               className="cs-convo-menu"
-              style={{ left: Math.min(msgMenu.x, window.innerWidth - 200), top: Math.min(msgMenu.y, window.innerHeight - 120) }}
+              style={{ left: Math.min(msgMenu.x, window.innerWidth - 200), top: Math.min(msgMenu.y, window.innerHeight - 170) }}
               onClick={(e) => e.stopPropagation()}
             >
+              <div className="cs-reaction-row">
+                {REACTION_EMOJIS.map((emoji) => (
+                  <button
+                    key={emoji} type="button" className="cs-reaction-row-btn"
+                    onClick={() => { handleToggleReaction(msgMenu.msg, emoji); closeMsgMenu(); }}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
               <button type="button" onClick={() => { handleReplyToMessage(msgMenu.msg); closeMsgMenu(); }}>↩ Trả lời</button>
               {canRecall && (
                 <button type="button" onClick={() => { handleRecallMessage(msgMenu.msg); closeMsgMenu(); }}>🗑 Thu hồi</button>

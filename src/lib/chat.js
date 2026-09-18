@@ -222,11 +222,22 @@ export function subscribeToPeerReadReceipt(roomId, peerId, onChange) {
 export async function fetchAllConversations(myId) {
   const { data: parts, error } = await supabase
     .from('chat_participants')
-    .select('room_id, pinned, chat_rooms(id, name, room_type, topic, avatar_emoji, created_by, last_message_at, last_message_preview, last_message_sender_id)')
+    .select('room_id, pinned, label_color, muted_until, hidden_at, chat_rooms(id, name, room_type, topic, avatar_emoji, created_by, last_message_at, last_message_preview, last_message_sender_id)')
     .eq('profile_id', myId);
   if (error) throw error;
   const pinnedByRoom = Object.fromEntries((parts || []).map((p) => [p.room_id, !!p.pinned]));
-  const rooms = (parts || []).map((p) => p.chat_rooms).filter(Boolean);
+  const labelByRoom = Object.fromEntries((parts || []).map((p) => [p.room_id, p.label_color || null]));
+  const mutedByRoom = Object.fromEntries((parts || []).map((p) => [p.room_id, p.muted_until || null]));
+  // Ẩn/Xoá hội thoại chỉ ẩn tạm - nếu có tin nhắn mới SAU lúc ẩn, tự hiện
+  // lại trong danh sách (giống Zalo), nên lọc theo cả hidden_at LẪN
+  // last_message_at của chính phòng đó, không chỉ dựa vào hidden_at suông.
+  const hiddenAtByRoom = Object.fromEntries((parts || []).map((p) => [p.room_id, p.hidden_at || null]));
+  const rooms = (parts || []).map((p) => p.chat_rooms).filter(Boolean)
+    .filter((r) => {
+      const hiddenAt = hiddenAtByRoom[r.id];
+      if (!hiddenAt) return true;
+      return r.last_message_at && new Date(r.last_message_at) > new Date(hiddenAt);
+    });
   const roomIds = rooms.map((r) => r.id);
   if (!roomIds.length) return [];
 
@@ -259,6 +270,8 @@ export async function fetchAllConversations(myId) {
         lastAt: r.last_message_at || null,
         lastSenderId: r.last_message_sender_id || null,
         pinned: !!pinnedByRoom[r.id],
+        labelColor: labelByRoom[r.id] || null,
+        mutedUntil: mutedByRoom[r.id] || null,
       };
     })
     .filter((c) => c.roomType !== 'direct' || c.peerId)
@@ -286,6 +299,109 @@ export async function setConversationPinned(roomId, myId, pinned) {
     .eq('room_id', roomId)
     .eq('profile_id', myId);
   if (error) throw error;
+}
+
+// Phân loại màu hội thoại (Khách hàng/Gia đình/Công việc/...) - null = bỏ
+// phân loại. Chỉ ảnh hưởng CHÍNH MÌNH, giống cơ chế Ghim.
+export async function setConversationLabel(roomId, myId, labelColor) {
+  const { error } = await supabase
+    .from('chat_participants')
+    .update({ label_color: labelColor })
+    .eq('room_id', roomId)
+    .eq('profile_id', myId);
+  if (error) throw error;
+}
+
+// Tắt thông báo có hẹn giờ - mutedUntil là ISO string thời điểm hết hạn tắt,
+// hoặc null để bật lại thông báo ngay.
+export async function setConversationMuted(roomId, myId, mutedUntil) {
+  const { error } = await supabase
+    .from('chat_participants')
+    .update({ muted_until: mutedUntil })
+    .eq('room_id', roomId)
+    .eq('profile_id', myId);
+  if (error) throw error;
+}
+
+// Ẩn/Xoá hội thoại khỏi danh sách CỦA RIÊNG MÌNH - hiddenAt là ISO string
+// lúc ẩn (dùng new Date().toISOString()), hoặc null để hiện lại ngay. Chỉ
+// ẩn ở client (xem fetchAllConversations lọc theo hidden_at) - KHÔNG xoá
+// tin nhắn nào, người khác trong phòng không bị ảnh hưởng gì.
+export async function setConversationHidden(roomId, myId, hiddenAt) {
+  const { error } = await supabase
+    .from('chat_participants')
+    .update({ hidden_at: hiddenAt })
+    .eq('room_id', roomId)
+    .eq('profile_id', myId);
+  if (error) throw error;
+}
+
+export async function reportConversation(roomId, reporterId, reason) {
+  const { error } = await supabase
+    .from('chat_reports')
+    .insert({ room_id: roomId, reporter_id: reporterId, reason: reason || null });
+  if (error) throw error;
+}
+
+// ── Thả cảm xúc tin nhắn (👍❤️😂😮😢😡) ───────────────────────────────────
+// Mỗi người CHỈ 1 cảm xúc / 1 tin nhắn (unique(message_id, profile_id) ở
+// DB) - bấm cảm xúc khác thì THAY THẾ (upsert), bấm lại đúng cảm xúc cũ thì
+// bỏ đi (delete). Xử lý ở đây thay vì để component tự upsert/delete rải
+// rác, để chỗ toggle luôn nhất quán.
+export async function fetchRoomReactions(roomId) {
+  const { data, error } = await supabase
+    .from('chat_message_reactions')
+    .select('id, message_id, profile_id, emoji')
+    .eq('room_id', roomId);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function toggleMessageReaction({ messageId, roomId, profileId, emoji, currentEmoji }) {
+  if (currentEmoji === emoji) {
+    const { error } = await supabase
+      .from('chat_message_reactions')
+      .delete()
+      .eq('message_id', messageId)
+      .eq('profile_id', profileId);
+    if (error) throw error;
+    return null;
+  }
+  const { data, error } = await supabase
+    .from('chat_message_reactions')
+    .upsert({ message_id: messageId, room_id: roomId, profile_id: profileId, emoji }, { onConflict: 'message_id,profile_id' })
+    .select('id, message_id, profile_id, emoji')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// LỖI THẬT đã vá (phát hiện qua test tay 18/9/2026, 2 nguyên nhân riêng):
+// 1) React StrictMode (chỉ bật ở môi trường dev) chạy effect 2 lần - đóng
+//    kênh CÙNG TÊN đang tồn tại (nếu có) trước khi mở kênh mới, đảm bảo
+//    luôn chỉ có ĐÚNG 1 kênh/phòng tại một thời điểm.
+// 2) NGUYÊN NHÂN CHÍNH: bộ lọc `filter: room_id=eq.${roomId}` KHÔNG hoạt
+//    động cho sự kiện DELETE — Supabase Realtime chỉ gửi kèm "id" (khoá
+//    chính) cho DELETE khi bảng có RLS, không có room_id để đối chiếu bộ
+//    lọc, nên Realtime tự loại bỏ sự kiện xoá trước khi tới client (verify
+//    bằng debug channel: kênh KHÔNG lọc nhận đúng sự kiện DELETE, kênh CÓ
+//    lọc room_id thì không nhận được gì cả). Bỏ hẳn filter phía server,
+//    chuyển việc lọc đúng phòng sang phía client (ChatScreen.jsx tự so
+//    room_id cho INSERT/UPDATE; DELETE thì cứ để qua vì reducer chỉ xoá
+//    đúng id đang có trong state, phòng khác không có id đó nên vô hại).
+export function subscribeToRoomReactions(roomId, onChange) {
+  if (!roomId) return () => {};
+  const topic = `chat-reactions-${roomId}`;
+  const existing = supabase.getChannels().find((c) => c.topic === `realtime:${topic}`);
+  if (existing) supabase.removeChannel(existing);
+  const channel = supabase
+    .channel(topic)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_message_reactions' }, (payload) => {
+      if (payload.eventType !== 'DELETE' && payload.new?.room_id !== roomId) return;
+      onChange(payload);
+    })
+    .subscribe();
+  return () => supabase.removeChannel(channel);
 }
 
 // Tự tạo nhóm chat mới với người mình chọn (khác 4 nhóm mặc định cố định).
