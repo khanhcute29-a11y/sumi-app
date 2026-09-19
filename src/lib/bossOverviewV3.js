@@ -83,7 +83,7 @@ const REVENUE_CATEGORY_FLOWS = [...ORDER_FLOWS, MIXED_FLOW];
 // Gom 1 danh sách rows (đã có order_type từ RPC) thành object theo từng
 // luồng sản phẩm — dùng chung cho cả 3 bucket "Tiền đặt cọc"/"Công nợ cần
 // thu"/"Đơn đang giao" bên dưới, tránh lặp lại cùng 1 vòng lặp reduce 3 lần.
-function groupRowsByOrderFlow(rows, amountOf) {
+function groupRowsByOrderFlow(rows, amountOf, whenOf) {
   const byKey = {};
   REVENUE_CATEGORY_FLOWS.forEach((f) => { byKey[f.key] = { amount: 0, count: 0, orders: [] }; });
   rows.forEach((o) => {
@@ -93,7 +93,7 @@ function groupRowsByOrderFlow(rows, amountOf) {
     bucket.count += 1;
     bucket.orders.push({
       id: o.id, orderCode: o.order_code, customerName: o.customer_name || '—',
-      amount, branch: o.target_store || null, when: o.completed_at,
+      amount, branch: o.target_store || null, when: whenOf(o),
     });
   });
   return byKey;
@@ -102,7 +102,10 @@ function groupRowsByOrderFlow(rows, amountOf) {
 export async function fetchDoanhThuDuTinh() {
   const [depositRes, debtRes, deliveryRes, congNoRes] = await Promise.all([
     supabase.rpc('orders_pending_deposit_rows'),
-    supabase.from('customer_debt_balances').select('customer_id, name, balance').gt('balance', 0),
+    // last_entry_at: view customer_debt_balances đã tự tính sẵn (MAX ngày
+    // phát sinh của các bút toán công nợ) - chỉ cần SELECT thêm, không cần
+    // sửa view (xem 202609200900_them_moc_thoi_gian_doanh_thu_du_tinh.sql).
+    supabase.from('customer_debt_balances').select('customer_id, name, balance, last_entry_at').gt('balance', 0),
     supabase.rpc('orders_in_delivery_rows'),
     supabase.rpc('orders_unverified_completed_rows'),
   ]);
@@ -118,7 +121,7 @@ export async function fetchDoanhThuDuTinh() {
     count: (depositRes.data || []).length,
     orders: (depositRes.data || []).map((o) => ({
       id: o.id, orderCode: o.order_code, customerName: o.customer_name || '—',
-      amount: Number(o.deposit) || 0, branch: o.target_store || null,
+      amount: Number(o.deposit) || 0, branch: o.target_store || null, when: o.created_at,
     })),
   };
   // Đổi tên rõ nghĩa (theo phản hồi Giám đốc 20/09/2026): dễ nhầm với khối
@@ -136,7 +139,7 @@ export async function fetchDoanhThuDuTinh() {
     count: (debtRes.data || []).length,
     orders: (debtRes.data || []).map((d) => ({
       id: d.customer_id, orderCode: null, customerName: d.name,
-      amount: Number(d.balance) || 0, branch: 'Trường học', isDebtCustomer: true,
+      amount: Number(d.balance) || 0, branch: 'Trường học', isDebtCustomer: true, when: d.last_entry_at,
     })),
   };
   const delivery = {
@@ -146,7 +149,7 @@ export async function fetchDoanhThuDuTinh() {
     count: (deliveryRes.data || []).length,
     orders: (deliveryRes.data || []).map((o) => ({
       id: o.id, orderCode: o.order_code, customerName: o.customer_name || '—',
-      amount: Number(o.total) || 0, branch: o.target_store || null,
+      amount: Number(o.total) || 0, branch: o.target_store || null, when: o.created_at,
     })),
   };
 
@@ -173,9 +176,9 @@ export async function fetchDoanhThuDuTinh() {
   // cho 3 bucket có sẵn order_type (đặt cọc/công nợ cần thu/đang giao).
   // "Công nợ đơn sỉ chưa thu" CỐ Ý không nằm trong đây, tính riêng ở "debt"
   // ở trên vì lấy theo khách hàng, không có dữ liệu loại bánh để tách.
-  const depositByFlow = groupRowsByOrderFlow(depositRes.data || [], (o) => Number(o.deposit) || 0);
-  const deliveryByFlow = groupRowsByOrderFlow(deliveryRes.data || [], (o) => Number(o.total) || 0);
-  const congNoByFlow = groupRowsByOrderFlow(congNoRes.data || [], (o) => Math.max(0, (Number(o.total) || 0) - (Number(o.deposit) || 0)));
+  const depositByFlow = groupRowsByOrderFlow(depositRes.data || [], (o) => Number(o.deposit) || 0, (o) => o.created_at);
+  const deliveryByFlow = groupRowsByOrderFlow(deliveryRes.data || [], (o) => Number(o.total) || 0, (o) => o.created_at);
+  const congNoByFlow = groupRowsByOrderFlow(congNoRes.data || [], (o) => Math.max(0, (Number(o.total) || 0) - (Number(o.deposit) || 0)), (o) => o.completed_at);
 
   const categoryGroups = REVENUE_CATEGORY_FLOWS.map((f) => {
     const d = depositByFlow[f.key];

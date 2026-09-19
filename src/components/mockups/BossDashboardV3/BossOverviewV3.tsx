@@ -1906,7 +1906,14 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
                         {o.orderCode ? o.customerName : 'Công nợ trường học'}{o.branch ? ` · ${o.branch}` : ''}
                       </div>
                     </div>
-                    <div style={{ fontSize: 13.5, fontWeight: 900, color: '#15803d' }}>{formatVND(o.amount)}</div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 900, color: '#15803d' }}>{formatVND(o.amount)}</div>
+                      {o.when && (
+                        <div style={{ fontSize: 10.5, color: '#a08a76', marginTop: 2 }}>
+                          {new Date(o.when).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </button>
               ))}
