@@ -121,9 +121,17 @@ export async function fetchDoanhThuDuTinh() {
       amount: Number(o.deposit) || 0, branch: o.target_store || null,
     })),
   };
+  // Đổi tên rõ nghĩa (theo phản hồi Giám đốc 20/09/2026): dễ nhầm với khối
+  // "Trường học" trong categoryGroups bên dưới, dù 2 số này KHÁC NHAU và
+  // KHÔNG cộng đôi — khối "Trường học" là ảnh chụp đơn hàng đang xử lý
+  // (đặt cọc/chưa xác minh/đang giao) tính real-time từ bảng orders; còn
+  // "debt" ở đây là SỔ CÔNG NỢ DÀI HẠN riêng (customer_debt_entries/
+  // customer_debt_balances), tích luỹ qua nhiều đơn/nhiều tháng, có số dư
+  // đầu kỳ - không chỉ đơn đang treo lúc này. Ghi rõ "Trường học —" ở đầu
+  // để không ai tưởng đây là 1 loại bánh khác ngoài 5 loại kia.
   const debt = {
-    id: 'debt', icon: '📒', title: 'Công nợ đơn sỉ chưa thu',
-    note: 'Công nợ trường học còn dư nợ — tính theo KHÁCH HÀNG, không tách được theo loại bánh',
+    id: 'debt', icon: '📒', title: 'Trường học — Công nợ sổ sách',
+    note: 'Sổ công nợ dài hạn theo KHÁCH HÀNG (khác với khối "Trường học" ở trên — đó là đơn đang xử lý, đây là công nợ tích luỹ nhiều đơn/nhiều tháng), không tách được theo loại bánh',
     amount: (debtRes.data || []).reduce((s, d) => s + (Number(d.balance) || 0), 0),
     count: (debtRes.data || []).length,
     orders: (debtRes.data || []).map((d) => ({
@@ -173,8 +181,12 @@ export async function fetchDoanhThuDuTinh() {
     const d = depositByFlow[f.key];
     const c = congNoByFlow[f.key];
     const del = deliveryByFlow[f.key];
+    // Riêng "Trường học" đổi nhãn rõ nghĩa hơn "Trường học — Công nợ sổ
+    // sách" (bucket debt ở trên) — CHỈ đổi title hiển thị ở màn Doanh thu dự
+    // tính này, KHÔNG đụng title dùng chung ORDER_FLOWS (KDS, Đơn hàng...).
+    const title = f.key === 'school' ? 'Trường học — Đơn đang xử lý' : f.title;
     return {
-      key: f.key, icon: f.icon, title: f.title, subtitle: f.subtitle,
+      key: f.key, icon: f.icon, title, subtitle: f.subtitle,
       amount: d.amount + c.amount + del.amount,
       count: d.count + c.count + del.count,
       lines: [
