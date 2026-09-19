@@ -3,9 +3,10 @@
 //
 // sheet = { name, headers, rows, bandCol?, totalRow? }
 //  - Cột có tiêu đề chứa "(đ)" → định dạng tiền #,##0
-//  - Cột có tiêu đề chứa "số" hoặc "Số" (đếm) → căn giữa, số nguyên
-//  - bandCol: tô nền xen kẽ mỗi khi giá trị cột này đổi (gom theo ngày/tuần)
-//  - totalRow: dòng cuối in đậm + tô nền (dòng TỔNG)
+//  - Cột đếm (Số đơn / Số lượng…) → căn giữa, số nguyên
+//  - bandCol: kẻ đường đậm hơn mỗi khi giá trị cột này đổi (tách nhóm ngày/tuần,
+//    KHÔNG tô nền xen kẽ — nền chỗ có chỗ không gây rối mắt)
+//  - totalRows: số dòng CUỐI là dòng TỔNG (in đậm + tô nền vàng nhạt)
 const BORDER = { style: 'thin', color: { argb: 'FFEADCCA' } };
 
 export async function downloadXlsx(filename, sheets) {
@@ -35,24 +36,25 @@ export async function downloadXlsx(filename, sheets) {
       c.border = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER };
     });
 
-    let band = false; let prev = null;
+    const MID = { style: 'medium', color: { argb: 'FF15803D' } };
+    let prev = null;
     for (let r = 2; r <= ws.rowCount; r += 1) {
       const row = ws.getRow(r);
-      const isTotal = sh.totalRow && r === ws.rowCount;
-      if (sh.bandCol !== undefined) {
+      const isTotal = r > ws.rowCount - (sh.totalRows || 0);
+      let groupStart = false;
+      if (sh.bandCol !== undefined && !isTotal) {
         const v = row.getCell(sh.bandCol + 1).value;
-        if (v !== prev) { band = !band; prev = v; }
+        groupStart = prev !== null && v !== prev;
+        prev = v;
       }
       row.eachCell({ includeEmpty: true }, (c, col) => {
-        c.border = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER };
+        c.border = { top: groupStart || (isTotal && r === ws.rowCount - sh.totalRows + 1) ? MID : BORDER, bottom: BORDER, left: BORDER, right: BORDER };
         c.alignment = { vertical: 'top', wrapText: true, horizontal: moneyCols[col - 1] ? 'right' : countCols[col - 1] ? 'center' : 'left' };
         if (moneyCols[col - 1]) c.numFmt = '#,##0';
         else if (countCols[col - 1]) c.numFmt = '#,##0';
         if (isTotal) {
           c.font = { bold: true };
           c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
-        } else if (band) {
-          c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0FDF4' } };
         }
       });
     }

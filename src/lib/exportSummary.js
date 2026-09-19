@@ -28,6 +28,7 @@ const weekOf = (iso) => {
 };
 const dayLabel = (s) => (s === NO_DATE ? s : fmtDay(new Date(`${s}T00:00:00`)));
 const num = (v) => Number(v) || 0;
+const sumBy = (list, key) => list.reduce((s, o) => s + num(o[key]), 0);
 
 export const rangeBounds = (from, to) => ({
   fromIso: new Date(`${from}T00:00:00`).toISOString(),
@@ -79,13 +80,14 @@ export async function exportOrdersSummary(from, to, format = 'xlsx') {
   const byWeek = group(live, weekOf, init, add);
   const tag = stamp(from, to);
   await emit(format, `don-hang_${tag}`, [
-    { name: 'Theo ngày', headers: headersFor('Ngày cần giao'), rows: toRows(byDay, dayLabel), bandCol: 0, totalRow: true },
-    { name: 'Theo tuần', headers: headersFor('Tuần (T2 - CN)'), rows: toRows(byWeek, (p) => p), bandCol: 0, totalRow: true },
+    { name: 'Theo ngày', headers: headersFor('Ngày cần giao'), rows: toRows(byDay, dayLabel), bandCol: 0, totalRows: 1 },
+    { name: 'Theo tuần', headers: headersFor('Tuần (T2 - CN)'), rows: toRows(byWeek, (p) => p), bandCol: 0, totalRows: 1 },
     { name: 'Chi tiết', headers: ['Ngày cần giao', 'Mã đơn', 'Khách hàng', 'Loại bánh', 'Trạng thái', 'Sản phẩm', 'Số lượng', 'Tổng tiền (đ)', 'Đã cọc (đ)', 'Chi nhánh'],
       rows: rows.map((o) => [
         dayLabel(dayOf(o.required_at)), o.order_code, o.customer_name || '', categoryTitle(categoryKey(o.order_type)),
         o.status_v2, o.product_names || '', num(o.total_quantity), num(o.total), num(o.deposit), o.target_store || '',
-      ]), bandCol: 0 },
+      ]).concat([['TỔNG', '', '', '', '', '', sumBy(rows.filter((o) => o.status_v2 !== 'cancelled'), 'total_quantity'), sumBy(rows.filter((o) => o.status_v2 !== 'cancelled'), 'total'), sumBy(rows.filter((o) => o.status_v2 !== 'cancelled'), 'deposit'), '']]),
+      bandCol: 0, totalRows: 1 },
   ], ['theo-ngay', 'theo-tuan', 'chi-tiet']);
   return rows.length;
 }
@@ -140,13 +142,16 @@ export async function exportRevenueSummary(from, to, format = 'xlsx') {
   };
   const tag = stamp(from, to);
   const kindLabel = (k) => KINDS.find((x) => x.key === k)?.label || k;
+  // Cuối file chi tiết: mỗi loại doanh thu 1 dòng TỔNG (không cộng chung thuần với dự tính).
+  const kindTotals = KINDS.filter((k) => recs.some((r) => r.kind === k.key))
+    .map((k) => [`TỔNG ${k.label}`, '', '', '', '', recs.filter((r) => r.kind === k.key).reduce((s, r) => s + r.amount, 0), '']);
   await emit(format, `doanh-thu_${tag}`, [
-    { name: 'Theo ngày', headers: headersFor('Ngày'), rows: toRows(group(recs, dayOf, init, add), dayLabel), bandCol: 0, totalRow: true },
-    { name: 'Theo tuần', headers: headersFor('Tuần (T2 - CN)'), rows: toRows(group(recs, weekOf, init, add), (p) => p), bandCol: 0, totalRow: true },
+    { name: 'Theo ngày', headers: headersFor('Ngày'), rows: toRows(group(recs, dayOf, init, add), dayLabel), bandCol: 0, totalRows: 1 },
+    { name: 'Theo tuần', headers: headersFor('Tuần (T2 - CN)'), rows: toRows(group(recs, weekOf, init, add), (p) => p), bandCol: 0, totalRows: 1 },
     { name: 'Chi tiết', headers: ['Loại doanh thu', 'Ngày', 'Mã đơn', 'Khách hàng', 'Loại bánh', 'Số tiền (đ)', 'Chi nhánh'],
       rows: [...recs].sort((a, b) => dayOf(a.when).localeCompare(dayOf(b.when))).map((r) => [
         kindLabel(r.kind), dayLabel(dayOf(r.when)), r.code || '', r.customer || '', categoryTitle(r.category), r.amount, r.branch || '',
-      ]) },
+      ]).concat(kindTotals), totalRows: kindTotals.length },
   ], ['theo-ngay', 'theo-tuan', 'chi-tiet']);
   return recs.length;
 }
