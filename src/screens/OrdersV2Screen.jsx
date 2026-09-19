@@ -11,7 +11,7 @@ import { subscribeToBroadcast, BroadcastEvents } from '../lib/realtimeSync';
 import FinishedGoodsInventoryV2 from '../components/warehouse/FinishedGoodsInventoryV2';
 import { fetchOrderNoteCounts } from '../lib/queries';
 import { fetchOrderHearts, addOrderHeart } from '../lib/bossOverviewV3';
-import { IconInbox, IconKitchen, IconPackage, IconShipping, IconCheckCircle, IconWarning, IconWarehouse, IconCake, IconBakery, IconMacaron, IconSchool, IconTeabreak, IconMixed } from '../components/icons/FrogIcons';
+import { IconInbox, IconKitchen, IconPackage, IconShipping, IconCheckCircle, IconWarning, IconWarehouse, IconCake, IconBakery, IconMacaron, IconSchool, IconTeabreak, IconMixed, IconExport } from '../components/icons/FrogIcons';
 import { localDateStr } from '../lib/date';
 import ExportSummaryModal from '../components/ExportSummaryModal';
 
@@ -473,10 +473,10 @@ export default function OrdersV2Screen() {
                 cursor: 'pointer', font: 'inherit', textAlign: 'left',
               }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 20 }}>📤</span>
+                <IconExport size={22} />
                 <strong style={{ color: '#2d1c10', fontSize: 18 }}>Xuất tổng hợp</strong>
               </span>
-              <span style={{ color: '#b93e13', fontWeight: 800 }}>Theo ngày · tuần →</span>
+              <span style={{ color: '#b93e13', fontWeight: 800 }}>Xuất Excel →</span>
             </button>
           )}
         </div>

@@ -77,7 +77,7 @@ const timeOf = (iso) => {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
-export async function exportOrdersSummary(from, to, format = 'xlsx', flows = []) {
+export async function exportOrdersSummary(from, to, flows = []) {
   const [ordersRes, itemsRes] = await Promise.all([
     supabase.rpc('orders_export_rows', { p_from: from, p_to: to }),
     supabase.rpc('orders_export_item_rows', { p_from: from, p_to: to }),
@@ -113,18 +113,6 @@ export async function exportOrdersSummary(from, to, format = 'xlsx', flows = [])
   const sections = CATEGORIES.map((c) => ({ ...c, list: orders.filter((o) => categoryKey(o.order_type) === c.key) })).filter((c) => c.list.length);
   const multi = sections.length > 1;
   const tag = flowTag(flows) + stamp(from, to);
-
-  if (format === 'csv') {
-    const rows = [];
-    orders.forEach((o) => {
-      const items = itemsByOrder[o.id] || [];
-      const tail = [money(o.total), money(o.deposit), remainOf(o)];
-      if (!items.length) { rows.push([categoryTitle(categoryKey(o.order_type)), ...orderInfo(o), o.product_names || '', num(o.total_quantity), '', '', '', ...tail]); return; }
-      items.forEach((it) => rows.push([categoryTitle(categoryKey(o.order_type)), ...orderInfo(o), ...itemCells(it), ...tail]));
-    });
-    downloadCsv(`don-hang_${tag}.csv`, ['Luồng', ...ORDER_HEADERS], rows);
-    return orders.length;
-  }
 
   const rows = []; const rowStyles = [];
   const push = (r, style) => { rows.push(r); rowStyles.push(style); };

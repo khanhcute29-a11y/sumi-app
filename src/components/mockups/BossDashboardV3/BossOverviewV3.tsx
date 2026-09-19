@@ -35,6 +35,7 @@ import { AuthProvider, useAuth } from '../../../lib/AuthContext';
 import { playConfirmSound } from '../../../lib/sound';
 import { listOrdersV2 } from '../../../lib/featureFlags';
 import ExportSummaryModal from '../../ExportSummaryModal';
+import { IconExport } from '../../icons/FrogIcons';
 import { ORDER_FLOWS } from '../../../data/orderCatalogs';
 // Tái dùng ĐÚNG bộ lọc ngày/tuần/tháng/tuỳ chọn đã có sẵn cho doanh thu theo
 // kênh (Hôm nay) — không viết lại công thức tính khoảng ngày ở đây, tránh
@@ -1725,7 +1726,7 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
                     </div>
                   </div>
                   <button onClick={() => setActiveSheet(null)} aria-label="Quay lại" style={{ order: -1, flexShrink: 0, width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer' }}>‹</button>
-                  <button onClick={() => setShowRevenueExport(true)} style={{ marginLeft: 'auto', flexShrink: 0, minHeight: 40, padding: '0 12px', borderRadius: 12, background: '#f0fdf4', border: '1.5px solid #15803d', color: '#15803d', fontSize: 12, fontWeight: 900, cursor: 'pointer' }}>📤 Xuất</button>
+                  <button onClick={() => setShowRevenueExport(true)} style={{ marginLeft: 'auto', flexShrink: 0, minHeight: 40, padding: '0 12px', borderRadius: 12, background: '#f0fdf4', border: '1.5px solid #15803d', color: '#15803d', fontSize: 12, fontWeight: 900, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconExport size={18} />Xuất</button>
                 </div>
 
                 {/* 2 module: Doanh thu hôm nay / Lịch sử */}
