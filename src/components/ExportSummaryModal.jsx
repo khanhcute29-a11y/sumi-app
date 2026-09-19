@@ -5,6 +5,7 @@ import { exportOrdersSummary, exportRevenueSummary, thisWeekRange } from '../lib
 // Chỉ được mở từ chỗ đã giới hạn cho Giám đốc.
 export default function ExportSummaryModal({ mode, onClose }) {
   const [range, setRange] = useState(thisWeekRange);
+  const [format, setFormat] = useState('xlsx');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const isOrders = mode === 'orders';
@@ -14,8 +15,8 @@ export default function ExportSummaryModal({ mode, onClose }) {
     if (!valid || busy) return;
     setBusy(true); setMsg('');
     try {
-      const n = await (isOrders ? exportOrdersSummary : exportRevenueSummary)(range.from, range.to);
-      setMsg(n ? `Đã xuất 3 file (${n} dòng dữ liệu).` : 'Không có dữ liệu trong khoảng này — file chỉ có tiêu đề.');
+      const n = await (isOrders ? exportOrdersSummary : exportRevenueSummary)(range.from, range.to, format);
+      setMsg(n ? `Đã xuất ${format === 'xlsx' ? '1 file Excel (3 sheet)' : '3 file CSV'} (${n} dòng dữ liệu).` : 'Không có dữ liệu trong khoảng này — file chỉ có tiêu đề.');
     } catch (err) {
       setMsg(`Lỗi: ${err?.message || 'không xuất được.'}${isOrders ? ' (đã chạy migration orders_export_rows chưa?)' : ''}`);
     } finally { setBusy(false); }
@@ -36,11 +37,16 @@ export default function ExportSummaryModal({ mode, onClose }) {
           <label style={label}>Từ ngày<input type="date" style={input} value={range.from} max={range.to} onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} /></label>
           <label style={label}>Đến ngày<input type="date" style={input} value={range.to} min={range.from} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} /></label>
         </div>
-        <p style={{ fontSize: 11.5, color: '#725f50', margin: '10px 0 0' }}>Tải về 3 file CSV (mở bằng Excel): theo ngày, theo tuần, chi tiết. Nếu trình duyệt hỏi cho phép tải nhiều file, hãy chọn Cho phép.</p>
+        <label style={{ ...label, marginTop: 10 }}>Định dạng
+          <select style={input} value={format} onChange={(e) => setFormat(e.target.value)}>
+            <option value="xlsx">Excel (.xlsx) — 1 file, 3 sheet: theo ngày, theo tuần, chi tiết</option>
+            <option value="csv">CSV — 3 file rời</option>
+          </select>
+        </label>
         {msg && <p style={{ fontSize: 12.5, fontWeight: 700, color: msg.startsWith('Lỗi') ? '#b91c1c' : '#15803d', margin: '10px 0 0' }}>{msg}</p>}
         <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
           <button onClick={onClose} style={{ flex: 1, minHeight: 44, borderRadius: 12, border: '1px solid #eadcca', background: '#f4efe8', fontWeight: 800, cursor: 'pointer' }}>Đóng</button>
-          <button onClick={run} disabled={!valid || busy} style={{ flex: 2, minHeight: 44, borderRadius: 12, border: 'none', background: valid ? '#15803d' : '#9ca3af', color: '#fff', fontWeight: 900, cursor: 'pointer' }}>{busy ? 'Đang xuất…' : 'Xuất 3 file CSV'}</button>
+          <button onClick={run} disabled={!valid || busy} style={{ flex: 2, minHeight: 44, borderRadius: 12, border: 'none', background: valid ? '#15803d' : '#9ca3af', color: '#fff', fontWeight: 900, cursor: 'pointer' }}>{busy ? 'Đang xuất…' : (format === 'xlsx' ? 'Xuất file Excel' : 'Xuất 3 file CSV')}</button>
         </div>
       </div>
     </div>

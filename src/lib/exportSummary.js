@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient';
 import { downloadCsv } from './csv';
+import { downloadXlsx } from './xlsxExport';
 import { ORDER_FLOWS } from '../data/orderCatalogs';
 import { fetchRevenueByChannel, fetchDoanhThuDuTinh } from './bossOverviewV3';
 import { localDateStr, mondayOf } from './date';
@@ -54,7 +55,7 @@ function group(records, periodOf, init, add) {
 const stamp = (from, to) => `${from}_${to}`;
 
 // ───────────── ĐƠN HÀNG ─────────────
-export async function exportOrdersSummary(from, to) {
+export async function exportOrdersSummary(from, to, format = 'xlsx') {
   const { data, error } = await supabase.rpc('orders_export_rows', { p_from: from, p_to: to });
   if (error) throw error;
   const rows = data || [];
@@ -77,16 +78,15 @@ export async function exportOrdersSummary(from, to) {
   const byDay = group(live, dayOf, init, add);
   const byWeek = group(live, weekOf, init, add);
   const tag = stamp(from, to);
-  downloadCsv(`don-hang-theo-ngay_${tag}.csv`, headersFor('Ngày cần giao'), toRows(byDay, dayLabel));
-  await pause();
-  downloadCsv(`don-hang-theo-tuan_${tag}.csv`, headersFor('Tuần (T2 - CN)'), toRows(byWeek, (p) => p));
-  await pause();
-  downloadCsv(`don-hang-chi-tiet_${tag}.csv`,
-    ['Ngày cần giao', 'Mã đơn', 'Khách hàng', 'Loại bánh', 'Trạng thái', 'Sản phẩm', 'Số lượng', 'Tổng tiền (đ)', 'Đã cọc (đ)', 'Chi nhánh'],
-    rows.map((o) => [
-      dayLabel(dayOf(o.required_at)), o.order_code, o.customer_name || '', categoryTitle(categoryKey(o.order_type)),
-      o.status_v2, o.product_names || '', num(o.total_quantity), num(o.total), num(o.deposit), o.target_store || '',
-    ]));
+  await emit(format, `don-hang_${tag}`, [
+    { name: 'Theo ngày', headers: headersFor('Ngày cần giao'), rows: toRows(byDay, dayLabel), bandCol: 0, totalRow: true },
+    { name: 'Theo tuần', headers: headersFor('Tuần (T2 - CN)'), rows: toRows(byWeek, (p) => p), bandCol: 0, totalRow: true },
+    { name: 'Chi tiết', headers: ['Ngày cần giao', 'Mã đơn', 'Khách hàng', 'Loại bánh', 'Trạng thái', 'Sản phẩm', 'Số lượng', 'Tổng tiền (đ)', 'Đã cọc (đ)', 'Chi nhánh'],
+      rows: rows.map((o) => [
+        dayLabel(dayOf(o.required_at)), o.order_code, o.customer_name || '', categoryTitle(categoryKey(o.order_type)),
+        o.status_v2, o.product_names || '', num(o.total_quantity), num(o.total), num(o.deposit), o.target_store || '',
+      ]), bandCol: 0 },
+  ], ['theo-ngay', 'theo-tuan', 'chi-tiet']);
   return rows.length;
 }
 
@@ -99,7 +99,7 @@ const KINDS = [
   { key: 'debt_book', label: 'Công nợ sổ sách (trường học)' },
 ];
 
-export async function exportRevenueSummary(from, to) {
+export async function exportRevenueSummary(from, to, format = 'xlsx') {
   const { fromIso, toIso } = rangeBounds(from, to);
   const [thuan, duTinh] = await Promise.all([
     fetchRevenueByChannel({ from: fromIso, to: toIso }),
@@ -139,18 +139,30 @@ export async function exportRevenueSummary(from, to) {
     return [...body, ['TỔNG', '', ...tot, groups.reduce((s, g) => s + est(g), 0)]];
   };
   const tag = stamp(from, to);
-  downloadCsv(`doanh-thu-theo-ngay_${tag}.csv`, headersFor('Ngày'), toRows(group(recs, dayOf, init, add), dayLabel));
-  await pause();
-  downloadCsv(`doanh-thu-theo-tuan_${tag}.csv`, headersFor('Tuần (T2 - CN)'), toRows(group(recs, weekOf, init, add), (p) => p));
-  await pause();
   const kindLabel = (k) => KINDS.find((x) => x.key === k)?.label || k;
-  downloadCsv(`doanh-thu-chi-tiet_${tag}.csv`,
-    ['Loại doanh thu', 'Ngày', 'Mã đơn', 'Khách hàng', 'Loại bánh', 'Số tiền (đ)', 'Chi nhánh'],
-    [...recs].sort((a, b) => dayOf(a.when).localeCompare(dayOf(b.when))).map((r) => [
-      kindLabel(r.kind), dayLabel(dayOf(r.when)), r.code || '', r.customer || '', categoryTitle(r.category), r.amount, r.branch || '',
-    ]));
+  await emit(format, `doanh-thu_${tag}`, [
+    { name: 'Theo ngày', headers: headersFor('Ngày'), rows: toRows(group(recs, dayOf, init, add), dayLabel), bandCol: 0, totalRow: true },
+    { name: 'Theo tuần', headers: headersFor('Tuần (T2 - CN)'), rows: toRows(group(recs, weekOf, init, add), (p) => p), bandCol: 0, totalRow: true },
+    { name: 'Chi tiết', headers: ['Loại doanh thu', 'Ngày', 'Mã đơn', 'Khách hàng', 'Loại bánh', 'Số tiền (đ)', 'Chi nhánh'],
+      rows: [...recs].sort((a, b) => dayOf(a.when).localeCompare(dayOf(b.when))).map((r) => [
+        kindLabel(r.kind), dayLabel(dayOf(r.when)), r.code || '', r.customer || '', categoryTitle(r.category), r.amount, r.branch || '',
+      ]) },
+  ], ['theo-ngay', 'theo-tuan', 'chi-tiet']);
   return recs.length;
 }
 
 // Trình duyệt hay chặn nhiều lượt tải liên tiếp nếu bắn cùng lúc.
 const pause = () => new Promise((r) => setTimeout(r, 500));
+
+// xlsx: 1 file nhiều sheet có định dạng. csv: 3 file rời (bản cũ, giữ lại để đối chiếu).
+async function emit(format, base, sheets, suffixes) {
+  if (format === 'csv') {
+    const [pre, tag] = [base.split('_')[0], base.slice(base.indexOf('_'))];
+    for (let i = 0; i < sheets.length; i += 1) {
+      downloadCsv(`${pre}-${suffixes[i]}${tag}.csv`, sheets[i].headers, sheets[i].rows);
+      if (i < sheets.length - 1) await pause();
+    }
+    return;
+  }
+  await downloadXlsx(`${base}.xlsx`, sheets);
+}
