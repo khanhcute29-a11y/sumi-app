@@ -489,6 +489,14 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
   // ── Dữ liệu thật: doanh thu DỰ TÍNH (đặt cọc + công nợ sỉ + đơn đang giao) ──
   const [duTinhBuckets, setDuTinhBuckets] = useState<any[]>([]);
   const [duTinhTotal, setDuTinhTotal] = useState(0);
+  // Phân rõ Doanh thu dự tính theo từng loại bánh (yêu cầu Giám đốc
+  // 19/09/2026) — categoryGroups: 5 luồng chính + "Đơn tổng hợp" (đơn trộn
+  // nhiều loại), mỗi nhóm có 3 dòng con (Đặt cọc/Công nợ cần thu/Đang giao).
+  // debtStandalone: "Công nợ đơn sỉ chưa thu" KHÔNG tách theo loại bánh (tính
+  // theo khách hàng, không có dữ liệu để tách) — hiển thị riêng, không lồng
+  // vào các nhóm loại bánh ở trên.
+  const [duTinhCategoryGroups, setDuTinhCategoryGroups] = useState<any[]>([]);
+  const [duTinhDebt, setDuTinhDebt] = useState<any>(null);
 
   // ── Tab "Hôm nay" / "Lịch sử" trong sheet Doanh Thu ──
   const [revenueTab, setRevenueTab] = useState<'today' | 'history'>('today');
@@ -683,6 +691,8 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
       setTotalRevenue(rev.total);
       setDuTinhBuckets(duTinh.buckets);
       setDuTinhTotal(duTinh.total);
+      setDuTinhCategoryGroups(duTinh.categoryGroups || []);
+      setDuTinhDebt(duTinh.debt || null);
 
       setExpenseStreams(claims.map(mapLedgerRow));
       setTotalExpense(claims.filter(isCommittedSpend).reduce((s: number, c: any) => s + (Number(c.amount) || 0), 0));
@@ -1740,25 +1750,52 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
                       <div style={{ fontSize: 12, fontWeight: 900, color: '#b45309', textTransform: 'uppercase', marginBottom: 8 }}>
                         🔮 Doanh thu dự tính — {formatVND(duTinhTotal)}
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {duTinhBuckets.map((b: any) => (
-                          <button key={b.id} onClick={() => b.orders.length && setRevenueDrill({ title: b.title, amount: b.amount, orders: b.orders })}
-                            style={{ textAlign: 'left', width: '100%', background: '#fffbeb', border: '1.5px solid #fde68a', borderRadius: 14, padding: 12, cursor: b.orders.length ? 'pointer' : 'default' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {duTinhCategoryGroups.map((g: any) => (
+                          <div key={g.key} style={{ background: '#fffbeb', border: '1.5px solid #fde68a', borderRadius: 14, padding: 12 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ fontSize: 22 }}>{g.icon}</span>
+                                <div style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>{g.title}</div>
+                              </div>
+                              <div style={{ fontSize: 14, fontWeight: 900, color: '#b45309' }}>{formatVND(g.amount)}</div>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              {g.lines.filter((l: any) => l.count > 0).map((l: any) => (
+                                <button key={l.id} onClick={() => l.orders.length && setRevenueDrill({ title: `${g.title} — ${l.title}`, amount: l.amount, orders: l.orders })}
+                                  style={{ textAlign: 'left', width: '100%', background: '#fff', border: '1px solid #f3e3b8', borderRadius: 10, padding: '8px 10px', cursor: l.orders.length ? 'pointer' : 'default', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <span style={{ fontSize: 15 }}>{l.icon}</span>
+                                    <span style={{ fontSize: 12, fontWeight: 800, color: '#5b4636' }}>{l.title} · {l.count} khoản</span>
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    <span style={{ fontSize: 12.5, fontWeight: 900, color: '#b45309' }}>{formatVND(l.amount)}</span>
+                                    {l.orders.length > 0 && <ChevronRight size={14} color="#a08060" />}
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+
+                        {duTinhDebt && duTinhDebt.count > 0 && (
+                          <button onClick={() => duTinhDebt.orders.length && setRevenueDrill({ title: duTinhDebt.title, amount: duTinhDebt.amount, orders: duTinhDebt.orders })}
+                            style={{ textAlign: 'left', width: '100%', background: '#fffbeb', border: '1.5px solid #fde68a', borderRadius: 14, padding: 12, cursor: duTinhDebt.orders.length ? 'pointer' : 'default' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <span style={{ fontSize: 22 }}>{b.icon}</span>
+                                <span style={{ fontSize: 22 }}>{duTinhDebt.icon}</span>
                                 <div>
-                                  <div style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>{b.title}</div>
-                                  <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>{b.note} · {b.count} khoản</div>
+                                  <div style={{ fontSize: 13, fontWeight: 900, color: '#2d1c10' }}>{duTinhDebt.title}</div>
+                                  <div style={{ fontSize: 11, color: '#725f50', marginTop: 2 }}>{duTinhDebt.note} · {duTinhDebt.count} khoản</div>
                                 </div>
                               </div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <div style={{ fontSize: 14, fontWeight: 900, color: '#b45309' }}>{formatVND(b.amount)}</div>
-                                {b.orders.length > 0 && <ChevronRight size={16} color="#a08060" />}
+                                <div style={{ fontSize: 14, fontWeight: 900, color: '#b45309' }}>{formatVND(duTinhDebt.amount)}</div>
+                                {duTinhDebt.orders.length > 0 && <ChevronRight size={16} color="#a08060" />}
                               </div>
                             </div>
                           </button>
-                        ))}
+                        )}
                       </div>
                     </div>
 

@@ -73,6 +73,32 @@ export async function fetchRevenueByChannel({ from, to } = {}) {
 // theo deposit/total/payment_verified — cột đã khoá ở DB. Thay bằng 3 RPC
 // tương ứng (chỉ owner/admin, khớp is_business_director()) — debtRes không
 // đụng bảng orders nên giữ nguyên.
+// Nhóm "Đơn tổng hợp" — order_type='mixed' (1 đơn trộn nhiều loại bánh, VD
+// vừa có bánh kem vừa có macaron) hoặc bất kỳ order_type lạ nào không khớp
+// đúng 5 luồng chính. Theo yêu cầu Giám đốc (19/09/2026): KHÔNG tách nhỏ đơn
+// mixed ra từng sản phẩm — gộp chung 1 nhóm riêng cho đơn giản/nhanh.
+const MIXED_FLOW = { key: 'mixed', icon: '🧺', title: 'Đơn tổng hợp', subtitle: 'Đơn có nhiều loại bánh khác nhau trong cùng 1 đơn' };
+const REVENUE_CATEGORY_FLOWS = [...ORDER_FLOWS, MIXED_FLOW];
+
+// Gom 1 danh sách rows (đã có order_type từ RPC) thành object theo từng
+// luồng sản phẩm — dùng chung cho cả 3 bucket "Tiền đặt cọc"/"Công nợ cần
+// thu"/"Đơn đang giao" bên dưới, tránh lặp lại cùng 1 vòng lặp reduce 3 lần.
+function groupRowsByOrderFlow(rows, amountOf) {
+  const byKey = {};
+  REVENUE_CATEGORY_FLOWS.forEach((f) => { byKey[f.key] = { amount: 0, count: 0, orders: [] }; });
+  rows.forEach((o) => {
+    const bucket = byKey[o.order_type] || byKey.mixed;
+    const amount = amountOf(o);
+    bucket.amount += amount;
+    bucket.count += 1;
+    bucket.orders.push({
+      id: o.id, orderCode: o.order_code, customerName: o.customer_name || '—',
+      amount, branch: o.target_store || null, when: o.completed_at,
+    });
+  });
+  return byKey;
+}
+
 export async function fetchDoanhThuDuTinh() {
   const [depositRes, debtRes, deliveryRes, congNoRes] = await Promise.all([
     supabase.rpc('orders_pending_deposit_rows'),
@@ -97,7 +123,7 @@ export async function fetchDoanhThuDuTinh() {
   };
   const debt = {
     id: 'debt', icon: '📒', title: 'Công nợ đơn sỉ chưa thu',
-    note: 'Công nợ trường học còn dư nợ',
+    note: 'Công nợ trường học còn dư nợ — tính theo KHÁCH HÀNG, không tách được theo loại bánh',
     amount: (debtRes.data || []).reduce((s, d) => s + (Number(d.balance) || 0), 0),
     count: (debtRes.data || []).length,
     orders: (debtRes.data || []).map((d) => ({
@@ -134,7 +160,32 @@ export async function fetchDoanhThuDuTinh() {
 
   const buckets = [deposit, congNo, debt, delivery];
   const total = buckets.reduce((s, b) => s + b.amount, 0);
-  return { buckets, total };
+
+  // Phân rõ theo từng loại bánh (yêu cầu Giám đốc 19/09/2026) — CHỈ áp dụng
+  // cho 3 bucket có sẵn order_type (đặt cọc/công nợ cần thu/đang giao).
+  // "Công nợ đơn sỉ chưa thu" CỐ Ý không nằm trong đây, tính riêng ở "debt"
+  // ở trên vì lấy theo khách hàng, không có dữ liệu loại bánh để tách.
+  const depositByFlow = groupRowsByOrderFlow(depositRes.data || [], (o) => Number(o.deposit) || 0);
+  const deliveryByFlow = groupRowsByOrderFlow(deliveryRes.data || [], (o) => Number(o.total) || 0);
+  const congNoByFlow = groupRowsByOrderFlow(congNoRes.data || [], (o) => Math.max(0, (Number(o.total) || 0) - (Number(o.deposit) || 0)));
+
+  const categoryGroups = REVENUE_CATEGORY_FLOWS.map((f) => {
+    const d = depositByFlow[f.key];
+    const c = congNoByFlow[f.key];
+    const del = deliveryByFlow[f.key];
+    return {
+      key: f.key, icon: f.icon, title: f.title, subtitle: f.subtitle,
+      amount: d.amount + c.amount + del.amount,
+      count: d.count + c.count + del.count,
+      lines: [
+        { id: 'deposit', icon: '💰', title: 'Tiền đặt cọc', amount: d.amount, count: d.count, orders: d.orders },
+        { id: 'cong_no_can_thu', icon: '🧾', title: 'Công nợ cần thu', amount: c.amount, count: c.count, orders: c.orders },
+        { id: 'in_delivery', icon: '🛵', title: 'Đơn đang giao', amount: del.amount, count: del.count, orders: del.orders },
+      ],
+    };
+  }).filter((g) => g.count > 0);
+
+  return { buckets, total, categoryGroups, debt };
 }
 
 // ---- 1c. CÔNG NỢ CẦN THU — danh sách đầy đủ cho Kế toán (không gộp số tiền
