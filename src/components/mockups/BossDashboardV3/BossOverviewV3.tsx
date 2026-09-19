@@ -34,6 +34,7 @@ import {
 import { AuthProvider, useAuth } from '../../../lib/AuthContext';
 import { playConfirmSound } from '../../../lib/sound';
 import { listOrdersV2 } from '../../../lib/featureFlags';
+import ExportSummaryModal from '../../ExportSummaryModal';
 import { ORDER_FLOWS } from '../../../data/orderCatalogs';
 // Tái dùng ĐÚNG bộ lọc ngày/tuần/tháng/tuỳ chọn đã có sẵn cho doanh thu theo
 // kênh (Hôm nay) — không viết lại công thức tính khoảng ngày ở đây, tránh
@@ -500,6 +501,7 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
 
   // ── Tab "Hôm nay" / "Lịch sử" trong sheet Doanh Thu ──
   const [revenueTab, setRevenueTab] = useState<'today' | 'history'>('today');
+  const [showRevenueExport, setShowRevenueExport] = useState(false);
   const [historyFrom, setHistoryFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10); });
   const [historyTo, setHistoryTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [historyChannels, setHistoryChannels] = useState<any[]>([]);
@@ -1709,6 +1711,7 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
         {/* ========================================================================= */}
         {/* ── BOTTOM SHEET: 1. CHI TIẾT DOANH THU & NGUỒN THU ── */}
         {/* ========================================================================= */}
+        {showRevenueExport && <ExportSummaryModal mode="revenue" onClose={() => setShowRevenueExport(false)} />}
         {activeSheet === 'revenue_detail' && (
           <div className="sheet-overlay" onClick={() => setActiveSheet(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)', zIndex: 1200, display: 'flex', alignItems: 'flex-end' }}>
             <div onClick={e => e.stopPropagation()} style={sheetPanelStyle()}>
@@ -1722,6 +1725,7 @@ export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string)
                     </div>
                   </div>
                   <button onClick={() => setActiveSheet(null)} aria-label="Quay lại" style={{ order: -1, flexShrink: 0, width: 40, height: 40, borderRadius: 12, background: '#f4efe8', border: 'none', fontSize: 20, fontWeight: 900, color: '#2d1c10', cursor: 'pointer' }}>‹</button>
+                  <button onClick={() => setShowRevenueExport(true)} style={{ marginLeft: 'auto', flexShrink: 0, minHeight: 40, padding: '0 12px', borderRadius: 12, background: '#f0fdf4', border: '1.5px solid #15803d', color: '#15803d', fontSize: 12, fontWeight: 900, cursor: 'pointer' }}>📤 Xuất</button>
                 </div>
 
                 {/* 2 module: Doanh thu hôm nay / Lịch sử */}

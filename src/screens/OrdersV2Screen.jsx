@@ -13,6 +13,7 @@ import { fetchOrderNoteCounts } from '../lib/queries';
 import { fetchOrderHearts, addOrderHeart } from '../lib/bossOverviewV3';
 import { IconInbox, IconKitchen, IconPackage, IconShipping, IconCheckCircle, IconWarning, IconWarehouse, IconCake, IconBakery, IconMacaron, IconSchool, IconTeabreak, IconMixed } from '../components/icons/FrogIcons';
 import { localDateStr } from '../lib/date';
+import ExportSummaryModal from '../components/ExportSummaryModal';
 
 const LABELS = {
   awaiting_assignment: 'Đơn chờ làm', awaiting_acceptance: 'Đơn chờ làm', in_production: 'Bếp đang làm',
@@ -70,6 +71,7 @@ export default function OrdersV2Screen() {
   const [selectedId, setSelectedId] = useState(null);
   const [error, setError] = useState('');
   const [showKho, setShowKho] = useState(false);
+  const [showExport, setShowExport] = useState(false);
   // Luồng Trường học tách biệt hoàn toàn khỏi 6 thẻ tổng quan chung (yêu cầu
   // chủ tiệm 05/09/2026) — đơn trường học không còn tính vào 6 thẻ
   // chung/luồng phân loại nữa, có hẳn 1 khối 6 thẻ riêng dưới Kho Thành Phẩm.
@@ -460,8 +462,27 @@ export default function OrdersV2Screen() {
               <span style={{ color: '#b93e13', fontWeight: 800 }}>Xem →</span>
             </button>
           )}
+
+          {/* Xuất tổng hợp theo ngày/tuần — CHỈ Giám đốc (owner/admin): số tiền
+              đơn bị khoá cột ở DB, RPC orders_export_rows cũng chặn phía server. */}
+          {['owner', 'admin'].includes(profile?.role) && (
+            <button className="mock-order-overview-kho" onClick={() => setShowExport(true)}
+              style={{
+                gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '14px 16px', borderRadius: 16, border: '1.5px solid #eadcca', background: '#fffaf3',
+                cursor: 'pointer', font: 'inherit', textAlign: 'left',
+              }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 20 }}>📤</span>
+                <strong style={{ color: '#2d1c10', fontSize: 18 }}>Xuất tổng hợp</strong>
+              </span>
+              <span style={{ color: '#b93e13', fontWeight: 800 }}>Theo ngày · tuần →</span>
+            </button>
+          )}
         </div>
       )}
+
+      {showExport && <ExportSummaryModal mode="orders" onClose={() => setShowExport(false)} />}
 
       {/* Màn hình 1 (khối riêng): Tổng quan 6 trạng thái CHỈ đơn Trường học —
           bấm vào thẳng danh sách luôn (flowGroup='school'), không qua bước
