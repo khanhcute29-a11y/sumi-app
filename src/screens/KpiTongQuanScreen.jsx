@@ -4,7 +4,8 @@ import { useAuth } from '../lib/AuthContext';
 import { hasAnyRole } from '../lib/roles';
 import { localDateStr } from '../lib/date';
 import SoKetToanKpi from '../components/tasks/v2/SoKetToanKpi';
-import { IconDashboard, IconClipboard, IconClock, IconCake, IconTruck, IconStar, IconSettings, IconMapPin, IconWarning } from '../components/icons/FrogIcons';
+import KpiExportModal from '../components/KpiExportModal';
+import { IconDashboard, IconClipboard, IconClock, IconCake, IconTruck, IconStar, IconSettings, IconMapPin, IconWarning, IconExport } from '../components/icons/FrogIcons';
 
 // Tổng quan KPI — 1 màn xem đủ mọi mặt của 1 nhân viên (việc, giờ làm/tăng
 // ca, chuyên cần, sao thưởng/phạt), theo khoảng ngày tự chọn. Giám đốc xem
@@ -523,6 +524,7 @@ export default function KpiTongQuanScreen() {
   const [tab, setTab] = useState('nhanh'); // 'nhanh' | 'chot'
   const [from, setFrom] = useState(dauThangStr());
   const [to, setTo] = useState(homNayStr());
+  const [moXuat, setMoXuat] = useState(false);
   const [nhanVienDangXem, setNhanVienDangXem] = useState(
     laGiamDoc ? null : { id: profile?.id, ten: profile?.full_name },
   );
@@ -587,6 +589,18 @@ export default function KpiTongQuanScreen() {
                 style={{ width: '100%', minHeight: 44, borderRadius: 10, border: '1px solid var(--border-default)', padding: '0 8px' }} />
             </label>
           </div>
+
+          {/* Xuất KPI từng người ra Excel — chỉ Giám đốc (RPC KPI cũng chặn phía server). */}
+          {laGiamDoc && (
+            <button
+              onClick={() => setMoXuat(true)}
+              style={{
+                alignSelf: 'flex-start', minHeight: 44, padding: '0 14px', borderRadius: 12, border: '1.5px solid var(--border-default)',
+                background: 'var(--surface-card)', fontWeight: 800, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8,
+              }}
+            ><IconExport size={20} /> Xuất KPI từng người</button>
+          )}
+          {moXuat && <KpiExportModal initialFrom={from} initialTo={to} onClose={() => setMoXuat(false)} />}
 
           {!khoangNgayHopLe && (
             <div style={{ color: 'var(--status-danger)', font: 'var(--text-body-sm)' }}>

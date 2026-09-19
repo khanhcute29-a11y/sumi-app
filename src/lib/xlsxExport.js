@@ -6,6 +6,8 @@
 //  - Cột đếm (Số đơn / Số lượng…) → căn giữa, số nguyên
 //  - bandCol: kẻ đường đậm hơn mỗi khi giá trị cột này đổi (tách nhóm ngày/tuần,
 //    KHÔNG tô nền xen kẽ — nền chỗ có chỗ không gây rối mắt)
+//  - centerNumbers: ô số căn giữa, định dạng #,##0.## (bảng KPI, nhiều cột số không có "(đ)")
+//  - freezeCols: số cột đầu cố định khi cuộn ngang (VD tên nhân viên)
 //  - totalRows: số dòng CUỐI là dòng TỔNG (in đậm + tô nền vàng nhạt)
 // Kiểu dòng cho bảng dạng KHỐI (mỗi đơn 1 khối): order = dòng thông tin đơn,
 // item = dòng sản phẩm, cancelled = đơn huỷ (gạch mờ), section = tiêu đề luồng,
@@ -20,6 +22,7 @@ function styleBlocks(ws, sh, moneyCols, countCols) {
       c.border = { top: startsBlock ? MID : BORDER, bottom: BORDER, left: BORDER, right: BORDER };
       c.alignment = { vertical: 'top', wrapText: true, horizontal: moneyCols[col - 1] ? 'right' : countCols[col - 1] ? 'center' : 'left' };
       if (moneyCols[col - 1] || countCols[col - 1]) c.numFmt = '#,##0';
+      if (sh.centerNumbers && typeof c.value === 'number') { c.alignment = { ...c.alignment, horizontal: 'center' }; c.numFmt = '#,##0.##'; }
       if (FILLS[kind]) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: FILLS[kind] } };
       if (kind === 'order') c.font = { bold: true };
       if (kind === 'flow' || kind === 'grand') c.font = { bold: true };
@@ -35,7 +38,7 @@ export async function downloadXlsx(filename, sheets) {
   const ExcelJS = (await import('exceljs')).default;
   const wb = new ExcelJS.Workbook();
   sheets.forEach((sh) => {
-    const ws = wb.addWorksheet(sh.name.slice(0, 31), { views: [{ state: 'frozen', ySplit: 1 }] });
+    const ws = wb.addWorksheet(sh.name.slice(0, 31), { views: [{ state: 'frozen', ySplit: 1, xSplit: sh.freezeCols || 0 }] });
     ws.addRow(sh.headers);
     sh.rows.forEach((r) => ws.addRow(r));
 
@@ -75,6 +78,7 @@ export async function downloadXlsx(filename, sheets) {
         c.alignment = { vertical: 'top', wrapText: true, horizontal: moneyCols[col - 1] ? 'right' : countCols[col - 1] ? 'center' : 'left' };
         if (moneyCols[col - 1]) c.numFmt = '#,##0';
         else if (countCols[col - 1]) c.numFmt = '#,##0';
+        if (sh.centerNumbers && typeof c.value === 'number' && !moneyCols[col - 1]) { c.alignment = { ...c.alignment, horizontal: 'center' }; c.numFmt = '#,##0.##'; }
         if (isTotal) {
           c.font = { bold: true };
           c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
