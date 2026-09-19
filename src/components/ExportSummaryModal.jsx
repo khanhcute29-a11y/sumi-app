@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { exportOrdersSummary, exportRevenueSummary, thisWeekRange } from '../lib/exportSummary';
+import { exportOrdersSummary, exportRevenueSummary, thisWeekRange, EXPORT_FLOWS } from '../lib/exportSummary';
 
 // Hộp chọn khoảng ngày → tải 3 file CSV (theo ngày, theo tuần, chi tiết).
 // Chỉ được mở từ chỗ đã giới hạn cho Giám đốc.
 export default function ExportSummaryModal({ mode, onClose }) {
   const [range, setRange] = useState(thisWeekRange);
+  const [flows, setFlows] = useState([]);
   const [format, setFormat] = useState('xlsx');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
@@ -15,10 +16,10 @@ export default function ExportSummaryModal({ mode, onClose }) {
     if (!valid || busy) return;
     setBusy(true); setMsg('');
     try {
-      const n = await (isOrders ? exportOrdersSummary : exportRevenueSummary)(range.from, range.to, format);
+      const n = await (isOrders ? exportOrdersSummary : exportRevenueSummary)(range.from, range.to, format, flows);
       setMsg(n ? `Đã xuất ${format === 'xlsx' ? '1 file Excel (3 sheet)' : '3 file CSV'} (${n} dòng dữ liệu).` : 'Không có dữ liệu trong khoảng này — file chỉ có tiêu đề.');
     } catch (err) {
-      setMsg(`Lỗi: ${err?.message || 'không xuất được.'}${isOrders ? ' (đã chạy migration orders_export_rows chưa?)' : ''}`);
+      setMsg(`Lỗi: ${err?.message || 'không xuất được.'}${isOrders ? ' (đã chạy 2 migration orders_export_rows và orders_export_item_rows chưa?)' : ''}`);
     } finally { setBusy(false); }
   };
 
@@ -30,12 +31,30 @@ export default function ExportSummaryModal({ mode, onClose }) {
         <strong style={{ fontSize: 16, color: '#2d1c10' }}>📤 Xuất tổng hợp {isOrders ? 'đơn hàng' : 'doanh thu'}</strong>
         <p style={{ fontSize: 12, color: '#725f50', margin: '6px 0 12px', lineHeight: 1.5 }}>
           {isOrders
-            ? 'Tính theo ngày cần giao, tất cả loại bánh. Tuần tính Thứ Hai – Chủ Nhật.'
+            ? 'Tính theo ngày cần giao. Chi tiết từng sản phẩm của đơn. Tuần tính Thứ Hai – Chủ Nhật.'
             : 'Doanh thu thuần (theo ngày hoàn thành) + doanh thu dự tính (theo mốc ngày từng khoản), tách theo loại bánh.'}
         </p>
         <div style={{ display: 'flex', gap: 10 }}>
           <label style={label}>Từ ngày<input type="date" style={input} value={range.from} max={range.to} onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} /></label>
           <label style={label}>Đến ngày<input type="date" style={input} value={range.to} min={range.from} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} /></label>
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#725f50', marginBottom: 6 }}>
+            Luồng cần xuất {flows.length === 0 ? '(đang chọn: tất cả)' : `(${flows.length} luồng)`}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {EXPORT_FLOWS.map((f) => {
+              const on = flows.includes(f.key);
+              return (
+                <button key={f.key} type="button" onClick={() => setFlows((cur) => (on ? cur.filter((k) => k !== f.key) : [...cur, f.key]))}
+                  style={{ minHeight: 36, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontSize: 12.5, fontWeight: 800,
+                    border: on ? '2px solid #15803d' : '1px solid #eadcca', background: on ? '#f0fdf4' : '#fff', color: on ? '#15803d' : '#725f50' }}>
+                  {on ? '✓ ' : ''}{f.title}
+                </button>
+              );
+            })}
+          </div>
+          {flows.length > 0 && <button type="button" onClick={() => setFlows([])} style={{ marginTop: 6, background: 'none', border: 'none', color: '#b93e13', fontSize: 12, fontWeight: 800, cursor: 'pointer', padding: 0 }}>Bỏ chọn (xuất tất cả)</button>}
         </div>
         <label style={{ ...label, marginTop: 10 }}>Định dạng
           <select style={input} value={format} onChange={(e) => setFormat(e.target.value)}>
