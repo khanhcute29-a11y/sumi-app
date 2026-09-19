@@ -17,9 +17,9 @@ export default function ExportSummaryModal({ mode, onClose }) {
     setBusy(true); setMsg('');
     try {
       const n = await (isOrders ? exportOrdersSummary : exportRevenueSummary)(range.from, range.to, format, flows);
-      setMsg(n ? `Đã xuất ${format === 'xlsx' ? '1 file Excel (3 sheet)' : '3 file CSV'} (${n} dòng dữ liệu).` : 'Không có dữ liệu trong khoảng này — file chỉ có tiêu đề.');
+      setMsg(n ? `Đã xuất ${isOrders ? `${n} đơn hàng` : `${n} dòng dữ liệu`} (${isOrders ? (format === 'xlsx' ? '1 file Excel' : '1 file CSV') : (format === 'xlsx' ? '1 file Excel, 3 sheet' : '3 file CSV')}).` : 'Không có dữ liệu trong khoảng này — file chỉ có tiêu đề.');
     } catch (err) {
-      setMsg(`Lỗi: ${err?.message || 'không xuất được.'}${isOrders ? ' (đã chạy 2 migration orders_export_rows và orders_export_item_rows chưa?)' : ''}`);
+      setMsg(`Lỗi: ${err?.message || 'không xuất được.'}${isOrders ? ' (đã chạy đủ migration orders_export_rows / orders_export_item_rows chưa?)' : ''}`);
     } finally { setBusy(false); }
   };
 
@@ -31,7 +31,7 @@ export default function ExportSummaryModal({ mode, onClose }) {
         <strong style={{ fontSize: 16, color: '#2d1c10' }}>📤 Xuất tổng hợp {isOrders ? 'đơn hàng' : 'doanh thu'}</strong>
         <p style={{ fontSize: 12, color: '#725f50', margin: '6px 0 12px', lineHeight: 1.5 }}>
           {isOrders
-            ? 'Tính theo ngày cần giao. Chi tiết từng sản phẩm của đơn. Tuần tính Thứ Hai – Chủ Nhật.'
+            ? 'Tính theo ngày cần giao. Mỗi đơn 1 khối: thông tin đơn, tổng tiền và từng sản phẩm.'
             : 'Doanh thu thuần (theo ngày hoàn thành) + doanh thu dự tính (theo mốc ngày từng khoản), tách theo loại bánh.'}
         </p>
         <div style={{ display: 'flex', gap: 10 }}>
@@ -58,14 +58,14 @@ export default function ExportSummaryModal({ mode, onClose }) {
         </div>
         <label style={{ ...label, marginTop: 10 }}>Định dạng
           <select style={input} value={format} onChange={(e) => setFormat(e.target.value)}>
-            <option value="xlsx">Excel (.xlsx) — 1 file, 3 sheet: theo ngày, theo tuần, chi tiết</option>
-            <option value="csv">CSV — 3 file rời</option>
+            <option value="xlsx">{isOrders ? 'Excel (.xlsx) — chi tiết từng đơn, từng sản phẩm' : 'Excel (.xlsx) — 1 file, 3 sheet: theo ngày, theo tuần, chi tiết'}</option>
+            <option value="csv">{isOrders ? 'CSV — 1 bảng phẳng' : 'CSV — 3 file rời'}</option>
           </select>
         </label>
         {msg && <p style={{ fontSize: 12.5, fontWeight: 700, color: msg.startsWith('Lỗi') ? '#b91c1c' : '#15803d', margin: '10px 0 0' }}>{msg}</p>}
         <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
           <button onClick={onClose} style={{ flex: 1, minHeight: 44, borderRadius: 12, border: '1px solid #eadcca', background: '#f4efe8', fontWeight: 800, cursor: 'pointer' }}>Đóng</button>
-          <button onClick={run} disabled={!valid || busy} style={{ flex: 2, minHeight: 44, borderRadius: 12, border: 'none', background: valid ? '#15803d' : '#9ca3af', color: '#fff', fontWeight: 900, cursor: 'pointer' }}>{busy ? 'Đang xuất…' : (format === 'xlsx' ? 'Xuất file Excel' : 'Xuất 3 file CSV')}</button>
+          <button onClick={run} disabled={!valid || busy} style={{ flex: 2, minHeight: 44, borderRadius: 12, border: 'none', background: valid ? '#15803d' : '#9ca3af', color: '#fff', fontWeight: 900, cursor: 'pointer' }}>{busy ? 'Đang xuất…' : (format === 'xlsx' ? 'Xuất file Excel' : (isOrders ? 'Xuất file CSV' : 'Xuất 3 file CSV'))}</button>
         </div>
       </div>
     </div>

@@ -7,6 +7,28 @@
 //  - bandCol: kẻ đường đậm hơn mỗi khi giá trị cột này đổi (tách nhóm ngày/tuần,
 //    KHÔNG tô nền xen kẽ — nền chỗ có chỗ không gây rối mắt)
 //  - totalRows: số dòng CUỐI là dòng TỔNG (in đậm + tô nền vàng nhạt)
+// Kiểu dòng cho bảng dạng KHỐI (mỗi đơn 1 khối): order = dòng thông tin đơn,
+// item = dòng sản phẩm, cancelled = đơn huỷ (gạch mờ), section = tiêu đề luồng,
+// flow = tổng luồng, grand = tổng cộng.
+const FILLS = { order: 'FFE7F5EC', section: 'FF15803D', flow: 'FFFEF3C7', grand: 'FFFDE68A', cancelled: 'FFF3F4F6' };
+function styleBlocks(ws, sh, moneyCols, countCols) {
+  const MID = { style: 'medium', color: { argb: 'FF15803D' } };
+  sh.rowStyles.forEach((kind, i) => {
+    const row = ws.getRow(i + 2);
+    const startsBlock = kind === 'order' || kind === 'cancelled' || kind === 'flow' || kind === 'grand' || kind === 'section';
+    row.eachCell({ includeEmpty: true }, (c, col) => {
+      c.border = { top: startsBlock ? MID : BORDER, bottom: BORDER, left: BORDER, right: BORDER };
+      c.alignment = { vertical: 'top', wrapText: true, horizontal: moneyCols[col - 1] ? 'right' : countCols[col - 1] ? 'center' : 'left' };
+      if (moneyCols[col - 1] || countCols[col - 1]) c.numFmt = '#,##0';
+      if (FILLS[kind]) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: FILLS[kind] } };
+      if (kind === 'order') c.font = { bold: true };
+      if (kind === 'flow' || kind === 'grand') c.font = { bold: true };
+      if (kind === 'section') c.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      if (kind === 'cancelled') c.font = { italic: true, strike: true, color: { argb: 'FF9CA3AF' } };
+    });
+  });
+}
+
 const BORDER = { style: 'thin', color: { argb: 'FFEADCCA' } };
 
 export async function downloadXlsx(filename, sheets) {
@@ -37,6 +59,7 @@ export async function downloadXlsx(filename, sheets) {
     });
 
     const MID = { style: 'medium', color: { argb: 'FF15803D' } };
+    if (sh.rowStyles) { styleBlocks(ws, sh, moneyCols, countCols); return; }
     let prev = null;
     for (let r = 2; r <= ws.rowCount; r += 1) {
       const row = ws.getRow(r);

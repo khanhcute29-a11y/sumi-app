@@ -55,8 +55,6 @@ function group(records, periodOf, init, add) {
 
 const stamp = (from, to) => `${from}_${to}`;
 
-const DETAIL_HEADERS = ['Ngày cần giao', 'Mã đơn', 'Khách hàng', 'Loại bánh', 'Trạng thái', 'Sản phẩm', 'Số lượng', 'Đơn vị', 'Đơn giá (đ)', 'Thành tiền (đ)', 'Tổng tiền đơn (đ)', 'Chi nhánh'];
-
 // flows rỗng = tất cả luồng.
 export const flowSelected = (flows, key) => !flows || flows.length === 0 || flows.includes(key);
 // Ghi luồng đã chọn vào tên file, ví dụ "school_" hoặc "cake-macaron_".
@@ -64,6 +62,21 @@ const flowTag = (flows) => (flows && flows.length ? `${flows.join('-')}_` : '');
 export const EXPORT_FLOWS = CATEGORIES;
 
 // ───────────── ĐƠN HÀNG ─────────────
+// Chi tiết đơn (Giám đốc 20/09/2026): 1 sheet duy nhất, mỗi đơn 1 KHỐI —
+// dòng đầu khối = thông tin đơn + tổng tiền, các dòng dưới = từng sản phẩm.
+const STATUS_LABELS = {
+  awaiting_assignment: 'Chờ làm', awaiting_acceptance: 'Chờ làm', in_production: 'Bếp đang làm',
+  ready_for_fulfillment: 'Chờ vận chuyển', in_delivery: 'Đang vận chuyển', completed: 'Giao thành công', cancelled: 'Đã huỷ',
+};
+const ORDER_HEADERS = ['Ngày giao', 'Giờ giao', 'Mã đơn', 'Khách hàng', 'Địa chỉ giao', 'Trạng thái', 'Chi nhánh',
+  'Sản phẩm', 'Số lượng', 'Đơn vị', 'Đơn giá (đ)', 'Thành tiền (đ)', 'Tổng tiền đơn (đ)', 'Đã cọc (đ)', 'Còn lại (đ)'];
+const COL_QTY = 8; const COL_TOTAL = 12; const COL_DEPOSIT = 13; const COL_REMAIN = 14;
+const timeOf = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+
 export async function exportOrdersSummary(from, to, format = 'xlsx', flows = []) {
   const [ordersRes, itemsRes] = await Promise.all([
     supabase.rpc('orders_export_rows', { p_from: from, p_to: to }),
@@ -71,54 +84,75 @@ export async function exportOrdersSummary(from, to, format = 'xlsx', flows = [])
   ]);
   if (ordersRes.error) throw ordersRes.error;
   if (itemsRes.error) throw itemsRes.error;
-  const rows = (ordersRes.data || []).filter((o) => flowSelected(flows, categoryKey(o.order_type)));
+  const orders = (ordersRes.data || [])
+    .filter((o) => flowSelected(flows, categoryKey(o.order_type)))
+    .sort((a, b) => String(a.required_at).localeCompare(String(b.required_at)));
   const itemsByOrder = {};
   (itemsRes.data || []).forEach((it) => { (itemsByOrder[it.order_id] ||= []).push(it); });
-  // Đơn đã huỷ không tính vào tổng hợp, vẫn liệt kê ở file chi tiết.
-  const live = rows.filter((o) => o.status_v2 !== 'cancelled').map((o) => ({
-    when: o.required_at, category: categoryKey(o.order_type), qty: num(o.total_quantity),
-    total: num(o.total), names: o.product_names || '',
-  }));
-  const init = () => ({ orders: 0, qty: 0, total: 0, names: [] });
-  const add = (acc, r) => {
-    acc.orders += 1; acc.qty += r.qty; acc.total += r.total;
-    if (r.names && !acc.names.includes(r.names)) acc.names.push(r.names);
+
+  const money = (v) => (v === null || v === undefined || v === '' ? '' : num(v));
+  const orderInfo = (o) => [dayLabel(dayOf(o.required_at)), timeOf(o.required_at), o.order_code, o.customer_name || '',
+    o.address || '', STATUS_LABELS[o.status_v2] || o.status_v2, o.target_store || ''];
+  const remainOf = (o) => Math.max(0, num(o.total) - num(o.deposit));
+  const itemCells = (it) => {
+    const price = money(it.unit_price);
+    return [it.item_name || '', num(it.quantity), it.unit || '', price, price === '' ? '' : num(it.quantity) * price];
   };
-  const headersFor = (label) => [label, 'Loại bánh', 'Số đơn', 'Tổng số sản phẩm', 'Tổng tiền đơn (đ)', 'Sản phẩm cần làm'];
-  const toRows = (groups, labelOf) => {
-    const body = groups.map((g) => [labelOf(g.period), categoryTitle(g.category), g.orders, g.qty, g.total, g.names.join(' | ')]);
-    const sum = groups.reduce((s, g) => ({ o: s.o + g.orders, q: s.q + g.qty, t: s.t + g.total }), { o: 0, q: 0, t: 0 });
-    return [...body, ['TỔNG', '', sum.o, sum.q, sum.t, '']];
+  const sumRow = (label, list) => {
+    const live = list.filter((o) => o.status_v2 !== 'cancelled');
+    const r = Array(ORDER_HEADERS.length).fill('');
+    r[0] = label; r[2] = `${live.length} đơn`;
+    r[COL_QTY] = live.reduce((t, o) => t + num(o.total_quantity), 0);
+    r[COL_TOTAL] = live.reduce((t, o) => t + num(o.total), 0);
+    r[COL_DEPOSIT] = live.reduce((t, o) => t + num(o.deposit), 0);
+    r[COL_REMAIN] = live.reduce((t, o) => t + remainOf(o), 0);
+    return r;
   };
-  const byDay = group(live, dayOf, init, add);
-  const byWeek = group(live, weekOf, init, add);
-  // Chi tiết: mỗi SẢN PHẨM 1 dòng (đơn nhiều món → nhiều dòng). "Tổng tiền đơn"
-  // chỉ ghi ở dòng đầu của mỗi đơn để cộng lại khớp với sheet Theo ngày/tuần.
-  const detailRows = [];
-  rows.forEach((o) => {
-    const head = [dayLabel(dayOf(o.required_at)), o.order_code, o.customer_name || '', categoryTitle(categoryKey(o.order_type)), o.status_v2];
-    const items = itemsByOrder[o.id] || [];
-    if (!items.length) {
-      detailRows.push([...head, o.product_names || '', num(o.total_quantity), '', '', '', num(o.total), o.target_store || '']);
-      return;
-    }
-    items.forEach((it, i) => {
-      const price = it.unit_price === null || it.unit_price === undefined ? '' : num(it.unit_price);
-      detailRows.push([...head, it.item_name || '', num(it.quantity), it.unit || '', price,
-        price === '' ? '' : num(it.quantity) * price, i === 0 ? num(o.total) : '', o.target_store || '']);
-    });
-  });
-  const liveCodes = new Set(rows.filter((o) => o.status_v2 !== 'cancelled').map((o) => o.order_code));
-  const inLive = (r) => liveCodes.has(r[1]);
-  const sumCol = (i) => detailRows.filter(inLive).reduce((t, r) => t + (Number(r[i]) || 0), 0);
-  const detailTotal = ['TỔNG', '', '', '', '', '', sumCol(6), '', '', sumCol(9), sumCol(10), ''];
+
+  // Gom theo luồng theo thứ tự CATEGORIES; chỉ 1 luồng có dữ liệu → bỏ tiêu đề/tổng luồng (tránh lặp với TỔNG CỘNG).
+  const sections = CATEGORIES.map((c) => ({ ...c, list: orders.filter((o) => categoryKey(o.order_type) === c.key) })).filter((c) => c.list.length);
+  const multi = sections.length > 1;
   const tag = flowTag(flows) + stamp(from, to);
-  await emit(format, `don-hang_${tag}`, [
-    { name: 'Theo ngày', headers: headersFor('Ngày cần giao'), rows: toRows(byDay, dayLabel), bandCol: 0, totalRows: 1 },
-    { name: 'Theo tuần', headers: headersFor('Tuần (T2 - CN)'), rows: toRows(byWeek, (p) => p), bandCol: 0, totalRows: 1 },
-    { name: 'Chi tiết', headers: DETAIL_HEADERS, rows: detailRows.concat([detailTotal]), bandCol: 0, totalRows: 1 },
-  ], ['theo-ngay', 'theo-tuan', 'chi-tiet']);
-  return rows.length;
+
+  if (format === 'csv') {
+    const rows = [];
+    orders.forEach((o) => {
+      const items = itemsByOrder[o.id] || [];
+      const tail = [money(o.total), money(o.deposit), remainOf(o)];
+      if (!items.length) { rows.push([categoryTitle(categoryKey(o.order_type)), ...orderInfo(o), o.product_names || '', num(o.total_quantity), '', '', '', ...tail]); return; }
+      items.forEach((it) => rows.push([categoryTitle(categoryKey(o.order_type)), ...orderInfo(o), ...itemCells(it), ...tail]));
+    });
+    downloadCsv(`don-hang_${tag}.csv`, ['Luồng', ...ORDER_HEADERS], rows);
+    return orders.length;
+  }
+
+  const rows = []; const rowStyles = [];
+  const push = (r, style) => { rows.push(r); rowStyles.push(style); };
+  sections.forEach((sec) => {
+    if (multi) { const r = Array(ORDER_HEADERS.length).fill(''); r[0] = sec.title; push(r, 'section'); }
+    sec.list.forEach((o) => {
+      const cancelled = o.status_v2 === 'cancelled';
+      const head = Array(ORDER_HEADERS.length).fill('');
+      orderInfo(o).forEach((v, i) => { head[i] = v; });
+      head[COL_TOTAL] = money(o.total); head[COL_DEPOSIT] = money(o.deposit); head[COL_REMAIN] = remainOf(o);
+      push(head, cancelled ? 'cancelled' : 'order');
+      const items = itemsByOrder[o.id] || [];
+      if (!items.length) {
+        const r = Array(ORDER_HEADERS.length).fill('');
+        r[7] = o.product_names || ''; r[COL_QTY] = num(o.total_quantity);
+        push(r, 'item');
+      }
+      items.forEach((it) => {
+        const r = Array(ORDER_HEADERS.length).fill('');
+        itemCells(it).forEach((v, i) => { r[7 + i] = v; });
+        push(r, 'item');
+      });
+    });
+    if (multi) push(sumRow(`TỔNG ${sec.title}`, sec.list), 'flow');
+  });
+  push(sumRow('TỔNG CỘNG', orders), 'grand');
+  await downloadXlsx(`don-hang_${tag}.xlsx`, [{ name: 'Chi tiết đơn', headers: ORDER_HEADERS, rows, rowStyles }]);
+  return orders.length;
 }
 
 // ───────────── DOANH THU ─────────────
