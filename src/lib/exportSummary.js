@@ -69,8 +69,10 @@ const STATUS_LABELS = {
   ready_for_fulfillment: 'Chờ vận chuyển', in_delivery: 'Đang vận chuyển', completed: 'Giao thành công', cancelled: 'Đã huỷ',
 };
 const ORDER_HEADERS = ['Ngày giao', 'Giờ giao', 'Mã đơn', 'Khách hàng', 'Địa chỉ giao', 'Trạng thái', 'Chi nhánh',
-  'Sản phẩm', 'Số lượng', 'Đơn vị', 'Đơn giá (đ)', 'Thành tiền (đ)', 'Tổng tiền đơn (đ)', 'Đã cọc (đ)', 'Còn lại (đ)'];
-const COL_QTY = 8; const COL_TOTAL = 12; const COL_DEPOSIT = 13; const COL_REMAIN = 14;
+  'Nhân viên lên đơn', 'Nhân viên làm', 'Nhân viên giao',
+  'Sản phẩm', 'Số lượng', 'Đơn vị', 'Đơn giá (đ)', 'Thành tiền (đ)', 'Tổng tiền đơn (đ)', 'Đã thanh toán (đ)', 'Chưa thanh toán (đ)'];
+const COL_ITEM = 10; // cột đầu của nhóm sản phẩm (Sản phẩm...Thành tiền)
+const COL_QTY = 11; const COL_TOTAL = 15; const COL_PAID = 16; const COL_UNPAID = 17;
 const timeOf = (iso) => {
   if (!iso) return '';
   const d = new Date(iso);
@@ -92,8 +94,12 @@ export async function exportOrdersSummary(from, to, flows = []) {
 
   const money = (v) => (v === null || v === undefined || v === '' ? '' : num(v));
   const orderInfo = (o) => [dayLabel(dayOf(o.required_at)), timeOf(o.required_at), o.order_code, o.customer_name || '',
-    o.address || '', STATUS_LABELS[o.status_v2] || o.status_v2, o.target_store || ''];
-  const remainOf = (o) => Math.max(0, num(o.total) - num(o.deposit));
+    o.address || '', STATUS_LABELS[o.status_v2] || o.status_v2, o.target_store || '',
+    o.created_by_name || '', o.worker_names || '', o.driver_name || ''];
+  // Đơn ĐÃ XÁC MINH thanh toán = thu đủ cả đơn (kể cả khi không có cọc); chưa xác minh thì mới
+  // chỉ tính tiền cọc. Trước đây chỉ trừ cọc nên đơn đã thu đủ vẫn bị ghi "còn nợ" cả đơn.
+  const paidOf = (o) => (o.payment_verified === true ? num(o.total) : Math.min(num(o.deposit), num(o.total)));
+  const unpaidOf = (o) => Math.max(0, num(o.total) - paidOf(o));
   const itemCells = (it) => {
     const price = money(it.unit_price);
     return [it.item_name || '', num(it.quantity), it.unit || '', price, price === '' ? '' : num(it.quantity) * price];
@@ -104,8 +110,8 @@ export async function exportOrdersSummary(from, to, flows = []) {
     r[0] = label; r[2] = `${live.length} đơn`;
     r[COL_QTY] = live.reduce((t, o) => t + num(o.total_quantity), 0);
     r[COL_TOTAL] = live.reduce((t, o) => t + num(o.total), 0);
-    r[COL_DEPOSIT] = live.reduce((t, o) => t + num(o.deposit), 0);
-    r[COL_REMAIN] = live.reduce((t, o) => t + remainOf(o), 0);
+    r[COL_PAID] = live.reduce((t, o) => t + paidOf(o), 0);
+    r[COL_UNPAID] = live.reduce((t, o) => t + unpaidOf(o), 0);
     return r;
   };
 
@@ -122,17 +128,17 @@ export async function exportOrdersSummary(from, to, flows = []) {
       const cancelled = o.status_v2 === 'cancelled';
       const head = Array(ORDER_HEADERS.length).fill('');
       orderInfo(o).forEach((v, i) => { head[i] = v; });
-      head[COL_TOTAL] = money(o.total); head[COL_DEPOSIT] = money(o.deposit); head[COL_REMAIN] = remainOf(o);
+      head[COL_TOTAL] = money(o.total); head[COL_PAID] = paidOf(o); head[COL_UNPAID] = unpaidOf(o);
       push(head, cancelled ? 'cancelled' : 'order');
       const items = itemsByOrder[o.id] || [];
       if (!items.length) {
         const r = Array(ORDER_HEADERS.length).fill('');
-        r[7] = o.product_names || ''; r[COL_QTY] = num(o.total_quantity);
+        r[COL_ITEM] = o.product_names || ''; r[COL_QTY] = num(o.total_quantity);
         push(r, 'item');
       }
       items.forEach((it) => {
         const r = Array(ORDER_HEADERS.length).fill('');
-        itemCells(it).forEach((v, i) => { r[7 + i] = v; });
+        itemCells(it).forEach((v, i) => { r[COL_ITEM + i] = v; });
         push(r, 'item');
       });
     });
