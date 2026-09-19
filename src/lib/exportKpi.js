@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient';
 import { downloadXlsx } from './xlsxExport';
 import { rangeBounds } from './exportSummary';
+import { ROLE_META } from './roles';
 
 // Xuất KPI từng người (Giám đốc 20/09/2026): 1 file Excel — sheet "Tổng hợp"
 // (mỗi nhân viên 1 dòng) + mỗi người 1 sheet chi tiết. KHÔNG viết lại cách tính:
@@ -20,11 +21,8 @@ const fmtDate = (s) => (s ? new Date(`${String(s).slice(0, 10)}T00:00:00`).toLoc
 const fmtTime = (iso) => (iso ? new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '');
 const fmtDay = (iso) => (iso ? new Date(iso).toLocaleDateString('vi-VN') : '');
 
-const ROLE_LABELS = {
-  owner: 'Chủ tiệm', admin: 'Quản trị', accountant: 'Kế toán', cashier: 'Thu ngân', sale: 'Bán hàng',
-  kitchen_lead: 'Trưởng bếp', kitchen_staff: 'Nhân viên bếp', shipper: 'Shipper', warehouse: 'Kho',
-};
-const roleLabel = (r) => ROLE_LABELS[r] || r || '';
+// Dùng đúng nhãn vai trò của app (ROLE_META) — 1 nguồn duy nhất, không tự dịch lại.
+const roleLabel = (r) => ROLE_META[r]?.label || r || '';
 
 const STATUS_LABELS = { missing_checkout: 'Chưa chấm ra', leave: 'Xin nghỉ' };
 const COMPLAINT_LABELS = { giao_tre: 'Giao trễ', sai_don: 'Sai đơn', chat_luong: 'Chất lượng', thai_do: 'Thái độ phục vụ', khac: 'Khác' };
@@ -59,6 +57,18 @@ const SUMMARY_HEADERS = [
   'Số đơn đã giao', 'Quãng đường (km)', 'Thời gian chạy chuyến (giờ)', 'Đơn có ảnh chứng minh',
   'Sao được cộng', 'Tiền thưởng cộng (đ)', 'Sao chưa đạt (không trừ lương)', 'Sao thực nhận', 'Tiền thưởng thực nhận (đ)',
   'Bánh lỗi ghi nhận (lần)', 'Bánh lỗi (số lượng)', 'Khiếu nại khách (lần)',
+];
+
+// Nhãn nhóm cột (hàng trên cùng) — from/to là chỉ số cột (0-based) trong SUMMARY_HEADERS.
+const SUMMARY_GROUPS = [
+  { label: 'NHÂN VIÊN', from: 0, to: 1, color: 'FF475569' },
+  { label: 'ĐIỂM KPI', from: 2, to: 3, color: 'FF15803D' },
+  { label: 'CÔNG VIỆC', from: 4, to: 9, color: 'FF0369A1' },
+  { label: 'GIỜ LÀM & CHUYÊN CẦN', from: 10, to: 15, color: 'FF7C3AED' },
+  { label: 'SẢN XUẤT', from: 16, to: 17, color: 'FFB45309' },
+  { label: 'GIAO HÀNG', from: 18, to: 21, color: 'FFBE185D' },
+  { label: 'THƯỞNG CHUYÊN CẦN', from: 22, to: 26, color: 'FFCA8A04' },
+  { label: 'GHI NHẬN MỚI (CHƯA TÍNH ĐIỂM)', from: 27, to: 29, color: 'FF64748B' },
 ];
 
 function summaryRow(st, d, score, defects, complaints) {
@@ -171,7 +181,7 @@ export async function exportKpiSummary(from, to, onProgress) {
   });
 
   await downloadXlsx(`kpi-nhan-vien_${from}_${to}.xlsx`, [
-    { name: 'Tổng hợp', headers: SUMMARY_HEADERS, rows: summaryRows, centerNumbers: true, freezeCols: 1 },
+    { name: 'Tổng hợp', headers: SUMMARY_HEADERS, rows: summaryRows, centerNumbers: true, freezeCols: 1, groups: SUMMARY_GROUPS },
     ...personSheets,
   ]);
   return staff.length;

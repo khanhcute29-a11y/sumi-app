@@ -7,6 +7,7 @@
 //  - bandCol: kẻ đường đậm hơn mỗi khi giá trị cột này đổi (tách nhóm ngày/tuần,
 //    KHÔNG tô nền xen kẽ — nền chỗ có chỗ không gây rối mắt)
 //  - centerNumbers: ô số căn giữa, định dạng #,##0.## (bảng KPI, nhiều cột số không có "(đ)")
+//  - groups: [{ label, from, to, color }] — hàng nhãn nhóm cột (gộp ô, tô màu riêng) phía trên tiêu đề
 //  - freezeCols: số cột đầu cố định khi cuộn ngang (VD tên nhân viên)
 //  - totalRows: số dòng CUỐI là dòng TỔNG (in đậm + tô nền vàng nhạt)
 // Kiểu dòng cho bảng dạng KHỐI (mỗi đơn 1 khối): order = dòng thông tin đơn,
@@ -22,7 +23,7 @@ function styleBlocks(ws, sh, moneyCols, countCols) {
       c.border = { top: startsBlock ? MID : BORDER, bottom: BORDER, left: BORDER, right: BORDER };
       c.alignment = { vertical: 'top', wrapText: true, horizontal: moneyCols[col - 1] ? 'right' : countCols[col - 1] ? 'center' : 'left' };
       if (moneyCols[col - 1] || countCols[col - 1]) c.numFmt = '#,##0';
-      if (sh.centerNumbers && typeof c.value === 'number') { c.alignment = { ...c.alignment, horizontal: 'center' }; c.numFmt = '#,##0.##'; }
+      if (sh.centerNumbers && typeof c.value === 'number') { c.alignment = { ...c.alignment, horizontal: 'center' }; c.numFmt = Number.isInteger(c.value) ? '#,##0' : '#,##0.##'; }
       if (FILLS[kind]) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: FILLS[kind] } };
       if (kind === 'order') c.font = { bold: true };
       if (kind === 'flow' || kind === 'grand') c.font = { bold: true };
@@ -38,9 +39,11 @@ export async function downloadXlsx(filename, sheets) {
   const ExcelJS = (await import('exceljs')).default;
   const wb = new ExcelJS.Workbook();
   sheets.forEach((sh) => {
-    const ws = wb.addWorksheet(sh.name.slice(0, 31), { views: [{ state: 'frozen', ySplit: 1, xSplit: sh.freezeCols || 0 }] });
+    const ws = wb.addWorksheet(sh.name.slice(0, 31), { views: [{ state: 'frozen', ySplit: sh.groups ? 2 : 1, xSplit: sh.freezeCols || 0 }] });
+    if (sh.groups) ws.addRow(Array(sh.headers.length).fill(''));
     ws.addRow(sh.headers);
     sh.rows.forEach((r) => ws.addRow(r));
+    const HEAD = sh.groups ? 2 : 1; // số dòng tiêu đề phía trên dữ liệu
 
     const moneyCols = sh.headers.map((h) => /\(đ\)/.test(h));
     const countCols = sh.headers.map((h, i) => !moneyCols[i] && /^(số|tổng số)|số đơn|số lượng/i.test(h));
@@ -52,11 +55,27 @@ export async function downloadXlsx(filename, sheets) {
       ws.getColumn(i + 1).width = isText ? 60 : Math.min(Math.max(longest + 2, 12), moneyCols[i] ? 20 : 34);
     });
 
-    const head = ws.getRow(1);
-    head.height = 32;
-    head.eachCell((c) => {
+    if (sh.groups) {
+      sh.groups.forEach((g) => {
+        if (g.to > g.from) ws.mergeCells(1, g.from + 1, 1, g.to + 1);
+        const c = ws.getCell(1, g.from + 1);
+        c.value = g.label;
+        for (let col = g.from + 1; col <= g.to + 1; col += 1) {
+          const cc = ws.getCell(1, col);
+          cc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: g.color } };
+          cc.border = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER };
+        }
+        c.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 12 };
+        c.alignment = { vertical: 'middle', horizontal: 'center' };
+      });
+      ws.getRow(1).height = 26;
+    }
+    const head = ws.getRow(HEAD);
+    head.height = 44;
+    head.eachCell((c, col) => {
+      const grp = sh.groups && sh.groups.find((g) => col - 1 >= g.from && col - 1 <= g.to);
       c.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF15803D' } };
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: grp ? grp.color : 'FF15803D' } };
       c.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
       c.border = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER };
     });
@@ -64,7 +83,7 @@ export async function downloadXlsx(filename, sheets) {
     const MID = { style: 'medium', color: { argb: 'FF15803D' } };
     if (sh.rowStyles) { styleBlocks(ws, sh, moneyCols, countCols); return; }
     let prev = null;
-    for (let r = 2; r <= ws.rowCount; r += 1) {
+    for (let r = HEAD + 1; r <= ws.rowCount; r += 1) {
       const row = ws.getRow(r);
       const isTotal = r > ws.rowCount - (sh.totalRows || 0);
       let groupStart = false;
@@ -78,7 +97,7 @@ export async function downloadXlsx(filename, sheets) {
         c.alignment = { vertical: 'top', wrapText: true, horizontal: moneyCols[col - 1] ? 'right' : countCols[col - 1] ? 'center' : 'left' };
         if (moneyCols[col - 1]) c.numFmt = '#,##0';
         else if (countCols[col - 1]) c.numFmt = '#,##0';
-        if (sh.centerNumbers && typeof c.value === 'number' && !moneyCols[col - 1]) { c.alignment = { ...c.alignment, horizontal: 'center' }; c.numFmt = '#,##0.##'; }
+        if (sh.centerNumbers && typeof c.value === 'number' && !moneyCols[col - 1]) { c.alignment = { ...c.alignment, horizontal: 'center' }; c.numFmt = Number.isInteger(c.value) ? '#,##0' : '#,##0.##'; }
         if (isTotal) {
           c.font = { bold: true };
           c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
