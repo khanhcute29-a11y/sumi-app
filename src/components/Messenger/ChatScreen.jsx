@@ -181,11 +181,22 @@ export default function ChatScreen({ profile }) {
   // lên giữa màn hình. Bám sát window.visualViewport để biết CHÍNH XÁC chiều
   // cao còn hiển thị (đã trừ bàn phím) và tự đặt height bằng px cho khung
   // chat trên mobile — không cần đụng tới BottomNav/App shell.
+  //
+  // LỖI THẬT đã vá thêm (báo lại thiết bị thật 19/9/2026): chỉ chỉnh height
+  // theo vv.height là CHƯA ĐỦ — lúc focus ô nhập, Safari còn tự CUỘN cả
+  // trang (dịch visualViewport theo trục dọc, vv.offsetTop > 0) để đưa ô
+  // nhập lên trên bàn phím. Khung chat đang "position: fixed" (neo theo
+  // layout viewport, không tự trôi theo cú cuộn này) nên bị lộ ra SAI CHỖ:
+  // phần đầu (header) bị cuộn khuất lên trên, để lại khoảng trống to phía
+  // dưới thanh nhập liệu. Theo dõi thêm vv.offsetTop và dịch khung chat
+  // xuống đúng bằng offsetTop đó để luôn khớp với đúng phần đang hiển thị
+  // thật trên màn hình.
   const [mobileViewportPx, setMobileViewportPx] = useState(null);
+  const [mobileViewportOffsetTop, setMobileViewportOffsetTop] = useState(0);
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return undefined;
-    const onVvResize = () => setMobileViewportPx(vv.height);
+    const onVvResize = () => { setMobileViewportPx(vv.height); setMobileViewportOffsetTop(vv.offsetTop); };
     vv.addEventListener('resize', onVvResize);
     vv.addEventListener('scroll', onVvResize);
     onVvResize();
@@ -1164,7 +1175,9 @@ export default function ChatScreen({ profile }) {
   return (
     <div
       className={`sumi-chat-page ${mobileThreadOpen ? 'cs-mobile-thread-open' : ''}`}
-      style={mobileThreadOpen && mobileViewportPx ? { height: `${mobileViewportPx}px` } : undefined}
+      style={mobileThreadOpen && mobileViewportPx
+        ? { height: `${mobileViewportPx}px`, top: `${mobileViewportOffsetTop}px` }
+        : undefined}
     >
       {/* LỖI THẬT đã vá: trước đây lỗi (setError) chỉ hiện BÊN TRONG khung
           nhập tin — nếu tải danh sách hội thoại/danh bạ lỗi ngay từ đầu, lúc
