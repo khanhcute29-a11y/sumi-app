@@ -1446,7 +1446,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                   />
                   {att.attachment_type === 'production_proof' && (() => {
                     const pk = data.packages.find((x) => x.id === att.work_package_id);
-                    const who = [pk?.organization_units?.name, pk?.completed_by_staff_name].filter(Boolean).join(' · ');
+                    const who = [pk?.organization_units?.name, pk?.completed_by_staff_name || pk?.assigned_to_staff_name].filter(Boolean).join(' · ');
                     return (
                       <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '14px 6px 4px', background: 'linear-gradient(transparent, rgba(0,0,0,.75))', color: '#fff', fontSize: 10.5, fontWeight: 700, lineHeight: 1.25 }}>
                         <div>🍰 Thành phẩm{who ? ` · ${who}` : ''}</div>
