@@ -62,7 +62,7 @@ export default function OrdersV2Screen() {
   const [historyTo, setHistoryTo] = useState('');
   const [historyKeyword, setHistoryKeyword] = useState('');
   // Bộ lọc NGÀY CẦN GIAO riêng cho đơn Trường học (các thẻ đang làm việc, không gồm "Giao thành công"
-  // vì thẻ đó đã có bộ lọc ngày hoàn thành riêng). mode: all | today | tomorrow | next7 | week | day | range
+  // vì thẻ đó đã có bộ lọc ngày hoàn thành riêng). mode: all | today | tomorrow | week | day | range
   const [dateFilter, setDateFilter] = useState({ mode: 'all', from: '', to: '' });
   const [canCreate, setCanCreate] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
@@ -216,7 +216,6 @@ export default function OrdersV2Screen() {
     const { mode, from, to } = dateFilter;
     if (mode === 'today') return { from: addDays(0), to: addDays(0) };
     if (mode === 'tomorrow') return { from: addDays(1), to: addDays(1) };
-    if (mode === 'next7') return { from: addDays(0), to: addDays(6) };
     if (mode === 'week') { const mon = mondayOf(new Date()); const sun = new Date(mon); sun.setDate(sun.getDate() + 6); return { from: localDateStr(mon), to: localDateStr(sun) }; }
     if (mode === 'day') return { from, to: from };
     if (mode === 'range') return { from, to };
@@ -640,7 +639,7 @@ export default function OrdersV2Screen() {
           {schoolMode && !isHistoryTab && (
             <div style={{ display: 'grid', gap: 8, margin: '4px 0 10px' }}>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {[['all', 'Tất cả'], ['today', 'Hôm nay'], ['tomorrow', 'Ngày mai'], ['next7', '7 ngày tới'], ['week', 'Tuần này']].map(([m, label]) => {
+                {[['all', 'Tất cả'], ['today', 'Hôm nay'], ['tomorrow', 'Ngày mai'], ['week', 'Tuần này']].map(([m, label]) => {
                   const on = dateFilter.mode === m;
                   return (
                     <button key={m} type="button" onClick={() => setDateFilter({ mode: m, from: '', to: '' })}
