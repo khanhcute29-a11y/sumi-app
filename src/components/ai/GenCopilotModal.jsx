@@ -7,7 +7,8 @@ import {
 } from 'lucide-react';
 import { 
   askGenCopilot, speakVietnamese, stopSpeaking, 
-  executeSalaryAdvance, executeExpenseClaim, executeAssignTask
+  executeSalaryAdvance, executeExpenseClaim, executeAssignTask,
+  executeCreateOrderDirectly
 } from '../../lib/geminiCopilot';
 import { playConfirmSound } from '../../lib/sound';
 
@@ -162,7 +163,7 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm 
         } else if (fc.name === 'bao_khoan_chi') {
           replyText = `Dạ, em đã lập phiếu ghi nhận khoản chi ${Number(fc.args.so_tien).toLocaleString('vi-VN')}đ (${fc.args.noi_dung_chi}). Bạn kiểm tra và bấm xác nhận bên dưới nhé!`;
         } else if (fc.name === 'tao_don_hang_banh') {
-          replyText = `Dạ, em đã bóc tách thông tin đơn bánh cho khách ${fc.args.ten_khach || 'chưa rõ'}: Loại ${fc.args.loai_banh || 'bánh kem'} size ${fc.args.size_banh || 'chuẩn'}. Mời bạn kiểm tra thẻ bên dưới:`;
+          replyText = `Dạ, em đã bóc tách thông tin đơn bánh cho khách ${fc.args.ten_khach || 'chưa rõ'}: Món ${fc.args.loai_banh || 'bánh'} - Số lượng/Size: ${fc.args.size_banh || 'chuẩn'}. Sếp/bạn bấm "🚀 Tạo Đơn & Chuyển Bếp Ngay" bên dưới để em gửi lệnh sản xuất xuống Bếp ngay lập tức nhé!`;
         } else if (fc.name === 'canh_bao_quy_dinh') {
           replyText = `⚠️ CẢNH BÁO QUY CHẾ: ${fc.args.noi_dung_vi_pham} (Gợi ý: ${fc.args.huong_giai_quyet || 'Báo cáo Giám đốc'})`;
         }
@@ -240,12 +241,13 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm 
         speakVietnamese(res.message);
         setPendingAction(null);
       } else if (action.name === 'tao_don_hang_banh') {
-        // Mở form tạo đơn có sẵn của Sumi Bakery và truyền dữ liệu bóc tách
-        if (onOpenOrderForm) {
-          onOpenOrderForm(action.args);
-        }
+        const res = await executeCreateOrderDirectly(action.args, userProfile);
+        setMessages((prev) => [
+          ...prev,
+          { id: Date.now(), sender: 'gen', text: `✅ ${res.message}` }
+        ]);
+        speakVietnamese(res.message);
         setPendingAction(null);
-        onClose();
       }
     } catch (err) {
       alert(`Lỗi khi thực hiện: ${err.message}`);
@@ -528,26 +530,55 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm 
                     {m.action.args.thoi_gian_nhan && <div>• Giờ nhận: <b>{m.action.args.thoi_gian_nhan}</b></div>}
                     {m.action.args.chu_viet_len_banh && <div>• Chữ ghi bánh: <i>"{m.action.args.chu_viet_len_banh}"</i></div>}
                   </div>
-                  <button
-                    onClick={() => handleConfirmAction(m.action)}
-                    style={{
-                      width: '100%',
-                      padding: '10px 14px',
-                      borderRadius: 10,
-                      border: 'none',
-                      background: '#f05c2b',
-                      color: '#fff',
-                      fontSize: 13,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 6
-                    }}
-                  >
-                    Mở Form Hoàn Tất Đơn <ArrowRight size={16} />
-                  </button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <button
+                      onClick={() => handleConfirmAction(m.action)}
+                      style={{
+                        width: '100%',
+                        padding: '11px 14px',
+                        borderRadius: 10,
+                        border: 'none',
+                        background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
+                        color: '#fff',
+                        fontSize: 14,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        boxShadow: '0 4px 12px rgba(22, 163, 74, 0.3)'
+                      }}
+                    >
+                      🚀 Tạo Đơn & Chuyển Bếp Ngay
+                    </button>
+                    {onOpenOrderForm && (
+                      <button
+                        onClick={() => {
+                          onOpenOrderForm(m.action.args);
+                          setPendingAction(null);
+                          onClose();
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          borderRadius: 8,
+                          border: '1px solid #fed7aa',
+                          background: '#fff',
+                          color: '#c2410c',
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6
+                        }}
+                      >
+                        ✏️ Mở form tự chỉnh sửa thêm <ArrowRight size={14} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
 

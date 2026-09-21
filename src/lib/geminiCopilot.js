@@ -3,6 +3,8 @@ import { playConfirmSound } from './sound';
 import { fetchRevenueByChannel, fetchDoanhThuDuTinh, fetchExpenseAndAdvanceLedgerToday } from './bossOverviewV3';
 import { countNewOrders, countKitchenActiveOrders } from './queries';
 import { localDateStr } from './date';
+import { newId } from './ids';
+import { broadcastEvent, BroadcastEvents, notifyOtherTabs } from './realtimeSync';
 
 // Thư viện hỗ trợ Trợ lý AI 'Gen' cho giao diện React
 // Tích hợp: Gọi AI, Text-to-Speech (đọc tiếng Việt), Web Speech (ghi âm) và Thực thi lệnh Supabase
@@ -551,4 +553,228 @@ export async function executeAssignTask({ tenNhanVien, noiDungViec, hanChot, yeu
     message: `Đã giao việc "${noiDungViec}" cho bạn ${targetStaffName} thành công!`
   };
 }
+
+/**
+ * Thực thi lệnh Tạo Đơn Hàng Trực Tiếp và Chuyển Bếp vào Supabase (create_order_v2)
+ * Tự động phân loại đơn (Trường học, Bánh kem, Bánh mặn, Macaron), khớp khách hàng và gửi lệnh xuống Bếp
+ */
+export async function executeCreateOrderDirectly(orderArgs, userProfile) {
+  if (!orderArgs) throw new Error('Thiếu thông tin đơn bánh');
+
+  const trimmedName = (orderArgs.ten_khach || 'Khách lẻ').trim();
+  const trimmedPhone = (orderArgs.so_dien_thoai || '').trim();
+  const cakeName = (orderArgs.loai_banh || 'Bánh kem').trim();
+  const sizeText = (orderArgs.size_banh || '').trim();
+
+  // 1. Phân loại luồng đơn
+  let orderType = 'cake';
+  const nameLower = trimmedName.toLowerCase();
+  const cakeLower = cakeName.toLowerCase();
+
+  if (
+    nameLower.includes('trường') ||
+    nameLower.includes('tiểu học') ||
+    nameLower.includes('mầm non') ||
+    nameLower.includes('thcs') ||
+    nameLower.includes('thpt') ||
+    nameLower.includes('mẫu giáo') ||
+    nameLower.includes('school')
+  ) {
+    orderType = 'school';
+  } else if (cakeLower.includes('macaron')) {
+    orderType = 'macaron';
+  } else if (cakeLower.includes('teabreak')) {
+    orderType = 'teabreak';
+  } else if (
+    cakeLower.includes('bánh mì') ||
+    cakeLower.includes('bông lan') ||
+    cakeLower.includes('croissant') ||
+    cakeLower.includes('bánh bao') ||
+    cakeLower.includes('chà bông')
+  ) {
+    orderType = 'bakery';
+  } else {
+    orderType = 'cake';
+  }
+
+  // 2. Khớp hoặc tạo khách hàng
+  let customerId = null;
+  if (orderType === 'school') {
+    const { data: schools } = await supabase
+      .from('customers')
+      .select('id, name')
+      .eq('is_school', true);
+
+    const norm = (s) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ');
+    const hit = (schools || []).find(
+      s => norm(s.name) === norm(trimmedName) || norm(s.name).includes(norm(trimmedName)) || norm(trimmedName).includes(norm(s.name))
+    );
+
+    if (hit) {
+      customerId = hit.id;
+    } else {
+      const { data: newSc, error: scErr } = await supabase
+        .from('customers')
+        .insert({
+          name: trimmedName,
+          phone: trimmedPhone || null,
+          address: orderArgs.dia_chi || null,
+          is_school: true,
+          channel: 'school'
+        })
+        .select('id')
+        .single();
+      if (!scErr && newSc) {
+        customerId = newSc.id;
+      }
+    }
+  } else {
+    if (trimmedPhone) {
+      const { data: cByPhone } = await supabase
+        .from('customers')
+        .select('id, name')
+        .eq('phone', trimmedPhone)
+        .maybeSingle();
+      if (cByPhone) customerId = cByPhone.id;
+    }
+    if (!customerId && trimmedName && trimmedName !== 'Khách lẻ') {
+      const { data: cByName } = await supabase
+        .from('customers')
+        .select('id, name')
+        .eq('name', trimmedName)
+        .maybeSingle();
+      if (cByName) customerId = cByName.id;
+    }
+    if (!customerId) {
+      const { data: newCust, error: cErr } = await supabase
+        .from('customers')
+        .insert({
+          name: trimmedName,
+          phone: trimmedPhone || null,
+          address: orderArgs.dia_chi || null,
+          channel: 'retail'
+        })
+        .select('id')
+        .single();
+      if (!cErr && newCust) {
+        customerId = newCust.id;
+      }
+    }
+  }
+
+  // 3. Xử lý thời gian giao bánh
+  let requiredAt = null;
+  const timeRaw = (orderArgs.thoi_gian_nhan || '').toLowerCase();
+  const now = new Date();
+
+  let hours = 8;
+  let minutes = 0;
+  const timeMatch = timeRaw.match(/(\d{1,2})(?:[:h](\d{2}))?/);
+  if (timeMatch) {
+    hours = parseInt(timeMatch[1], 10);
+    if (timeMatch[2]) minutes = parseInt(timeMatch[2], 10);
+  }
+
+  if (timeRaw.includes('mai') || timeRaw.includes('ngày mai') || timeRaw.includes('sáng mai')) {
+    const tmr = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, hours, minutes, 0);
+    requiredAt = tmr.toISOString();
+  } else if (timeRaw.includes('hôm nay') || timeRaw.includes('chiều nay') || timeRaw.includes('tối nay')) {
+    const todayTarget = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0);
+    requiredAt = todayTarget.toISOString();
+  } else {
+    // Mặc định 8h sáng mai nếu không rõ mốc ngày
+    const defaultTarget = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, hours, minutes, 0);
+    requiredAt = defaultTarget.toISOString();
+  }
+
+  // 4. Bóc tách số lượng món
+  let qty = 1;
+  const qtyMatch = sizeText.match(/(\d+)\s*(?:cái|ổ|hộp|phần|bánh)/i) || cakeName.match(/(\d+)\s*(?:cái|ổ|hộp|phần|bánh)/i);
+  if (qtyMatch) {
+    qty = parseInt(qtyMatch[1], 10);
+  } else {
+    const numOnly = parseInt(sizeText, 10);
+    if (!isNaN(numOnly) && numOnly > 0) qty = numOnly;
+  }
+
+  const items = [
+    {
+      name: cakeName,
+      quantity: qty,
+      display_order: 0,
+      unit: 'cái',
+      specification: {
+        size: sizeText || `${qty} cái`,
+        product_flow: orderType,
+        writing: orderArgs.chu_viet_len_banh || null,
+        cake_note: orderArgs.ghi_chu_tho_banh || null,
+        candles: orderArgs.nen_tuoi || null
+      }
+    }
+  ];
+
+  // 5. Sinh mã đơn hàng
+  const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+  const timeStr = String(now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()).padStart(5, '0');
+  const orderCode = `SUMI-${dateStr}-${timeStr}`;
+  const idempotencyKey = newId();
+
+  const customerNote = [
+    trimmedName && `Khách: ${trimmedName}`,
+    trimmedPhone && `SĐT: ${trimmedPhone}`,
+    orderArgs.chu_viet_len_banh && `Chữ: "${orderArgs.chu_viet_len_banh}"`,
+    orderArgs.nen_tuoi && `Nến: ${orderArgs.nen_tuoi}`,
+    orderArgs.ghi_chu_tho_banh,
+    '⚡ Đơn tạo trực tiếp qua Trợ lý AI Gen'
+  ].filter(Boolean).join(' · ');
+
+  // 6. Thực thi tạo đơn và tự động chuyển gói việc Bếp (create_order_v2)
+  const { data: orderId, error: orderErr } = await supabase.rpc('create_order_v2', {
+    p_idempotency_key: idempotencyKey,
+    p_order_code: orderCode,
+    p_order_type: orderType,
+    p_customer_id: customerId,
+    p_required_at: requiredAt,
+    p_fulfillment_method: orderArgs.dia_chi ? 'delivery' : (orderArgs.hinh_thuc_nhan || 'delivery'),
+    p_address: orderArgs.dia_chi || null,
+    p_note: customerNote,
+    p_confidentiality: orderType === 'school' ? 'school_restricted' : 'normal',
+    p_items: items,
+    p_ship_fee: 0,
+    p_deposit: 0,
+    p_payment_method: orderType === 'school' ? 'debt' : 'cod',
+    p_total: Number(orderArgs.tam_tinh_gia) || 0,
+    p_discount_amount: 0,
+    p_promotion_note: null,
+    p_tax_code: null,
+    p_vat_amount: 0
+  });
+
+  if (orderErr) throw orderErr;
+
+  // 7. Bắn sự kiện Realtime thông báo cho Bếp và các màn hình khác
+  try {
+    await broadcastEvent(BroadcastEvents.ORDER_CREATED, {
+      orderId,
+      orderCode,
+      orderType,
+      customerName: trimmedName,
+      createdAt: new Date().toISOString()
+    });
+    notifyOtherTabs(BroadcastEvents.ORDER_CREATED, { orderId });
+  } catch (e) {
+    console.warn('[executeCreateOrderDirectly] Broadcast event warning:', e);
+  }
+
+  playConfirmSound();
+  return {
+    success: true,
+    orderId,
+    orderCode,
+    orderType,
+    customerName: trimmedName,
+    message: `Đã tạo thành công đơn hàng #${orderCode} cho ${trimmedName} (${cakeName} - ${qty} cái) và chuyển ngay xuống Bếp làm bánh!`
+  };
+}
+
 

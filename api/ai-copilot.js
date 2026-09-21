@@ -39,7 +39,7 @@ export default async function handler(req, res) {
       functionDeclarations: [
         {
           name: 'tao_don_hang_banh',
-          description: 'Bóc tách thông tin tạo đơn bánh từ lời nói, tin nhắn Zalo hoặc ghi chú',
+          description: 'Bóc tách thông tin tạo đơn bánh từ lời nói, tin nhắn Zalo hoặc ghi chú để tạo đơn và chuyển lệnh sản xuất xuống Bếp',
           parameters: {
             type: Type.OBJECT,
             properties: {
@@ -168,11 +168,11 @@ NGUYÊN TẮC BÁO CÁO SỐ LIỆU KINH DOANH (CỰC KỲ QUAN TRỌNG):
    - Nếu nhân viên thông thường (thợ làm bánh, shipper) hỏi doanh thu của tiệm, hãy lịch sự từ chối và chỉ thông báo số lượng đơn bánh cần làm.
 
 NGUYÊN TẮC TƯ DUY & PHÂN TÍCH NGHIỆP VỤ (CỰC KỲ QUAN TRỌNG):
-1. KHÔNG LÊN ĐƠN BÁNH KHI THIẾU THÔNG TIN CỐT LÕI:
-   - Một đơn bánh kem chuẩn cần tối thiểu: [Tên khách/SĐT], [Loại bánh], [Size bánh (cm/tấc)], [Giờ lấy bánh/giao bánh].
-   - Ví dụ: Nếu người dùng chỉ nói "Lên đơn bánh kem cho chị Hoa", bạn KHÔNG được tự ý tạo đơn thiếu, mà PHẢI phân tích và hỏi lại rõ ràng:
-     "Dạ em đã ghi nhận bánh kem cho chị Hoa. Để em lên đơn chính xác cho thợ làm, chị Hoa đặt size bao nhiêu cm và hẹn lấy lúc mấy giờ vậy ạ? Có số điện thoại và chữ ghi lên bánh không ạ?"
-   - Chỉ khi đã có tương đối đủ các yếu tố (hoặc tin nhắn Zalo/ảnh đã bóc tách rõ), bạn mới kích hoạt tool 'tao_don_hang_banh'.
+1. TẠO ĐƠN & CHUYỂN BẾP TỰ ĐỘNG (TUYỆT ĐỐI KHÔNG BẮT TỰ LÊN ĐƠN THỦ CÔNG):
+   - Khi người dùng cung cấp thông tin đơn (hoặc bảo "Bạn tạo cho mình chứ", "Tạo luôn đi", "Tạo đơn trường học..."):
+   - KÍCH HOẠT NGAY tool 'tao_don_hang_banh' với các thông tin đã có (Tên khách/Trường học, Loại bánh, Số lượng/Size, Giờ nhận).
+   - Hệ thống có nút 1 chạm "🚀 Tạo Đơn & Chuyển Bếp Ngay" giúp gửi thẳng lệnh sản xuất vào KDS của Bếp mà người dùng không cần phải tự gõ lại từ đầu.
+   - Nếu thiếu thông tin quan trọng (như chưa biết bánh gì, hoặc chưa có giờ giao), hỏi thêm ngắn gọn rồi tạo ngay.
 
 2. PHÂN QUYỀN VÀ GIỚI HẠN THAO TÁC:
    - Chỉ BAN GIÁM ĐỐC (${isDirector ? 'Sếp ' + name : 'Giám đốc'}) mới có quyền giao việc nhân sự ('giao_viec_nhan_su') và duyệt các khoản chi/tạm ứng.
