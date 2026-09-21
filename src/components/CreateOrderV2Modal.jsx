@@ -173,6 +173,18 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
  },[isReadyStock,items]);
  const [catalogSearch,setCatalogSearch]=useState(''); const [guestCount,setGuestCount]=useState('');
  const [schoolSearch,setSchoolSearch]=useState(''); const [selectedSchool,setSelectedSchool]=useState(null);
+ // Trường CHƯA có trong danh sách 92 trường cố định: nhân viên thêm ngay khi tạo đơn
+ // (hồ sơ khách trường học, is_school=true → tự vào Công nợ). Trường đã thêm từ trước
+ // được nạp lại từ bảng customers để lần sau tìm là thấy.
+ const [extraSchools,setExtraSchools]=useState([]); const [showNewSchool,setShowNewSchool]=useState(false);
+ const [newSchool,setNewSchool]=useState({name:'',address:'',taxCode:'',phone:''});
+ useEffect(()=>{if(type!=='school')return;let huy=false;
+  supabase.from('customers').select('id,name,address,school_code,tax_code').eq('is_school',true).then(({data})=>{
+   if(huy||!data)return;const known=new Set(SCHOOL_DELIVERY_POINTS.map(x=>x.code));
+   setExtraSchools(data.filter(c=>!c.school_code||!known.has(c.school_code)).map(c=>({code:c.school_code||'',name:c.name,address:c.address||'',type:'Trường học (thêm mới)',customerId:c.id,taxCode:c.tax_code||''})));
+  });
+  return()=>{huy=true;};
+ },[type]);
  // Gợi ý khách hàng đã lưu — CHỈ áp dụng cho đơn không phải trường học
  // (trường học chọn theo SCHOOL_DELIVERY_POINTS ở trên, khác luồng). Tải 1
  // lần khi vào màn (không phải mỗi lần gõ) rồi lọc tại chỗ theo tên + SĐT +
@@ -257,8 +269,11 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
  });setCatalogSearch('');};
  const flow=ORDER_FLOWS.find(x=>x.key===type);
  const suggestions=TEABREAK_CATALOG.filter(x=>!catalogSearch||normalizeSearch(`${x.code} ${x.name} ${x.group}`).includes(normalizeSearch(catalogSearch))).slice(0,8);
- const schoolSuggestions=SCHOOL_DELIVERY_POINTS.filter(x=>!schoolSearch||normalizeSearch(`${x.code} ${x.name} ${x.address} ${x.type}`).includes(normalizeSearch(schoolSearch))).slice(0,10);
+ const schoolSuggestions=[...SCHOOL_DELIVERY_POINTS,...extraSchools].filter(x=>!schoolSearch||normalizeSearch(`${x.code} ${x.name} ${x.address} ${x.type}`).includes(normalizeSearch(schoolSearch))).slice(0,10);
  const chooseSchool=(school)=>{setSelectedSchool(school);setCustomerName(school.name);setAddress(school.address);setSchoolSearch('');};
+ const applyNewSchool=()=>{const name=newSchool.name.trim();if(!name){setError('Vui lòng nhập tên trường.');return;}setError('');
+  chooseSchool({code:'',name,address:newSchool.address.trim(),type:'Trường học (thêm mới)',isNew:true,taxCode:newSchool.taxCode.trim(),phone:newSchool.phone.trim()});
+  setShowNewSchool(false);setNewSchool({name:'',address:'',taxCode:'',phone:''});};
  const libraryTable=type==='school'?'school_photo_library':'macaron_photo_library';
  const libraryStoragePrefix=type==='school'?'school-library':'macaron-library';
  const loadLibraryPhotos=async()=>{setLibraryLoading(true);try{const {data,error:err}=await supabase.from(libraryTable).select('id,storage_path,caption,created_at').order('created_at',{ascending:false});if(err)throw err;setLibraryPhotos((data||[]).map(p=>({...p,url:supabase.storage.from('uploads').getPublicUrl(p.storage_path).data?.publicUrl})));}catch(e){setError(e.message);}finally{setLibraryLoading(false);}};
@@ -313,7 +328,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
  const isMixed=itemFlows.length>1;
  const routeFor={cake:'Bếp lạnh',bakery:'Bếp nóng / Bakery',teabreak:'Bếp theo món',macaron:'Xưởng 41',school:'Xưởng 42'};
  const submit=async()=>{setError('');setSaving(true);try{
-  if(type==='school'&&!selectedSchool)throw new Error('Vui lòng chọn trường hoặc điểm giao.');
+  if(type==='school'&&!selectedSchool)throw new Error('Vui lòng chọn trường, hoặc bấm "Thêm trường mới" nếu trường chưa có trong danh sách.');
   if(!items.length||items.some(x=>!x.name||Number(x.quantity)<=0))throw new Error('Vui lòng nhập đủ tên bánh và số lượng.');
   for(const it of items){
    if((it.flow_type||type)!=='macaron'||!it.specification?.priceTier)continue;
@@ -334,6 +349,22 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
     if(selectedSchool?.code){
       const {data: schoolCust} = await supabase.from('customers').select('id').eq('school_code', selectedSchool.code).maybeSingle();
       customerId = schoolCust?.id || null;
+    }
+    else if(selectedSchool?.customerId){
+      customerId = selectedSchool.customerId; // trường đã thêm mới từ trước (có hồ sơ, chưa có mã)
+    } else if(selectedSchool?.isNew){
+      // Trường mới: tìm hồ sơ khách trường học trùng TÊN (chuẩn hoá) để không tạo trùng khi 2 người
+      // cùng nhập; không có thì tạo mới với is_school=true để đơn hoàn thành tự ghi công nợ đúng tên này
+      // (trigger trg_school_order_to_debt chỉ cần customer_id, view công nợ lọc is_school).
+      const norm=normalizeSearch(selectedSchool.name);
+      const {data: cands} = await supabase.from('customers').select('id,name').eq('is_school', true);
+      const hit=(cands||[]).find(c=>normalizeSearch(c.name||'')===norm);
+      if(hit){ customerId = hit.id; }
+      else {
+        const {data: newSc, error: newScErr} = await supabase.from('customers').insert({name: selectedSchool.name, address: selectedSchool.address||null, tax_code: selectedSchool.taxCode||null, phone: selectedSchool.phone||null, is_school: true, channel: 'school'}).select('id').single();
+        if(newScErr) throw new Error(`Không lưu được trường mới: ${newScErr.message}`);
+        customerId = newSc?.id || null;
+      }
     }
   } else if(customerName||customerPhone){
     // Khớp khách theo CẢ tên và SĐT (không chỉ SĐT) — chuẩn hoá hoa/thường +
@@ -507,6 +538,15 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
     <button onClick={startVoiceInput} disabled={isRecording||voiceLoading} style={{width:'100%',minHeight:54,border:'2px dashed #d7c3aa',borderRadius:17,background:'#fff',fontSize:16,fontWeight:900,color:isRecording?'#b93e13':'#2d1c10',cursor:isRecording||voiceLoading?'not-allowed':'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:8,marginBottom:12}}>🎤 {isRecording?'Đang ghi âm...':voiceLoading?'Đang xử lý...':'Nói để chọn trường + nhập món'}</button>
     <label>Tìm trường hoặc điểm giao</label><input style={fieldStyle} placeholder="Gõ HC 5, Hoa Cúc, Dĩ An…" value={schoolSearch} onChange={e=>setSchoolSearch(e.target.value)}/>
     {!selectedSchool&&<div className="sumi-school-results">{schoolSuggestions.map(school=><button key={`${school.code}-${school.name}`} onClick={()=>chooseSchool(school)}><b>🏫</b><span><strong>{school.name}</strong><small>{school.code} · {school.type}</small><em>{school.address||'Chưa có địa chỉ — cần bổ sung'}</em></span></button>)}</div>}
+    {!selectedSchool&&<button type="button" onClick={()=>{setShowNewSchool(v=>!v);if(!showNewSchool&&schoolSearch&&!newSchool.name)setNewSchool(n=>({...n,name:schoolSearch}));}} style={{width:'100%',minHeight:48,marginTop:8,border:'2px dashed #d96b43',borderRadius:14,background:'#fff7ed',color:'#b93e13',fontWeight:900,fontSize:15,cursor:'pointer'}}>➕ Không thấy trường? Thêm trường mới</button>}
+    {!selectedSchool&&showNewSchool&&<div style={{display:'grid',gap:8,marginTop:8,padding:12,border:'2px solid #eadcca',borderRadius:14,background:'#fffaf2'}}>
+     <label style={{fontWeight:800,fontSize:13}}>Tên trường / điểm giao *</label><input style={fieldStyle} placeholder="VD: Trường Tiểu học ABC" value={newSchool.name} onChange={e=>setNewSchool(n=>({...n,name:e.target.value}))}/>
+     <label style={{fontWeight:800,fontSize:13}}>Địa chỉ giao (nên nhập để shipper biết giao đâu)</label><input style={fieldStyle} placeholder="Số nhà, đường, phường…" value={newSchool.address} onChange={e=>setNewSchool(n=>({...n,address:e.target.value}))}/>
+     <label style={{fontWeight:800,fontSize:13}}>Mã số thuế (nếu có, để xuất hoá đơn)</label><input style={fieldStyle} value={newSchool.taxCode} onChange={e=>setNewSchool(n=>({...n,taxCode:e.target.value}))}/>
+     <label style={{fontWeight:800,fontSize:13}}>Số điện thoại liên hệ (nếu có)</label><input style={fieldStyle} inputMode="tel" value={newSchool.phone} onChange={e=>setNewSchool(n=>({...n,phone:e.target.value}))}/>
+     <div style={{fontSize:12,color:'#725f50',lineHeight:1.4}}>Trường sẽ được lưu thành khách hàng mới. Đơn hoàn thành sẽ tự ghi vào <b>Công nợ</b> đúng tên trường này.</div>
+     <div style={{display:'flex',gap:8}}><button type="button" onClick={()=>setShowNewSchool(false)} style={{flex:1,minHeight:44,borderRadius:12,border:'1px solid #eadcca',background:'#f4efe8',fontWeight:800,cursor:'pointer'}}>Huỷ</button><button type="button" onClick={applyNewSchool} style={{flex:2,minHeight:44,borderRadius:12,border:'none',background:'#138a53',color:'#fff',fontWeight:900,cursor:'pointer'}}>Dùng trường này</button></div>
+    </div>}
     {selectedSchool&&<div className="sumi-school-selected"><b>✓</b><span><strong>{selectedSchool.name}</strong><small>{selectedSchool.code} · {selectedSchool.type}</small><em>{selectedSchool.address||'Chưa có địa chỉ'}</em></span><button onClick={()=>setSelectedSchool(null)}>Đổi</button></div>}
    </section>}
    {type!=='school'&&<><label style={{display:'block',fontWeight:900}}>Khách hàng</label>
