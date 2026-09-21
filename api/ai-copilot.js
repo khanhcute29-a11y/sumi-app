@@ -134,13 +134,14 @@ NGƯỜI ĐANG NÓI CHUYỆN VỚI BẠN:
 - Tên: ${name}
 - Vai trò: ${role} (${isDirector ? 'GIÁM ĐỐC / CHỦ TIỆM - Toàn quyền duyệt chi và chỉ đạo' : 'Nhân viên tiệm bánh - Phải tuân thủ quy chế'})
 
-QUY CHẾ TIỆM BÁNH SUMI BAKERY CẦN LƯU Ý:
-1. Đặt bánh kem tạo hình phức tạp cần báo trước ít nhất 4 tiếng. Nếu khách đòi lấy gấp dưới 2 tiếng: Phải kích hoạt 'canh_bao_quy_dinh' báo thợ bánh trước khi nhận.
-2. Mức chiết khấu tối đa nhân viên được phép giảm là 10-15%. Nếu khách đòi giảm sâu hơn, phải báo cần Giám đốc duyệt.
-3. Khi nhân viên xin tạm ứng lương hoặc báo chi: Luôn bóc tách đúng số tiền và lý do, sau đó hỏi xác nhận lại để nhân viên bấm đồng ý trước khi gửi sếp.
-4. Với nhân sự không rành chữ, bạn hãy trả lời thật ngắn gọn, ấm áp, rõ ràng, dễ nghe.
-
-Khi người dùng gửi tin nhắn Zalo forward vào hoặc nói giọng nói, hãy tự động nhận diện ý định và gọi Tool tương ứng.`;
+CÁCH HƯỚNG DẪN VÀ TƯƠNG TÁC TỰ NHIÊN:
+1. Khi người dùng mới chưa biết sử dụng, hỏi "chưa biết dùng", "bạn làm được gì", "hướng dẫn tôi": Hãy hướng dẫn thật ngắn gọn, ấm áp: Bạn có thể giúp Sếp giao việc cho nhân viên, lên đơn bánh kem từ tin nhắn Zalo, ghi nhận khoản chi mua đồ, hoặc xin tạm ứng lương. Sếp/bạn chỉ cần nói hoặc gõ tự nhiên như đang nói chuyện với một người trợ lý thật.
+2. Khi người dùng muốn giao việc: Gọi ngay tool 'giao_viec_nhan_su'.
+3. Khi khách gửi tin nhắn Zalo hoặc ảnh mẫu bánh: Tự động bóc tách và gọi 'tao_don_hang_banh'.
+4. Đặt bánh kem tạo hình phức tạp cần báo trước ít nhất 4 tiếng. Nếu khách đòi lấy gấp dưới 2 tiếng: Phải kích hoạt 'canh_bao_quy_dinh' báo thợ bánh trước khi nhận.
+5. Mức chiết khấu tối đa nhân viên được phép giảm là 10-15%. Nếu khách đòi giảm sâu hơn, phải báo cần Giám đốc duyệt.
+6. Khi nhân viên xin tạm ứng lương hoặc báo chi: Luôn bóc tách đúng số tiền và lý do, sau đó kích hoạt tool tương ứng để xác nhận.
+7. Với nhân sự không rành chữ, bạn hãy trả lời thật ngắn gọn, ấm áp, rõ ràng, dễ nghe.`;
 
     // Chuẩn bị nội dung gửi Gemini (Multimodal text + image nếu có)
     const contents = [];
@@ -162,16 +163,38 @@ Khi người dùng gửi tin nhắn Zalo forward vào hoặc nói giọng nói, 
       contents.push({ role: 'user', parts: [{ text: message }] });
     }
 
-    // Gọi mô hình Gemini 3.6 Flash
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
-      contents: contents,
-      config: {
-        systemInstruction,
-        tools: tools,
-        temperature: 0.2 // Giữ độ chính xác cao cho nghiệp vụ
+    // Model Cascade: Chống lỗi 503 Spikes in high demand
+    const candidateModels = [
+      'gemini-3.5-flash-lite',
+      'gemini-3.5-flash',
+      'gemini-flash-latest',
+      'gemini-3.6-flash'
+    ];
+
+    let response = null;
+    let lastError = null;
+
+    for (const model of candidateModels) {
+      try {
+        response = await ai.models.generateContent({
+          model,
+          contents,
+          config: {
+            systemInstruction,
+            tools: tools,
+            temperature: 0.2
+          }
+        });
+        if (response) break;
+      } catch (err) {
+        lastError = err;
+        console.warn(`[Gemini Model ${model} Warning]:`, err.message);
       }
-    });
+    }
+
+    if (!response) {
+      throw lastError || new Error('Không thể kết nối tới mô hình AI Gemini');
+    }
 
     const replyText = response.text || '';
     const functionCalls = response.functionCalls || [];

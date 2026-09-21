@@ -38,5 +38,46 @@ export default defineConfig({
         globIgnores: ['visual-guides/**'],
       },
     }),
+    {
+      name: 'api-tts-dev',
+      configureServer(server) {
+        server.middlewares.use('/api/tts', async (req, res) => {
+          try {
+            const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+            const text = parsedUrl.searchParams.get('text');
+            if (!text) {
+              res.statusCode = 400;
+              res.end('Missing text parameter');
+              return;
+            }
+            const { MsEdgeTTS, OUTPUT_FORMAT } = await import('msedge-tts');
+            const tts = new MsEdgeTTS();
+            await tts.setMetadata('vi-VN-NamMinhNeural', OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
+            const { audioStream } = tts.toStream(text.slice(0, 1000));
+            
+            const chunks = [];
+            audioStream.on('data', chunk => chunks.push(chunk));
+            audioStream.on('end', () => {
+              const buffer = Buffer.concat(chunks);
+              res.setHeader('Content-Type', 'audio/mpeg');
+              res.setHeader('Content-Length', buffer.length);
+              res.setHeader('Accept-Ranges', 'bytes');
+              res.setHeader('Cache-Control', 'public, max-age=86400');
+              res.end(buffer);
+            });
+            audioStream.on('error', err => {
+              console.error('[Vite TTS Stream error]:', err);
+              res.statusCode = 500;
+              res.end(err.message);
+            });
+          } catch (err) {
+            console.error('[Vite TTS Dev Error]:', err);
+            res.statusCode = 500;
+            res.end(err.message);
+          }
+        });
+      }
+    }
   ],
 })
+

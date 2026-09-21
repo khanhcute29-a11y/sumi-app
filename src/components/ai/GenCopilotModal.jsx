@@ -2,11 +2,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   X, Mic, MicOff, Send, Image as ImageIcon, Volume2, 
   VolumeX, AlertTriangle, CheckCircle2, Bot, Sparkles, 
-  CornerDownLeft, FileText, DollarSign, Cake, ArrowRight 
+  CornerDownLeft, FileText, DollarSign, Cake, ArrowRight,
+  ClipboardList, ReceiptText
 } from 'lucide-react';
 import { 
   askGenCopilot, speakVietnamese, stopSpeaking, 
-  executeSalaryAdvance, executeExpenseClaim 
+  executeSalaryAdvance, executeExpenseClaim, executeAssignTask
 } from '../../lib/geminiCopilot';
 import { playConfirmSound } from '../../lib/sound';
 
@@ -129,6 +130,10 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm 
 
         if (fc.name === 'xin_tam_ung_luong') {
           replyText = `Dạ, em thấy bạn muốn xin tạm ứng số tiền: ${Number(fc.args.so_tien).toLocaleString('vi-VN')}đ (Lý do: ${fc.args.ly_do}). Bạn bấm xác nhận bên dưới để em gửi Giám đốc duyệt nhé!`;
+        } else if (fc.name === 'giao_viec_nhan_su') {
+          replyText = `Dạ, em đã lập phiếu giao việc cho bạn ${fc.args.ten_nhan_vien || 'nhân sự'}: "${fc.args.noi_dung_viec}". Sếp bấm 'Giao việc ngay' bên dưới để em gửi lệnh nhé!`;
+        } else if (fc.name === 'bao_khoan_chi') {
+          replyText = `Dạ, em đã lập phiếu ghi nhận khoản chi ${Number(fc.args.so_tien).toLocaleString('vi-VN')}đ (${fc.args.noi_dung_chi}). Bạn kiểm tra và bấm xác nhận bên dưới nhé!`;
         } else if (fc.name === 'tao_don_hang_banh') {
           replyText = `Dạ, em đã bóc tách thông tin đơn bánh cho khách ${fc.args.ten_khach || 'chưa rõ'}: Loại ${fc.args.loai_banh || 'bánh kem'} size ${fc.args.size_banh || 'chuẩn'}. Mời bạn kiểm tra thẻ bên dưới:`;
         } else if (fc.name === 'canh_bao_quy_dinh') {
@@ -146,7 +151,7 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm 
       setMessages((prev) => [...prev, genMsg]);
       setPendingAction(actionToConfirm);
 
-      // Đọc to câu trả lời cho nhân sự (hỗ trợ người không biết chữ)
+      // Đọc to câu trả lời cho nhân sự bằng giọng Nam Minh
       speakVietnamese(replyText);
       setIsSpeaking(true);
 
@@ -170,7 +175,32 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm 
     setIsLoading(true);
 
     try {
-      if (action.name === 'xin_tam_ung_luong') {
+      if (action.name === 'giao_viec_nhan_su') {
+        const res = await executeAssignTask({
+          tenNhanVien: action.args.ten_nhan_vien,
+          noiDungViec: action.args.noi_dung_viec,
+          hanChot: action.args.han_chot,
+          yeuCauAnh: action.args.yeu_cau_anh
+        });
+        setMessages((prev) => [
+          ...prev,
+          { id: Date.now(), sender: 'gen', text: `✅ ${res.message}` }
+        ]);
+        speakVietnamese(res.message);
+        setPendingAction(null);
+      } else if (action.name === 'bao_khoan_chi') {
+        const res = await executeExpenseClaim({
+          soTien: action.args.so_tien,
+          noiDungChi: action.args.noi_dung_chi,
+          ghiChu: action.args.ghi_chu
+        });
+        setMessages((prev) => [
+          ...prev,
+          { id: Date.now(), sender: 'gen', text: `✅ ${res.message}` }
+        ]);
+        speakVietnamese(res.message);
+        setPendingAction(null);
+      } else if (action.name === 'xin_tam_ung_luong') {
         const res = await executeSalaryAdvance({
           soTien: action.args.so_tien,
           lyDo: action.args.ly_do,
@@ -458,6 +488,123 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm 
                   </button>
                 </div>
               )}
+
+              {m.action && m.action.name === 'giao_viec_nhan_su' && (
+                <div
+                  style={{
+                    background: '#f0fdf4',
+                    border: '1.5px solid #86efac',
+                    borderRadius: '14px',
+                    padding: '14px',
+                    marginTop: '8px'
+                  }}
+                >
+                  <div style={{ fontWeight: 700, color: '#16a34a', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <ClipboardList size={18} /> Phiếu Giao Việc Nhân Sự
+                  </div>
+                  <div style={{ fontSize: 13, color: '#166534', marginBottom: 12, lineHeight: 1.6 }}>
+                    <div>• Nhân sự: <b style={{ fontSize: 14, color: '#14532d' }}>{m.action.args.ten_nhan_vien || 'Nhân sự'}</b></div>
+                    <div>• Nội dung việc: <b>{m.action.args.noi_dung_viec}</b></div>
+                    {m.action.args.han_chot && <div>• Hạn chót: <b>{m.action.args.han_chot}</b></div>}
+                    {m.action.args.yeu_cau_anh && <div>• Yêu cầu: <i>Bắt buộc chụp ảnh nghiệm thu</i></div>}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => setPendingAction(null)}
+                      style={{
+                        flex: 1,
+                        padding: '9px 12px',
+                        borderRadius: 10,
+                        border: '1px solid #ddd',
+                        background: '#fff',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      onClick={() => handleConfirmAction(m.action)}
+                      style={{
+                        flex: 2,
+                        padding: '9px 12px',
+                        borderRadius: 10,
+                        border: 'none',
+                        background: '#16a34a',
+                        color: '#fff',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6
+                      }}
+                    >
+                      <CheckCircle2 size={16} /> Giao việc ngay
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {m.action && m.action.name === 'bao_khoan_chi' && (
+                <div
+                  style={{
+                    background: '#fef2f2',
+                    border: '1.5px solid #fca5a5',
+                    borderRadius: '14px',
+                    padding: '14px',
+                    marginTop: '8px'
+                  }}
+                >
+                  <div style={{ fontWeight: 700, color: '#dc2626', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <ReceiptText size={18} /> Phiếu Ghi Nhận Khoản Chi
+                  </div>
+                  <div style={{ fontSize: 13, color: '#991b1b', marginBottom: 12, lineHeight: 1.6 }}>
+                    <div>• Số tiền: <b style={{ fontSize: 15, color: '#dc2626' }}>{Number(m.action.args.so_tien).toLocaleString('vi-VN')} đ</b></div>
+                    <div>• Nội dung chi: <b>{m.action.args.noi_dung_chi}</b></div>
+                    {m.action.args.ghi_chu && <div>• Ghi chú: {m.action.args.ghi_chu}</div>}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => setPendingAction(null)}
+                      style={{
+                        flex: 1,
+                        padding: '9px 12px',
+                        borderRadius: 10,
+                        border: '1px solid #ddd',
+                        background: '#fff',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      onClick={() => handleConfirmAction(m.action)}
+                      style={{
+                        flex: 2,
+                        padding: '9px 12px',
+                        borderRadius: 10,
+                        border: 'none',
+                        background: '#dc2626',
+                        color: '#fff',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6
+                      }}
+                    >
+                      <CheckCircle2 size={16} /> Xác nhận ghi chi
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
 
@@ -480,62 +627,6 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm 
           )}
 
           <div ref={chatEndRef} />
-        </div>
-
-        {/* Gợi ý nhanh (Quick Chips) */}
-        <div
-          style={{
-            padding: '8px 12px',
-            background: '#ffffff',
-            borderTop: '1px solid #f0e6dd',
-            display: 'flex',
-            gap: 8,
-            overflowX: 'auto',
-            whiteSpace: 'nowrap'
-          }}
-        >
-          <button
-            onClick={() => handleSend('Lên đơn bánh kem bắp 20cm cho chị Lan 0988123456 giao 4h chiều mai')}
-            style={{
-              padding: '6px 12px',
-              borderRadius: '20px',
-              border: '1px solid #eadcca',
-              background: '#faf6f0',
-              fontSize: 12,
-              color: '#524338',
-              cursor: 'pointer'
-            }}
-          >
-            🎂 Lên đơn bánh kem bắp
-          </button>
-          <button
-            onClick={() => handleSend('Xin tạm ứng lương 2 triệu lo tiền nhà')}
-            style={{
-              padding: '6px 12px',
-              borderRadius: '20px',
-              border: '1px solid #eadcca',
-              background: '#faf6f0',
-              fontSize: 12,
-              color: '#524338',
-              cursor: 'pointer'
-            }}
-          >
-            💵 Xin tạm ứng lương
-          </button>
-          <button
-            onClick={() => handleSend('Chi 120k mua thêm đá lạnh cho tủ bánh')}
-            style={{
-              padding: '6px 12px',
-              borderRadius: '20px',
-              border: '1px solid #eadcca',
-              background: '#faf6f0',
-              fontSize: 12,
-              color: '#524338',
-              cursor: 'pointer'
-            }}
-          >
-            🧾 Báo chi tiền đá
-          </button>
         </div>
 
         {/* Preview ảnh đính kèm nếu có */}
