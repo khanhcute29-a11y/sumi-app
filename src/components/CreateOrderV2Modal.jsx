@@ -269,7 +269,13 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
  });setCatalogSearch('');};
  const flow=ORDER_FLOWS.find(x=>x.key===type);
  const suggestions=TEABREAK_CATALOG.filter(x=>!catalogSearch||normalizeSearch(`${x.code} ${x.name} ${x.group}`).includes(normalizeSearch(catalogSearch))).slice(0,8);
- const schoolSuggestions=[...SCHOOL_DELIVERY_POINTS,...extraSchools].filter(x=>!schoolSearch||normalizeSearch(`${x.code} ${x.name} ${x.address} ${x.type}`).includes(normalizeSearch(schoolSearch))).slice(0,10);
+ // Tìm theo TỪNG TỪ (không cần đúng nguyên cụm liền nhau): gõ "Trường hoa cúc 5" vẫn ra "Trường Mầm non Hoa Cúc 5".
+ const schoolTokens=normalizeSearch(schoolSearch).split(/\s+/).filter(Boolean);
+ const schoolQuery=normalizeSearch(schoolSearch);
+ const schoolSuggestions=[...SCHOOL_DELIVERY_POINTS,...extraSchools].filter(x=>{if(!schoolTokens.length)return true;const hay=normalizeSearch(`${x.code} ${x.name} ${x.address} ${x.type}`);const words=hay.split(/\s+/);
+  // từ ngắn (1-2 ký tự, VD "c", "b", "5") chỉ khớp ĐẦU TỪ để không ra kết quả tạp
+  return schoolTokens.every(t=>t.length<3?words.some(w=>w.startsWith(t)):hay.includes(t));})
+  .sort((a,b)=>(normalizeSearch(b.name).includes(schoolQuery)?1:0)-(normalizeSearch(a.name).includes(schoolQuery)?1:0)).slice(0,10);
  const chooseSchool=(school)=>{setSelectedSchool(school);setCustomerName(school.name);setAddress(school.address);setSchoolSearch('');};
  const applyNewSchool=()=>{const name=newSchool.name.trim();if(!name){setError('Vui lòng nhập tên trường.');return;}setError('');
   chooseSchool({code:'',name,address:newSchool.address.trim(),type:'Trường học (thêm mới)',isNew:true,taxCode:newSchool.taxCode.trim(),phone:newSchool.phone.trim()});
