@@ -20,6 +20,7 @@ import { IconCake, IconBakery, IconMacaron, IconSchool, IconTeabreak, IconMixed 
 import StarRateBar from './StarRateBar';
 import { PhotoField } from './PhotoField';
 import { CameraPhotoField } from './CameraPhotoField';
+import ProductionProofModal from './ProductionProofModal';
 import { CARRIER_OPTIONS, SHIPMENT_STATUS_OPTIONS, shipmentStatusMeta, carrierLabel, fetchActiveShipmentForOrder, handOffToCarrier, updateShipmentStatus } from '../lib/thirdPartyShipping';
 
 const ORDER_TYPE_ICONS = {
@@ -120,6 +121,10 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [showAcceptPackageModal, setShowAcceptPackageModal] = useState(false);
+  // Khung chụp ảnh thành phẩm bắt buộc trước khi bếp Hoàn thành/Duyệt hoàn thành mẻ.
+  const [proofFor, setProofFor] = useState(null); // { pkg, mode: 'complete' | 'approve' }
+  const [proofBusy, setProofBusy] = useState(false);
+  const [proofError, setProofError] = useState('');
   const [selectedPackage, setSelectedPackage] = useState(null);
   const [selectedStaff, setSelectedStaff] = useState('');
   const [staffOptions, setStaffOptions] = useState([]);
@@ -191,7 +196,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       supabase.from('domain_events').select('id,event_type,occurred_at,payload').eq('entity_type', 'order').eq('entity_id', orderId).order('occurred_at', { ascending: false }),
       supabase.from('kpi_logs').select('id,event_type,created_at,staff_name,staff_id,gps_latitude,gps_longitude,photo_url,notes').eq('order_id', orderId).order('created_at', { ascending: false }),
       supabase.from('order_operations_list').select('production_started_at,production_completed_at,production_minutes,delivery_started_at,delivery_completed_at,delivery_minutes,delivery_provider,provider_label,shipping_fee,driver_name,is_overdue,overdue_stage,overdue_minutes,was_late,late_staff_names').eq('id', orderId).single(),
-      supabase.from('order_attachments').select('id,attachment_type,storage_path,mime_type,created_at').eq('order_id', orderId).order('created_at', { ascending: false }),
+      supabase.from('order_attachments').select('id,attachment_type,storage_path,mime_type,created_at,work_package_id').eq('order_id', orderId).order('created_at', { ascending: false }),
       supabase.from('order_change_logs').select('id,field_name,old_value,new_value,edited_by_name,created_at').eq('order_id', orderId).order('created_at', { ascending: false }),
       supabase.rpc('sumi_quyen_sua_don', { p_order_id: orderId }),
       // Người giao hàng thật (staff_id) để Giám đốc đánh giá — order_operations_list
@@ -213,8 +218,15 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
     const priceByItemId = Object.fromEntries((itemPrices?.data || []).map((r) => [r.item_id, r.unit_price]));
     if (i.data) i.data = i.data.map((it) => ({ ...it, unit_price: priceByItemId[it.id] ?? null }));
 
+    // Cột work_package_id chỉ có sau migration 202609201400 — chưa chạy thì query trên
+    // lỗi, tải lại bản không có cột đó để màn chi tiết đơn KHÔNG bị vỡ.
+    let attRows = att.data;
+    if (att.error) {
+      const retry = await supabase.from('order_attachments').select('id,attachment_type,storage_path,mime_type,created_at').eq('order_id', orderId).order('created_at', { ascending: false });
+      attRows = retry.data;
+    }
     // Lấy URL xem ảnh cho các file đính kèm
-    const resolvedAttachments = await Promise.all((att.data || []).map(async (a) => {
+    const resolvedAttachments = await Promise.all((attRows || []).map(async (a) => {
       let url = '';
       if (a.storage_path) {
         try {
@@ -387,7 +399,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
     }
   };
 
-  const approvePackage = async (p, photoFile = null) => {
+  const approvePackage = async (p, photoFile = null, rethrow = false) => {
     setBusy(true); setError('');
     try {
       let photoPath = null;
@@ -411,7 +423,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       }
       await load();
       onChanged?.();
-    } catch (e) { setError(e.message); } finally { setBusy(false); }
+    } catch (e) { setError(e.message); if (rethrow) throw e; } finally { setBusy(false); }
   };
 
   const captureGPS = async () => {
@@ -613,7 +625,37 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
     })();
   };
 
-  const completeWorkPackage = async (p) => {
+  // Tải các ảnh thành phẩm lên storage 'uploads', trả về mảng path.
+  const uploadProofFiles = async (files) => {
+    const paths = [];
+    for (const f of files) {
+      const cleanExt = ((f.name || 'anh.jpg').split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+      const path = `orders/${orderId}/production/${crypto.randomUUID()}.${cleanExt}`;
+      const { error: upErr } = await supabase.storage.from('uploads').upload(path, f, { contentType: f.type || 'image/jpeg' });
+      if (upErr) throw upErr;
+      paths.push(path);
+    }
+    return paths;
+  };
+
+  // Bấm "Hoàn thành" ở khung chụp ảnh: tải ảnh lên trước, chỉ khi tải xong mới gọi RPC.
+  const submitProof = async (files) => {
+    if (!proofFor) return;
+    const { pkg, mode } = proofFor;
+    setProofBusy(true); setProofError('');
+    try {
+      if (mode === 'approve') {
+        await approvePackage(pkg, files[0] || null, true);
+      } else {
+        await completeWorkPackage(pkg, files, true);
+      }
+      setProofFor(null);
+    } catch (e) {
+      setProofError(e?.message || 'Không hoàn thành được, vui lòng thử lại.');
+    } finally { setProofBusy(false); }
+  };
+
+  const completeWorkPackage = async (p, files = [], rethrow = false) => {
     setBusy(true);
     setError('');
     try {
@@ -621,11 +663,13 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       const staffName = p.assigned_to_staff_name || profile.full_name || profile.email;
 
       // Call RPC to complete work package and update order status (bypasses RLS)
+      const proofPaths = files.length ? await uploadProofFiles(files) : null;
       const { data, error } = await supabase.rpc('complete_work_package_and_order', {
         p_package_id: p.id,
         p_order_id: orderId,
         p_staff_id: staffId,
-        p_staff_name: staffName
+        p_staff_name: staffName,
+        p_proof_paths: proofPaths
       });
 
       if (error) throw error;
@@ -654,6 +698,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       onChanged?.();
     } catch (e) {
       setError(e.message);
+      if (rethrow) throw e; // khung chụp ảnh giữ nguyên để nhân viên thử lại
     } finally {
       setBusy(false);
     }
@@ -1382,7 +1427,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
         {proofPhotos.length > 0 && (
           <div style={box}>
             <strong style={{ fontSize: 16, display: 'block', marginBottom: 10, color: 'var(--text-primary)' }}>
-              📸 Ảnh chụp hoàn thành / giao hàng ({proofPhotos.length})
+              📸 Ảnh thành phẩm / giao hàng ({proofPhotos.length})
             </strong>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: 10 }}>
               {proofPhotos.map((att) => (
@@ -1399,6 +1444,16 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                     alt={att.attachment_type || 'Ảnh'}
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   />
+                  {att.attachment_type === 'production_proof' && (() => {
+                    const pk = data.packages.find((x) => x.id === att.work_package_id);
+                    const who = [pk?.organization_units?.name, pk?.completed_by_staff_name || pk?.assigned_to_staff_name].filter(Boolean).join(' · ');
+                    return (
+                      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '14px 6px 4px', background: 'linear-gradient(transparent, rgba(0,0,0,.75))', color: '#fff', fontSize: 10.5, fontWeight: 700, lineHeight: 1.25 }}>
+                        <div>🍰 Thành phẩm{who ? ` · ${who}` : ''}</div>
+                        <div style={{ opacity: 0.85 }}>{new Date(att.created_at).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</div>
+                      </div>
+                    );
+                  })()}
                 </div>
               ))}
             </div>
@@ -1460,7 +1515,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                     {p.status === 'in_progress' && (
                       <button
                         disabled={busy}
-                        onClick={() => completeWorkPackage(p)}
+                        onClick={() => { setProofError(''); setProofFor({ pkg: p, mode: 'complete' }); }}
                         style={{
                           minHeight: 44, border: 0, borderRadius: 12, padding: '0 16px', fontWeight: 900,
                           background: '#28a745', color: 'white', fontSize: 15, cursor: 'pointer',
@@ -1473,7 +1528,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                     {p.status === 'awaiting_approval' && (
                       <button
                         disabled={busy}
-                        onClick={() => approvePackage(p)}
+                        onClick={() => { setProofError(''); setProofFor({ pkg: p, mode: 'approve' }); }}
                         style={{
                           minHeight: 44, border: 0, borderRadius: 12, padding: '0 16px', fontWeight: 900,
                           background: '#087f5b', color: 'white', fontSize: 15, cursor: 'pointer',
@@ -2035,6 +2090,17 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
             </div>
           </div>
         </div>
+      )}
+
+      {proofFor && (
+        <ProductionProofModal
+          packageName={proofFor.pkg.organization_units?.name}
+          isDirector={director}
+          busy={proofBusy}
+          error={proofError}
+          onCancel={() => setProofFor(null)}
+          onSubmit={submitProof}
+        />
       )}
 
       {/* Modal: Nhận đơn - Tự làm hoặc Giao nhân viên */}

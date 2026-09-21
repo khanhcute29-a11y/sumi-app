@@ -11,8 +11,9 @@ import { subscribeToBroadcast, BroadcastEvents } from '../lib/realtimeSync';
 import FinishedGoodsInventoryV2 from '../components/warehouse/FinishedGoodsInventoryV2';
 import { fetchOrderNoteCounts } from '../lib/queries';
 import { fetchOrderHearts, addOrderHeart } from '../lib/bossOverviewV3';
-import { IconInbox, IconKitchen, IconPackage, IconShipping, IconCheckCircle, IconWarning, IconWarehouse, IconCake, IconBakery, IconMacaron, IconSchool, IconTeabreak, IconMixed } from '../components/icons/FrogIcons';
-import { localDateStr } from '../lib/date';
+import { IconInbox, IconKitchen, IconPackage, IconShipping, IconCheckCircle, IconWarning, IconWarehouse, IconCake, IconBakery, IconMacaron, IconSchool, IconTeabreak, IconMixed, IconExport } from '../components/icons/FrogIcons';
+import { localDateStr, mondayOf } from '../lib/date';
+import ExportSummaryModal from '../components/ExportSummaryModal';
 
 const LABELS = {
   awaiting_assignment: 'Đơn chờ làm', awaiting_acceptance: 'Đơn chờ làm', in_production: 'Bếp đang làm',
@@ -60,6 +61,9 @@ export default function OrdersV2Screen() {
   const [historyFrom, setHistoryFrom] = useState('');
   const [historyTo, setHistoryTo] = useState('');
   const [historyKeyword, setHistoryKeyword] = useState('');
+  // Bộ lọc NGÀY CẦN GIAO riêng cho đơn Trường học (các thẻ đang làm việc, không gồm "Giao thành công"
+  // vì thẻ đó đã có bộ lọc ngày hoàn thành riêng). mode: all | today | tomorrow | week | day | range
+  const [dateFilter, setDateFilter] = useState({ mode: 'all', from: '', to: '' });
   const [canCreate, setCanCreate] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [resumeDraftId, setResumeDraftId] = useState(null);
@@ -70,10 +74,12 @@ export default function OrdersV2Screen() {
   const [selectedId, setSelectedId] = useState(null);
   const [error, setError] = useState('');
   const [showKho, setShowKho] = useState(false);
+  const [showExport, setShowExport] = useState(false);
   // Luồng Trường học tách biệt hoàn toàn khỏi 6 thẻ tổng quan chung (yêu cầu
   // chủ tiệm 05/09/2026) — đơn trường học không còn tính vào 6 thẻ
   // chung/luồng phân loại nữa, có hẳn 1 khối 6 thẻ riêng dưới Kho Thành Phẩm.
   const [schoolMode, setSchoolMode] = useState(false);
+  useEffect(() => { if (!schoolMode) setDateFilter({ mode: 'all', from: '', to: '' }); }, [schoolMode]);
   // ── Thả tim (đánh dấu đã xem) + số lượng bình luận trên thẻ đơn ──
   const [orderHearts, setOrderHearts] = useState({});
   const [noteCounts, setNoteCounts] = useState({});
@@ -204,12 +210,34 @@ export default function OrdersV2Screen() {
     return base.filter(FILTERS.find(x => x.key === filter)?.match || (() => true));
   }, [schoolMode, schoolVisible, generalVisible, filter]);
 
+  // Khoảng ngày (YYYY-MM-DD, giờ địa phương VN — KHÔNG dùng toISOString) theo nút đang chọn.
+  const dateRange = useMemo(() => {
+    const addDays = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return localDateStr(d); };
+    const { mode, from, to } = dateFilter;
+    if (mode === 'today') return { from: addDays(0), to: addDays(0) };
+    if (mode === 'tomorrow') return { from: addDays(1), to: addDays(1) };
+    if (mode === 'week') { const mon = mondayOf(new Date()); const sun = new Date(mon); sun.setDate(sun.getDate() + 6); return { from: localDateStr(mon), to: localDateStr(sun) }; }
+    if (mode === 'day') return { from, to: from };
+    if (mode === 'range') return { from, to };
+    return { from: '', to: '' };
+  }, [dateFilter]);
+  // Chỉ áp dụng cho khối Trường học ở các thẻ đang làm việc (không phải "Giao thành công").
+  const dateActive = Boolean(schoolMode && filter && filter !== 'completed' && dateFilter.mode !== 'all'
+    && (dateFilter.mode !== 'day' || dateFilter.from) && (dateFilter.mode !== 'range' || (dateFilter.from || dateFilter.to)));
+
   // Lọc tiếp theo 5 luồng và tìm kiếm
   const shownOrders = useMemo(() => {
     let list = statusOrders;
     if (flowGroup && flowGroup !== 'all') {
       const g = FLOW_GROUPS.find(x => x.key === flowGroup);
       if (g) list = list.filter(g.match);
+    }
+    if (dateActive) {
+      list = list.filter(o => {
+        if (!o.required_at) return false;
+        const d = localDateStr(new Date(o.required_at));
+        return (!dateRange.from || d >= dateRange.from) && (!dateRange.to || d <= dateRange.to);
+      });
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
@@ -220,7 +248,7 @@ export default function OrdersV2Screen() {
       );
     }
     return list;
-  }, [statusOrders, flowGroup, searchQuery]);
+  }, [statusOrders, flowGroup, searchQuery, dateActive, dateRange]);
 
   const stage = (s) => s === 'completed' ? 5 : s === 'in_delivery' ? 4 : s === 'ready_for_fulfillment' ? 3 : s === 'in_production' ? 2 : 1;
 
@@ -230,6 +258,8 @@ export default function OrdersV2Screen() {
   // trước — 2 mục đích khác nhau nên dùng field khác nhau.
   const isHistoryTab = filter === 'completed';
   const { todayOrders, otherOrders } = useMemo(() => {
+    // Đang lọc ngày → hiển thị dạng gom theo ngày (khối riêng bên dưới), không tách Hôm nay/Ngày khác.
+    if (dateActive) return { todayOrders: [], otherOrders: [] };
     const todayStr = localDateStr();
     const today = [], other = [];
     for (const o of shownOrders) {
@@ -238,7 +268,7 @@ export default function OrdersV2Screen() {
       else other.push(o);
     }
     return { todayOrders: today, otherOrders: other };
-  }, [shownOrders, isHistoryTab]);
+  }, [shownOrders, isHistoryTab, dateActive]);
 
   // Bộ lọc khoảng ngày + tên khách CHỈ áp dụng cho khối "Đơn Trước Đây" của
   // tab Lịch sử — "Đơn Hôm Nay" luôn hiện đủ, không bị ảnh hưởng (yêu cầu
@@ -255,6 +285,25 @@ export default function OrdersV2Screen() {
     }
     return list;
   }, [otherOrders, isHistoryTab, historyFrom, historyTo, historyKeyword]);
+
+  // Gom theo NGÀY CẦN GIAO khi đang lọc: mỗi ngày có số đơn + tổng số lượng (total_quantity) để bếp lên kế hoạch.
+  const DOW = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+  const dayGroups = useMemo(() => {
+    if (!dateActive) return [];
+    const map = new Map();
+    [...shownOrders].sort((a, b) => String(a.required_at).localeCompare(String(b.required_at))).forEach((o) => {
+      const d = localDateStr(new Date(o.required_at));
+      if (!map.has(d)) map.set(d, []);
+      map.get(d).push(o);
+    });
+    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([d, list]) => {
+      const dt = new Date(`${d}T00:00:00`);
+      return { day: d, label: `${DOW[dt.getDay()]} ${dt.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}`,
+        orders: list, qty: list.reduce((t, o) => t + (Number(o.total_quantity) || 0), 0) };
+    });
+  }, [dateActive, shownOrders]);
+  const fmtQty = (n) => Math.round(n).toLocaleString('vi-VN');
+  const fmtDay = (d) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}` : '…');
 
   const renderOrderCard = (o) => (
     <button className="mock-order-card" key={o.id} onClick={() => setSelectedId(o.id)}>
@@ -460,8 +509,27 @@ export default function OrdersV2Screen() {
               <span style={{ color: '#b93e13', fontWeight: 800 }}>Xem →</span>
             </button>
           )}
+
+          {/* Xuất tổng hợp theo ngày/tuần — CHỈ Giám đốc (owner/admin): số tiền
+              đơn bị khoá cột ở DB, RPC orders_export_rows cũng chặn phía server. */}
+          {['owner', 'admin'].includes(profile?.role) && (
+            <button className="mock-order-overview-kho" onClick={() => setShowExport(true)}
+              style={{
+                gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '14px 16px', borderRadius: 16, border: '1.5px solid #eadcca', background: '#fffaf3',
+                cursor: 'pointer', font: 'inherit', textAlign: 'left',
+              }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <IconExport size={22} />
+                <strong style={{ color: '#2d1c10', fontSize: 18 }}>Xuất tổng hợp</strong>
+              </span>
+              <span style={{ color: '#b93e13', fontWeight: 800 }}>Xuất Excel →</span>
+            </button>
+          )}
         </div>
       )}
+
+      {showExport && <ExportSummaryModal mode="orders" onClose={() => setShowExport(false)} />}
 
       {/* Màn hình 1 (khối riêng): Tổng quan 6 trạng thái CHỈ đơn Trường học —
           bấm vào thẳng danh sách luôn (flowGroup='school'), không qua bước
@@ -567,6 +635,87 @@ export default function OrdersV2Screen() {
             />
           )}
 
+          {/* Bộ lọc NGÀY CẦN GIAO cho đơn Trường học (các thẻ đang làm việc) */}
+          {schoolMode && !isHistoryTab && (
+            <div style={{ display: 'grid', gap: 8, margin: '4px 0 10px' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {[['all', 'Tất cả'], ['today', 'Hôm nay'], ['tomorrow', 'Ngày mai'], ['week', 'Tuần này']].map(([m, label]) => {
+                  const on = dateFilter.mode === m;
+                  return (
+                    <button key={m} type="button" onClick={() => setDateFilter({ mode: m, from: '', to: '' })}
+                      style={{ minHeight: 38, padding: '0 14px', borderRadius: 999, cursor: 'pointer', fontSize: 13, fontWeight: 800,
+                        border: on ? '2px solid #15803d' : '1px solid #eadcca', background: on ? '#f0fdf4' : '#fff', color: on ? '#15803d' : '#725f50' }}>
+                      {label}
+                    </button>
+                  );
+                })}
+                {(() => {
+                  const on = dateFilter.mode === 'day' || dateFilter.mode === 'range';
+                  return (
+                    <button type="button" onClick={() => setDateFilter(on ? { mode: 'all', from: '', to: '' } : { mode: 'range', from: localDateStr(), to: localDateStr() })}
+                      style={{ minHeight: 38, padding: '0 14px', borderRadius: 999, cursor: 'pointer', fontSize: 13, fontWeight: 800,
+                        border: on ? '2px solid #15803d' : '1px solid #eadcca', background: on ? '#f0fdf4' : '#fff', color: on ? '#15803d' : '#725f50' }}>
+                      📅 Chọn ngày
+                    </button>
+                  );
+                })()}
+              </div>
+              {(dateFilter.mode === 'day' || dateFilter.mode === 'range') && (
+                <div style={{ display: 'grid', gap: 8, padding: 10, border: '1px solid #eadcca', borderRadius: 14, background: '#fffaf3' }}>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {[['day', 'Đúng 1 ngày'], ['range', 'Khoảng ngày']].map(([m, label]) => (
+                      <button key={m} type="button" onClick={() => setDateFilter((f) => ({ mode: m, from: f.from || localDateStr(), to: m === 'day' ? '' : (f.to || f.from || localDateStr()) }))}
+                        style={{ flex: 1, minHeight: 36, borderRadius: 10, cursor: 'pointer', fontSize: 12.5, fontWeight: 800,
+                          border: dateFilter.mode === m ? '2px solid #15803d' : '1px solid #eadcca', background: dateFilter.mode === m ? '#f0fdf4' : '#fff', color: dateFilter.mode === m ? '#15803d' : '#725f50' }}>{label}</button>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 700, color: '#725f50' }}>
+                      {dateFilter.mode === 'day' ? 'Ngày' : 'Từ ngày'}
+                      <input type="date" className="mock-flow-search" style={{ marginBottom: 0 }} value={dateFilter.from}
+                        max={dateFilter.mode === 'range' && dateFilter.to ? dateFilter.to : undefined}
+                        onChange={e => setDateFilter((f) => ({ ...f, from: e.target.value }))} />
+                    </label>
+                    {dateFilter.mode === 'range' && (
+                      <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 700, color: '#725f50' }}>
+                        Đến ngày
+                        <input type="date" className="mock-flow-search" style={{ marginBottom: 0 }} value={dateFilter.to}
+                          min={dateFilter.from || undefined}
+                          onChange={e => setDateFilter((f) => ({ ...f, to: e.target.value }))} />
+                      </label>
+                    )}
+                  </div>
+                </div>
+              )}
+              {dateActive && (
+                <div style={{ padding: '8px 12px', borderRadius: 12, background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', fontSize: 13, fontWeight: 800 }}>
+                  {dateRange.from === dateRange.to ? fmtDay(dateRange.from) : `${fmtDay(dateRange.from)} – ${fmtDay(dateRange.to)}`}
+                  {' · '}{shownOrders.length} đơn · tổng SL {fmtQty(dayGroups.reduce((t, g) => t + g.qty, 0))}
+                </div>
+              )}
+              {dateFilter.mode === 'range' && dateFilter.from && dateFilter.to && dateFilter.from > dateFilter.to && (
+                <div style={{ color: '#b91c1c', fontSize: 12.5, fontWeight: 700 }}>"Từ ngày" phải trước hoặc bằng "Đến ngày".</div>
+              )}
+            </div>
+          )}
+
+          {/* Đang lọc ngày: gom theo từng ngày cần giao, mỗi ngày có tổng số đơn + tổng số lượng */}
+          {dateActive && dayGroups.map((g) => (
+            <React.Fragment key={g.day}>
+              <div className="mock-list-head" style={{ marginTop: 8 }}>
+                <strong style={{ fontSize: 15 }}>🗓️ {g.label} · {g.orders.length} đơn · {fmtQty(g.qty)} SL</strong>
+              </div>
+              {g.orders.map(renderOrderCard)}
+            </React.Fragment>
+          ))}
+          {dateActive && !loading && !error && shownOrders.length === 0 && (
+            <div className="mock-empty" style={{ padding: '20px 0' }}>
+              <span>🔍</span>
+              <h2>Không có đơn nào trong khoảng này</h2>
+              <button onClick={() => setDateFilter({ mode: 'all', from: '', to: '' })} style={{ marginTop: 10, padding: '8px 16px', borderRadius: 12, border: '1px solid #d7c3aa', background: '#fff', cursor: 'pointer', fontWeight: 800 }}>Xoá bộ lọc ngày</button>
+            </div>
+          )}
+
           {/* Đơn Hôm Nay — LUÔN hiện đủ, không bao giờ bị bộ lọc lịch sử bên
               dưới làm ảnh hưởng. */}
           {todayOrders.length > 0 && (
@@ -614,7 +763,7 @@ export default function OrdersV2Screen() {
             </div>
           )}
 
-          {!loading && !error && shownOrders.length === 0 && (
+          {!loading && !error && !dateActive && shownOrders.length === 0 && (
             <div className="mock-empty">
               <span>📦</span>
               <h2>Không có đơn hàng nào</h2>

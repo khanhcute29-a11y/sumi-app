@@ -10,6 +10,7 @@ import { parseVoiceOrder } from '../lib/parseVoiceOrder';
 import { fetchCustomers } from '../lib/queries';
 import { CAKE_BASES, CAKE_FILLINGS, baseSurcharge } from '../lib/cakePricing';
 import { broadcastEvent, BroadcastEvents, notifyOtherTabs } from '../lib/realtimeSync';
+import { showToast } from '../lib/toast';
 
 const PAYMENT_METHODS = [{ value: 'cod', label: 'COD (thu khi giao)' }, { value: 'bank_transfer', label: 'Chuyển khoản' }, { value: 'cash', label: 'Tiền mặt' }];
 
@@ -47,6 +48,22 @@ function ProductNameField({item,products,flowType,onChange}){
    {matches.map(p=><button type="button" key={p.id} onClick={()=>choose(p)}><span>🍰</span><b>{p.name}</b><small>{categoryLabel(p.category||'Sản phẩm')} · {p.unit||'cái'}{p.product_variants?.length?` · ${p.product_variants.length} size`:''}</small></button>)}
    {item.name?.trim()&&<button type="button" className="manual" onClick={()=>setOpen(false)}><span>✍️</span><b>Dùng tên “{item.name.trim()}”</b><small>Chưa có trong danh sách · vẫn tạo đơn bình thường</small></button>}
    {!matches.length&&!item.name?.trim()&&<p>Gõ một phần tên bánh để tìm.</p>}
+  </div>}
+ </div>;
+}
+
+const SCHOOL_SPEC_OPTIONS=['Bịch','Thùng'];
+function SchoolSpecField({value,onChange}){
+ const [open,setOpen]=useState(false); const wrap=useRef(null);
+ useEffect(()=>{if(!open)return;const close=e=>{if(wrap.current&&!wrap.current.contains(e.target))setOpen(false)};document.addEventListener('pointerdown',close);return()=>document.removeEventListener('pointerdown',close)},[open]);
+ const q=normalizeSearch(value||'');
+ const matches=SCHOOL_SPEC_OPTIONS.filter(o=>!q||normalizeSearch(o).includes(q));
+ return <div className="sumi-product-combobox" ref={wrap}>
+  <input style={fieldStyle} autoComplete="off" placeholder="Quy cách (Bịch/Thùng hoặc gõ tự do)" value={value||''} onFocus={()=>setOpen(true)} onChange={e=>{onChange(e.target.value);setOpen(true)}} aria-expanded={open}/>
+  {open&&<div className="sumi-product-options">
+   {matches.map(o=><button type="button" key={o} onClick={()=>{onChange(o);setOpen(false)}}><span>📦</span><b>{o}</b></button>)}
+   {value?.trim()&&!SCHOOL_SPEC_OPTIONS.includes(value.trim())&&<button type="button" className="manual" onClick={()=>setOpen(false)}><span>✍️</span><b>Dùng “{value.trim()}”</b><small>Chưa có trong danh sách · vẫn dùng bình thường</small></button>}
+   {!matches.length&&!value?.trim()&&<p>Gõ để tìm hoặc chọn Bịch/Thùng.</p>}
   </div>}
  </div>;
 }
@@ -157,6 +174,19 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
  },[isReadyStock,items]);
  const [catalogSearch,setCatalogSearch]=useState(''); const [guestCount,setGuestCount]=useState('');
  const [schoolSearch,setSchoolSearch]=useState(''); const [selectedSchool,setSelectedSchool]=useState(null);
+ // Trường CHƯA có trong danh sách 92 trường cố định: nhân viên thêm ngay khi tạo đơn
+ // (hồ sơ khách trường học, is_school=true → tự vào Công nợ). Trường đã thêm từ trước
+ // được nạp lại từ bảng customers để lần sau tìm là thấy.
+ const [extraSchools,setExtraSchools]=useState([]); const [showNewSchool,setShowNewSchool]=useState(false);
+ const [newSchool,setNewSchool]=useState({name:'',address:'',taxCode:'',phone:''});
+ const [schoolPick,setSchoolPick]=useState(null); // {typed,matches} — tên gõ khớp NHIỀU trường, hỏi nhân viên chọn
+ useEffect(()=>{if(type!=='school')return;let huy=false;
+  supabase.from('customers').select('id,name,address,school_code,tax_code').eq('is_school',true).then(({data})=>{
+   if(huy||!data)return;const known=new Set(SCHOOL_DELIVERY_POINTS.map(x=>x.code));
+   setExtraSchools(data.filter(c=>!c.school_code||!known.has(c.school_code)).map(c=>({code:c.school_code||'',name:c.name,address:c.address||'',type:'Trường học (thêm mới)',customerId:c.id,taxCode:c.tax_code||''})));
+  });
+  return()=>{huy=true;};
+ },[type]);
  // Gợi ý khách hàng đã lưu — CHỈ áp dụng cho đơn không phải trường học
  // (trường học chọn theo SCHOOL_DELIVERY_POINTS ở trên, khác luồng). Tải 1
  // lần khi vào màn (không phải mỗi lần gõ) rồi lọc tại chỗ theo tên + SĐT +
@@ -241,8 +271,17 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
  });setCatalogSearch('');};
  const flow=ORDER_FLOWS.find(x=>x.key===type);
  const suggestions=TEABREAK_CATALOG.filter(x=>!catalogSearch||normalizeSearch(`${x.code} ${x.name} ${x.group}`).includes(normalizeSearch(catalogSearch))).slice(0,8);
- const schoolSuggestions=SCHOOL_DELIVERY_POINTS.filter(x=>!schoolSearch||normalizeSearch(`${x.code} ${x.name} ${x.address} ${x.type}`).includes(normalizeSearch(schoolSearch))).slice(0,10);
+ // Tìm theo TỪNG TỪ (không cần đúng nguyên cụm liền nhau): gõ "Trường hoa cúc 5" vẫn ra "Trường Mầm non Hoa Cúc 5".
+ const matchSchools=(q)=>{const tokens=normalizeSearch(q).split(/\s+/).filter(Boolean);const full=normalizeSearch(q);
+  return [...SCHOOL_DELIVERY_POINTS,...extraSchools].filter(x=>{if(!tokens.length)return true;const hay=normalizeSearch(`${x.code} ${x.name} ${x.address} ${x.type}`);const words=hay.split(/\s+/);
+   // từ ngắn (1-2 ký tự, VD "c", "b", "5") chỉ khớp ĐẦU TỪ để không ra kết quả tạp
+   return tokens.every(t=>t.length<3?words.some(w=>w.startsWith(t)):hay.includes(t));})
+   .sort((a,b)=>(normalizeSearch(b.name).includes(full)?1:0)-(normalizeSearch(a.name).includes(full)?1:0));};
+ const schoolSuggestions=matchSchools(schoolSearch).slice(0,10);
  const chooseSchool=(school)=>{setSelectedSchool(school);setCustomerName(school.name);setAddress(school.address);setSchoolSearch('');};
+ const applyNewSchool=()=>{const name=newSchool.name.trim();if(!name){setError('Vui lòng nhập tên trường.');return;}setError('');
+  chooseSchool({code:'',name,address:newSchool.address.trim(),type:'Trường học (thêm mới)',isNew:true,taxCode:newSchool.taxCode.trim(),phone:newSchool.phone.trim()});
+  setShowNewSchool(false);setNewSchool({name:'',address:'',taxCode:'',phone:''});};
  const libraryTable=type==='school'?'school_photo_library':'macaron_photo_library';
  const libraryStoragePrefix=type==='school'?'school-library':'macaron-library';
  const loadLibraryPhotos=async()=>{setLibraryLoading(true);try{const {data,error:err}=await supabase.from(libraryTable).select('id,storage_path,caption,created_at').order('created_at',{ascending:false});if(err)throw err;setLibraryPhotos((data||[]).map(p=>({...p,url:supabase.storage.from('uploads').getPublicUrl(p.storage_path).data?.publicUrl})));}catch(e){setError(e.message);}finally{setLibraryLoading(false);}};
@@ -297,7 +336,18 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
  const isMixed=itemFlows.length>1;
  const routeFor={cake:'Bếp lạnh',bakery:'Bếp nóng / Bakery',teabreak:'Bếp theo món',macaron:'Xưởng 41',school:'Xưởng 42'};
  const submit=async()=>{setError('');setSaving(true);try{
-  if(type==='school'&&!selectedSchool)throw new Error('Vui lòng chọn trường hoặc điểm giao.');
+  // Đơn trường học KHÔNG bắt buộc chọn trong danh sách (trường mới phát sinh liên tục): gõ tên vào ô tìm rồi
+  // bấm Tạo đơn là đủ. Khớp đúng 1 trường có sẵn → dùng trường đó; khớp nhiều → hỏi chọn; không khớp → trường mới.
+  let school=selectedSchool; let effName=customerName; let effAddress=address; let schoolNotice='';
+  if(type==='school'&&!school){
+   const typed=schoolSearch.trim();
+   if(!typed)throw new Error('Vui lòng nhập tên trường (gõ tên vào ô "Tìm trường hoặc điểm giao", hoặc chọn trong danh sách).');
+   const found=matchSchools(typed);
+   if(found.length===1){school=found[0];schoolNotice=`Đã gắn đơn vào trường có sẵn: ${school.name}`;}
+   else if(found.length>1){setSchoolPick({typed,matches:found.slice(0,10)});setSaving(false);return;}
+   else{school={code:'',name:typed,address:'',type:'Trường học (thêm mới)',isNew:true,taxCode:'',phone:''};schoolNotice=`Đã lưu trường mới: ${typed}`;}
+   effName=school.name; effAddress=school.address||address;
+  }
   if(!items.length||items.some(x=>!x.name||Number(x.quantity)<=0))throw new Error('Vui lòng nhập đủ tên bánh và số lượng.');
   for(const it of items){
    if((it.flow_type||type)!=='macaron'||!it.specification?.priceTier)continue;
@@ -310,10 +360,30 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
   const timeStr = String(now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()).padStart(5,'0');
   const orderCode = `SUMI-${dateStr}-${timeStr}`;
   let customerId=null;
+  // Khách ĐÃ có địa chỉ hồ sơ chưa — dùng để quyết định có lưu địa chỉ đơn
+  // này ngược vào hồ sơ khách hay không (chỉ lưu khi hồ sơ đang trống, không
+  // ghi đè địa chỉ đã có — tránh 1 đơn giao chỗ khác làm sai hồ sơ khách).
+  let customerHasAddress=false;
   if(type==='school'){
-    if(selectedSchool?.code){
-      const {data: schoolCust} = await supabase.from('customers').select('id').eq('school_code', selectedSchool.code).maybeSingle();
+    if(school?.code){
+      const {data: schoolCust} = await supabase.from('customers').select('id').eq('school_code', school.code).maybeSingle();
       customerId = schoolCust?.id || null;
+    }
+    else if(school?.customerId){
+      customerId = school.customerId; // trường đã thêm mới từ trước (có hồ sơ, chưa có mã)
+    } else if(school?.isNew){
+      // Trường mới: tìm hồ sơ khách trường học trùng TÊN (chuẩn hoá) để không tạo trùng khi 2 người
+      // cùng nhập; không có thì tạo mới với is_school=true để đơn hoàn thành tự ghi công nợ đúng tên này
+      // (trigger trg_school_order_to_debt chỉ cần customer_id, view công nợ lọc is_school).
+      const norm=normalizeSearch(school.name);
+      const {data: cands} = await supabase.from('customers').select('id,name').eq('is_school', true);
+      const hit=(cands||[]).find(c=>normalizeSearch(c.name||'')===norm);
+      if(hit){ customerId = hit.id; }
+      else {
+        const {data: newSc, error: newScErr} = await supabase.from('customers').insert({name: school.name, address: school.address||null, tax_code: school.taxCode||null, phone: school.phone||null, is_school: true, channel: 'school'}).select('id').single();
+        if(newScErr) throw new Error(`Không lưu được trường mới: ${newScErr.message}`);
+        customerId = newSc?.id || null;
+      }
     }
   } else if(customerName||customerPhone){
     // Khớp khách theo CẢ tên và SĐT (không chỉ SĐT) — chuẩn hoá hoa/thường +
@@ -329,12 +399,13 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
     const norm=(s)=>s.trim().toLowerCase().replace(/\s+/g,' ');
     let cust = null;
     if(trimmedPhone){
-      const {data: samePhone} = await supabase.from('customers').select('id,name').eq('phone', trimmedPhone);
+      const {data: samePhone} = await supabase.from('customers').select('id,name,address').eq('phone', trimmedPhone);
       cust = (samePhone||[]).find(c=>norm(c.name||'')===norm(trimmedName)) || null;
     } else if(trimmedName){
-      const {data} = await supabase.from('customers').select('id').eq('name', trimmedName).is('phone', null).maybeSingle();
+      const {data} = await supabase.from('customers').select('id,address').eq('name', trimmedName).is('phone', null).maybeSingle();
       cust = data;
     }
+    customerHasAddress=!!(cust?.address&&cust.address.trim());
     if(!cust) {
       // LỖI THẬT đã vá: trước đây insert kèm `created_by` — cột KHÔNG tồn tại
       // trên bảng `customers` (chỉ `orders`/`customer_debt_entries` mới có),
@@ -353,7 +424,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
     }
   }
   const viTriXuongText=fulfillment==='delivery'?(viTriXuong==='Chọn khác'?viTriKhac:viTriXuong):'';
-  const customerNote=[customerName&&`Khách hàng: ${customerName}`,customerPhone&&`SĐT: ${customerPhone}`,type==='teabreak'&&guestCount&&`Số khách: ${guestCount}`,viTriXuongText&&`Vị trí xưởng: ${viTriXuongText}`,note,isReadyStock&&'⚡ BÁNH CÓ SẴN (XUẤT KHO THÀNH PHẨM NGAY)'].filter(Boolean).join(' · ');
+  const customerNote=[effName&&`Khách hàng: ${effName}`,customerPhone&&`SĐT: ${customerPhone}`,type==='teabreak'&&guestCount&&`Số khách: ${guestCount}`,viTriXuongText&&`Vị trí xưởng: ${viTriXuongText}`,note,isReadyStock&&'⚡ BÁNH CÓ SẴN (XUẤT KHO THÀNH PHẨM NGAY)'].filter(Boolean).join(' · ');
   const normalizedItems=items.map((item,index)=>({...item,display_order:index,specification:{...(item.specification||{}),product_flow:item.flow_type||type,is_ready_stock:isReadyStock}}));
   // Bánh có sẵn: KIỂM TRA KHO TRƯỚC KHI TẠO ĐƠN.
   // Nếu để tạo đơn xong mới kiểm tra rồi báo lỗi thì đơn đã nằm trong hệ
@@ -377,8 +448,18 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
     }
   }
 
-  const {data: orderId, error: orderErr} = await supabase.rpc('create_order_v2',{p_idempotency_key:key,p_order_code:orderCode,p_order_type:isMixed?'mixed':type,p_customer_id:customerId,p_required_at:requiredAt?new Date(requiredAt).toISOString():null,p_fulfillment_method:fulfillment,p_address:fulfillment==='delivery'?address:null,p_note:customerNote||null,p_confidentiality:type==='school'?'school_restricted':'normal',p_items:normalizedItems,p_ship_fee:effectiveShipFee,p_deposit:Number(deposit)||0,p_payment_method:paymentMethod,p_total:grandTotal,p_discount_amount:discountVal,p_promotion_note:type!=='school'?(promotionNote||null):null,p_tax_code:type!=='school'?(taxCode||null):null,p_vat_amount:vatAmount});
+  const {data: orderId, error: orderErr} = await supabase.rpc('create_order_v2',{p_idempotency_key:key,p_order_code:orderCode,p_order_type:isMixed?'mixed':type,p_customer_id:customerId,p_required_at:requiredAt?new Date(requiredAt).toISOString():null,p_fulfillment_method:fulfillment,p_address:fulfillment==='delivery'?effAddress:null,p_note:customerNote||null,p_confidentiality:type==='school'?'school_restricted':'normal',p_items:normalizedItems,p_ship_fee:effectiveShipFee,p_deposit:Number(deposit)||0,p_payment_method:paymentMethod,p_total:grandTotal,p_discount_amount:discountVal,p_promotion_note:type!=='school'?(promotionNote||null):null,p_tax_code:type!=='school'?(taxCode||null):null,p_vat_amount:vatAmount});
   if(orderErr) throw orderErr;
+  if(schoolNotice)showToast({icon:'🏫',title:'Đơn trường học',message:schoolNotice,tone:'success'});
+  // Lưu địa chỉ đơn này ngược vào hồ sơ khách hàng NẾU hồ sơ đang trống —
+  // để lần đặt sau, chọn khách từ gợi ý sẽ tự điền sẵn địa chỉ (chooseCustomer
+  // đã đọc customers.address từ trước, chỉ là trước giờ luôn trống với khách
+  // lẻ nên chưa bao giờ có tác dụng). Không chặn/báo lỗi tạo đơn nếu bước này
+  // thất bại — đơn đã tạo xong là việc chính, lưu địa chỉ chỉ là tiện ích thêm.
+  if(customerId&&fulfillment==='delivery'&&!customerHasAddress&&effAddress&&effAddress.trim()){
+    supabase.from('customers').update({address:effAddress.trim()}).eq('id',customerId)
+      .then(({error:addrErr})=>{ if(addrErr) console.warn('Không lưu được địa chỉ vào hồ sơ khách hàng:',addrErr.message); });
+  }
   for(const file of photos){
     try {
       const cleanExt = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
@@ -477,6 +558,23 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
     <button onClick={startVoiceInput} disabled={isRecording||voiceLoading} style={{width:'100%',minHeight:54,border:'2px dashed #d7c3aa',borderRadius:17,background:'#fff',fontSize:16,fontWeight:900,color:isRecording?'#b93e13':'#2d1c10',cursor:isRecording||voiceLoading?'not-allowed':'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:8,marginBottom:12}}>🎤 {isRecording?'Đang ghi âm...':voiceLoading?'Đang xử lý...':'Nói để chọn trường + nhập món'}</button>
     <label>Tìm trường hoặc điểm giao</label><input style={fieldStyle} placeholder="Gõ HC 5, Hoa Cúc, Dĩ An…" value={schoolSearch} onChange={e=>setSchoolSearch(e.target.value)}/>
     {!selectedSchool&&<div className="sumi-school-results">{schoolSuggestions.map(school=><button key={`${school.code}-${school.name}`} onClick={()=>chooseSchool(school)}><b>🏫</b><span><strong>{school.name}</strong><small>{school.code} · {school.type}</small><em>{school.address||'Chưa có địa chỉ — cần bổ sung'}</em></span></button>)}</div>}
+    {schoolPick&&<div onClick={()=>setSchoolPick(null)} style={{position:'fixed',inset:0,zIndex:140,background:'rgba(0,0,0,.55)',display:'flex',alignItems:'center',justifyContent:'center',padding:12}}>
+     <div onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:18,padding:16,width:'100%',maxWidth:440,maxHeight:'88vh',overflowY:'auto'}}>
+      <strong style={{fontSize:17,color:'#2d1c10'}}>Chọn đúng trường</strong>
+      <p style={{margin:'6px 0 10px',fontSize:13,color:'#725f50',lineHeight:1.5}}>Tên "{schoolPick.typed}" giống nhiều trường. Chọn 1 trường bên dưới, hoặc lưu như trường mới.</p>
+      <div style={{display:'grid',gap:7}}>{schoolPick.matches.map(m=><button type="button" key={`${m.customerId||m.code}-${m.name}`} onClick={()=>{chooseSchool(m);setSchoolPick(null);}} style={{textAlign:'left',padding:10,border:'1px solid #eadcca',borderRadius:14,background:'#fffaf2',cursor:'pointer'}}><strong style={{display:'block',color:'#2d1c10'}}>🏫 {m.name}</strong><small style={{color:'#09663d',fontWeight:800}}>{m.code||'—'} · {m.type}</small><em style={{display:'block',color:'#725f50',fontSize:12,fontStyle:'normal'}}>{m.address||'Chưa có địa chỉ'}</em></button>)}</div>
+      <button type="button" onClick={()=>{chooseSchool({code:'',name:schoolPick.typed,address:'',type:'Trường học (thêm mới)',isNew:true,taxCode:'',phone:''});setSchoolPick(null);}} style={{marginTop:10,width:'100%',minHeight:46,borderRadius:12,border:'2px dashed #d96b43',background:'#fff7ed',color:'#b93e13',fontWeight:900,cursor:'pointer'}}>Không phải, lưu như trường mới: "{schoolPick.typed}"</button>
+      <button type="button" onClick={()=>setSchoolPick(null)} style={{marginTop:8,width:'100%',minHeight:42,borderRadius:12,border:'1px solid #eadcca',background:'#f4efe8',fontWeight:800,cursor:'pointer'}}>Huỷ</button>
+     </div></div>}
+    {!selectedSchool&&<button type="button" onClick={()=>{setShowNewSchool(v=>!v);if(!showNewSchool&&schoolSearch&&!newSchool.name)setNewSchool(n=>({...n,name:schoolSearch}));}} style={{width:'100%',minHeight:48,marginTop:8,border:'2px dashed #d96b43',borderRadius:14,background:'#fff7ed',color:'#b93e13',fontWeight:900,fontSize:15,cursor:'pointer'}}>➕ Không thấy trường? Thêm trường mới</button>}
+    {!selectedSchool&&showNewSchool&&<div style={{display:'grid',gap:8,marginTop:8,padding:12,border:'2px solid #eadcca',borderRadius:14,background:'#fffaf2'}}>
+     <label style={{fontWeight:800,fontSize:13}}>Tên trường / điểm giao *</label><input style={fieldStyle} placeholder="VD: Trường Tiểu học ABC" value={newSchool.name} onChange={e=>setNewSchool(n=>({...n,name:e.target.value}))}/>
+     <label style={{fontWeight:800,fontSize:13}}>Địa chỉ giao (nên nhập để shipper biết giao đâu)</label><input style={fieldStyle} placeholder="Số nhà, đường, phường…" value={newSchool.address} onChange={e=>setNewSchool(n=>({...n,address:e.target.value}))}/>
+     <label style={{fontWeight:800,fontSize:13}}>Mã số thuế (nếu có, để xuất hoá đơn)</label><input style={fieldStyle} value={newSchool.taxCode} onChange={e=>setNewSchool(n=>({...n,taxCode:e.target.value}))}/>
+     <label style={{fontWeight:800,fontSize:13}}>Số điện thoại liên hệ (nếu có)</label><input style={fieldStyle} inputMode="tel" value={newSchool.phone} onChange={e=>setNewSchool(n=>({...n,phone:e.target.value}))}/>
+     <div style={{fontSize:12,color:'#725f50',lineHeight:1.4}}>Trường sẽ được lưu thành khách hàng mới. Đơn hoàn thành sẽ tự ghi vào <b>Công nợ</b> đúng tên trường này.</div>
+     <div style={{display:'flex',gap:8}}><button type="button" onClick={()=>setShowNewSchool(false)} style={{flex:1,minHeight:44,borderRadius:12,border:'1px solid #eadcca',background:'#f4efe8',fontWeight:800,cursor:'pointer'}}>Huỷ</button><button type="button" onClick={applyNewSchool} style={{flex:2,minHeight:44,borderRadius:12,border:'none',background:'#138a53',color:'#fff',fontWeight:900,cursor:'pointer'}}>Dùng trường này</button></div>
+    </div>}
     {selectedSchool&&<div className="sumi-school-selected"><b>✓</b><span><strong>{selectedSchool.name}</strong><small>{selectedSchool.code} · {selectedSchool.type}</small><em>{selectedSchool.address||'Chưa có địa chỉ'}</em></span><button onClick={()=>setSelectedSchool(null)}>Đổi</button></div>}
    </section>}
    {type!=='school'&&<><label style={{display:'block',fontWeight:900}}>Khách hàng</label>
@@ -532,7 +630,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
       </div>
       <input style={{...fieldStyle,gridColumn:'1 / -1'}} placeholder="Ghi chú thêm về màu/nhân (VD: đỏ 4 khay, xanh 6 khay...)" value={it.specification?.color||''} onChange={e=>spec(itemIndex,'color',e.target.value)}/>
      </>}
-     {(it.flow_type||type)==='school'&&<>{it.variants?.length?<select style={fieldStyle} value={it.specification?.size||''} onChange={e=>{const v=it.variants.find(x=>x.label===e.target.value);changeMany(itemIndex,{unit_price:v?.price??null,specification:{...it.specification,size:e.target.value}})}}><option value="">Chọn trọng lượng...</option>{it.variants.map(v=><option key={v.id} value={v.label}>{v.label} — {Number(v.price).toLocaleString('vi-VN')}đ</option>)}</select>:<input style={fieldStyle} placeholder="Quy cách" value={it.specification?.spec||''} onChange={e=>spec(itemIndex,'spec',e.target.value)}/>}<input style={fieldStyle} inputMode="numeric" placeholder="Hoặc nhập giá tay (VD: 8.500)" value={fmtMoney(it.unit_price)} onChange={e=>change(itemIndex,'unit_price',parseMoney(e.target.value))}/><input style={fieldStyle} placeholder="Khối/lớp/ghi chú" value={it.specification?.grade_note||''} onChange={e=>spec(itemIndex,'grade_note',e.target.value)}/></>}
+     {(it.flow_type||type)==='school'&&<>{it.variants?.length?<select style={fieldStyle} value={it.specification?.size||''} onChange={e=>{const v=it.variants.find(x=>x.label===e.target.value);changeMany(itemIndex,{unit_price:v?.price??null,specification:{...it.specification,size:e.target.value}})}}><option value="">Chọn trọng lượng...</option>{it.variants.map(v=><option key={v.id} value={v.label}>{v.label} — {Number(v.price).toLocaleString('vi-VN')}đ</option>)}</select>:<SchoolSpecField value={it.specification?.spec} onChange={v=>spec(itemIndex,'spec',v)}/>}<input style={fieldStyle} inputMode="numeric" placeholder="Hoặc nhập giá tay (VD: 8.500)" value={fmtMoney(it.unit_price)} onChange={e=>change(itemIndex,'unit_price',parseMoney(e.target.value))}/></>}
      {(it.flow_type||type)!=='school'&&!((it.flow_type||type)==='bakery'&&it.specification?.product_line==='moon_cake')&&<input style={fieldStyle} inputMode="numeric" placeholder="Đơn giá (có thể để trống)" value={fmtMoney(it.unit_price)} onChange={e=>change(itemIndex,'unit_price',parseMoney(e.target.value))}/>}
     </div>{items.length>1&&<button onClick={()=>setItems(x=>x.filter((_,n)=>n!==itemIndex))} style={{marginTop:8,minHeight:44,color:'#b42318',border:0,background:'none',cursor:'pointer',fontWeight:600}}>✕ Xóa sản phẩm</button>}
    </div>;})}

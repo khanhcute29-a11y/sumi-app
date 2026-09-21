@@ -59,6 +59,17 @@ export function IconWarehouse(props) {
   );
 }
 
+export function IconExport(props) {
+  return (
+    <Wrap {...props}>
+      <path d="M4 14 V19 a1 1 0 0 0 1 1 H19 a1 1 0 0 0 1 -1 V14" fill="#e3ac6c" />
+      <line x1="12" y1="14" x2="12" y2="4.5" />
+      <path d="M8 8.2 L12 4.2 L16 8.2" />
+      <Eyes x1="10" x2="14" y="17" />
+    </Wrap>
+  );
+}
+
 export function IconCashbook(props) {
   return (
     <Wrap {...props}>

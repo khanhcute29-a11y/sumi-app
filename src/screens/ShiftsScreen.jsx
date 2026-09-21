@@ -523,8 +523,8 @@ function AddManualShiftModal({ staffName, staffId, defaultBranch, onClose, onDon
     setSaving(true);
     setError('');
     try {
-      await addShiftCheckin({ staffId, staffName, workDate, shiftLabel: shiftLabel.trim(), branch, expectedStart: `${startTime}:00`, lateMinutes: 0, wageEarned: 0, reason: '[BỔ SUNG] ' + (reason.trim() || 'Bổ sung ca làm') });
-      await addShiftCheckout({ staffId, staffName, workDate, shiftLabel: shiftLabel.trim(), branch, photoUrl: null });
+      await addShiftCheckin({ staffId, staffName, workDate, shiftLabel: shiftLabel.trim(), branch, expectedStart: `${startTime}:00`, lateMinutes: 0, wageEarned: 0, reason: '[BỔ SUNG] ' + (reason.trim() || 'Bổ sung ca làm'), checkinTime: new Date(inTimeStr).toISOString() });
+      await addShiftCheckout({ staffId, staffName, workDate, shiftLabel: shiftLabel.trim(), branch, photoUrl: null, checkoutTime: new Date(outTimeStr).toISOString() });
       onDone();
     } catch (err) {
       setError(err.message || 'Không thể lưu ca bổ sung.');
