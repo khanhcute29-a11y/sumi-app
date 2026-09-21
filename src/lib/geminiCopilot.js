@@ -91,13 +91,13 @@ function fallbackSpeechSynthesis(cleanText) {
 /**
  * Gửi yêu cầu tới Trợ lý Gen (Backend Serverless hoặc Direct API)
  */
-export async function askGenCopilot({ message, imageBase64, userProfile }) {
+export async function askGenCopilot({ message, imageBase64, userProfile, history }) {
   try {
     // 1. Thử gọi qua endpoint Serverless /api/ai-copilot
     const res = await fetch('/api/ai-copilot', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, imageBase64, userProfile })
+      body: JSON.stringify({ message, imageBase64, userProfile, history })
     });
 
     if (res.ok) {
@@ -108,7 +108,7 @@ export async function askGenCopilot({ message, imageBase64, userProfile }) {
     // Kiểm tra VITE_GEMINI_API_KEY trong file .env.local
     const clientApiKey = import.meta.env.VITE_GEMINI_API_KEY;
     if (clientApiKey) {
-      return await callDirectGemini(clientApiKey, message, imageBase64, userProfile);
+      return await callDirectGemini(clientApiKey, message, imageBase64, userProfile, history);
     }
 
     const errData = await res.json().catch(() => ({}));
@@ -122,10 +122,7 @@ export async function askGenCopilot({ message, imageBase64, userProfile }) {
 /**
  * Fallback: Gọi trực tiếp Google GenAI nếu chạy môi trường local Vite dev
  */
-/**
- * Fallback: Gọi trực tiếp Google GenAI nếu chạy môi trường local Vite dev
- */
-async function callDirectGemini(apiKey, message, imageBase64, userProfile) {
+async function callDirectGemini(apiKey, message, imageBase64, userProfile, history) {
   const { GoogleGenAI, Type } = await import('@google/genai');
   const ai = new GoogleGenAI({ apiKey });
 
@@ -237,6 +234,18 @@ CÁCH HƯỚNG DẪN VÀ TƯƠNG TÁC TỰ NHIÊN:
 5. Với nhân sự không rành chữ, bạn hãy trả lời thật ngắn gọn, ấm áp, rõ ràng, dễ nghe.`;
 
   const contents = [];
+
+  // Đưa lịch sử hội thoại gần nhất vào ngữ cảnh (trừ tin nhắn hiện tại)
+  if (history && Array.isArray(history)) {
+    for (const h of history.slice(-6)) {
+      if (!h.text) continue;
+      contents.push({
+        role: h.sender === 'user' ? 'user' : 'model',
+        parts: [{ text: h.text }]
+      });
+    }
+  }
+
   if (imageBase64) {
     const matches = imageBase64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
     if (matches && matches.length === 3) {

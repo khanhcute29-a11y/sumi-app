@@ -145,6 +145,18 @@ CÁCH HƯỚNG DẪN VÀ TƯƠNG TÁC TỰ NHIÊN:
 
     // Chuẩn bị nội dung gửi Gemini (Multimodal text + image nếu có)
     const contents = [];
+
+    // Đưa lịch sử hội thoại gần nhất vào ngữ cảnh
+    if (history && Array.isArray(history)) {
+      for (const h of history.slice(-6)) {
+        if (!h.text) continue;
+        contents.push({
+          role: h.sender === 'user' ? 'user' : 'model',
+          parts: [{ text: h.text }]
+        });
+      }
+    }
+
     if (imageBase64) {
       // Tách mime type và data
       const matches = imageBase64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);

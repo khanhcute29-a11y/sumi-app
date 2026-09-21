@@ -3,7 +3,7 @@ import {
   X, Mic, MicOff, Send, Image as ImageIcon, Volume2, 
   VolumeX, AlertTriangle, CheckCircle2, Bot, Sparkles, 
   CornerDownLeft, FileText, DollarSign, Cake, ArrowRight,
-  ClipboardList, ReceiptText
+  ClipboardList, ReceiptText, RotateCcw
 } from 'lucide-react';
 import { 
   askGenCopilot, speakVietnamese, stopSpeaking, 
@@ -14,20 +14,46 @@ import { playConfirmSound } from '../../lib/sound';
 export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm }) {
   if (!isOpen) return null;
 
+  const storageKey = `sumi_gen_chat_${userProfile?.id || 'default'}`;
+
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      sender: 'gen',
-      text: `Chào ${userProfile?.name || 'bạn'}! Em là Gen — Trợ lý AI tiệm bánh Sumi Bakery. Anh/chị có thể nói, dán tin nhắn Zalo hoặc gửi ảnh mẫu bánh để em xử lý nhé!`,
-      action: null
+  const [messages, setMessages] = useState(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Lỗi đọc lịch sử chat:', e);
     }
-  ]);
+    return [
+      {
+        id: 1,
+        sender: 'gen',
+        text: `Chào ${userProfile?.name || 'bạn'}! Em là Gen — Trợ lý AI tiệm bánh Sumi Bakery. Anh/chị có thể nói, dán tin nhắn Zalo hoặc gửi ảnh mẫu bánh để em xử lý nhé!`,
+        action: null
+      }
+    ];
+  });
   const [isListening, setIsListening] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [pendingAction, setPendingAction] = useState(null); // Hành động chờ xác nhận 2 bước
+
+  // Tự động lưu lịch sử chat vào localStorage mỗi khi có tin nhắn mới
+  useEffect(() => {
+    try {
+      if (messages && messages.length > 0) {
+        localStorage.setItem(storageKey, JSON.stringify(messages.slice(-50)));
+      }
+    } catch (e) {
+      console.warn('Lỗi lưu lịch sử chat:', e);
+    }
+  }, [messages, storageKey]);
 
   const recognitionRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -114,7 +140,8 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm 
       const data = await askGenCopilot({
         message: text,
         imageBase64: image,
-        userProfile
+        userProfile,
+        history: messages.slice(-6)
       });
 
       let replyText = data.reply || '';
@@ -316,6 +343,41 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm 
               title="Đọc to nội dung"
             >
               {isSpeaking ? <VolumeX size={18} /> : <Volume2 size={18} />}
+            </button>
+
+            <button
+              onClick={() => {
+                if (window.confirm('Bạn có muốn bắt đầu một cuộc trò chuyện mới với Gen không? (Lịch sử cũ sẽ được làm mới)')) {
+                  const defaultMsg = [
+                    {
+                      id: Date.now(),
+                      sender: 'gen',
+                      text: `Dạ em đã sẵn sàng! Sếp/bạn cần em hỗ trợ công việc gì tiếp theo ạ?`,
+                      action: null
+                    }
+                  ];
+                  setMessages(defaultMsg);
+                  try {
+                    localStorage.removeItem(storageKey);
+                  } catch (_) {}
+                  stopSpeaking();
+                }
+              }}
+              style={{
+                background: 'rgba(255,255,255,0.2)',
+                border: 'none',
+                color: '#fff',
+                borderRadius: '50%',
+                width: 34,
+                height: 34,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+              title="Cuộc trò chuyện mới"
+            >
+              <RotateCcw size={16} />
             </button>
 
             <button
