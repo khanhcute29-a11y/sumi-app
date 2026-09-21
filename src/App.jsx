@@ -67,6 +67,9 @@ import { IconDashboard, IconShipping, IconProducts, IconShifts, IconReports, Ico
 // chỉ nhóm này mới thấy mục "Kế Toán Tổng Quan" trong menu.
 const FINANCE_ROLES = ['owner', 'admin', 'accountant', 'cashier'];
 import { loadFeatureFlags } from './lib/featureFlags';
+import { GenFloatingButton } from './components/ai/GenFloatingButton';
+import { GenCopilotModal } from './components/ai/GenCopilotModal';
+import { GenVoiceTaskAlert } from './components/ai/GenVoiceTaskAlert';
 
 const MORE_ITEMS = [
   { key: 'dashboard', label: 'Tổng Quan', Icon: IconDashboard },
@@ -129,6 +132,8 @@ function OpsApp({ onSignOut }) {
   const [warehouseBranch, setWarehouseBranch] = useState('all');
   const [badgeCounts, setBadgeCounts] = useState({ orders: 0, kds: 0, approvals: 0, incidents: 0, chat: 0 });
   const [featureFlags, setFeatureFlags] = useState({ orders_v2_read: false, delivery_v2: false, kpi_v2: false });
+  const [showGen, setShowGen] = useState(false);
+  const [voiceTask, setVoiceTask] = useState(null);
 
   useOrderNotifications();
 
@@ -235,6 +240,11 @@ function OpsApp({ onSignOut }) {
               //     tab "Việc được giao" lọc category='assigned' nên không có nó)
               //  - việc giao thường     -> entity_type 'task'  -> mở trang Công việc
               const laViecTrongDon = n.entity_type === 'order';
+              setVoiceTask({
+                id: n.entity_id || n.id,
+                title: n.body || n.title,
+                assignee_name: profile?.name
+              });
               showToast({
                 ...NOTIFY_KINDS[n.notification_type],
                 message: n.body || n.title,
@@ -425,6 +435,23 @@ function OpsApp({ onSignOut }) {
           style={{ position: 'static', left: 'auto', right: 'auto', bottom: 'auto', width: '100%', flexShrink: 0 }} />
       </div>
       {showMore && <MoreSheet onClose={() => setShowMore(false)} onSelect={setTab} badges={badgeCounts} items={moreItems} />}
+      {/* Trợ lý AI Gemini 'Gen' */}
+      <GenFloatingButton onClick={() => setShowGen(true)} />
+      <GenCopilotModal
+        isOpen={showGen}
+        onClose={() => setShowGen(false)}
+        userProfile={profile}
+        onOpenOrderForm={(orderData) => {
+          setTab('orders');
+        }}
+      />
+      {voiceTask && (
+        <GenVoiceTaskAlert
+          task={voiceTask}
+          onClose={() => setVoiceTask(null)}
+          onAccepted={() => setVoiceTask(null)}
+        />
+      )}
     </div>
   );
 }

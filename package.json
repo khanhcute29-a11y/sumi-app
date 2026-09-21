@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@google/genai": "^2.23.0",
     "@supabase/supabase-js": "^2.112.0",
     "emoji-picker-element": "^1.29.1",
     "heic2any": "^0.0.4",

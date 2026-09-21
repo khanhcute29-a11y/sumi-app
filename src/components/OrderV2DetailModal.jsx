@@ -1228,7 +1228,7 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
                   disabled={busy}
                   onClick={() => { setTpNotes(''); setTpError(''); setShowShipmentStatusModal(true); }}
                   style={{
-                    marginTop: 10, minHeight: 38, border: 0, borderRadius: 10, padding: '0 14px', fontWeight: 800,
+                    marginTop: 10, minHeight: 38, borderRadius: 10, padding: '0 14px', fontWeight: 800,
                     background: '#fff', color: '#1E88E5', border: '1.5px solid #1E88E5', fontSize: 13.5, cursor: 'pointer',
                   }}
                 >
