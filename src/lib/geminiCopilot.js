@@ -104,7 +104,7 @@ Hãy trả lời thân thiện, ấm áp và trả về kết quả rõ ràng.`;
   }
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.6-flash',
     contents: contents,
     config: { systemInstruction }
   });

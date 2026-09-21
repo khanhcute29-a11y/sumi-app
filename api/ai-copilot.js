@@ -162,9 +162,9 @@ Khi người dùng gửi tin nhắn Zalo forward vào hoặc nói giọng nói, 
       contents.push({ role: 'user', parts: [{ text: message }] });
     }
 
-    // Gọi mô hình Gemini 2.5 Flash
+    // Gọi mô hình Gemini 3.6 Flash
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       contents: contents,
       config: {
         systemInstruction,
