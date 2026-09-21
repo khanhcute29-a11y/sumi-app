@@ -1,8 +1,106 @@
 import { supabase } from './supabaseClient';
 import { playConfirmSound } from './sound';
+import { fetchRevenueByChannel, fetchDoanhThuDuTinh, fetchExpenseAndAdvanceLedgerToday } from './bossOverviewV3';
+import { countNewOrders, countKitchenActiveOrders } from './queries';
+import { localDateStr } from './date';
 
 // Thư viện hỗ trợ Trợ lý AI 'Gen' cho giao diện React
 // Tích hợp: Gọi AI, Text-to-Speech (đọc tiếng Việt), Web Speech (ghi âm) và Thực thi lệnh Supabase
+
+/**
+ * Thu thập số liệu kinh doanh thời gian thực từ Supabase của Sumi Bakery
+ * Cung cấp cho Trợ lý Gen toàn bộ dữ liệu: Đơn hàng, Doanh thu, Công nợ, Chi tiêu
+ */
+export async function fetchSumiAppSnapshot(userProfile) {
+  const role = userProfile?.role || 'staff';
+  const isDirector = ['owner', 'admin', 'accountant'].includes(role);
+  const today = localDateStr();
+  const snapshot = {
+    ngay: today,
+    vai_tro_nguoi_dung: role,
+    ten_nguoi_dung: userProfile?.name || 'Nhân sự'
+  };
+
+  try {
+    // 1. Tình hình đơn hàng hôm nay
+    const [newCount, kitchenCount, todayOrdersRes] = await Promise.all([
+      countNewOrders().catch(() => ({ count: 0 })),
+      countKitchenActiveOrders().catch(() => ({ count: 0 })),
+      supabase
+        .from('orders')
+        .select('id, order_code, status, status_v2, order_type, customer_name, created_at')
+        .gte('created_at', `${today}T00:00:00`)
+        .catch(() => ({ data: [] }))
+    ]);
+
+    const todayOrders = todayOrdersRes?.data || [];
+    snapshot.don_hang = {
+      tong_don_tao_hom_nay: todayOrders.length,
+      don_moi_cho_bep_nhan: newCount?.count || 0,
+      bep_dang_lam: kitchenCount?.count || 0,
+      don_dang_giao: todayOrders.filter(o => o.status_v2 === 'in_delivery').length,
+      don_hoan_thanh: todayOrders.filter(o => o.status_v2 === 'completed' || o.status === 'hoan_thanh').length
+    };
+
+    // 2. Nếu là Ban Giám Đốc hoặc Kế toán -> Lấy toàn bộ số liệu Tài chính & Doanh thu
+    if (isDirector) {
+      const [revenueRes, duTinhRes, expenseRes] = await Promise.all([
+        fetchRevenueByChannel({ from: `${today}T00:00:00`, to: new Date().toISOString() }).catch(err => {
+          console.warn('[Snapshot] Doanh thu error:', err);
+          return null;
+        }),
+        fetchDoanhThuDuTinh().catch(err => {
+          console.warn('[Snapshot] Doanh thu du tinh error:', err);
+          return null;
+        }),
+        fetchExpenseAndAdvanceLedgerToday().catch(err => {
+          console.warn('[Snapshot] Expense error:', err);
+          return null;
+        })
+      ]);
+
+      if (revenueRes) {
+        snapshot.tai_chinh = {
+          doanh_thu_thuan_hom_nay: revenueRes.total || 0,
+          doanh_thu_theo_kenh: (revenueRes.channels || []).map(c => ({
+            kenh: c.title || c.name || c.key,
+            so_tien: c.amount,
+            so_don: c.count,
+            ty_le: c.percentage
+          }))
+        };
+      }
+
+      if (duTinhRes) {
+        snapshot.doanh_thu_du_tinh = {
+          tong_du_tinh: duTinhRes.total || 0,
+          tien_dat_coc_da_thu: duTinhRes.buckets?.find(b => b.id === 'deposit')?.amount || 0,
+          cong_no_can_thu: duTinhRes.buckets?.find(b => b.id === 'cong_no_can_thu')?.amount || 0,
+          don_dang_giao_chua_hoan_tat: duTinhRes.buckets?.find(b => b.id === 'in_delivery')?.amount || 0,
+          cong_no_truong_hoc_so_sach: duTinhRes.buckets?.find(b => b.id === 'debt')?.amount || 0
+        };
+      }
+
+      if (expenseRes) {
+        const rows = expenseRes.rows || expenseRes || [];
+        const totalChi = rows.reduce((s, r) => s + (Number(r.amount || r.so_tien) || 0), 0);
+        snapshot.chi_tieu_so_quy_hom_nay = {
+          tong_chi: totalChi,
+          so_khoan_chi: rows.length,
+          danh_sach: rows.slice(0, 5).map(r => ({
+            noi_dung: r.content || r.noi_dung_chi || r.reason || 'Khoản chi',
+            so_tien: Number(r.amount || r.so_tien) || 0,
+            loai: r.type || 'chi_tieu'
+          }))
+        };
+      }
+    }
+  } catch (e) {
+    console.warn('[fetchSumiAppSnapshot] Lỗi thu thập dữ liệu:', e);
+  }
+
+  return snapshot;
+}
 
 let persistentAudio = null;
 
@@ -91,13 +189,16 @@ function fallbackSpeechSynthesis(cleanText) {
 /**
  * Gửi yêu cầu tới Trợ lý Gen (Backend Serverless hoặc Direct API)
  */
-export async function askGenCopilot({ message, imageBase64, userProfile, history }) {
+export async function askGenCopilot({ message, imageBase64, userProfile, history, appSnapshot }) {
   try {
+    // Tự động trích xuất ảnh chụp số liệu thời gian thực từ Supabase nếu chưa truyền vào
+    const liveSnapshot = appSnapshot || await fetchSumiAppSnapshot(userProfile).catch(() => null);
+
     // 1. Thử gọi qua endpoint Serverless /api/ai-copilot
     const res = await fetch('/api/ai-copilot', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, imageBase64, userProfile, history })
+      body: JSON.stringify({ message, imageBase64, userProfile, history, appSnapshot: liveSnapshot })
     });
 
     if (res.ok) {
@@ -108,7 +209,7 @@ export async function askGenCopilot({ message, imageBase64, userProfile, history
     // Kiểm tra VITE_GEMINI_API_KEY trong file .env.local
     const clientApiKey = import.meta.env.VITE_GEMINI_API_KEY;
     if (clientApiKey) {
-      return await callDirectGemini(clientApiKey, message, imageBase64, userProfile, history);
+      return await callDirectGemini(clientApiKey, message, imageBase64, userProfile, history, liveSnapshot);
     }
 
     const errData = await res.json().catch(() => ({}));
@@ -122,13 +223,13 @@ export async function askGenCopilot({ message, imageBase64, userProfile, history
 /**
  * Fallback: Gọi trực tiếp Google GenAI nếu chạy môi trường local Vite dev
  */
-async function callDirectGemini(apiKey, message, imageBase64, userProfile, history) {
+async function callDirectGemini(apiKey, message, imageBase64, userProfile, history, liveSnapshot) {
   const { GoogleGenAI, Type } = await import('@google/genai');
   const ai = new GoogleGenAI({ apiKey });
 
   const role = userProfile?.role || 'staff';
   const name = userProfile?.name || 'Bạn';
-  const isDirector = ['owner', 'admin'].includes(role);
+  const isDirector = ['owner', 'admin', 'accountant'].includes(role);
 
   const tools = [{
     functionDeclarations: [
@@ -219,12 +320,40 @@ async function callDirectGemini(apiKey, message, imageBase64, userProfile, histo
     ]
   }];
 
+  let dataSection = '';
+  if (liveSnapshot) {
+    dataSection = `
+DỮ LIỆU THỜI GIAN THỰC TRÊN HỆ THỐNG SUMI BAKERY HÔM NAY (${liveSnapshot.ngay || 'Hôm nay'}):
+${JSON.stringify(liveSnapshot, null, 2)}
+`;
+  }
+
   const systemInstruction = `Bạn là "Gen" — Hệ điều hành Trợ lý Trí tuệ Nhân tạo toàn diện của tiệm bánh Sumi Bakery (sumibakery.shop).
-Bạn hỗ trợ 22 nhân sự trong toàn bộ tiệm bánh thực hiện các nghiệp vụ: Nghe (giọng nói), Nhìn (hình ảnh mẫu bánh/hóa đơn), Phân tích nghiệp vụ, và Thao tác trực tiếp vào hệ thống cơ sở dữ liệu.
+Bạn hỗ trợ 22 nhân sự trong toàn bộ tiệm bánh thực hiện các nghiệp vụ: Nghe (giọng nói), Nhìn (hình ảnh mẫu bánh/hóa đơn), Phân tích nghiệp vụ, BÁO CÁO TOÀN DIỆN SỐ LIỆU DOANH THU/ĐƠN HÀNG, và Thao tác trực tiếp vào hệ thống cơ sở dữ liệu.
 
 NGƯỜI ĐANG NÓI CHUYỆN VỚI BẠN:
 - Tên: ${name}
-- Vai trò: ${role} (${isDirector ? 'BAN GIÁM ĐỐC / CHỦ TIỆM - Toàn quyền chỉ đạo, giao việc và duyệt chi' : 'Nhân viên tiệm bánh - Tuân thủ quy chế, thao tác trong quyền hạn'})
+- Vai trò: ${role} (${isDirector ? 'BAN GIÁM ĐỐC / CHỦ TIỆM / KẾ TOÁN - Toàn quyền chỉ đạo, xem toàn bộ số liệu doanh thu, đơn hàng, công nợ, chi tiêu' : 'Nhân viên tiệm bánh - Tuân thủ quy chế, thao tác trong quyền hạn'})
+
+${dataSection}
+
+NGUYÊN TẮC BÁO CÁO SỐ LIỆU KINH DOANH (CỰC KỲ QUAN TRỌNG):
+1. BẠN ĐÃ ĐƯỢC KẾT NỐI TRỰC TIẾP VỚI CƠ SỞ DỮ LIỆU THẬT CỦA TIỆM BÁNH:
+   - TUYỆT ĐỐI KHÔNG BAO GIỜ NÓI: "em chưa được kết nối với dữ liệu thu ngân/POS", "chưa thể trích xuất báo cáo", hoặc "vui lòng gửi sao kê hóa đơn".
+   - Khi được hỏi về doanh thu, đơn hàng, công nợ, chi tiêu: HÃY ĐỌC TRỰC TIẾP CÁC CON SỐ TRONG [DỮ LIỆU THỜI GIAN THỰC] Ở TRÊN ĐỂ BÁO CÁO NGAY LẬP TỨC.
+   - Nếu số tiền là 0 hoặc chưa có đơn phát sinh, báo cáo trung thực: "Hôm nay tiệm chưa có đơn hoàn thành ghi nhận doanh thu thuần, hiện có X đơn đang làm/đang giao...".
+
+2. CÁCH TRÌNH BÀY BÁO CÁO DOANH THU CHO SẾP:
+   - Tổng kết rõ ràng theo cấu trúc tài chính chuẩn của Sumi Bakery:
+     * 💰 Doanh thu thuần (Đơn hoàn thành & xác minh thu tiền): Tổng tiền + chi tiết theo kênh (Bánh kem, Bánh mặn/ngọt, Macaron, Teabreak, Trường học...).
+     * 📊 Doanh thu dự tính & Công nợ: Tiền cọc đã nhận + Công nợ cần thu từ khách + Giá trị đơn đang trên đường giao.
+     * 📦 Tình hình đơn hàng hôm nay: Số đơn mới, bếp đang làm, đang giao, đã giao.
+     * 💸 Chi tiêu & Tạm ứng hôm nay (nếu có): Tổng số tiền chi, nội dung chi.
+   - Luôn định dạng tiền tệ Việt Nam rõ ràng (VD: 1.500.000đ hoặc 0đ), dùng dấu gạch đầu dòng và icon emoji trang nhã, dễ nhìn trên điện thoại.
+
+3. PHÂN QUYỀN BẢO MẬT DOANH THU:
+   - Chỉ Ban Giám Đốc (${isDirector ? 'Sếp ' + name : 'Giám đốc/Kế toán'}) mới được xem số tiền doanh thu và chi tiêu của toàn tiệm.
+   - Nếu nhân viên thông thường (thợ làm bánh, shipper) hỏi doanh thu của tiệm, hãy lịch sự từ chối và chỉ thông báo số lượng đơn bánh cần làm.
 
 NGUYÊN TẮC TƯ DUY & PHÂN TÍCH NGHIỆP VỤ (CỰC KỲ QUAN TRỌNG):
 1. KHÔNG LÊN ĐƠN BÁNH KHI THIẾU THÔNG TIN CỐT LÕI:
