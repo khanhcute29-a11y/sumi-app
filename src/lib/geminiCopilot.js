@@ -25,13 +25,25 @@ export async function fetchSumiAppSnapshot(userProfile) {
 
   try {
     // 1. Tình hình đơn hàng hôm nay
-    const [newCount, kitchenCount, todayOrdersRes] = await Promise.all([
+    const [newCount, kitchenCount, todayOrdersRes, todayShiftLogsRes, stockRes] = await Promise.all([
       countNewOrders().catch(() => ({ count: 0 })),
       countKitchenActiveOrders().catch(() => ({ count: 0 })),
       supabase
         .from('orders')
         .select('id, order_code, status, status_v2, order_type, customer_name, created_at')
         .gte('created_at', `${today}T00:00:00`)
+        .catch(() => ({ data: [] })),
+      supabase
+        .from('shift_logs')
+        .select('staff_id, staff_name, type, checkin_time, shift_label')
+        .eq('work_date', today)
+        .order('created_at', { ascending: true })
+        .catch(() => ({ data: [] })),
+      supabase
+        .from('finished_goods_stock')
+        .select('id, size, qty, branch, store_location, products(name)')
+        .gt('qty', 0)
+        .limit(15)
         .catch(() => ({ data: [] }))
     ]);
 
@@ -44,9 +56,37 @@ export async function fetchSumiAppSnapshot(userProfile) {
       don_hoan_thanh: todayOrders.filter(o => o.status_v2 === 'completed' || o.status === 'hoan_thanh').length
     };
 
-    // 2. Nếu là Ban Giám Đốc hoặc Kế toán -> Lấy toàn bộ số liệu Tài chính & Doanh thu
+    // 2. Tình hình nhân sự & chấm công hôm nay
+    const shiftLogs = todayShiftLogsRes?.data || [];
+    const workingStaffMap = {};
+    for (const log of shiftLogs) {
+      if (log.type === 'checkin') {
+        workingStaffMap[log.staff_id] = { name: log.staff_name, in: true, time: log.checkin_time, shift: log.shift_label };
+      } else if (log.type === 'checkout') {
+        if (workingStaffMap[log.staff_id]) workingStaffMap[log.staff_id].in = false;
+      }
+    }
+    const currentlyWorking = Object.values(workingStaffMap).filter(s => s.in).map(s => s.name);
+    snapshot.nhan_su_hom_nay = {
+      so_nhan_su_dang_trong_ca: currentlyWorking.length,
+      danh_sach_dang_lam: currentlyWorking,
+      tong_so_luot_cham_cong: shiftLogs.length
+    };
+
+    // 3. Tồn kho thành phẩm có sẵn trong tủ
+    const stockItems = stockRes?.data || [];
+    if (stockItems.length > 0) {
+      snapshot.ton_kho_thanh_pham_chinh = stockItems.map(s => ({
+        ten_banh: s.products?.name || 'Bánh',
+        size: s.size || 'Tiêu chuẩn',
+        so_luong: Number(s.qty) || 0,
+        chi_nhanh: s.branch || s.store_location || 'Kho tiệm'
+      }));
+    }
+
+    // 4. Nếu là Ban Giám Đốc hoặc Kế toán -> Lấy toàn bộ số liệu Tài chính & Doanh thu & Yêu cầu chờ duyệt
     if (isDirector) {
-      const [revenueRes, duTinhRes, expenseRes] = await Promise.all([
+      const [revenueRes, duTinhRes, expenseRes, pendingClaimsRes, pendingAdvancesRes] = await Promise.all([
         fetchRevenueByChannel({ from: `${today}T00:00:00`, to: new Date().toISOString() }).catch(err => {
           console.warn('[Snapshot] Doanh thu error:', err);
           return null;
@@ -58,7 +98,17 @@ export async function fetchSumiAppSnapshot(userProfile) {
         fetchExpenseAndAdvanceLedgerToday().catch(err => {
           console.warn('[Snapshot] Expense error:', err);
           return null;
-        })
+        }),
+        supabase
+          .from('expense_claims')
+          .select('id, claimant_name, amount, description')
+          .eq('status', 'pending_director')
+          .catch(() => ({ data: [] })),
+        supabase
+          .from('salary_advance_requests')
+          .select('id, employee_name, amount, reason')
+          .eq('status', 'pending_director')
+          .catch(() => ({ data: [] }))
       ]);
 
       if (revenueRes) {
@@ -93,6 +143,25 @@ export async function fetchSumiAppSnapshot(userProfile) {
             noi_dung: r.content || r.noi_dung_chi || r.reason || 'Khoản chi',
             so_tien: Number(r.amount || r.so_tien) || 0,
             loai: r.type || 'chi_tieu'
+          }))
+        };
+      }
+
+      const pendingClaims = pendingClaimsRes?.data || [];
+      const pendingAdvances = pendingAdvancesRes?.data || [];
+      if (pendingClaims.length > 0 || pendingAdvances.length > 0) {
+        snapshot.yeu_cau_cho_giam_doc_duyet = {
+          khoan_chi_cho_duyet: pendingClaims.map(c => ({
+            id: c.id,
+            nguoi_bao: c.claimant_name,
+            so_tien: Number(c.amount) || 0,
+            noi_dung: c.description
+          })),
+          tam_ung_cho_duyet: pendingAdvances.map(a => ({
+            id: a.id,
+            nguoi_xin: a.employee_name,
+            so_tien: Number(a.amount) || 0,
+            ly_do: a.reason
           }))
         };
       }
@@ -243,14 +312,82 @@ async function callDirectGemini(apiKey, message, imageBase64, userProfile, histo
           properties: {
             ten_khach: { type: Type.STRING, description: 'Họ tên khách hàng' },
             so_dien_thoai: { type: Type.STRING, description: 'Số điện thoại liên hệ' },
+            dia_chi: { type: Type.STRING, description: 'Địa chỉ giao bánh nếu ship' },
+            hinh_thuc_nhan: { type: Type.STRING, enum: ['lay_tai_tiem', 'giao_hang'], description: 'Tự lấy hay giao hàng' },
+            thoi_gian_nhan: { type: Type.STRING, description: 'Ngày và giờ nhận bánh' },
             loai_banh: { type: Type.STRING, description: 'Tên loại bánh (Bánh kem bắp, Tiramisu...)' },
             size_banh: { type: Type.STRING, description: 'Kích thước bánh (16cm, 20cm, 25cm...)' },
-            ngay_giao: { type: Type.STRING, description: 'Ngày và giờ khách hẹn lấy' },
-            noi_dung_ghi_banh: { type: Type.STRING, description: 'Chữ viết lên mặt bánh (Happy Birthday...)' },
-            dia_chi_giao: { type: Type.STRING, description: 'Địa chỉ giao bánh nếu ship tận nơi' },
-            ghi_chu: { type: Type.STRING, description: 'Yêu cầu đặc biệt về màu sắc, phụ kiện' }
+            chu_viet_len_banh: { type: Type.STRING, description: 'Chữ viết lên mặt bánh' },
+            nen_tuoi: { type: Type.STRING, description: 'Số tuổi cắm nến' },
+            ghi_chu_tho_banh: { type: Type.STRING, description: 'Yêu cầu thợ làm bánh' },
+            tam_tinh_gia: { type: Type.NUMBER, description: 'Giá ước tính nếu có' }
           },
-          required: ['loai_banh']
+          required: ['ten_khach', 'loai_banh']
+        }
+      },
+      {
+        name: 'tra_cuu_don_hang',
+        description: 'Tra cứu thông tin chi tiết một hoặc nhiều đơn hàng theo tên khách, số điện thoại hoặc mã đơn (#SUMI-...)',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            tu_khoa: { type: Type.STRING, description: 'Tên khách, số điện thoại hoặc mã đơn hàng cần tìm' }
+          },
+          required: ['tu_khoa']
+        }
+      },
+      {
+        name: 'cap_nhat_trang_thai_don',
+        description: 'Cập nhật trạng thái của đơn hàng trong hệ thống (bếp nhận làm, làm xong chờ giao, đang giao, hoàn thành hoặc hủy đơn)',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            ma_don_hang: { type: Type.STRING, description: 'Mã đơn hàng (ví dụ: SUMI-20260921-12345) hoặc tên khách hàng' },
+            trang_thai_moi: {
+              type: Type.STRING,
+              enum: ['bep_nhan_lam', 'lam_xong_cho_giao', 'dang_giao', 'hoan_thanh', 'huy_don'],
+              description: 'Trạng thái muốn chuyển sang'
+            },
+            ly_do_huy: { type: Type.STRING, description: 'Lý do nếu chọn hủy đơn' }
+          },
+          required: ['ma_don_hang', 'trang_thai_moi']
+        }
+      },
+      {
+        name: 'duyet_khoan_chi_hoac_ung',
+        description: 'Giám đốc phê duyệt hoặc từ chối phiếu xin tạm ứng lương hoặc báo khoản chi',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            loai: { type: Type.STRING, enum: ['tam_ung', 'chi_tieu'], description: 'Loại yêu cầu duyệt' },
+            id: { type: Type.STRING, description: 'ID của phiếu yêu cầu' },
+            ten_nguoi_yeu_cau: { type: Type.STRING, description: 'Tên nhân sự' },
+            so_tien: { type: Type.NUMBER, description: 'Số tiền' },
+            dong_y: { type: Type.BOOLEAN, description: 'True nếu duyệt đồng ý, False nếu từ chối' },
+            ghi_chu: { type: Type.STRING, description: 'Ghi chú duyệt/từ chối' }
+          },
+          required: ['loai', 'id', 'dong_y']
+        }
+      },
+      {
+        name: 'tra_cuu_ton_kho',
+        description: 'Tra cứu số lượng tồn kho của một loại bánh hoặc mặt hàng trong kho thành phẩm tiệm bánh',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            ten_mon: { type: Type.STRING, description: 'Tên loại bánh hoặc sản phẩm cần tra cứu' }
+          },
+          required: ['ten_mon']
+        }
+      },
+      {
+        name: 'tra_cuu_nhan_su_cham_cong',
+        description: 'Tra cứu tình hình nhân sự đi làm, ca trực, chấm công hôm nay của toàn tiệm hoặc một nhân viên cụ thể',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            ten_nhan_vien: { type: Type.STRING, description: 'Tên nhân viên cần kiểm tra' }
+          }
         }
       },
       {
@@ -331,15 +468,15 @@ ${JSON.stringify(liveSnapshot, null, 2)}
   }
 
   const systemInstruction = `Bạn là "Gen" — Hệ điều hành Trợ lý Trí tuệ Nhân tạo toàn diện của tiệm bánh Sumi Bakery (sumibakery.shop).
-Bạn hỗ trợ 22 nhân sự trong toàn bộ tiệm bánh thực hiện các nghiệp vụ: Nghe (giọng nói), Nhìn (hình ảnh mẫu bánh/hóa đơn), Phân tích nghiệp vụ, BÁO CÁO TOÀN DIỆN SỐ LIỆU DOANH THU/ĐƠN HÀNG, và Thao tác trực tiếp vào hệ thống cơ sở dữ liệu.
+Bạn hỗ trợ 22 nhân sự trong toàn bộ tiệm bánh thực hiện các nghiệp vụ: Nghe (giọng nói), Nhìn (hình ảnh mẫu bánh/hóa đơn), Phân tích nghiệp vụ, BÁO CÁO TOÀN DIỆN SỐ LIỆU DOANH THU/ĐƠN HÀNG/TỒN KHO/CHẤM CÔNG, và Thao tác trực tiếp vào hệ thống cơ sở dữ liệu.
 
 NGƯỜI ĐANG NÓI CHUYỆN VỚI BẠN:
 - Tên: ${name}
-- Vai trò: ${role} (${isDirector ? 'BAN GIÁM ĐỐC / CHỦ TIỆM / KẾ TOÁN - Toàn quyền chỉ đạo, xem toàn bộ số liệu doanh thu, đơn hàng, công nợ, chi tiêu' : 'Nhân viên tiệm bánh - Tuân thủ quy chế, thao tác trong quyền hạn'})
+- Vai trò: ${role} (${isDirector ? 'BAN GIÁM ĐỐC / CHỦ TIỆM / KẾ TOÁN - Toàn quyền chỉ đạo, xem toàn bộ số liệu doanh thu, đơn hàng, công nợ, chi tiêu, duyệt chi/ứng' : 'Nhân viên tiệm bánh - Tuân thủ quy chế, thao tác trong quyền hạn'})
 
 ${dataSection}
 
-NGUYÊN TẮC BÁO CÁO SỐ LIỆU KINH DOANH (CỰC KỲ QUAN TRỌNG):
+NGUYÊN TẮC BÁO CÁO SỐ LIỆU KINH DOANH & TRUY VẤN THỜI GIAN THỰC (CỰC KỲ QUAN TRỌNG):
 1. BẠN ĐÃ ĐƯỢC KẾT NỐI TRỰC TIẾP VỚI CƠ SỞ DỮ LIỆU THẬT CỦA TIỆM BÁNH:
    - TUYỆT ĐỐI KHÔNG BAO GIỜ NÓI: "em chưa được kết nối với dữ liệu thu ngân/POS", "chưa thể trích xuất báo cáo", hoặc "vui lòng gửi sao kê hóa đơn".
    - Khi được hỏi về doanh thu, đơn hàng, công nợ, chi tiêu: HÃY ĐỌC TRỰC TIẾP CÁC CON SỐ TRONG [DỮ LIỆU THỜI GIAN THỰC] Ở TRÊN ĐỂ BÁO CÁO NGAY LẬP TỨC.
@@ -353,27 +490,32 @@ NGUYÊN TẮC BÁO CÁO SỐ LIỆU KINH DOANH (CỰC KỲ QUAN TRỌNG):
      * 💸 Chi tiêu & Tạm ứng hôm nay (nếu có): Tổng số tiền chi, nội dung chi.
    - Luôn định dạng tiền tệ Việt Nam rõ ràng (VD: 1.500.000đ hoặc 0đ), dùng dấu gạch đầu dòng và icon emoji trang nhã, dễ nhìn trên điện thoại.
 
-3. PHÂN QUYỀN BẢO MẬT DOANH THU:
-   - Chỉ Ban Giám Đốc (${isDirector ? 'Sếp ' + name : 'Giám đốc/Kế toán'}) mới được xem số tiền doanh thu và chi tiêu của toàn tiệm.
-   - Nếu nhân viên thông thường (thợ làm bánh, shipper) hỏi doanh thu của tiệm, hãy lịch sự từ chối và chỉ thông báo số lượng đơn bánh cần làm.
+3. TRA CỨU ĐƠN HÀNG, TỒN KHO & NHÂN SỰ:
+   - Khi người dùng hỏi thông tin đơn của ai hoặc kiểm tra đơn: Kích hoạt tool 'tra_cuu_don_hang'.
+   - Khi người dùng hỏi số lượng bánh trong tủ / kho còn bao nhiêu: Kích hoạt tool 'tra_cuu_ton_kho' (hoặc đọc trực tiếp từ mục 'ton_kho_thanh_pham_chinh' trong dữ liệu nếu đã có sẵn).
+   - Khi người dùng hỏi ai đang đi làm hôm nay, ai đã chấm công: Kích hoạt tool 'tra_cuu_nhan_su_cham_cong' (hoặc đọc trực tiếp từ mục 'nhan_su_hom_nay' trong dữ liệu thời gian thực).
 
-NGUYÊN TẮC TƯ DUY & PHÂN TÍCH NGHIỆP VỤ (CỰC KỲ QUAN TRỌNG):
-1. KHÔNG LÊN ĐƠN BÁNH KHI THIẾU THÔNG TIN CỐT LÕI:
-   - Một đơn bánh kem chuẩn cần tối thiểu: [Tên khách/SĐT], [Loại bánh], [Size bánh (cm/tấc)], [Giờ lấy bánh/giao bánh].
-   - Ví dụ: Nếu người dùng chỉ nói "Lên đơn bánh kem cho chị Hoa", bạn KHÔNG được tự ý tạo đơn thiếu, mà PHẢI phân tích và hỏi lại rõ ràng:
-     "Dạ em đã ghi nhận bánh kem cho chị Hoa. Để em lên đơn chính xác cho thợ làm, chị Hoa đặt size bao nhiêu cm và hẹn lấy lúc mấy giờ vậy ạ? Có số điện thoại và chữ ghi lên bánh không ạ?"
-   - Chỉ khi đã có tương đối đủ các yếu tố (hoặc tin nhắn Zalo/ảnh đã bóc tách rõ), bạn mới kích hoạt tool 'tao_don_hang_banh'.
+4. CẬP NHẬT TRẠNG THÁI ĐƠN HÀNG TRÊN APP:
+   - Khi nhân viên báo "Đã làm xong đơn X", "Bếp nhận làm đơn Y", "Đã giao xong đơn Z", "Hủy đơn W": Kích hoạt tool 'cap_nhat_trang_thai_don' với trạng thái tương ứng.
 
-2. PHÂN QUYỀN VÀ GIỚI HẠN THAO TÁC:
-   - Chỉ BAN GIÁM ĐỐC (${isDirector ? 'Sếp ' + name : 'Giám đốc'}) mới có quyền giao việc nhân sự ('giao_viec_nhan_su') và duyệt các khoản chi/tạm ứng.
-   - Nếu nhân viên yêu cầu việc vượt quyền hạn, hãy lịch sự từ chối và hướng dẫn báo cáo Giám đốc.
+5. PHÊ DUYỆT TÀI CHÍNH (CHO GIÁM ĐỐC):
+   - Khi Giám đốc (${isDirector ? 'Sếp ' + name : 'Giám đốc'}) bảo duyệt khoản chi hoặc tạm ứng của nhân viên: Kích hoạt tool 'duyet_khoan_chi_hoac_ung'.
 
-3. TỰ ĐỘNG CẢNH BÁO QUY CHẾ VÀ ĐỀ XUẤT:
+6. PHÂN QUYỀN BẢO MẬT:
+   - Chỉ Ban Giám Đốc (${isDirector ? 'Sếp ' + name : 'Giám đốc/Kế toán'}) mới được xem số tiền doanh thu, chi tiêu toàn tiệm và phê duyệt tiền bạc.
+   - Nếu nhân viên thông thường hỏi doanh thu toàn tiệm, hãy lịch sự từ chối và chỉ thông báo số lượng đơn bánh cần làm.
+
+7. TẠO ĐƠN & CHUYỂN BẾP TỰ ĐỘNG:
+   - Khi người dùng cung cấp thông tin đơn (hoặc bảo "Tạo đơn trường học...", "Lên đơn bánh..."):
+   - KÍCH HOẠT NGAY tool 'tao_don_hang_banh' với các thông tin đã có (Tên khách/Trường học, Loại bánh, Số lượng/Size, Giờ nhận).
+   - Hệ thống có nút 1 chạm "🚀 Tạo Đơn & Chuyển Bếp Ngay" giúp gửi thẳng lệnh sản xuất vào KDS của Bếp mà người dùng không cần phải tự gõ lại từ đầu.
+
+8. TỰ ĐỘNG CẢNH BÁO QUY CHẾ VÀ ĐỀ XUẤT:
    - Đặt bánh lấy gấp dưới 2 tiếng: Kích hoạt 'canh_bao_quy_dinh' vì quy định tiệm bánh kem tạo hình cần ít nhất 4 tiếng để nướng cốt và trang trí.
    - Giảm giá > 15%: Cảnh báo cần Giám đốc phê duyệt trước khi chốt đơn.
    - Khi nhân viên xin tạm ứng hoặc báo chi: Bóc tách đúng số tiền, lý do và tạo thẻ xác nhận 2 bước.
 
-4. PHONG CÁCH GIAO TIẾP:
+9. PHONG CÁCH GIAO TIẾP:
    - Ấm áp, nhã nhặn, thông minh, chuyên nghiệp. Với nhân viên phụ bếp/lao động không rành chữ, dùng câu ngắn gọn, mạch lạc, dễ nghe.`;
 
   const contents = [];
@@ -776,5 +918,336 @@ export async function executeCreateOrderDirectly(orderArgs, userProfile) {
     message: `Đã tạo thành công đơn hàng #${orderCode} cho ${trimmedName} (${cakeName} - ${qty} cái) và chuyển ngay xuống Bếp làm bánh!`
   };
 }
+
+/**
+ * Tra cứu thông tin đơn hàng theo tên khách, số điện thoại hoặc mã đơn
+ */
+export async function executeSearchOrder({ query }) {
+  if (!query) return { success: false, message: 'Thiếu từ khóa tra cứu đơn hàng' };
+  const cleanQ = query.trim().replace(/^#/, '');
+
+  try {
+    const { data: orders, error } = await supabase
+      .from('orders')
+      .select(`
+        id, order_code, status, status_v2, order_type, address, note,
+        required_at, created_at, customer_id, customer_name, customer_phone, total,
+        customers(name, phone),
+        order_items(name_snapshot, quantity, unit, specification)
+      `)
+      .or(`order_code.ilike.%${cleanQ}%,customer_name.ilike.%${cleanQ}%,customer_phone.ilike.%${cleanQ}%`)
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    if (error) throw error;
+    let results = orders || [];
+
+    if (results.length === 0) {
+      // Thử tìm qua bảng customers
+      const { data: custs } = await supabase
+        .from('customers')
+        .select('id')
+        .or(`name.ilike.%${cleanQ}%,phone.ilike.%${cleanQ}%`)
+        .limit(5);
+
+      if (custs && custs.length > 0) {
+        const cIds = custs.map(c => c.id);
+        const { data: ordsByCust } = await supabase
+          .from('orders')
+          .select(`
+            id, order_code, status, status_v2, order_type, address, note,
+            required_at, created_at, customer_id, customer_name, customer_phone, total,
+            customers(name, phone),
+            order_items(name_snapshot, quantity, unit, specification)
+          `)
+          .in('customer_id', cIds)
+          .order('created_at', { ascending: false })
+          .limit(5);
+        results = ordsByCust || [];
+      }
+    }
+
+    return {
+      success: true,
+      orders: results
+    };
+  } catch (err) {
+    console.error('[executeSearchOrder] Lỗi:', err);
+    return { success: false, error: err.message, orders: [] };
+  }
+}
+
+/**
+ * Cập nhật trạng thái đơn hàng (bếp làm, xong chờ giao, đang giao, hoàn thành, hủy)
+ */
+export async function executeOrderStatusUpdate({ orderCodeOrId, newStatus, reason, userProfile }) {
+  if (!orderCodeOrId) throw new Error('Thiếu mã đơn hàng hoặc tên khách');
+  const cleanQ = orderCodeOrId.trim().replace(/^#/, '');
+
+  // 1. Tìm đơn hàng tương ứng
+  const { data: orders, error: findErr } = await supabase
+    .from('orders')
+    .select('id, order_code, status, status_v2, customer_name')
+    .or(`order_code.ilike.%${cleanQ}%,customer_name.ilike.%${cleanQ}%`)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (findErr || !orders || orders.length === 0) {
+    throw new Error(`Không tìm thấy đơn hàng nào khớp với "${orderCodeOrId}"`);
+  }
+
+  const order = orders[0];
+  const now = new Date().toISOString();
+  let fieldsToUpdate = {};
+  let statusTextVN = '';
+
+  switch (newStatus) {
+    case 'bep_nhan_lam':
+    case 'dang_lam':
+    case 'in_production':
+      fieldsToUpdate = {
+        status: 'dang_lam',
+        status_v2: 'in_production',
+        production_started_at: now
+      };
+      statusTextVN = 'Bếp đang làm bánh';
+      break;
+
+    case 'lam_xong_cho_giao':
+    case 'cho_giao':
+    case 'ready_for_fulfillment':
+      fieldsToUpdate = {
+        status: 'cho_giao',
+        status_v2: 'ready_for_fulfillment',
+        production_completed_at: now
+      };
+      statusTextVN = 'Làm xong, chờ giao';
+      break;
+
+    case 'dang_giao':
+    case 'in_delivery':
+      fieldsToUpdate = {
+        status: 'dang_giao',
+        status_v2: 'in_delivery',
+        delivery_started_at: now
+      };
+      statusTextVN = 'Đang trên đường giao hàng';
+      break;
+
+    case 'hoan_thanh':
+    case 'completed':
+      fieldsToUpdate = {
+        status: 'hoan_thanh',
+        status_v2: 'completed',
+        completed_at: now,
+        delivery_completed_at: now
+      };
+      statusTextVN = 'Hoàn thành đơn hàng';
+      break;
+
+    case 'huy_don':
+    case 'huy':
+    case 'cancelled':
+      fieldsToUpdate = {
+        status: 'huy',
+        status_v2: 'cancelled',
+        cancel_reason: reason || 'Hủy qua Trợ lý Gen',
+        cancel_staff_name: userProfile?.name || 'Gen Copilot'
+      };
+      statusTextVN = 'Đã hủy đơn hàng';
+      break;
+
+    default:
+      fieldsToUpdate = { status: newStatus };
+      statusTextVN = newStatus;
+  }
+
+  const { error: updErr } = await supabase
+    .from('orders')
+    .update(fieldsToUpdate)
+    .eq('id', order.id);
+
+  if (updErr) throw updErr;
+
+  // Đồng bộ thời gian thực tới tất cả màn hình (KDS Bếp, Shipper, Thu ngân)
+  try {
+    await broadcastEvent(BroadcastEvents.ORDER_STATUS_CHANGED, {
+      orderId: order.id,
+      orderCode: order.order_code,
+      status: fieldsToUpdate.status,
+      status_v2: fieldsToUpdate.status_v2,
+      updatedAt: now
+    });
+    notifyOtherTabs(BroadcastEvents.ORDER_STATUS_CHANGED, {
+      orderId: order.id,
+      status: fieldsToUpdate.status
+    });
+  } catch (e) {
+    console.warn('[executeOrderStatusUpdate] Broadcast warning:', e);
+  }
+
+  playConfirmSound();
+  return {
+    success: true,
+    orderCode: order.order_code,
+    customerName: order.customer_name,
+    newStatus: statusTextVN,
+    message: `Đã cập nhật đơn #${order.order_code} (${order.customer_name || 'Khách'}) sang trạng thái: "${statusTextVN}"!`
+  };
+}
+
+/**
+ * Tra cứu số lượng tồn kho thành phẩm trong tủ/kho tiệm bánh
+ */
+export async function executeCheckInventory({ keyword }) {
+  try {
+    const { data: stockList, error } = await supabase
+      .from('finished_goods_stock')
+      .select(`
+        id, product_id, size, qty, branch, store_location, expiry_date,
+        products(id, name, category, unit, price)
+      `)
+      .gt('qty', 0)
+      .order('qty', { ascending: false });
+
+    if (error) throw error;
+    let filtered = stockList || [];
+
+    if (keyword) {
+      const kw = keyword.toLowerCase().trim();
+      filtered = filtered.filter(item => {
+        const pName = (item.products?.name || '').toLowerCase();
+        const pCat = (item.products?.category || '').toLowerCase();
+        const size = (item.size || '').toLowerCase();
+        return pName.includes(kw) || pCat.includes(kw) || size.includes(kw);
+      });
+    }
+
+    return {
+      success: true,
+      items: filtered.slice(0, 15).map(item => ({
+        name: item.products?.name || 'Sản phẩm',
+        size: item.size || 'Chuẩn',
+        qty: Number(item.qty) || 0,
+        branch: item.branch || item.store_location || 'Kho tiệm',
+        expiry: item.expiry_date || null
+      }))
+    };
+  } catch (err) {
+    console.error('[executeCheckInventory] Error:', err);
+    return { success: false, error: err.message, items: [] };
+  }
+}
+
+/**
+ * Tra cứu tình hình nhân sự đi làm & chấm công hôm nay
+ */
+export async function executeGetStaffAttendance({ keyword }) {
+  const today = localDateStr();
+  try {
+    const [logsRes, profilesRes] = await Promise.all([
+      supabase
+        .from('shift_logs')
+        .select('staff_id, staff_name, type, checkin_time, shift_label, late_minutes')
+        .eq('work_date', today)
+        .order('created_at', { ascending: true }),
+      supabase
+        .from('profiles')
+        .select('id, full_name, station, role')
+        .eq('approved', true)
+        .neq('active', false)
+    ]);
+
+    const logs = logsRes.data || [];
+    const profiles = profilesRes.data || [];
+
+    const staffMap = {};
+    for (const p of profiles) {
+      staffMap[p.id] = {
+        id: p.id,
+        name: p.full_name,
+        station: p.station,
+        role: p.role,
+        hasCheckedIn: false,
+        isCurrentlyWorking: false,
+        checkinTime: null,
+        shiftLabel: null
+      };
+    }
+
+    for (const l of logs) {
+      if (!staffMap[l.staff_id]) {
+        staffMap[l.staff_id] = {
+          id: l.staff_id,
+          name: l.staff_name,
+          station: null,
+          role: 'staff',
+          hasCheckedIn: false,
+          isCurrentlyWorking: false,
+          checkinTime: null,
+          shiftLabel: null
+        };
+      }
+      if (l.type === 'checkin') {
+        staffMap[l.staff_id].hasCheckedIn = true;
+        staffMap[l.staff_id].isCurrentlyWorking = true;
+        staffMap[l.staff_id].checkinTime = l.checkin_time;
+        staffMap[l.staff_id].shiftLabel = l.shift_label;
+      } else if (l.type === 'checkout') {
+        staffMap[l.staff_id].isCurrentlyWorking = false;
+      }
+    }
+
+    let list = Object.values(staffMap);
+    if (keyword) {
+      const kw = keyword.toLowerCase().trim();
+      list = list.filter(s => s.name.toLowerCase().includes(kw) || (s.station && s.station.toLowerCase().includes(kw)));
+    }
+
+    const workingNow = list.filter(s => s.isCurrentlyWorking);
+    return {
+      success: true,
+      totalWorking: workingNow.length,
+      workingList: workingNow,
+      allStaffToday: list.filter(s => s.hasCheckedIn)
+    };
+  } catch (err) {
+    console.error('[executeGetStaffAttendance] Error:', err);
+    return { success: false, error: err.message, workingList: [], allStaffToday: [] };
+  }
+}
+
+/**
+ * Phê duyệt hoặc từ chối khoản chi / tạm ứng lương (Dành cho Giám đốc)
+ */
+export async function executeReviewClaimOrAdvance({ type, id, approve, note }) {
+  if (!id) throw new Error('Thiếu ID yêu cầu cần phê duyệt');
+
+  if (type === 'chi_tieu' || type === 'expense') {
+    const { error } = await supabase.rpc('review_expense_claim', {
+      p_id: id,
+      p_approve: Boolean(approve),
+      p_note: note ? String(note).trim() : null
+    });
+    if (error) throw error;
+  } else {
+    // Tạm ứng lương
+    const { error } = await supabase.rpc('review_salary_advance', {
+      p_id: id,
+      p_approve: Boolean(approve),
+      p_note: note ? String(note).trim() : null
+    });
+    if (error) throw error;
+  }
+
+  playConfirmSound();
+  const actName = approve ? 'Đã phê duyệt' : 'Đã từ chối';
+  const targetLabel = (type === 'chi_tieu' || type === 'expense') ? 'khoản chi tiêu' : 'phiếu tạm ứng lương';
+  return {
+    success: true,
+    message: `${actName} ${targetLabel} thành công!`
+  };
+}
+
 
 

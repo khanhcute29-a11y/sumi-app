@@ -3,14 +3,37 @@ import {
   X, Mic, MicOff, Send, Image as ImageIcon, Volume2, 
   VolumeX, AlertTriangle, CheckCircle2, Bot, Sparkles, 
   CornerDownLeft, FileText, DollarSign, Cake, ArrowRight,
-  ClipboardList, ReceiptText, RotateCcw
+  ClipboardList, ReceiptText, RotateCcw, Truck, Check, XCircle, Search, Users, Boxes
 } from 'lucide-react';
 import { 
   askGenCopilot, speakVietnamese, stopSpeaking, 
   executeSalaryAdvance, executeExpenseClaim, executeAssignTask,
-  executeCreateOrderDirectly
+  executeCreateOrderDirectly, executeSearchOrder, executeOrderStatusUpdate,
+  executeCheckInventory, executeGetStaffAttendance, executeReviewClaimOrAdvance
 } from '../../lib/geminiCopilot';
 import { playConfirmSound } from '../../lib/sound';
+
+function getStatusLabelVN(st) {
+  const map = {
+    'awaiting_assignment': 'Chờ nhận làm',
+    'awaiting_acceptance': 'Chờ nhận làm',
+    'in_production': 'Bếp đang làm bánh',
+    'ready_for_fulfillment': 'Làm xong, chờ giao',
+    'in_delivery': 'Đang trên đường giao',
+    'completed': 'Hoàn thành',
+    'cancelled': 'Đã hủy',
+    'bep_nhan_lam': 'Bếp nhận làm',
+    'lam_xong_cho_giao': 'Làm xong, chờ giao',
+    'dang_giao': 'Đang giao hàng',
+    'hoan_thanh': 'Hoàn thành',
+    'huy_don': 'Hủy đơn',
+    'moi': 'Đơn mới',
+    'dang_lam': 'Bếp đang làm',
+    'cho_giao': 'Chờ giao hàng',
+    'huy': 'Đã hủy'
+  };
+  return map[st] || st;
+}
 
 export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm }) {
   if (!isOpen) return null;
@@ -151,21 +174,62 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm 
       // Kiểm tra xem Gemini có gọi Function Calling không
       if (data.functionCalls && data.functionCalls.length > 0) {
         const fc = data.functionCalls[0];
-        actionToConfirm = {
-          name: fc.name,
-          args: fc.args
-        };
 
-        if (fc.name === 'xin_tam_ung_luong') {
-          replyText = `Dạ, em thấy bạn muốn xin tạm ứng số tiền: ${Number(fc.args.so_tien).toLocaleString('vi-VN')}đ (Lý do: ${fc.args.ly_do}). Bạn bấm xác nhận bên dưới để em gửi Giám đốc duyệt nhé!`;
-        } else if (fc.name === 'giao_viec_nhan_su') {
-          replyText = `Dạ, em đã lập phiếu giao việc cho bạn ${fc.args.ten_nhan_vien || 'nhân sự'}: "${fc.args.noi_dung_viec}". Sếp bấm 'Giao việc ngay' bên dưới để em gửi lệnh nhé!`;
-        } else if (fc.name === 'bao_khoan_chi') {
-          replyText = `Dạ, em đã lập phiếu ghi nhận khoản chi ${Number(fc.args.so_tien).toLocaleString('vi-VN')}đ (${fc.args.noi_dung_chi}). Bạn kiểm tra và bấm xác nhận bên dưới nhé!`;
-        } else if (fc.name === 'tao_don_hang_banh') {
-          replyText = `Dạ, em đã bóc tách thông tin đơn bánh cho khách ${fc.args.ten_khach || 'chưa rõ'}: Món ${fc.args.loai_banh || 'bánh'} - Số lượng/Size: ${fc.args.size_banh || 'chuẩn'}. Sếp/bạn bấm "🚀 Tạo Đơn & Chuyển Bếp Ngay" bên dưới để em gửi lệnh sản xuất xuống Bếp ngay lập tức nhé!`;
-        } else if (fc.name === 'canh_bao_quy_dinh') {
-          replyText = `⚠️ CẢNH BÁO QUY CHẾ: ${fc.args.noi_dung_vi_pham} (Gợi ý: ${fc.args.huong_giai_quyet || 'Báo cáo Giám đốc'})`;
+        if (fc.name === 'tra_cuu_don_hang') {
+          const ordData = await executeSearchOrder({ query: fc.args.tu_khoa });
+          if (ordData.orders && ordData.orders.length > 0) {
+            const listText = ordData.orders.map((o) => {
+              const itemsStr = (o.order_items || []).map(i => `${i.name_snapshot || 'Bánh'} (SL: ${i.quantity || 1})`).join(', ');
+              const timeStr = o.required_at ? new Date(o.required_at).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : 'Trong ngày';
+              return `📌 Đơn #${o.order_code} - Khách: ${o.customer_name || o.customers?.name || 'Khách'}\n• Trạng thái: ${getStatusLabelVN(o.status_v2 || o.status)}\n• Món: ${itemsStr || 'Bánh'}\n• Hẹn: ${timeStr}\n• Địa chỉ: ${o.address || 'Tại tiệm'}`;
+            }).join('\n\n');
+            replyText = `🔍 Em đã tra cứu thấy ${ordData.orders.length} đơn hàng khớp với "${fc.args.tu_khoa}":\n\n${listText}`;
+          } else {
+            replyText = `🔍 Em không tìm thấy đơn hàng nào khớp với từ khóa "${fc.args.tu_khoa}". Bạn kiểm tra lại mã đơn, tên khách hoặc số điện thoại giúp em nhé!`;
+          }
+        } else if (fc.name === 'tra_cuu_ton_kho') {
+          const stockData = await executeCheckInventory({ keyword: fc.args.ten_mon });
+          if (stockData.items && stockData.items.length > 0) {
+            const itemsStr = stockData.items.map(i => `• ${i.name} (Size: ${i.size}): ${i.qty} cái [${i.branch}]`).join('\n');
+            replyText = `📦 Tồn kho thành phẩm cho "${fc.args.ten_mon || 'kho'}":\n${itemsStr}`;
+          } else {
+            replyText = `📦 Hiện tại trong kho thành phẩm không còn tồn bánh "${fc.args.ten_mon || 'này'}".`;
+          }
+        } else if (fc.name === 'tra_cuu_nhan_su_cham_cong') {
+          const attData = await executeGetStaffAttendance({ keyword: fc.args.ten_nhan_vien });
+          if (fc.args.ten_nhan_vien) {
+            const hit = (attData.allStaffToday || []).find(s => s.name.toLowerCase().includes(fc.args.ten_nhan_vien.toLowerCase()));
+            if (hit) {
+              replyText = `👤 Nhân viên ${hit.name}:\n• Chấm công vào ca lúc: ${hit.checkinTime ? new Date(hit.checkinTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '--:--'}\n• Ca: ${hit.shiftLabel || 'Ca chuẩn'}\n• Trạng thái: ${hit.isCurrentlyWorking ? '🟢 Đang làm việc' : '⚪ Đã ra ca'}`;
+            } else {
+              replyText = `👤 Hôm nay hệ thống chưa ghi nhận bạn "${fc.args.ten_nhan_vien}" chấm công vào ca.`;
+            }
+          } else {
+            const names = (attData.workingList || []).map(s => `• ${s.name} (${s.station || 'Nhân sự'})`).join('\n');
+            replyText = `👥 Hiện có ${attData.totalWorking} nhân sự đang trong ca làm việc hôm nay:\n${names || 'Chưa có nhân sự nào trong ca'}`;
+          }
+        } else {
+          actionToConfirm = {
+            name: fc.name,
+            args: fc.args
+          };
+
+          if (fc.name === 'xin_tam_ung_luong') {
+            replyText = `Dạ, em thấy bạn muốn xin tạm ứng số tiền: ${Number(fc.args.so_tien).toLocaleString('vi-VN')}đ (Lý do: ${fc.args.ly_do}). Bạn bấm xác nhận bên dưới để em gửi Giám đốc duyệt nhé!`;
+          } else if (fc.name === 'giao_viec_nhan_su') {
+            replyText = `Dạ, em đã lập phiếu giao việc cho bạn ${fc.args.ten_nhan_vien || 'nhân sự'}: "${fc.args.noi_dung_viec}". Sếp bấm 'Giao việc ngay' bên dưới để em gửi lệnh nhé!`;
+          } else if (fc.name === 'bao_khoan_chi') {
+            replyText = `Dạ, em đã lập phiếu ghi nhận khoản chi ${Number(fc.args.so_tien).toLocaleString('vi-VN')}đ (${fc.args.noi_dung_chi}). Bạn kiểm tra và bấm xác nhận bên dưới nhé!`;
+          } else if (fc.name === 'tao_don_hang_banh') {
+            replyText = `Dạ, em đã bóc tách thông tin đơn bánh cho khách ${fc.args.ten_khach || 'chưa rõ'}: Món ${fc.args.loai_banh || 'bánh'} - Số lượng/Size: ${fc.args.size_banh || 'chuẩn'}. Sếp/bạn bấm "🚀 Tạo Đơn & Chuyển Bếp Ngay" bên dưới để em gửi lệnh sản xuất xuống Bếp ngay lập tức nhé!`;
+          } else if (fc.name === 'cap_nhat_trang_thai_don') {
+            replyText = `Dạ, em đã chuẩn bị đổi trạng thái đơn ${fc.args.ma_don_hang} sang "${getStatusLabelVN(fc.args.trang_thai_moi)}". Bạn bấm xác nhận bên dưới để em cập nhật ngay nhé!`;
+          } else if (fc.name === 'duyet_khoan_chi_hoac_ung') {
+            const typeLabel = fc.args.loai === 'chi_tieu' ? 'khoản chi' : 'phiếu tạm ứng';
+            replyText = `Dạ Sếp, Sếp đang xem xét ${typeLabel} của ${fc.args.ten_nguoi_yeu_cau || 'nhân sự'}: ${Number(fc.args.so_tien || 0).toLocaleString('vi-VN')}đ. Sếp bấm duyệt hoặc từ chối bên dưới nhé!`;
+          } else if (fc.name === 'canh_bao_quy_dinh') {
+            replyText = `⚠️ CẢNH BÁO QUY CHẾ: ${fc.args.noi_dung_vi_pham} (Gợi ý: ${fc.args.huong_giai_quyet || 'Báo cáo Giám đốc'})`;
+          }
         }
       }
 
@@ -198,17 +262,18 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm 
   };
 
   // Xác nhận thực thi hành động 2 bước
-  const handleConfirmAction = async (action) => {
-    if (!action) return;
+  const handleConfirmAction = async (action, actionOverride = null) => {
+    const act = actionOverride || action;
+    if (!act) return;
     setIsLoading(true);
 
     try {
-      if (action.name === 'giao_viec_nhan_su') {
+      if (act.name === 'giao_viec_nhan_su') {
         const res = await executeAssignTask({
-          tenNhanVien: action.args.ten_nhan_vien,
-          noiDungViec: action.args.noi_dung_viec,
-          hanChot: action.args.han_chot,
-          yeuCauAnh: action.args.yeu_cau_anh
+          tenNhanVien: act.args.ten_nhan_vien,
+          noiDungViec: act.args.noi_dung_viec,
+          hanChot: act.args.han_chot,
+          yeuCauAnh: act.args.yeu_cau_anh
         });
         setMessages((prev) => [
           ...prev,
@@ -216,11 +281,11 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm 
         ]);
         speakVietnamese(res.message);
         setPendingAction(null);
-      } else if (action.name === 'bao_khoan_chi') {
+      } else if (act.name === 'bao_khoan_chi') {
         const res = await executeExpenseClaim({
-          soTien: action.args.so_tien,
-          noiDungChi: action.args.noi_dung_chi,
-          ghiChu: action.args.ghi_chu
+          soTien: act.args.so_tien,
+          noiDungChi: act.args.noi_dung_chi,
+          ghiChu: act.args.ghi_chu
         });
         setMessages((prev) => [
           ...prev,
@@ -228,11 +293,11 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm 
         ]);
         speakVietnamese(res.message);
         setPendingAction(null);
-      } else if (action.name === 'xin_tam_ung_luong') {
+      } else if (act.name === 'xin_tam_ung_luong') {
         const res = await executeSalaryAdvance({
-          soTien: action.args.so_tien,
-          lyDo: action.args.ly_do,
-          ngayCan: action.args.ngay_can
+          soTien: act.args.so_tien,
+          lyDo: act.args.ly_do,
+          ngayCan: act.args.ngay_can
         });
         setMessages((prev) => [
           ...prev,
@@ -240,8 +305,34 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm 
         ]);
         speakVietnamese(res.message);
         setPendingAction(null);
-      } else if (action.name === 'tao_don_hang_banh') {
-        const res = await executeCreateOrderDirectly(action.args, userProfile);
+      } else if (act.name === 'tao_don_hang_banh') {
+        const res = await executeCreateOrderDirectly(act.args, userProfile);
+        setMessages((prev) => [
+          ...prev,
+          { id: Date.now(), sender: 'gen', text: `✅ ${res.message}` }
+        ]);
+        speakVietnamese(res.message);
+        setPendingAction(null);
+      } else if (act.name === 'cap_nhat_trang_thai_don') {
+        const res = await executeOrderStatusUpdate({
+          orderCodeOrId: act.args.ma_don_hang,
+          newStatus: act.args.trang_thai_moi,
+          reason: act.args.ly_do_huy,
+          userProfile
+        });
+        setMessages((prev) => [
+          ...prev,
+          { id: Date.now(), sender: 'gen', text: `✅ ${res.message}` }
+        ]);
+        speakVietnamese(res.message);
+        setPendingAction(null);
+      } else if (act.name === 'duyet_khoan_chi_hoac_ung') {
+        const res = await executeReviewClaimOrAdvance({
+          type: act.args.loai,
+          id: act.args.id,
+          approve: act.args.dong_y,
+          note: act.args.ghi_chu
+        });
         setMessages((prev) => [
           ...prev,
           { id: Date.now(), sender: 'gen', text: `✅ ${res.message}` }
@@ -694,6 +785,128 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm 
                       }}
                     >
                       <CheckCircle2 size={16} /> Xác nhận ghi chi
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {m.action && m.action.name === 'cap_nhat_trang_thai_don' && (
+                <div
+                  style={{
+                    background: '#f0f9ff',
+                    border: '1.5px solid #bae6fd',
+                    borderRadius: '14px',
+                    padding: '14px',
+                    marginTop: '8px'
+                  }}
+                >
+                  <div style={{ fontWeight: 700, color: '#0284c7', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Truck size={18} /> Cập Nhật Trạng Thái Đơn Hàng
+                  </div>
+                  <div style={{ fontSize: 13, color: '#0369a1', marginBottom: 12, lineHeight: 1.6 }}>
+                    <div>• Mã đơn / Khách: <b style={{ fontSize: 14, color: '#0c4a6e' }}>{m.action.args.ma_don_hang}</b></div>
+                    <div>• Chuyển sang trạng thái: <b style={{ color: '#0284c7', fontSize: 14 }}>{getStatusLabelVN(m.action.args.trang_thai_moi)}</b></div>
+                    {m.action.args.ly_do_huy && <div>• Lý do hủy: <i>{m.action.args.ly_do_huy}</i></div>}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => setPendingAction(null)}
+                      style={{
+                        flex: 1,
+                        padding: '9px 12px',
+                        borderRadius: 10,
+                        border: '1px solid #ddd',
+                        background: '#fff',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      onClick={() => handleConfirmAction(m.action)}
+                      style={{
+                        flex: 2,
+                        padding: '9px 12px',
+                        borderRadius: 10,
+                        border: 'none',
+                        background: '#0284c7',
+                        color: '#fff',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6
+                      }}
+                    >
+                      <CheckCircle2 size={16} /> Xác nhận đổi trạng thái
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {m.action && m.action.name === 'duyet_khoan_chi_hoac_ung' && (
+                <div
+                  style={{
+                    background: '#fdf4ff',
+                    border: '1.5px solid #f0abfc',
+                    borderRadius: '14px',
+                    padding: '14px',
+                    marginTop: '8px'
+                  }}
+                >
+                  <div style={{ fontWeight: 700, color: '#a21caf', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <DollarSign size={18} /> Phê Duyệt Tài Chính (Ban Giám Đốc)
+                  </div>
+                  <div style={{ fontSize: 13, color: '#86198f', marginBottom: 12, lineHeight: 1.6 }}>
+                    <div>• Loại yêu cầu: <b>{m.action.args.loai === 'chi_tieu' ? 'Khoản chi tiêu' : 'Tạm ứng lương'}</b></div>
+                    <div>• Người yêu cầu: <b>{m.action.args.ten_nguoi_yeu_cau || 'Nhân sự'}</b></div>
+                    <div>• Số tiền: <b style={{ fontSize: 15, color: '#a21caf' }}>{Number(m.action.args.so_tien || 0).toLocaleString('vi-VN')} đ</b></div>
+                    {m.action.args.ghi_chu && <div>• Ghi chú: {m.action.args.ghi_chu}</div>}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => handleConfirmAction(m.action, { ...m.action, args: { ...m.action.args, dong_y: false } })}
+                      style={{
+                        flex: 1,
+                        padding: '9px 12px',
+                        borderRadius: 10,
+                        border: '1px solid #f87171',
+                        background: '#fff',
+                        color: '#dc2626',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 4
+                      }}
+                    >
+                      <XCircle size={15} /> Từ chối
+                    </button>
+                    <button
+                      onClick={() => handleConfirmAction(m.action, { ...m.action, args: { ...m.action.args, dong_y: true } })}
+                      style={{
+                        flex: 1.5,
+                        padding: '9px 12px',
+                        borderRadius: 10,
+                        border: 'none',
+                        background: '#16a34a',
+                        color: '#fff',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6
+                      }}
+                    >
+                      <CheckCircle2 size={16} /> Phê duyệt ngay
                     </button>
                   </div>
                 </div>

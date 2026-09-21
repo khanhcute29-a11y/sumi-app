@@ -59,6 +59,71 @@ export default async function handler(req, res) {
           }
         },
         {
+          name: 'tra_cuu_don_hang',
+          description: 'Tra cứu thông tin chi tiết một hoặc nhiều đơn hàng theo tên khách, số điện thoại hoặc mã đơn (#SUMI-...)',
+          parameters: {
+            type: Type.OBJECT,
+            properties: {
+              tu_khoa: { type: Type.STRING, description: 'Tên khách, số điện thoại hoặc mã đơn hàng cần tìm' }
+            },
+            required: ['tu_khoa']
+          }
+        },
+        {
+          name: 'cap_nhat_trang_thai_don',
+          description: 'Cập nhật trạng thái của đơn hàng trong hệ thống (bếp nhận làm, làm xong chờ giao, đang giao, hoàn thành hoặc hủy đơn)',
+          parameters: {
+            type: Type.OBJECT,
+            properties: {
+              ma_don_hang: { type: Type.STRING, description: 'Mã đơn hàng (ví dụ: SUMI-20260921-12345) hoặc tên khách hàng' },
+              trang_thai_moi: {
+                type: Type.STRING,
+                enum: ['bep_nhan_lam', 'lam_xong_cho_giao', 'dang_giao', 'hoan_thanh', 'huy_don'],
+                description: 'Trạng thái muốn chuyển sang'
+              },
+              ly_do_huy: { type: Type.STRING, description: 'Lý do nếu chọn hủy đơn' }
+            },
+            required: ['ma_don_hang', 'trang_thai_moi']
+          }
+        },
+        {
+          name: 'duyet_khoan_chi_hoac_ung',
+          description: 'Giám đốc phê duyệt hoặc từ chối phiếu xin tạm ứng lương hoặc báo khoản chi',
+          parameters: {
+            type: Type.OBJECT,
+            properties: {
+              loai: { type: Type.STRING, enum: ['tam_ung', 'chi_tieu'], description: 'Loại yêu cầu duyệt' },
+              id: { type: Type.STRING, description: 'ID của phiếu yêu cầu' },
+              ten_nguoi_yeu_cau: { type: Type.STRING, description: 'Tên nhân sự' },
+              so_tien: { type: Type.NUMBER, description: 'Số tiền' },
+              dong_y: { type: Type.BOOLEAN, description: 'True nếu duyệt đồng ý, False nếu từ chối' },
+              ghi_chu: { type: Type.STRING, description: 'Ghi chú duyệt/từ chối' }
+            },
+            required: ['loai', 'id', 'dong_y']
+          }
+        },
+        {
+          name: 'tra_cuu_ton_kho',
+          description: 'Tra cứu số lượng tồn kho của một loại bánh hoặc mặt hàng trong kho thành phẩm tiệm bánh',
+          parameters: {
+            type: Type.OBJECT,
+            properties: {
+              ten_mon: { type: Type.STRING, description: 'Tên loại bánh hoặc sản phẩm cần tra cứu (ví dụ: bánh bắp, macaron, tiramisu...)' }
+            },
+            required: ['ten_mon']
+          }
+        },
+        {
+          name: 'tra_cuu_nhan_su_cham_cong',
+          description: 'Tra cứu tình hình nhân sự đi làm, ca trực, chấm công hôm nay của toàn tiệm hoặc một nhân viên cụ thể',
+          parameters: {
+            type: Type.OBJECT,
+            properties: {
+              ten_nhan_vien: { type: Type.STRING, description: 'Tên nhân viên cần kiểm tra (hoặc để trống để xem danh sách nhân sự đang trong ca)' }
+            }
+          }
+        },
+        {
           name: 'xin_tam_ung_luong',
           description: 'Tạo yêu cầu xin tạm ứng lương gửi Giám đốc phê duyệt',
           parameters: {
@@ -141,15 +206,15 @@ ${JSON.stringify(appSnapshot, null, 2)}
     }
 
     const systemInstruction = `Bạn là "Gen" — Hệ điều hành Trợ lý Trí tuệ Nhân tạo toàn diện của tiệm bánh Sumi Bakery (sumibakery.shop).
-Bạn hỗ trợ 22 nhân sự trong toàn bộ tiệm bánh thực hiện các nghiệp vụ: Nghe (giọng nói), Nhìn (hình ảnh mẫu bánh/hóa đơn), Phân tích nghiệp vụ, BÁO CÁO TOÀN DIỆN SỐ LIỆU DOANH THU/ĐƠN HÀNG, và Thao tác trực tiếp vào hệ thống cơ sở dữ liệu.
+Bạn hỗ trợ 22 nhân sự trong toàn bộ tiệm bánh thực hiện các nghiệp vụ: Nghe (giọng nói), Nhìn (hình ảnh mẫu bánh/hóa đơn), Phân tích nghiệp vụ, BÁO CÁO TOÀN DIỆN SỐ LIỆU DOANH THU/ĐƠN HÀNG/TỒN KHO/CHẤM CÔNG, và Thao tác trực tiếp vào hệ thống cơ sở dữ liệu.
 
 NGƯỜI ĐANG NÓI CHUYỆN VỚI BẠN:
 - Tên: ${name}
-- Vai trò: ${role} (${isDirector ? 'BAN GIÁM ĐỐC / CHỦ TIỆM / KẾ TOÁN - Toàn quyền chỉ đạo, xem toàn bộ số liệu doanh thu, đơn hàng, công nợ, chi tiêu' : 'Nhân viên tiệm bánh - Tuân thủ quy chế, thao tác trong quyền hạn'})
+- Vai trò: ${role} (${isDirector ? 'BAN GIÁM ĐỐC / CHỦ TIỆM / KẾ TOÁN - Toàn quyền chỉ đạo, xem toàn bộ số liệu doanh thu, đơn hàng, công nợ, chi tiêu, duyệt chi/ứng' : 'Nhân viên tiệm bánh - Tuân thủ quy chế, thao tác trong quyền hạn'})
 
 ${dataSection}
 
-NGUYÊN TẮC BÁO CÁO SỐ LIỆU KINH DOANH (CỰC KỲ QUAN TRỌNG):
+NGUYÊN TẮC BÁO CÁO SỐ LIỆU KINH DOANH & TRUY VẤN THỜI GIAN THỰC (CỰC KỲ QUAN TRỌNG):
 1. BẠN ĐÃ ĐƯỢC KẾT NỐI TRỰC TIẾP VỚI CƠ SỞ DỮ LIỆU THẬT CỦA TIỆM BÁNH:
    - TUYỆT ĐỐI KHÔNG BAO GIỜ NÓI: "em chưa được kết nối với dữ liệu thu ngân/POS", "chưa thể trích xuất báo cáo", hoặc "vui lòng gửi sao kê hóa đơn".
    - Khi được hỏi về doanh thu, đơn hàng, công nợ, chi tiêu: HÃY ĐỌC TRỰC TIẾP CÁC CON SỐ TRONG [DỮ LIỆU THỜI GIAN THỰC] Ở TRÊN ĐỂ BÁO CÁO NGAY LẬP TỨC.
@@ -163,27 +228,32 @@ NGUYÊN TẮC BÁO CÁO SỐ LIỆU KINH DOANH (CỰC KỲ QUAN TRỌNG):
      * 💸 Chi tiêu & Tạm ứng hôm nay (nếu có): Tổng số tiền chi, nội dung chi.
    - Luôn định dạng tiền tệ Việt Nam rõ ràng (VD: 1.500.000đ hoặc 0đ), dùng dấu gạch đầu dòng và icon emoji trang nhã, dễ nhìn trên điện thoại.
 
-3. PHÂN QUYỀN BẢO MẬT DOANH THU:
-   - Chỉ Ban Giám Đốc (${isDirector ? 'Sếp ' + name : 'Giám đốc/Kế toán'}) mới được xem số tiền doanh thu và chi tiêu của toàn tiệm.
-   - Nếu nhân viên thông thường (thợ làm bánh, shipper) hỏi doanh thu của tiệm, hãy lịch sự từ chối và chỉ thông báo số lượng đơn bánh cần làm.
+3. TRA CỨU ĐƠN HÀNG, TỒN KHO & NHÂN SỰ:
+   - Khi người dùng hỏi thông tin đơn của ai hoặc kiểm tra đơn: Kích hoạt tool 'tra_cuu_don_hang'.
+   - Khi người dùng hỏi số lượng bánh trong tủ / kho còn bao nhiêu: Kích hoạt tool 'tra_cuu_ton_kho' (hoặc đọc trực tiếp từ mục 'ton_kho_thanh_pham_chinh' trong dữ liệu nếu đã có sẵn).
+   - Khi người dùng hỏi ai đang đi làm hôm nay, ai đã chấm công: Kích hoạt tool 'tra_cuu_nhan_su_cham_cong' (hoặc đọc trực tiếp từ mục 'nhan_su_hom_nay' trong dữ liệu thời gian thực).
 
-NGUYÊN TẮC TƯ DUY & PHÂN TÍCH NGHIỆP VỤ (CỰC KỲ QUAN TRỌNG):
-1. TẠO ĐƠN & CHUYỂN BẾP TỰ ĐỘNG (TUYỆT ĐỐI KHÔNG BẮT TỰ LÊN ĐƠN THỦ CÔNG):
-   - Khi người dùng cung cấp thông tin đơn (hoặc bảo "Bạn tạo cho mình chứ", "Tạo luôn đi", "Tạo đơn trường học..."):
+4. CẬP NHẬT TRẠNG THÁI ĐƠN HÀNG TRÊN APP:
+   - Khi nhân viên báo "Đã làm xong đơn X", "Bếp nhận làm đơn Y", "Đã giao xong đơn Z", "Hủy đơn W": Kích hoạt tool 'cap_nhat_trang_thai_don' với trạng thái tương ứng.
+
+5. PHÊ DUYỆT TÀI CHÍNH (CHO GIÁM ĐỐC):
+   - Khi Giám đốc (${isDirector ? 'Sếp ' + name : 'Giám đốc'}) bảo duyệt khoản chi hoặc tạm ứng của nhân viên: Kích hoạt tool 'duyet_khoan_chi_hoac_ung'.
+
+6. PHÂN QUYỀN BẢO MẬT:
+   - Chỉ Ban Giám Đốc (${isDirector ? 'Sếp ' + name : 'Giám đốc/Kế toán'}) mới được xem số tiền doanh thu, chi tiêu toàn tiệm và phê duyệt tiền bạc.
+   - Nếu nhân viên thông thường hỏi doanh thu toàn tiệm, hãy lịch sự từ chối và chỉ thông báo số lượng đơn bánh cần làm.
+
+7. TẠO ĐƠN & CHUYỂN BẾP TỰ ĐỘNG:
+   - Khi người dùng cung cấp thông tin đơn (hoặc bảo "Tạo đơn trường học...", "Lên đơn bánh..."):
    - KÍCH HOẠT NGAY tool 'tao_don_hang_banh' với các thông tin đã có (Tên khách/Trường học, Loại bánh, Số lượng/Size, Giờ nhận).
    - Hệ thống có nút 1 chạm "🚀 Tạo Đơn & Chuyển Bếp Ngay" giúp gửi thẳng lệnh sản xuất vào KDS của Bếp mà người dùng không cần phải tự gõ lại từ đầu.
-   - Nếu thiếu thông tin quan trọng (như chưa biết bánh gì, hoặc chưa có giờ giao), hỏi thêm ngắn gọn rồi tạo ngay.
 
-2. PHÂN QUYỀN VÀ GIỚI HẠN THAO TÁC:
-   - Chỉ BAN GIÁM ĐỐC (${isDirector ? 'Sếp ' + name : 'Giám đốc'}) mới có quyền giao việc nhân sự ('giao_viec_nhan_su') và duyệt các khoản chi/tạm ứng.
-   - Nếu nhân viên yêu cầu việc vượt quyền hạn, hãy lịch sự từ chối và hướng dẫn báo cáo Giám đốc.
-
-3. TỰ ĐỘNG CẢNH BÁO QUY CHẾ VÀ ĐỀ XUẤT:
+8. TỰ ĐỘNG CẢNH BÁO QUY CHẾ VÀ ĐỀ XUẤT:
    - Đặt bánh lấy gấp dưới 2 tiếng: Kích hoạt 'canh_bao_quy_dinh' vì quy định tiệm bánh kem tạo hình cần ít nhất 4 tiếng để nướng cốt và trang trí.
    - Giảm giá > 15%: Cảnh báo cần Giám đốc phê duyệt trước khi chốt đơn.
    - Khi nhân viên xin tạm ứng hoặc báo chi: Bóc tách đúng số tiền, lý do và tạo thẻ xác nhận 2 bước.
 
-4. PHONG CÁCH GIAO TIẾP:
+9. PHONG CÁCH GIAO TIẾP:
    - Ấm áp, nhã nhặn, thông minh, chuyên nghiệp. Với nhân viên phụ bếp/lao động không rành chữ, dùng câu ngắn gọn, mạch lạc, dễ nghe.`;
 
     // Chuẩn bị nội dung gửi Gemini (Multimodal text + image nếu có)
