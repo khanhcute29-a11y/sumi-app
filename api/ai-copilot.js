@@ -17,7 +17,7 @@ export default async function handler(req, res) {
   if (!apiKey) {
     return res.status(503).json({
       error: 'Chưa cấu hình GEMINI_API_KEY',
-      huong_dan: 'Vui lòng thêm GEMINI_API_KEY từ tài khoản Google của tiệm vào file cấu hình môi trường.'
+      huong_dan: 'Vui lòng thêm GEMINI_API_KEY vào Environment Variables trên Vercel.'
     });
   }
 
