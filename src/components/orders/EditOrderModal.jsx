@@ -111,7 +111,10 @@ export default function EditOrderModal({ orderId, onClose, onSaved }) {
   // Danh sách sản phẩm chỉ cần khi thật sự được sửa.
   useEffect(() => {
     if (!quyen?.duoc_sua) return;
-    supabase.from('products').select('id,name,category,price,unit,product_variants(label)')
+    // Lấy đủ id/price của từng mức giá (product_variants) — không chỉ label —
+    // để khi anh đổi size ở "Sửa chi tiết", giá tự nhảy đúng theo size đó
+    // (giống hệt màn Tạo đơn), thay vì để anh gõ tay size rồi giá đứng yên.
+    supabase.from('products').select('id,name,category,price,unit,product_variants(id,label,price)')
       .eq('active', true).order('name')
       .then(({ data }) => setSanPham(data || []))
       .catch(() => setSanPham([]));
@@ -347,9 +350,29 @@ export default function EditOrderModal({ orderId, onClose, onSaved }) {
             style={{ marginTop: 6, border: 'none', background: 'none', color: '#D96B43', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', padding: '4px 0' }}>
             {daMo ? '▲ Ẩn chi tiết' : '✏️ Sửa chi tiết (size / chữ trên bánh / nến...)'}
           </button>
-          {daMo && (
+          {daMo && (() => {
+            // Sản phẩm có sẵn mức giá theo size (product_variants) -> chọn size là NHẢY
+            // GIÁ THEO ĐÚNG SIZE ĐÓ (giống hệt màn Tạo đơn), không cho sửa tay giá nữa —
+            // tránh gõ nhầm lệch với bảng giá đã niêm yết. Sản phẩm KHÔNG có size nào
+            // (giá cố định một mức) thì cho gõ tay size (ghi chú, không đổi giá) và có
+            // thêm ô sửa giá tay riêng, vì không có bảng giá nào để đối chiếu.
+            const bienThe = sanPham.find((p) => p.id === x.product_id)?.product_variants || [];
+            return (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4, padding: 10, background: '#fbf7f1', borderRadius: 12 }}>
-              <input placeholder="Size (18cm...)" value={x.specification?.size || ''} onChange={(e) => doiSpec(x.khoa, 'size', e.target.value)} style={{ ...oO, minHeight: 40, gridColumn: luong === 'cake' ? '1 / -1' : 'auto' }} />
+              {bienThe.length > 0 ? (
+                <select value={x.specification?.size || ''} onChange={(e) => {
+                  const v = bienThe.find((b) => b.label === e.target.value);
+                  doiMon(x.khoa, { unit_price: v ? Number(v.price) : x.unit_price, specification: { ...x.specification, size: e.target.value } });
+                }} style={{ ...oO, minHeight: 40, gridColumn: luong === 'cake' ? '1 / -1' : 'auto' }}>
+                  <option value="">Chọn size...</option>
+                  {bienThe.map((v) => <option key={v.id} value={v.label}>{v.label} — {Number(v.price).toLocaleString('vi-VN')}đ</option>)}
+                </select>
+              ) : (
+                <>
+                  <input placeholder="Size (18cm...)" value={x.specification?.size || ''} onChange={(e) => doiSpec(x.khoa, 'size', e.target.value)} style={{ ...oO, minHeight: 40 }} />
+                  <input type="number" inputMode="numeric" placeholder="Giá bánh (đ)" value={x.unit_price ?? ''} onChange={(e) => doiMon(x.khoa, { unit_price: e.target.value === '' ? '' : Number(e.target.value) })} style={{ ...oO, minHeight: 40 }} />
+                </>
+              )}
               {luong === 'cake' ? (
                 <>
                   <select value={x.specification?.cot || ''} onChange={(e) => doiSpec(x.khoa, 'cot', e.target.value)} style={{ ...oO, minHeight: 40 }}>
@@ -367,7 +390,8 @@ export default function EditOrderModal({ orderId, onClose, onSaved }) {
                 <input placeholder="Ghi chú thêm (quy cách, đóng gói...)" value={x.specification?.packing || ''} onChange={(e) => doiSpec(x.khoa, 'packing', e.target.value)} style={{ ...oO, minHeight: 40, gridColumn: '1 / -1' }} />
               )}
             </div>
-          )}
+            );
+          })()}
         </div>
         );
       })}
