@@ -42,6 +42,17 @@ function HuyHieuKpi({ viec }) {
 export default function TheViecNhanVien({ viec, hoSo, tenTheoId = {}, onDoi, onBaoLoi, danhSachCa = [] }) {
   const [mo, setMo] = useState(false);
   const [dangChay, setDangChay] = useState('');
+
+  // Tự động mở bung chi tiết thẻ việc nếu được kích hoạt từ AI hoặc thông báo deep link
+  useEffect(() => {
+    const handleOpen = (e) => {
+      if (e.detail?.entityId && String(e.detail.entityId) === String(viec?.id)) {
+        setMo(true);
+      }
+    };
+    window.addEventListener('sumi-open-task', handleOpen);
+    return () => window.removeEventListener('sumi-open-task', handleOpen);
+  }, [viec?.id]);
   // Từ chối việc ngoài giờ — QUYỀN của nhân sự, không phải đề xuất chờ duyệt
   // (khác hẳn "Xin miễn trừ" hiện có). Xem chamCong.viecNgoaiGioLamViec() +
   // migration 202609042200.

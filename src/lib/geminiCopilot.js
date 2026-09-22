@@ -662,8 +662,9 @@ export async function executeAssignTask({ tenNhanVien, noiDungViec, hanChot, yeu
   }
 
   let success = false;
+  let createdTaskId = null;
   if (assigneeId) {
-    const { error: rpcErr } = await supabase.rpc('create_general_task', {
+    const { data: rpcRes, error: rpcErr } = await supabase.rpc('create_general_task', {
       p_category: 'assigned',
       p_title: noiDungViec || 'Công việc từ Sếp',
       p_description: `Giao bởi Sếp qua Trợ lý Gen. Hạn chót: ${hanChot || 'Trong ngày'}${yeuCauAnh ? ' (Có chụp ảnh)' : ''}`,
@@ -672,19 +673,24 @@ export async function executeAssignTask({ tenNhanVien, noiDungViec, hanChot, yeu
       p_deadline: null,
       p_reminder_at: null
     });
-    if (!rpcErr) success = true;
+    if (!rpcErr) {
+      success = true;
+      createdTaskId = rpcRes;
+    }
   }
 
   if (!success) {
-    const { error: insErr } = await supabase.from('tasks').insert({
+    const { data: insData, error: insErr } = await supabase.from('tasks').insert({
       title: noiDungViec || 'Công việc từ Sếp',
       description: `Giao cho: ${targetStaffName}. Hạn chót: ${hanChot || 'Trong ngày'}`,
       category: 'assigned',
       status: 'pending',
       assignee_id: assigneeId || null,
       created_at: new Date().toISOString()
-    });
-    if (insErr) {
+    }).select('id').single();
+    if (!insErr && insData?.id) {
+      createdTaskId = insData.id;
+    } else if (insErr) {
       console.warn('Fallback insert tasks error:', insErr);
     }
   }
@@ -692,6 +698,10 @@ export async function executeAssignTask({ tenNhanVien, noiDungViec, hanChot, yeu
   playConfirmSound();
   return {
     success: true,
+    taskId: createdTaskId,
+    staffName: targetStaffName,
+    title: noiDungViec,
+    deadline: hanChot,
     message: `Đã giao việc "${noiDungViec}" cho bạn ${targetStaffName} thành công!`
   };
 }
@@ -923,11 +933,11 @@ export async function executeCreateOrderDirectly(orderArgs, userProfile) {
  * Tra cứu thông tin đơn hàng theo tên khách, số điện thoại hoặc mã đơn
  */
 export async function executeSearchOrder({ query }) {
-  if (!query) return { success: false, message: 'Thiếu từ khóa tra cứu đơn hàng' };
-  const cleanQ = query.trim().replace(/^#/, '');
+  const rawQ = (query || '').trim();
+  const cleanQ = rawQ.replace(/^#/, '');
 
   try {
-    const { data: orders, error } = await supabase
+    let q = supabase
       .from('orders')
       .select(`
         id, order_code, status, status_v2, order_type, address, note,
@@ -935,20 +945,28 @@ export async function executeSearchOrder({ query }) {
         customers(name, phone),
         order_items(name_snapshot, quantity, unit, specification)
       `)
-      .or(`order_code.ilike.%${cleanQ}%,customer_name.ilike.%${cleanQ}%,customer_phone.ilike.%${cleanQ}%`)
       .order('created_at', { ascending: false })
-      .limit(5);
+      .limit(8);
 
+    const lower = cleanQ.toLowerCase();
+    if (lower === 'hôm nay' || lower === 'hom nay' || lower === 'today') {
+      const today = new Date().toISOString().slice(0, 10);
+      q = q.gte('created_at', `${today}T00:00:00`);
+    } else if (cleanQ) {
+      q = q.or(`order_code.ilike.%${cleanQ}%,customer_name.ilike.%${cleanQ}%,customer_phone.ilike.%${cleanQ}%`);
+    }
+
+    const { data: orders, error } = await q;
     if (error) throw error;
     let results = orders || [];
 
-    if (results.length === 0) {
+    if (results.length === 0 && cleanQ) {
       // Thử tìm qua bảng customers
       const { data: custs } = await supabase
         .from('customers')
         .select('id')
         .or(`name.ilike.%${cleanQ}%,phone.ilike.%${cleanQ}%`)
-        .limit(5);
+        .limit(8);
 
       if (custs && custs.length > 0) {
         const cIds = custs.map(c => c.id);
@@ -962,7 +980,7 @@ export async function executeSearchOrder({ query }) {
           `)
           .in('customer_id', cIds)
           .order('created_at', { ascending: false })
-          .limit(5);
+          .limit(8);
         results = ordsByCust || [];
       }
     }
@@ -974,6 +992,57 @@ export async function executeSearchOrder({ query }) {
   } catch (err) {
     console.error('[executeSearchOrder] Lỗi:', err);
     return { success: false, error: err.message, orders: [] };
+  }
+}
+
+/**
+ * Tra cứu danh sách công việc/nhiệm vụ theo nhân viên, nội dung hoặc trạng thái
+ */
+export async function executeSearchTasks({ tu_khoa, ten_nhan_vien, trang_thai }) {
+  try {
+    let q = supabase
+      .from('tasks')
+      .select(`
+        id, title, description, category, status, deadline, reminder_at,
+        created_at, accepted_at, completed_at, assignee_id,
+        assignee:profiles!tasks_assignee_id_fkey(full_name, station)
+      `)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (tu_khoa && tu_khoa.trim()) {
+      q = q.ilike('title', `%${tu_khoa.trim()}%`);
+    }
+
+    if (trang_thai) {
+      if (trang_thai === 'chua_xong' || trang_thai === 'pending') {
+        q = q.in('status', ['pending', 'open', 'assigned', 'accepted']);
+      } else if (trang_thai === 'da_xong' || trang_thai === 'completed') {
+        q = q.eq('status', 'completed');
+      }
+    }
+
+    const { data: tasks, error } = await q;
+    if (error) throw error;
+
+    let filtered = tasks || [];
+    if (ten_nhan_vien && ten_nhan_vien.trim()) {
+      const sKey = ten_nhan_vien.toLowerCase().trim();
+      filtered = filtered.filter(t => {
+        const aName = t.assignee?.full_name?.toLowerCase() || '';
+        const desc = t.description?.toLowerCase() || '';
+        return aName.includes(sKey) || desc.includes(sKey);
+      });
+    }
+
+    return {
+      success: true,
+      tasks: filtered
+    };
+  } catch (err) {
+    console.error('[executeSearchTasks] Lỗi:', err);
+    return { success: false, error: err.message, tasks: [] };
   }
 }
 

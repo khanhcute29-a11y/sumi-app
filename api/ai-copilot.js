@@ -60,13 +60,25 @@ export default async function handler(req, res) {
         },
         {
           name: 'tra_cuu_don_hang',
-          description: 'Tra cứu thông tin chi tiết một hoặc nhiều đơn hàng theo tên khách, số điện thoại hoặc mã đơn (#SUMI-...)',
+          description: 'Tra cứu thông tin chi tiết một hoặc nhiều đơn hàng theo tên khách, số điện thoại hoặc mã đơn (#SUMI-...) hoặc đơn hôm nay',
           parameters: {
             type: Type.OBJECT,
             properties: {
-              tu_khoa: { type: Type.STRING, description: 'Tên khách, số điện thoại hoặc mã đơn hàng cần tìm' }
+              tu_khoa: { type: Type.STRING, description: 'Tên khách, số điện thoại, mã đơn hàng cần tìm hoặc "hôm nay"' }
             },
             required: ['tu_khoa']
+          }
+        },
+        {
+          name: 'tra_cuu_cong_viec',
+          description: 'Tra cứu danh sách công việc, nhiệm vụ đã giao cho nhân viên, việc cần làm hôm nay, việc tồn đọng',
+          parameters: {
+            type: Type.OBJECT,
+            properties: {
+              tu_khoa: { type: Type.STRING, description: 'Nội dung hoặc tiêu đề công việc cần tìm' },
+              ten_nhan_vien: { type: Type.STRING, description: 'Tên nhân viên được giao việc' },
+              trang_thai: { type: Type.STRING, enum: ['chua_xong', 'da_xong', 'tat_ca'], description: 'Trạng thái việc' }
+            }
           }
         },
         {

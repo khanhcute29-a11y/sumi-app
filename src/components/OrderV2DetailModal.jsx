@@ -178,6 +178,18 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
   const [quyenSua, setQuyenSua] = useState(null);
 
   const load = async () => {
+    // Tự động nhận diện nếu orderId được truyền vào là mã đơn hàng (#SUMI-...)
+    // thay vì UUID — tra cứu ra UUID trước để tránh lỗi "invalid input syntax for type uuid".
+    let targetOrderId = orderId;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(orderId || '').trim());
+    if (!isUuid && orderId) {
+      const cleanCode = String(orderId).trim().replace(/^#/, '');
+      const { data: ord } = await supabase.from('orders').select('id').eq('order_code', cleanCode).maybeSingle();
+      if (ord?.id) {
+        targetOrderId = ord.id;
+      }
+    }
+
     // LỖI THẬT đã vá (quét codebase 06/09/2026): trước đây câu select này lấy
     // thẳng CẢ cột tài chính (ship_fee, deposit, payment_method, total,
     // discount_amount, vat_amount, payment_verified...) trong CÙNG 1 lần gọi
@@ -189,22 +201,22 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
     // get_order_financials — DB tự trả đúng phần được phép theo vai trò gọi
     // (đầy đủ / chỉ COD / rỗng), không cần đoán ở client.
     const [o, i, p, u, e, kpi, ops, att, changes, qs, ship, fin, itemPrices] = await Promise.all([
-      supabase.from('orders').select('id,order_code,order_type,status_v2,required_at,fulfillment_method_v2,address,note,created_by,created_by_name,created_at,confidentiality,version,is_internal,target_store,promotion_note,tax_code,customers(name,phone)').eq('id', orderId).single(),
-      supabase.from('order_items').select('id,name_snapshot,quantity,unit,specification,display_order').eq('order_id', orderId).order('display_order'),
-      supabase.from('order_work_packages_readable').select('id,unit_id,status,due_at,accepted_at,completed_at,version,is_collaborative,assigned_to_staff_id,assigned_to_staff_name,organization_units(name,code),work_package_items(order_item_id,quantity)').eq('order_id', orderId),
+      supabase.from('orders').select('id,order_code,order_type,status_v2,required_at,fulfillment_method_v2,address,note,created_by,created_by_name,created_at,confidentiality,version,is_internal,target_store,promotion_note,tax_code,customers(name,phone)').eq('id', targetOrderId).single(),
+      supabase.from('order_items').select('id,name_snapshot,quantity,unit,specification,display_order').eq('order_id', targetOrderId).order('display_order'),
+      supabase.from('order_work_packages_readable').select('id,unit_id,status,due_at,accepted_at,completed_at,version,is_collaborative,assigned_to_staff_id,assigned_to_staff_name,organization_units(name,code),work_package_items(order_item_id,quantity)').eq('order_id', targetOrderId),
       supabase.from('organization_units').select('id,name,code').eq('unit_type', 'kitchen').eq('active', true),
-      supabase.from('domain_events').select('id,event_type,occurred_at,payload').eq('entity_type', 'order').eq('entity_id', orderId).order('occurred_at', { ascending: false }),
-      supabase.from('kpi_logs').select('id,event_type,created_at,staff_name,staff_id,gps_latitude,gps_longitude,photo_url,notes').eq('order_id', orderId).order('created_at', { ascending: false }),
-      supabase.from('order_operations_list').select('production_started_at,production_completed_at,production_minutes,delivery_started_at,delivery_completed_at,delivery_minutes,delivery_provider,provider_label,shipping_fee,driver_name,is_overdue,overdue_stage,overdue_minutes,was_late,late_staff_names').eq('id', orderId).single(),
-      supabase.from('order_attachments').select('id,attachment_type,storage_path,mime_type,created_at,work_package_id').eq('order_id', orderId).order('created_at', { ascending: false }),
-      supabase.from('order_change_logs').select('id,field_name,old_value,new_value,edited_by_name,created_at').eq('order_id', orderId).order('created_at', { ascending: false }),
-      supabase.rpc('sumi_quyen_sua_don', { p_order_id: orderId }),
+      supabase.from('domain_events').select('id,event_type,occurred_at,payload').eq('entity_type', 'order').eq('entity_id', targetOrderId).order('occurred_at', { ascending: false }),
+      supabase.from('kpi_logs').select('id,event_type,created_at,staff_name,staff_id,gps_latitude,gps_longitude,photo_url,notes').eq('order_id', targetOrderId).order('created_at', { ascending: false }),
+      supabase.from('order_operations_list').select('production_started_at,production_completed_at,production_minutes,delivery_started_at,delivery_completed_at,delivery_minutes,delivery_provider,provider_label,shipping_fee,driver_name,is_overdue,overdue_stage,overdue_minutes,was_late,late_staff_names').eq('id', targetOrderId).single(),
+      supabase.from('order_attachments').select('id,attachment_type,storage_path,mime_type,created_at,work_package_id').eq('order_id', targetOrderId).order('created_at', { ascending: false }),
+      supabase.from('order_change_logs').select('id,field_name,old_value,new_value,edited_by_name,created_at').eq('order_id', targetOrderId).order('created_at', { ascending: false }),
+      supabase.rpc('sumi_quyen_sua_don', { p_order_id: targetOrderId }),
       // Người giao hàng thật (staff_id) để Giám đốc đánh giá — order_operations_list
       // chỉ có driver_name (text), không có id. Có thể ra nhiều dòng nếu đơn có
       // nhiều mẻ bếp, nhưng thông tin shipper là như nhau ở mọi dòng nên lấy dòng đầu.
-      supabase.from('order_lateness_detail').select('shipper_staff_id,shipper_staff_name,shipper_delivered_at').eq('order_id', orderId).limit(1),
-      supabase.rpc('get_order_financials', { p_order_id: orderId }),
-      supabase.rpc('get_order_item_prices', { p_order_id: orderId }),
+      supabase.from('order_lateness_detail').select('shipper_staff_id,shipper_staff_name,shipper_delivered_at').eq('order_id', targetOrderId).limit(1),
+      supabase.rpc('get_order_financials', { p_order_id: targetOrderId }),
+      supabase.rpc('get_order_item_prices', { p_order_id: targetOrderId }),
     ]);
 
     setQuyenSua(qs?.data || null);

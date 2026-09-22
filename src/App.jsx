@@ -323,7 +323,11 @@ function OpsApp({ onSignOut }) {
         setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-chat-room', { detail: { roomId: e.detail.entityId } })), DELAY);
       }
       if (nextTab === 'orders' && e.detail?.entityId) {
-        setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-order', { detail: { entityId: e.detail.entityId } })), DELAY);
+        const entId = e.detail.entityId;
+        // Gửi lặp lại theo nhịp 80ms, 250ms, 500ms để đảm bảo OrdersV2Screen mount kịp và bắt được sự kiện 100%
+        [80, 250, 500].forEach((ms) => {
+          setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-order', { detail: { entityId: entId } })), ms);
+        });
       }
       // Bấm vào tin nhắn thông báo còn kèm tab lọc (vd: 'production' = Bếp đang làm)
       // để mở thẳng đúng khu vực. Lời gọi cũ không có filter nên không đổi gì.
@@ -335,7 +339,10 @@ function OpsApp({ onSignOut }) {
         setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-feed', { detail: { entityId: e.detail.entityId } })), DELAY);
       }
       if ((nextTab === 'tasks' || nextTab === 'staffTasks') && e.detail?.entityId) {
-        setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-task', { detail: { entityId: e.detail.entityId } })), DELAY);
+        const entId = e.detail.entityId;
+        [80, 250, 500].forEach((ms) => {
+          setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-task', { detail: { entityId: entId } })), ms);
+        });
       }
       // Mở thẳng đúng tab con bên trong "Ca Làm Việc" (vd: 'schedule' = Lịch tuần)
       // thay vì luôn rơi về mặc định "Chấm công realtime".
@@ -444,7 +451,25 @@ function OpsApp({ onSignOut }) {
         onClose={() => setShowGen(false)}
         userProfile={profile}
         onOpenOrderForm={(orderData) => {
+          setShowGen(false);
           setTab('orders');
+          [100, 300].forEach((ms) => {
+            setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-create-order', { detail: orderData })), ms);
+          });
+        }}
+        onViewOrder={(orderId) => {
+          setShowGen(false);
+          setTab('orders');
+          [80, 250, 500].forEach((ms) => {
+            setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-order', { detail: { entityId: orderId } })), ms);
+          });
+        }}
+        onViewTask={(taskId) => {
+          setShowGen(false);
+          setTab('tasks');
+          [80, 250, 500].forEach((ms) => {
+            setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-task', { detail: { entityId: taskId } })), ms);
+          });
         }}
       />
       {voiceTask && (

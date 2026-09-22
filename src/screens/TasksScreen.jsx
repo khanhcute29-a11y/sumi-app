@@ -132,6 +132,7 @@ export default function TasksScreen() {
     const go = (e) => {
       const id = e.detail?.entityId;
       if (!id) return;
+      setStationFilter('');
       let n = 0;
       const tim = () => {
         const el = document.getElementById(`task-item-${id}`);
@@ -142,7 +143,7 @@ export default function TasksScreen() {
           setTimeout(() => { el.style.boxShadow = ''; }, 2600);
           return;
         }
-        if (++n < 20) setTimeout(tim, 250);
+        if (++n < 25) setTimeout(tim, 200);
       };
       tim();
     };

@@ -3,39 +3,43 @@ import {
   X, Mic, MicOff, Send, Image as ImageIcon, Volume2, 
   VolumeX, AlertTriangle, CheckCircle2, Bot, Sparkles, 
   CornerDownLeft, FileText, DollarSign, Cake, ArrowRight,
-  ClipboardList, ReceiptText, RotateCcw, Truck, Check, XCircle, Search, Users, Boxes
+  ClipboardList, ReceiptText, RotateCcw, Truck, Check, XCircle, Search, Users, Boxes, Eye
 } from 'lucide-react';
 import { 
   askGenCopilot, speakVietnamese, stopSpeaking, 
   executeSalaryAdvance, executeExpenseClaim, executeAssignTask,
-  executeCreateOrderDirectly, executeSearchOrder, executeOrderStatusUpdate,
+  executeCreateOrderDirectly, executeSearchOrder, executeSearchTasks, executeOrderStatusUpdate,
   executeCheckInventory, executeGetStaffAttendance, executeReviewClaimOrAdvance
 } from '../../lib/geminiCopilot';
 import { playConfirmSound } from '../../lib/sound';
 
-function getStatusLabelVN(st) {
+function getStatusMeta(st) {
   const map = {
-    'awaiting_assignment': 'Chờ nhận làm',
-    'awaiting_acceptance': 'Chờ nhận làm',
-    'in_production': 'Bếp đang làm bánh',
-    'ready_for_fulfillment': 'Làm xong, chờ giao',
-    'in_delivery': 'Đang trên đường giao',
-    'completed': 'Hoàn thành',
-    'cancelled': 'Đã hủy',
-    'bep_nhan_lam': 'Bếp nhận làm',
-    'lam_xong_cho_giao': 'Làm xong, chờ giao',
-    'dang_giao': 'Đang giao hàng',
-    'hoan_thanh': 'Hoàn thành',
-    'huy_don': 'Hủy đơn',
-    'moi': 'Đơn mới',
-    'dang_lam': 'Bếp đang làm',
-    'cho_giao': 'Chờ giao hàng',
-    'huy': 'Đã hủy'
+    'awaiting_assignment': { label: 'Chờ nhận làm', color: '#6b7280', bg: '#f3f4f6' },
+    'awaiting_acceptance': { label: 'Chờ nhận làm', color: '#6b7280', bg: '#f3f4f6' },
+    'in_production': { label: 'Bếp đang làm bánh', color: '#ea580c', bg: '#ffedd5' },
+    'ready_for_fulfillment': { label: 'Làm xong, chờ giao', color: '#0284c7', bg: '#e0f2fe' },
+    'in_delivery': { label: 'Đang trên đường giao', color: '#7c3aed', bg: '#ede9fe' },
+    'completed': { label: 'Hoàn thành', color: '#16a34a', bg: '#dcfce7' },
+    'cancelled': { label: 'Đã hủy', color: '#dc2626', bg: '#fee2e2' },
+    'bep_nhan_lam': { label: 'Bếp nhận làm', color: '#ea580c', bg: '#ffedd5' },
+    'lam_xong_cho_giao': { label: 'Làm xong, chờ giao', color: '#0284c7', bg: '#e0f2fe' },
+    'dang_giao': { label: 'Đang giao hàng', color: '#7c3aed', bg: '#ede9fe' },
+    'hoan_thanh': { label: 'Hoàn thành', color: '#16a34a', bg: '#dcfce7' },
+    'huy_don': { label: 'Hủy đơn', color: '#dc2626', bg: '#fee2e2' },
+    'moi': { label: 'Đơn mới', color: '#d97706', bg: '#fef3c7' },
+    'dang_lam': { label: 'Bếp đang làm', color: '#ea580c', bg: '#ffedd5' },
+    'cho_giao': { label: 'Chờ giao hàng', color: '#0284c7', bg: '#e0f2fe' },
+    'huy': { label: 'Đã hủy', color: '#dc2626', bg: '#fee2e2' }
   };
-  return map[st] || st;
+  return map[st] || { label: st || 'Mới', color: '#4b5563', bg: '#f3f4f6' };
 }
 
-export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm }) {
+function getStatusLabelVN(st) {
+  return getStatusMeta(st).label;
+}
+
+export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm, onViewOrder, onViewTask }) {
   if (!isOpen) return null;
 
   const storageKey = `sumi_gen_chat_${userProfile?.id || 'default'}`;
@@ -78,6 +82,66 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm 
       console.warn('Lỗi lưu lịch sử chat:', e);
     }
   }, [messages, storageKey]);
+
+  const handleOpenOrder = (orderIdOrCode) => {
+    if (!orderIdOrCode) return;
+    if (onViewOrder) {
+      onViewOrder(orderIdOrCode);
+    } else {
+      window.dispatchEvent(new CustomEvent('sumi-navigate', { detail: { tab: 'orders', entityId: orderIdOrCode } }));
+      onClose();
+    }
+  };
+
+  const handleOpenTask = (taskId) => {
+    if (!taskId) return;
+    if (onViewTask) {
+      onViewTask(taskId);
+    } else {
+      window.dispatchEvent(new CustomEvent('sumi-navigate', { detail: { tab: 'tasks', entityId: taskId } }));
+      onClose();
+    }
+  };
+
+  const renderMessageContent = (text) => {
+    if (!text) return null;
+    const parts = text.split(/(#?SUMI-\d{8}-\d{3,6})/gi);
+    if (parts.length === 1) return text;
+    return parts.map((part, idx) => {
+      if (/#?SUMI-\d{8}-\d{3,6}/i.test(part)) {
+        return (
+          <button
+            key={idx}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleOpenOrder(part.replace(/^#/, ''));
+            }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 3,
+              padding: '1px 7px',
+              margin: '0 2px',
+              borderRadius: 6,
+              background: '#fff0eb',
+              color: '#ea580c',
+              border: '1px solid #fbd0be',
+              fontWeight: 800,
+              fontSize: 12.5,
+              cursor: 'pointer',
+              verticalAlign: 'baseline',
+              textDecoration: 'none'
+            }}
+            title="Bấm để mở xem chi tiết đơn hàng này"
+          >
+            🔍 {part}
+          </button>
+        );
+      }
+      return part;
+    });
+  };
 
   const recognitionRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -178,14 +242,30 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm 
         if (fc.name === 'tra_cuu_don_hang') {
           const ordData = await executeSearchOrder({ query: fc.args.tu_khoa });
           if (ordData.orders && ordData.orders.length > 0) {
-            const listText = ordData.orders.map((o) => {
-              const itemsStr = (o.order_items || []).map(i => `${i.name_snapshot || 'Bánh'} (SL: ${i.quantity || 1})`).join(', ');
-              const timeStr = o.required_at ? new Date(o.required_at).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : 'Trong ngày';
-              return `📌 Đơn #${o.order_code} - Khách: ${o.customer_name || o.customers?.name || 'Khách'}\n• Trạng thái: ${getStatusLabelVN(o.status_v2 || o.status)}\n• Món: ${itemsStr || 'Bánh'}\n• Hẹn: ${timeStr}\n• Địa chỉ: ${o.address || 'Tại tiệm'}`;
-            }).join('\n\n');
-            replyText = `🔍 Em đã tra cứu thấy ${ordData.orders.length} đơn hàng khớp với "${fc.args.tu_khoa}":\n\n${listText}`;
+            replyText = `🔍 Em đã tra cứu thấy ${ordData.orders.length} đơn hàng khớp với "${fc.args.tu_khoa || 'yêu cầu'}". Bạn bấm vào nút "Xem chi tiết" của từng đơn bên dưới để mở thẳng đơn nhé:`;
+            actionToConfirm = {
+              type: 'card_display',
+              cardType: 'order_list',
+              orders: ordData.orders
+            };
           } else {
             replyText = `🔍 Em không tìm thấy đơn hàng nào khớp với từ khóa "${fc.args.tu_khoa}". Bạn kiểm tra lại mã đơn, tên khách hoặc số điện thoại giúp em nhé!`;
+          }
+        } else if (fc.name === 'tra_cuu_cong_viec') {
+          const taskData = await executeSearchTasks({
+            tu_khoa: fc.args.tu_khoa,
+            ten_nhan_vien: fc.args.ten_nhan_vien,
+            trang_thai: fc.args.trang_thai
+          });
+          if (taskData.tasks && taskData.tasks.length > 0) {
+            replyText = `📋 Em tìm thấy ${taskData.tasks.length} công việc${fc.args.ten_nhan_vien ? ` của bạn ${fc.args.ten_nhan_vien}` : ''}. Bạn bấm vào nút "Xem chi tiết" để mở thẳng đầu việc nhé:`;
+            actionToConfirm = {
+              type: 'card_display',
+              cardType: 'task_list',
+              tasks: taskData.tasks
+            };
+          } else {
+            replyText = `📋 Hiện không tìm thấy công việc nào khớp với yêu cầu của bạn.`;
           }
         } else if (fc.name === 'tra_cuu_ton_kho') {
           const stockData = await executeCheckInventory({ keyword: fc.args.ten_mon });
@@ -277,7 +357,21 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm 
         });
         setMessages((prev) => [
           ...prev,
-          { id: Date.now(), sender: 'gen', text: `✅ ${res.message}` }
+          {
+            id: Date.now(),
+            sender: 'gen',
+            text: `✅ ${res.message}`,
+            action: {
+              type: 'card_display',
+              cardType: 'created_task',
+              task: {
+                id: res.taskId,
+                staff_name: res.staffName || act.args.ten_nhan_vien,
+                title: res.title || act.args.noi_dung_viec,
+                deadline: res.deadline || act.args.han_chot
+              }
+            }
+          }
         ]);
         speakVietnamese(res.message);
         setPendingAction(null);
@@ -309,7 +403,24 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm 
         const res = await executeCreateOrderDirectly(act.args, userProfile);
         setMessages((prev) => [
           ...prev,
-          { id: Date.now(), sender: 'gen', text: `✅ ${res.message}` }
+          {
+            id: Date.now(),
+            sender: 'gen',
+            text: `✅ ${res.message}`,
+            action: {
+              type: 'card_display',
+              cardType: 'created_order',
+              order: {
+                id: res.orderId,
+                order_code: res.orderCode,
+                customer_name: res.customerName || act.args.ten_khach,
+                cake_name: act.args.loai_banh,
+                size: act.args.size_banh,
+                required_at: act.args.thoi_gian_nhan,
+                address: act.args.dia_chi
+              }
+            }
+          }
         ]);
         speakVietnamese(res.message);
         setPendingAction(null);
@@ -322,7 +433,17 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm 
         });
         setMessages((prev) => [
           ...prev,
-          { id: Date.now(), sender: 'gen', text: `✅ ${res.message}` }
+          {
+            id: Date.now(),
+            sender: 'gen',
+            text: `✅ ${res.message}`,
+            action: {
+              type: 'card_display',
+              cardType: 'status_updated',
+              orderCode: act.args.ma_don_hang,
+              newStatus: act.args.trang_thai_moi
+            }
+          }
         ]);
         speakVietnamese(res.message);
         setPendingAction(null);
@@ -541,8 +662,274 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm 
                     }}
                   />
                 )}
-                {m.text}
+                {m.sender === 'user' ? m.text : renderMessageContent(m.text)}
               </div>
+
+              {/* Thẻ hiển thị dữ liệu truy xuất hoặc kết quả (Card Display) */}
+              {m.action && m.action.type === 'card_display' && m.action.cardType === 'order_list' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4, width: '100%' }}>
+                  {(m.action.orders || []).map((o) => {
+                    const stMeta = getStatusMeta(o.status_v2 || o.status);
+                    const itemsStr = (o.order_items || []).map(i => `${i.name_snapshot || 'Bánh'} (SL: ${i.quantity || 1})`).join(', ');
+                    const timeStr = o.required_at ? new Date(o.required_at).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : 'Trong ngày';
+                    return (
+                      <div
+                        key={o.id}
+                        style={{
+                          background: '#ffffff',
+                          border: '1.5px solid #fed7aa',
+                          borderRadius: '14px',
+                          padding: '12px 14px',
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 6
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontWeight: 800, color: '#ea580c', fontSize: 13.5 }}>
+                            #{o.order_code}
+                          </span>
+                          <span style={{
+                            fontSize: 11.5, fontWeight: 800, padding: '2px 8px', borderRadius: 999,
+                            background: stMeta.bg, color: stMeta.color
+                          }}>
+                            {stMeta.label}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 13, color: '#451a03', lineHeight: 1.5 }}>
+                          <div><b>👤 {o.customer_name || o.customers?.name || 'Khách lẻ'}</b> {o.customers?.phone || o.customer_phone ? `· ${o.customers?.phone || o.customer_phone}` : ''}</div>
+                          <div>🎂 {itemsStr || 'Bánh kem'}</div>
+                          <div style={{ fontSize: 12, color: '#78350f' }}>⏰ Hẹn: {timeStr}</div>
+                          {o.address && <div style={{ fontSize: 12, color: '#78350f' }}>📍 {o.address}</div>}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenOrder(o.id || o.order_code)}
+                          style={{
+                            marginTop: 4,
+                            width: '100%',
+                            padding: '9px 12px',
+                            borderRadius: 10,
+                            border: 'none',
+                            background: 'linear-gradient(135deg, #f05c2b 0%, #ff8c42 100%)',
+                            color: '#fff',
+                            fontSize: 13,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 6,
+                            boxShadow: '0 2px 6px rgba(240, 92, 43, 0.25)'
+                          }}
+                        >
+                          <Eye size={15} /> Xem chi tiết đơn hàng
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {m.action && m.action.type === 'card_display' && m.action.cardType === 'created_order' && (
+                <div
+                  style={{
+                    background: '#f0fdf4',
+                    border: '1.5px solid #86efac',
+                    borderRadius: '14px',
+                    padding: '14px',
+                    marginTop: '4px',
+                    width: '100%'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <span style={{ fontWeight: 800, color: '#16a34a', fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <CheckCircle2 size={16} /> Đã chuyển Bếp thành công!
+                    </span>
+                    <span style={{ background: '#dcfce7', color: '#15803d', fontSize: 12, fontWeight: 800, padding: '2px 8px', borderRadius: 999 }}>
+                      #{m.action.order.order_code}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 13, color: '#166534', lineHeight: 1.6, marginBottom: 10 }}>
+                    <div>• Khách hàng: <b>{m.action.order.customer_name}</b></div>
+                    <div>• Món: <b>{m.action.order.cake_name}</b> {m.action.order.size ? `(${m.action.order.size})` : ''}</div>
+                    {m.action.order.required_at && <div>• Hẹn giao: <b>{m.action.order.required_at}</b></div>}
+                    {m.action.order.address && <div>• Địa chỉ: {m.action.order.address}</div>}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenOrder(m.action.order.id || m.action.order.order_code)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      borderRadius: 10,
+                      border: 'none',
+                      background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
+                      color: '#fff',
+                      fontSize: 13.5,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      boxShadow: '0 3px 10px rgba(22, 163, 74, 0.25)'
+                    }}
+                  >
+                    <Eye size={16} /> Mở Xem Chi Tiết Đơn Hàng Ngay
+                  </button>
+                </div>
+              )}
+
+              {m.action && m.action.type === 'card_display' && m.action.cardType === 'task_list' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4, width: '100%' }}>
+                  {(m.action.tasks || []).map((t) => {
+                    const isDone = t.status === 'completed';
+                    return (
+                      <div
+                        key={t.id}
+                        style={{
+                          background: '#ffffff',
+                          border: '1.5px solid #fed7aa',
+                          borderRadius: '14px',
+                          padding: '12px 14px',
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 6
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                          <span style={{ fontWeight: 800, color: '#2b231d', fontSize: 13.5 }}>
+                            📋 {t.title}
+                          </span>
+                          <span style={{
+                            fontSize: 11.5, fontWeight: 800, padding: '2px 8px', borderRadius: 999,
+                            background: isDone ? '#dcfce7' : '#fef3c7',
+                            color: isDone ? '#15803d' : '#b45309'
+                          }}>
+                            {isDone ? 'Đã xong' : 'Đang làm'}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 12.5, color: '#524338', lineHeight: 1.5 }}>
+                          <div>👤 Người làm: <b>{t.assignee?.full_name || 'Chưa nhận'}</b> {t.assignee?.station ? `(${t.assignee.station})` : ''}</div>
+                          {t.deadline && <div>⏰ Hạn chót: {new Date(t.deadline).toLocaleString('vi-VN')}</div>}
+                          {t.description && <div style={{ color: '#78350f', fontSize: 12 }}>{t.description}</div>}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenTask(t.id)}
+                          style={{
+                            marginTop: 4,
+                            width: '100%',
+                            padding: '8px 12px',
+                            borderRadius: 10,
+                            border: '1.5px solid #d97706',
+                            background: '#fffbeb',
+                            color: '#b45309',
+                            fontSize: 13,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 6
+                          }}
+                        >
+                          <ClipboardList size={15} /> Xem chi tiết công việc
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {m.action && m.action.type === 'card_display' && m.action.cardType === 'created_task' && (
+                <div
+                  style={{
+                    background: '#f0fdf4',
+                    border: '1.5px solid #86efac',
+                    borderRadius: '14px',
+                    padding: '14px',
+                    marginTop: '4px',
+                    width: '100%'
+                  }}
+                >
+                  <div style={{ fontWeight: 800, color: '#16a34a', marginBottom: 6, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <CheckCircle2 size={16} /> Đã giao việc thành công!
+                  </div>
+                  <div style={{ fontSize: 13, color: '#166534', lineHeight: 1.6, marginBottom: 10 }}>
+                    <div>• Nhân sự: <b>{m.action.task.staff_name}</b></div>
+                    <div>• Nội dung: <b>{m.action.task.title}</b></div>
+                    {m.action.task.deadline && <div>• Hạn chót: <b>{m.action.task.deadline}</b></div>}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenTask(m.action.task.id)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      borderRadius: 10,
+                      border: 'none',
+                      background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
+                      color: '#fff',
+                      fontSize: 13.5,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      boxShadow: '0 3px 10px rgba(22, 163, 74, 0.25)'
+                    }}
+                  >
+                    <ClipboardList size={16} /> Mở Xem Chi Tiết Công Việc Ngay
+                  </button>
+                </div>
+              )}
+
+              {m.action && m.action.type === 'card_display' && m.action.cardType === 'status_updated' && (
+                <div
+                  style={{
+                    background: '#f0f9ff',
+                    border: '1.5px solid #bae6fd',
+                    borderRadius: '14px',
+                    padding: '14px',
+                    marginTop: '4px',
+                    width: '100%'
+                  }}
+                >
+                  <div style={{ fontWeight: 800, color: '#0284c7', marginBottom: 6, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <CheckCircle2 size={16} /> Đã cập nhật trạng thái đơn!
+                  </div>
+                  <div style={{ fontSize: 13, color: '#0369a1', lineHeight: 1.6, marginBottom: 10 }}>
+                    <div>• Đơn: <b>#{m.action.orderCode}</b></div>
+                    <div>• Trạng thái mới: <b>{getStatusMeta(m.action.newStatus).label}</b></div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenOrder(m.action.orderCode)}
+                    style={{
+                      width: '100%',
+                      padding: '9px 14px',
+                      borderRadius: 10,
+                      border: 'none',
+                      background: '#0284c7',
+                      color: '#fff',
+                      fontSize: 13,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6
+                    }}
+                  >
+                    <Eye size={15} /> Xem chi tiết đơn hàng
+                  </button>
+                </div>
+              )}
 
               {/* Thẻ hành động chờ xác nhận (Action Card) */}
               {m.action && m.action.name === 'xin_tam_ung_luong' && (
