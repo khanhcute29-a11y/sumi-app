@@ -571,7 +571,7 @@ export async function fetchWarehouseStock() {
   return data;
 }
 
-export async function addWarehouseStock({ name, qtyLabel, unit, qty, costPerUnit, status, expiryDate, photoUrl, branch, staffName }) {
+export async function addWarehouseStock({ name, qtyLabel, unit, qty, costPerUnit, status, expiryDate, photoUrl, branch, staffName, lowStockThreshold }) {
   const trimmedName = (name || '').trim();
   const targetBranch = branch || 'bakery';
   const { data: existing, error: findErr } = await supabase
@@ -586,6 +586,7 @@ export async function addWarehouseStock({ name, qtyLabel, unit, qty, costPerUnit
       cost_per_unit: costPerUnit || existing.cost_per_unit,
       status: status || existing.status, expiry_date: expiryDate || existing.expiry_date,
       photo_url: photoUrl || existing.photo_url,
+      low_stock_threshold: lowStockThreshold != null && lowStockThreshold !== '' ? lowStockThreshold : existing.low_stock_threshold,
     }).eq('id', existing.id);
     if (updErr) throw updErr;
     stockId = existing.id;
@@ -593,6 +594,7 @@ export async function addWarehouseStock({ name, qtyLabel, unit, qty, costPerUnit
     const { data: created, error: insErr } = await supabase.from('warehouse_stock').insert({
       name: trimmedName, qty_label: qtyLabel, unit: unit || 'g', qty: qty || 0, cost_per_unit: costPerUnit || 0,
       status, expiry_date: expiryDate || null, photo_url: photoUrl || null, branch: targetBranch,
+      low_stock_threshold: lowStockThreshold != null && lowStockThreshold !== '' ? lowStockThreshold : null,
     }).select('id').single();
     if (insErr) throw insErr;
     stockId = created.id;
@@ -618,6 +620,14 @@ export async function deductWarehouseStock({ stockId, name, qty, unit, remaining
   if (logErr) throw logErr;
   const { error } = await supabase.from('warehouse_stock').update({ qty: remainingQty, qty_label: `${remainingQty} ${unit}` }).eq('id', stockId);
   if (error) throw error;
+}
+
+// Nguyên liệu đang dưới ngưỡng cảnh báo — dùng RPC (SECURITY DEFINER) thay vì lọc ở
+// client, để không phải kéo cả bảng warehouse_stock chỉ để tính "qty < threshold".
+export async function fetchLowStockIngredients() {
+  const { data, error } = await supabase.rpc('list_low_stock_ingredients');
+  if (error) throw error;
+  return data || [];
 }
 
 export async function fetchWarehouseStockOutLog(limit = 100) {

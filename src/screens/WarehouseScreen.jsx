@@ -7,7 +7,7 @@ import { Select } from '../components/forms/Select';
 import { CameraCapture } from '../components/CameraCapture';
 import { IncidentReportModal } from '../components/IncidentReportModal';
 import { VoiceMicButton } from '../components/VoiceMicButton';
-import { fetchWarehouseStock, addWarehouseStock, updateWarehouseStock, deductWarehouseStock, uploadPhoto, fetchWarehouseStockInLog, fetchWarehouseStockOutLog } from '../lib/queries';
+import { fetchWarehouseStock, addWarehouseStock, updateWarehouseStock, deductWarehouseStock, uploadPhoto, fetchWarehouseStockInLog, fetchWarehouseStockOutLog, fetchLowStockIngredients } from '../lib/queries';
 import { useAuth } from '../lib/AuthContext';
 import { hasAnyRole } from '../lib/roles';
 import { enqueue, getQueue } from '../lib/offlineQueue';
@@ -29,6 +29,7 @@ function AddStockForm({ onAdded, onQueued, onClose, defaultBranch, lockedBranch,
   const [qty, setQty] = useState('');
   const [unit, setUnit] = useState('kg');
   const [costPerUnit, setCostPerUnit] = useState('');
+  const [lowStockThreshold, setLowStockThreshold] = useState('');
   const [status, setStatus] = useState('fresh');
   const [expiryDate, setExpiryDate] = useState('');
   const [branch, setBranch] = useState(lockedBranch || defaultBranch || 'bakery');
@@ -46,7 +47,7 @@ function AddStockForm({ onAdded, onQueued, onClose, defaultBranch, lockedBranch,
   const qtyLabel = qty ? `${qty} ${unit}` : '';
 
   const queueOffline = () => {
-    const payload = { name, qtyLabel, unit, qty: Number(qty) || 0, costPerUnit: Number(costPerUnit) || 0, status, expiryDate, photoUrl: null, branch, staffName };
+    const payload = { name, qtyLabel, unit, qty: Number(qty) || 0, costPerUnit: Number(costPerUnit) || 0, status, expiryDate, photoUrl: null, branch, staffName, lowStockThreshold: lowStockThreshold === '' ? null : Number(lowStockThreshold) };
     const queued = enqueue('addWarehouseStock', payload);
     onQueued({ id: queued.id, name, qty_label: qtyLabel, status, expiry_date: expiryDate || null, branch, pendingSync: true });
   };
@@ -64,7 +65,7 @@ function AddStockForm({ onAdded, onQueued, onClose, defaultBranch, lockedBranch,
     try {
       let photoUrl = null;
       if (photoBlob) photoUrl = await uploadPhoto(photoBlob, 'warehouse');
-      await addWarehouseStock({ name, qtyLabel, unit, qty: Number(qty) || 0, costPerUnit: Number(costPerUnit) || 0, status, expiryDate, photoUrl, branch, staffName });
+      await addWarehouseStock({ name, qtyLabel, unit, qty: Number(qty) || 0, costPerUnit: Number(costPerUnit) || 0, status, expiryDate, photoUrl, branch, staffName, lowStockThreshold: lowStockThreshold === '' ? null : Number(lowStockThreshold) });
       onAdded();
       onClose();
     } catch (err) {
@@ -95,6 +96,7 @@ function AddStockForm({ onAdded, onQueued, onClose, defaultBranch, lockedBranch,
       </div>
       <Input label={`Giá nhập / ${unit}`} type="number" placeholder="VD: 25000" value={costPerUnit} onChange={(e) => setCostPerUnit(e.target.value)}
         helpText="Dùng để tính giá vốn sản phẩm ở màn Sản Phẩm." />
+      <Input label={`Báo khi tồn dưới (${unit}, để trống = không cảnh báo)`} type="number" placeholder="VD: 5" value={lowStockThreshold} onChange={(e) => setLowStockThreshold(e.target.value)} />
       <Select label="Tình trạng" value={status} onChange={(e) => setStatus(e.target.value)}
         options={[{ value: 'fresh', label: 'Còn hạn' }, { value: 'soon', label: 'Sắp hết hạn' }, { value: 'expired', label: 'Quá hạn' }]} />
       <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -177,6 +179,7 @@ function EditCostForm({ item, onSaved, onClose }) {
   const [qty, setQty] = useState(String(item.qty ?? ''));
   const [unit, setUnit] = useState(item.unit || 'kg');
   const [costPerUnit, setCostPerUnit] = useState(String(item.cost_per_unit ?? ''));
+  const [lowStockThreshold, setLowStockThreshold] = useState(item.low_stock_threshold != null ? String(item.low_stock_threshold) : '');
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -185,6 +188,7 @@ function EditCostForm({ item, onSaved, onClose }) {
       await updateWarehouseStock(item.id, {
         qty: Number(qty) || 0, unit, cost_per_unit: Number(costPerUnit) || 0,
         qty_label: `${qty} ${unit}`,
+        low_stock_threshold: lowStockThreshold === '' ? null : Number(lowStockThreshold),
       });
       onSaved();
       onClose();
@@ -198,6 +202,7 @@ function EditCostForm({ item, onSaved, onClose }) {
       <Input label="Tồn kho" type="number" value={qty} onChange={(e) => setQty(e.target.value)} style={{ flex: '1 1 100px' }} />
       <Select label="Đơn vị" value={unit} onChange={(e) => setUnit(e.target.value)} options={UNITS.map((u) => ({ value: u, label: u }))} style={{ flex: '1 1 100px' }} />
       <Input label={`Giá / ${unit}`} type="number" value={costPerUnit} onChange={(e) => setCostPerUnit(e.target.value)} style={{ flex: '1 1 120px' }} />
+      <Input label={`Báo khi tồn dưới (${unit})`} type="number" placeholder="Để trống = không cảnh báo" value={lowStockThreshold} onChange={(e) => setLowStockThreshold(e.target.value)} style={{ flex: '1 1 140px' }} />
       <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>Hủy</Button>
       <Button variant="primary" size="sm" onClick={handleSave} disabled={saving}>{saving ? '...' : 'Lưu'}</Button>
     </div>
@@ -275,6 +280,7 @@ export default function WarehouseScreen({ branch: viewBranch = 'all', onBranchCh
   const [editingId, setEditingId] = useState(null);
   const [showIncident, setShowIncident] = useState(false);
   const [activeTab, setActiveTab] = useState('nguyen_lieu');
+  const [lowStock, setLowStock] = useState([]);
 
   const load = () => {
     setLoading(true);
@@ -282,7 +288,13 @@ export default function WarehouseScreen({ branch: viewBranch = 'all', onBranchCh
       .then((data) => { setStock(data); setError(''); })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
+    loadLowStock();
   };
+
+  // Cảnh báo tồn thấp: nguyên liệu có đặt ngưỡng (low_stock_threshold) và tồn hiện
+  // tại đã dưới ngưỡng đó — Giám đốc/Bếp trưởng xem ngay khi mở màn Kho Hàng. Gọi
+  // lại mỗi khi load() chạy (thêm/sửa/xuất kho) để danh sách luôn khớp tồn mới nhất.
+  const loadLowStock = () => { fetchLowStockIngredients().then(setLowStock).catch(() => {}); };
 
   useEffect(() => {
     load();
@@ -339,6 +351,27 @@ export default function WarehouseScreen({ branch: viewBranch = 'all', onBranchCh
           {soonCount > 0 && <Badge tone="warning">{soonCount} nguyên liệu sắp hết hạn</Badge>}
         </div>
       )}
+      {(() => {
+        const lowHere = effectiveBranch === 'all' ? lowStock : lowStock.filter((s) => (s.branch || 'bakery') === effectiveBranch);
+        if (!lowHere.length) return null;
+        return (
+          <div style={{
+            display: 'flex', flexDirection: 'column', gap: 8,
+            background: 'var(--status-warning-soft, #fff7ed)', border: '1px solid var(--status-warning, #d96b43)',
+            borderRadius: 'var(--radius-md)', padding: '14px 18px',
+          }}>
+            <span style={{ font: '700 17px var(--font-body)', color: 'var(--status-warning, #b93e13)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <IconWarning size={18} /> Sắp hết {lowHere.length} nguyên liệu:
+            </span>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {lowHere.map((s) => (
+                <Badge key={s.id} tone="warning">{s.name} — còn {s.qty} {s.unit} (báo dưới {s.low_stock_threshold})</Badge>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
         <Button variant="primary" size="lg" icon={<IconAdd size={18} />} style={{ flex: 1, minWidth: 220, padding: '24px', font: '700 18px var(--font-body)' }} onClick={() => { setShowForm((v) => !v); setShowStockOut(false); }}>
           {showForm ? 'Đóng form nhập kho' : 'Thêm nguyên liệu vào kho'}
