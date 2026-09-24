@@ -19,14 +19,17 @@ export const DATA_MAP = {
     mo_ta: 'Đơn hàng (bánh kem, mặn/ngọt, macaron, trường học, teabreak)',
     xem: null,
     cot_an_toan: ['id', 'order_code', 'status', 'status_v2', 'order_type', 'address', 'required_at', 'delivery_date', 'delivery_time', 'created_at', 'completed_at', 'customer_id', 'kitchen_staff_name', 'shipper_staff_name', 'note', 'channel'],
-    cot_nhay_cam: { total: FINANCE_ROLES, deposit: FINANCE_ROLES, paid_amount: FINANCE_ROLES, vat_amount: FINANCE_ROLES, ship_fee: SALES_VIEW, discount_amount: SALES_VIEW },
+    // Cột tiền (total/deposit/giá) KHÔNG cấp SELECT trực tiếp cho authenticated —
+    // chỉ đọc qua RPC (công cụ tài chính chuyên biệt). Không đưa vào đây.
+    cot_nhay_cam: {},
     embed: ', customers(name,phone)',
   },
   order_items: {
     mo_ta: 'Chi tiết món trong đơn (tên bánh, số lượng, size)',
     xem: null,
     cot_an_toan: ['id', 'order_id', 'name', 'name_snapshot', 'qty', 'quantity', 'size', 'unit', 'specification', 'category', 'candle', 'content'],
-    cot_nhay_cam: { price: SALES_VIEW, unit_price: SALES_VIEW },
+    // Giá món (price/unit_price) không cấp trực tiếp — chỉ qua RPC tài chính.
+    cot_nhay_cam: {},
   },
   customers: {
     mo_ta: 'Khách hàng / trường học',

@@ -1051,7 +1051,7 @@ export async function executeSearchOrder({ query }) {
       .from('orders')
       .select(`
         id, order_code, status, status_v2, order_type, address, note,
-        required_at, created_at, customer_id, total,
+        required_at, created_at, customer_id,
         customers(name, phone),
         order_items(name_snapshot, quantity, unit, specification)
       `)
@@ -1086,7 +1086,7 @@ export async function executeSearchOrder({ query }) {
           .from('orders')
           .select(`
             id, order_code, status, status_v2, order_type, address, note,
-            required_at, created_at, customer_id, total,
+            required_at, created_at, customer_id,
             customers(name, phone),
             order_items(name_snapshot, quantity, unit, specification)
           `)
