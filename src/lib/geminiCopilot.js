@@ -264,6 +264,18 @@ function fallbackSpeechSynthesis(cleanText) {
 }
 
 
+// Chống treo: mọi lời gọi AI phải phản hồi trong AI_TIMEOUT_MS, quá thì coi như
+// lỗi (chuyển fallback hoặc báo lịch sự) — KHÔNG để người dùng chờ vô hạn.
+const AI_TIMEOUT_MS = 30000;
+
+function withTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`AI_TIMEOUT_${label}`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 /**
  * Gửi yêu cầu tới Trợ lý Gen (Backend Serverless hoặc Direct API)
  */
@@ -278,19 +290,31 @@ export async function askGenCopilot({ message, imageBase64, userProfile, history
     //    hardcode). Nếu chưa deploy / lỗi -> TỰ QUAY VỀ /api/ai-copilot cũ để Gen
     //    không gián đoạn (zero downtime trong lúc chuyển đổi).
     try {
-      const { data, error } = await supabase.functions.invoke('ai-copilot', { body: payload });
+      const { data, error } = await withTimeout(
+        supabase.functions.invoke('ai-copilot', { body: payload }),
+        AI_TIMEOUT_MS, 'SUPABASE'
+      );
       if (!error && data && !data.error) return data;
       console.warn('[askGenCopilot] ai-copilot (Supabase) chưa dùng được, thử /api:', error?.message || data?.error || 'unknown');
     } catch (invErr) {
-      console.warn('[askGenCopilot] Không gọi được ai-copilot (Supabase), thử /api:', invErr?.message || invErr);
+      console.warn('[askGenCopilot] Không gọi được ai-copilot (Supabase) (có thể timeout), thử /api:', invErr?.message || invErr);
     }
 
     // 2. FALLBACK: endpoint Serverless /api/ai-copilot (Vercel) — đường cũ.
-    const res = await fetch('/api/ai-copilot', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    //    Có AbortController để không treo quá AI_TIMEOUT_MS.
+    const ctrl = new AbortController();
+    const apiTimer = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
+    let res;
+    try {
+      res = await fetch('/api/ai-copilot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: ctrl.signal
+      });
+    } finally {
+      clearTimeout(apiTimer);
+    }
 
     if (res.ok) {
       return await res.json();
@@ -307,6 +331,11 @@ export async function askGenCopilot({ message, imageBase64, userProfile, history
     throw new Error(errData.error || `Lỗi máy chủ (${res.status})`);
   } catch (err) {
     console.error('[askGenCopilot] Lỗi:', err);
+    // Chuẩn hóa lỗi timeout/hủy request thành thông báo thân thiện.
+    const raw = String(err?.name || err?.message || '');
+    if (raw.includes('AI_TIMEOUT') || raw.includes('Abort') || err?.name === 'AbortError') {
+      throw new Error('Kết nối tới trợ lý AI hơi lâu (mạng có thể chậm). Anh/chị thử lại giúp em nhé.');
+    }
     throw err;
   }
 }
