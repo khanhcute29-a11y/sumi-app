@@ -11,7 +11,7 @@ import {
   executeCreateOrderDirectly, executeSearchOrder, executeSearchTasks, executeOrderStatusUpdate,
   executeCheckInventory, executeGetStaffAttendance, executeReviewClaimOrAdvance,
   executeBusinessAnalysis, executeDebtLookup, executeLowStockAlert, executeOpsSummary,
-  executeAppGuide, resolveOrderId
+  executeAppGuide, executeSendMessage, resolveOrderId
 } from '../../lib/geminiCopilot';
 import { executeDataQuery } from '../../lib/genDataQuery';
 import { playConfirmSound } from '../../lib/sound';
@@ -401,6 +401,8 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm,
             replyText = `Dạ Sếp, Sếp đang xem xét ${typeLabel} của ${fc.args.ten_nguoi_yeu_cau || 'nhân sự'}: ${Number(fc.args.so_tien || 0).toLocaleString('vi-VN')}đ. Sếp bấm duyệt hoặc từ chối bên dưới nhé!`;
           } else if (fc.name === 'canh_bao_quy_dinh') {
             replyText = `⚠️ CẢNH BÁO QUY CHẾ: ${fc.args.noi_dung_vi_pham} (Gợi ý: ${fc.args.huong_giai_quyet || 'Báo cáo Giám đốc'})`;
+          } else if (fc.name === 'gui_tin_nhan_cho_nhan_vien') {
+            replyText = `Dạ, em sẽ nhắn cho ${fc.args.ten_nhan_vien || 'nhân viên'}: "${fc.args.noi_dung}". Sếp bấm "Gửi ngay" bên dưới — nhân viên sẽ nghe em đọc to trên màn hình của họ.`;
           }
         }
       }
@@ -476,6 +478,18 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm,
         setMessages((prev) => [
           ...prev,
           { id: Date.now(), sender: 'gen', text: `✅ ${res.message}` }
+        ]);
+        speakVietnamese(res.message);
+        setPendingAction(null);
+      } else if (act.name === 'gui_tin_nhan_cho_nhan_vien') {
+        const res = await executeSendMessage({
+          ten_nhan_vien: act.args.ten_nhan_vien,
+          noi_dung: act.args.noi_dung,
+          userProfile
+        });
+        setMessages((prev) => [
+          ...prev,
+          { id: Date.now(), sender: 'gen', text: `${res.success ? '✅' : '⚠️'} ${res.message}` }
         ]);
         speakVietnamese(res.message);
         setPendingAction(null);
@@ -1238,6 +1252,48 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm,
                       }}
                     >
                       <CheckCircle2 size={16} /> Giao việc ngay
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {m.action && m.action.name === 'gui_tin_nhan_cho_nhan_vien' && (
+                <div
+                  style={{
+                    background: '#eff6ff',
+                    border: '1.5px solid #bfdbfe',
+                    borderRadius: '14px',
+                    padding: '14px',
+                    marginTop: '8px'
+                  }}
+                >
+                  <div style={{ fontWeight: 700, color: '#2563eb', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Send size={18} /> Nhắn Tin Cho Nhân Viên
+                  </div>
+                  <div style={{ fontSize: 13, color: '#1e40af', marginBottom: 12, lineHeight: 1.6 }}>
+                    <div>• Gửi tới: <b style={{ fontSize: 14, color: '#1e3a8a' }}>{m.action.args.ten_nhan_vien || 'Nhân viên'}</b></div>
+                    <div>• Nội dung: <b>"{m.action.args.noi_dung}"</b></div>
+                    <div style={{ fontSize: 12, color: '#3b82f6', marginTop: 4 }}>Nhân viên sẽ nghe Gen đọc to ngay trên màn hình.</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => setPendingAction(null)}
+                      style={{
+                        flex: 1, padding: '9px 12px', borderRadius: 10, border: '1px solid #ddd',
+                        background: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer'
+                      }}
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      onClick={() => handleConfirmAction(m.action)}
+                      style={{
+                        flex: 2, padding: '9px 12px', borderRadius: 10, border: 'none',
+                        background: '#2563eb', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
+                      }}
+                    >
+                      <Send size={16} /> Gửi ngay
                     </button>
                   </div>
                 </div>

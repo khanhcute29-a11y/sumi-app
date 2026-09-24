@@ -14,8 +14,14 @@ export function GenVoiceTaskAlert({ task, onClose, onAccepted }) {
 
   const [busy, setBusy] = useState(false);
   const employeeName = task.assignee_name || 'Bạn';
-  const taskTitle = task.title || task.content || 'Công việc mới';
-  const speechMessage = `${employeeName} ơi! Sếp vừa giao việc mới: ${taskTitle}. Bấm nút màu xanh để nhận việc nhé!`;
+  // kind='message' -> tin nhắn tự do từ Sếp (không phải giao việc): Gen đọc to
+  // nội dung, nút "TÔI ĐÃ NGHE" chỉ đóng lại (không có bước nhận việc).
+  const isMessage = task.kind === 'message';
+  const taskTitle = task.title || task.content || (isMessage ? 'Tin nhắn mới' : 'Công việc mới');
+  const fromLabel = task.from_title || 'Sếp';
+  const speechMessage = isMessage
+    ? `${employeeName} ơi! ${fromLabel} nhắn: ${taskTitle}`
+    : `${employeeName} ơi! Sếp vừa giao việc mới: ${taskTitle}. Bấm nút màu xanh để nhận việc nhé!`;
 
   useEffect(() => {
     // 1. Kích hoạt chuông gọi việc
@@ -37,6 +43,13 @@ export function GenVoiceTaskAlert({ task, onClose, onAccepted }) {
   }, [task?.id]);
 
   const handleAccept = async () => {
+    // Tin nhắn: chỉ cần xác nhận "đã nghe", không có bước nhận việc.
+    if (isMessage) {
+      stopSpeaking();
+      if (onAccepted) onAccepted(task.id);
+      onClose();
+      return;
+    }
     setBusy(true);
     try {
       await executeAcceptTask(task.id);
@@ -95,11 +108,11 @@ export function GenVoiceTaskAlert({ task, onClose, onAccepted }) {
         </div>
 
         <h2 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 900, color: '#111827' }}>
-          CÓ VIỆC MỚI ĐƯỢC GIAO!
+          {isMessage ? 'CÓ TIN NHẮN MỚI!' : 'CÓ VIỆC MỚI ĐƯỢC GIAO!'}
         </h2>
 
         <p style={{ margin: '0 0 16px', fontSize: 16, color: '#4b5563', lineHeight: 1.5 }}>
-          <b>{employeeName}</b> ơi, Sếp vừa giao:
+          <b>{employeeName}</b> ơi, {isMessage ? `${fromLabel} nhắn:` : 'Sếp vừa giao:'}
         </p>
 
         {/* Khung nội dung to bản */}
@@ -166,7 +179,7 @@ export function GenVoiceTaskAlert({ task, onClose, onAccepted }) {
           onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
         >
           <ThumbsUp size={28} />
-          <span>{busy ? 'ĐANG BÁO CÁO...' : 'TÔI ĐÃ HIỂU & NHẬN VIỆC'}</span>
+          <span>{busy ? 'ĐANG BÁO CÁO...' : (isMessage ? 'TÔI ĐÃ NGHE RÕ' : 'TÔI ĐÃ HIỂU & NHẬN VIỆC')}</span>
         </button>
 
         <button

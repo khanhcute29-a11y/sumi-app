@@ -270,6 +270,18 @@ export default async function handler(req, res) {
             },
             required: ['bang']
           }
+        },
+        {
+          name: 'gui_tin_nhan_cho_nhan_vien',
+          description: 'Gửi TIN NHẮN/thông tin tự do (KHÔNG phải giao việc) tới một nhân viên cụ thể. Nhân viên sẽ nghe Gen đọc to ngay trên màn hình. CHỈ Quản lý/Giám đốc/Kế toán.',
+          parameters: {
+            type: Type.OBJECT,
+            properties: {
+              ten_nhan_vien: { type: Type.STRING, description: 'Tên nhân viên nhận tin' },
+              noi_dung: { type: Type.STRING, description: 'Nội dung tin nhắn cần gửi' }
+            },
+            required: ['ten_nhan_vien', 'noi_dung']
+          }
         }
       ]
     }];
@@ -358,7 +370,8 @@ NGUYÊN TẮC BÁO CÁO SỐ LIỆU KINH DOANH & TRUY VẤN THỜI GIAN THỰC (
    - Sau khi có kết quả: tóm tắt ngắn gọn các BƯỚC thao tác, và LUÔN nhắc có nút "Mở màn ..." bên dưới để đi thẳng tới đó.
    - Nếu tính năng ngoài quyền của họ, giải thích nhẹ nhàng rằng mục này thuộc vai trò khác, không hứa mở giúp.
 
-13. TỰ TRUY VẤN & SUY LUẬN TRÊN DỮ LIỆU THẬT: khi câu hỏi cần dữ liệu mà các tool trên chưa bao -> 'truy_van_du_lieu' đọc bảng phù hợp (orders, order_items, customers, products, tasks, finished_goods_stock, warehouse_stock, shift_logs, expense_claims, salary_advance_requests, incident_reports, profiles) rồi TỰ PHÂN TÍCH trả lời. Kết quả đã tự lọc theo quyền người dùng (cột giá/giá vốn/lương/công nợ tự bị ẩn với tuyến dưới). Rỗng thì báo trung thực; ưu tiên tool chuyên biệt trước.`;
+13. TỰ TRUY VẤN & SUY LUẬN TRÊN DỮ LIỆU THẬT: khi câu hỏi cần dữ liệu mà các tool trên chưa bao -> 'truy_van_du_lieu' đọc bảng phù hợp (orders, order_items, customers, products, tasks, finished_goods_stock, warehouse_stock, shift_logs, expense_claims, salary_advance_requests, incident_reports, profiles) rồi TỰ PHÂN TÍCH trả lời. Kết quả đã tự lọc theo quyền người dùng (cột giá/giá vốn/lương/công nợ tự bị ẩn với tuyến dưới). Rỗng thì báo trung thực; ưu tiên tool chuyên biệt trước.
+14. NHẮN TIN CHO NHÂN VIÊN: khi Sếp/Quản lý bảo "nhắn cho [tên] rằng...", "báo [tên]...", "gửi tin cho [tên]" -> 'gui_tin_nhan_cho_nhan_vien' (ten_nhan_vien + noi_dung). Nhân viên sẽ nghe Gen đọc to ngay. CHỈ Quản lý/Giám đốc/Kế toán.`;
 
     // Chuẩn bị nội dung gửi Gemini (Multimodal text + image nếu có)
     const contents = [];

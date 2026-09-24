@@ -257,6 +257,27 @@ function OpsApp({ onSignOut }) {
             return;
           }
 
+          // Tin nhắn tự do từ Sếp/Quản lý gửi qua Trợ lý Gen -> bật voice-alert
+          // (Gen đọc to nội dung ngay trên màn hình nhân viên, không phải đi tìm).
+          if (n.notification_type === 'gen_message') {
+            playOnce('genmsg:' + n.id, () => {
+              try { playViecVoiceSound(); } catch (_) {}
+              setVoiceTask({
+                id: n.id,
+                title: n.body || n.title,
+                assignee_name: profile?.name,
+                kind: 'message',
+                from_title: n.title || 'Sếp nhắn',
+              });
+              showToast({
+                ...(NOTIFY_KINDS[n.notification_type] || {}),
+                message: n.body || n.title,
+                entityId: n.entity_id,
+              });
+            });
+            return;
+          }
+
           // Báo cáo tiến độ / duyệt việc qua lại (giao việc <-> nhận việc),
           // và kết quả duyệt/từ chối khoản chi + tạm ứng — TRƯỚC ĐÂY 2 loại
           // tài chính này chỉ kêu khi đang mở đúng màn Hộp thư

@@ -574,6 +574,18 @@ async function callDirectGemini(apiKey, message, imageBase64, userProfile, histo
           },
           required: ['bang']
         }
+      },
+      {
+        name: 'gui_tin_nhan_cho_nhan_vien',
+        description: 'Gửi một TIN NHẮN/thông tin tự do (KHÔNG phải giao việc) tới một nhân viên cụ thể. Nhân viên sẽ nghe Gen đọc to ngay trên màn hình. CHỈ Quản lý/Giám đốc/Kế toán dùng được.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            ten_nhan_vien: { type: Type.STRING, description: 'Tên nhân viên nhận tin' },
+            noi_dung: { type: Type.STRING, description: 'Nội dung tin nhắn cần gửi tới nhân viên' }
+          },
+          required: ['ten_nhan_vien', 'noi_dung']
+        }
       }
     ]
   }];
@@ -655,7 +667,9 @@ NGUYÊN TẮC BÁO CÁO SỐ LIỆU KINH DOANH & TRUY VẤN THỜI GIAN THỰC (
 13. TỰ TRUY VẤN & SUY LUẬN TRÊN DỮ LIỆU THẬT:
    - Khi câu hỏi cần dữ liệu mà các tool trên chưa bao (VD "khách nào đặt macaron nhiều nhất", "đơn nào trễ hẹn"): kích hoạt 'truy_van_du_lieu' đọc bảng phù hợp rồi TỰ PHÂN TÍCH trả lời. Danh mục bảng:
 ${DATA_CATALOG}
-   - Kết quả ĐÃ TỰ LỌC theo quyền (cột nhạy cảm: giá/giá vốn/lương/công nợ tự bị ẩn với tuyến dưới) — dùng thoải mái, không lo rò rỉ. Rỗng thì báo trung thực. Ưu tiên tool chuyên biệt; chỉ dùng truy_van_du_lieu khi cần linh hoạt.`;
+   - Kết quả ĐÃ TỰ LỌC theo quyền (cột nhạy cảm: giá/giá vốn/lương/công nợ tự bị ẩn với tuyến dưới) — dùng thoải mái, không lo rò rỉ. Rỗng thì báo trung thực. Ưu tiên tool chuyên biệt; chỉ dùng truy_van_du_lieu khi cần linh hoạt.
+
+14. NHẮN TIN CHO NHÂN VIÊN: khi Sếp/Quản lý bảo "nhắn cho [tên] rằng...", "báo [tên]...", "gửi tin cho [tên] nội dung...": kích hoạt 'gui_tin_nhan_cho_nhan_vien' (ten_nhan_vien + noi_dung). Nhân viên sẽ nghe Gen đọc to ngay trên màn hình họ. CHỈ Quản lý/Giám đốc/Kế toán dùng được.`;
 
   const contents = [];
 
@@ -1664,6 +1678,41 @@ export async function executeOpsSummary({ ky, userProfile }) {
 export async function executeAppGuide({ cau_hoi, userProfile }) {
   const matches = findAppGuide(cau_hoi, userProfile, 3);
   return { success: true, matches };
+}
+
+/**
+ * TOOL MỚI: Gửi TIN NHẮN tự do tới một nhân viên qua Gen. Chèn notification
+ * 'gen_message' (qua RPC gen_send_message SECURITY DEFINER — chặn quyền cả ở DB)
+ * -> realtime -> màn hình nhân viên bật voice-alert, Gen đọc to ngay.
+ * Gate Quản lý/Giám đốc/Kế toán (RPC cũng tự chặn lần nữa).
+ */
+export async function executeSendMessage({ ten_nhan_vien, noi_dung, userProfile }) {
+  if (!hasAnyRole(userProfile, MANAGER_ROLES)) {
+    return { success: false, denied: true, message: 'Xin lỗi, chỉ Quản lý/Giám đốc/Kế toán mới gửi tin cho nhân viên qua Gen.' };
+  }
+  const searchKey = String(ten_nhan_vien || '').toLowerCase().trim();
+  const content = String(noi_dung || '').trim();
+  if (!searchKey) return { success: false, message: 'Chưa rõ gửi cho nhân viên nào.' };
+  if (!content) return { success: false, message: 'Chưa có nội dung tin nhắn để gửi.' };
+
+  let target = null;
+  try {
+    const { data: staff } = await supabase.from('profiles').select('id, full_name').eq('approved', true).neq('active', false);
+    target = (staff || []).find((s) => s.full_name?.toLowerCase().includes(searchKey));
+  } catch (e) {
+    console.warn('[executeSendMessage] Không query được profiles:', e);
+  }
+  if (!target) return { success: false, message: `Không tìm thấy nhân viên tên "${ten_nhan_vien}".` };
+
+  try {
+    const { error } = await supabase.rpc('gen_send_message', { p_to_profile_id: target.id, p_content: content });
+    if (error) throw error;
+    playConfirmSound();
+    return { success: true, staffName: target.full_name, message: `Đã gửi tin cho ${target.full_name}. Nhân viên sẽ nghe Gen đọc to ngay trên màn hình.` };
+  } catch (err) {
+    console.error('[executeSendMessage] Lỗi:', err);
+    return { success: false, error: err.message, message: `Không gửi được tin: ${err.message}` };
+  }
 }
 
 

@@ -235,6 +235,18 @@ const functionDeclarations = [
       required: ["bang"],
     },
   },
+  {
+    name: "gui_tin_nhan_cho_nhan_vien",
+    description: "Gửi TIN NHẮN/thông tin tự do (KHÔNG phải giao việc) tới một nhân viên cụ thể. Nhân viên sẽ nghe Gen đọc to ngay trên màn hình. CHỈ Quản lý/Giám đốc/Kế toán.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        ten_nhan_vien: { type: "STRING", description: "Tên nhân viên nhận tin" },
+        noi_dung: { type: "STRING", description: "Nội dung tin nhắn cần gửi" },
+      },
+      required: ["ten_nhan_vien", "noi_dung"],
+    },
+  },
 ];
 
 const DATA_CATALOG = `- orders: đơn hàng (order_code, status_v2, order_type, created_at, required_at, customer_id)
@@ -285,7 +297,8 @@ NGUYÊN TẮC BÁO CÁO & TRUY VẤN THỜI GIAN THỰC:
 12. CHỈ ĐƯỜNG TRONG APP: hỏi "làm X ở đâu / cách làm X / tìm chức năng Y" -> 'chi_duong_tinh_nang'. Sau đó tóm tắt các BƯỚC và nhắc có nút "Mở màn ..." bên dưới.
 13. TỰ TRUY VẤN & SUY LUẬN TRÊN DỮ LIỆU THẬT: khi câu hỏi cần dữ liệu mà các tool trên chưa bao (VD "khách nào đặt macaron nhiều nhất tháng này", "đơn nào trễ hẹn", "so sánh...") -> dùng 'truy_van_du_lieu' đọc bảng phù hợp rồi TỰ PHÂN TÍCH để trả lời. Danh mục bảng:
 ${DATA_CATALOG}
-   - Kết quả trả về ĐÃ TỰ LỌC theo quyền người dùng (cột nhạy cảm: giá, giá vốn, lương, công nợ tự bị ẩn với tuyến dưới) -> cứ dùng thoải mái, không lo rò rỉ. Nếu dữ liệu rỗng thì báo trung thực, không bịa. Ưu tiên các tool chuyên biệt ở trên; chỉ dùng truy_van_du_lieu khi cần linh hoạt.`;
+   - Kết quả trả về ĐÃ TỰ LỌC theo quyền người dùng (cột nhạy cảm: giá, giá vốn, lương, công nợ tự bị ẩn với tuyến dưới) -> cứ dùng thoải mái, không lo rò rỉ. Nếu dữ liệu rỗng thì báo trung thực, không bịa. Ưu tiên các tool chuyên biệt ở trên; chỉ dùng truy_van_du_lieu khi cần linh hoạt.
+14. NHẮN TIN CHO NHÂN VIÊN: khi Sếp/Quản lý bảo "nhắn cho [tên] rằng...", "báo [tên]...", "gửi tin cho [tên]" -> 'gui_tin_nhan_cho_nhan_vien' (ten_nhan_vien + noi_dung). Nhân viên sẽ nghe Gen đọc to ngay trên màn hình. CHỈ Quản lý/Giám đốc/Kế toán.`;
 }
 
 serve(async (req) => {
