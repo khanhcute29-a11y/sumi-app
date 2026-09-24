@@ -11,7 +11,7 @@ import {
   executeCreateOrderDirectly, executeSearchOrder, executeSearchTasks, executeOrderStatusUpdate,
   executeCheckInventory, executeGetStaffAttendance, executeReviewClaimOrAdvance,
   executeBusinessAnalysis, executeDebtLookup, executeLowStockAlert, executeOpsSummary,
-  resolveOrderId
+  executeAppGuide, resolveOrderId
 } from '../../lib/geminiCopilot';
 import { playConfirmSound } from '../../lib/sound';
 
@@ -110,6 +110,13 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm,
       window.dispatchEvent(new CustomEvent('sumi-navigate', { detail: { tab: 'tasks', entityId: taskId } }));
       onClose();
     }
+  };
+
+  // Chỉ đường: mở thẳng một màn hình theo tab key (bách khoa toàn thư).
+  const handleOpenScreen = (tab) => {
+    if (!tab) return;
+    window.dispatchEvent(new CustomEvent('sumi-navigate', { detail: { tab } }));
+    onClose();
   };
 
   const renderMessageContent = (text) => {
@@ -341,6 +348,16 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm,
             replyText = `📋 TÓM TẮT VẬN HÀNH — ${r.ky}\n\n• Báo cáo ca: ${r.so_bao_cao_ca}\n• Việc hoàn thành: ${r.so_viec_hoan_thanh}\n• Vi phạm nội quy: ${r.so_vi_pham}${viStr}`;
           } else {
             replyText = `⚠️ Không lấy được tóm tắt vận hành: ${r.error || 'lỗi'}.`;
+          }
+        } else if (fc.name === 'chi_duong_tinh_nang') {
+          const r = await executeAppGuide({ cau_hoi: fc.args.cau_hoi, userProfile });
+          const list = r.matches || [];
+          if (list.length > 0) {
+            const steps = list.map(m => `📍 ${m.ten}${m.duocPhep ? '' : ' (thuộc vai trò khác)'}\n${m.mo_ta}\n➡️ ${m.lam_sao}`).join('\n\n');
+            replyText = `Dạ, đây là hướng dẫn:\n\n${steps}\n\nBấm nút bên dưới để em mở thẳng màn hình giúp anh/chị nhé!`;
+            actionToConfirm = { type: 'card_display', cardType: 'nav_screen', screens: list };
+          } else {
+            replyText = `Em chưa tìm thấy chức năng khớp với "${fc.args.cau_hoi}". Anh/chị mô tả rõ hơn giúp em nhé (VD: "sửa giá đơn", "chấm công", "công nợ khách").`;
           }
         } else {
           actionToConfirm = {
@@ -783,6 +800,38 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm,
                       </div>
                     );
                   })}
+                </div>
+              )}
+
+              {m.action && m.action.type === 'card_display' && m.action.cardType === 'nav_screen' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4, width: '100%' }}>
+                  {(m.action.screens || []).map((s) => (
+                    <button
+                      key={s.key}
+                      type="button"
+                      disabled={!s.duocPhep}
+                      onClick={() => handleOpenScreen(s.key)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 14px',
+                        borderRadius: 10,
+                        border: 'none',
+                        background: s.duocPhep ? 'linear-gradient(135deg, #f05c2b 0%, #ff8c42 100%)' : '#f3e8df',
+                        color: s.duocPhep ? '#fff' : '#a1887f',
+                        fontSize: 13.5,
+                        fontWeight: 700,
+                        cursor: s.duocPhep ? 'pointer' : 'not-allowed',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        boxShadow: s.duocPhep ? '0 2px 6px rgba(240, 92, 43, 0.25)' : 'none'
+                      }}
+                      title={s.duocPhep ? `Mở màn ${s.ten}` : 'Mục này thuộc vai trò khác'}
+                    >
+                      <ArrowRight size={15} /> Mở màn: {s.ten}
+                    </button>
+                  ))}
                 </div>
               )}
 

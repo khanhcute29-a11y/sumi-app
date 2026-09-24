@@ -244,6 +244,17 @@ export default async function handler(req, res) {
               ky: { type: Type.STRING, enum: ['hom_nay', 'tuan_nay'], description: 'Phạm vi thời gian tóm tắt' }
             }
           }
+        },
+        {
+          name: 'chi_duong_tinh_nang',
+          description: 'Trả lời câu hỏi "làm X ở đâu / như thế nào" trong app Sumi Bakery: chỉ đúng màn hình, các bước thao tác và gửi link mở thẳng màn đó. Dùng khi người dùng hỏi cách sử dụng, tìm chức năng, không biết bấm ở đâu.',
+          parameters: {
+            type: Type.OBJECT,
+            properties: {
+              cau_hoi: { type: Type.STRING, description: 'Việc người dùng muốn làm hoặc tính năng cần tìm (VD: "sửa giá đơn", "chấm công ở đâu", "cách tạo đơn trường học")' }
+            },
+            required: ['cau_hoi']
+          }
         }
       ]
     }];
@@ -325,7 +336,12 @@ NGUYÊN TẮC BÁO CÁO SỐ LIỆU KINH DOANH & TRUY VẤN THỜI GIAN THỰC (
 
 11. GIỚI HẠN QUYỀN (BẮT BUỘC TÔN TRỌNG):
    - Vai trò hiện tại: ${role}. ${isDirector ? 'Được phép xem toàn bộ số liệu tài chính.' : 'KHÔNG được xem doanh thu/giá vốn/công nợ toàn tiệm.'}
-   - Nếu người dùng KHÔNG đủ quyền mà hỏi số liệu tài chính/công nợ: từ chối lịch sự, KHÔNG bịa số, chỉ hỗ trợ phần trong quyền hạn (đơn hàng, tồn kho thành phẩm, công việc). Hệ thống cũng chặn cứng ở tầng dữ liệu nên đừng cố đoán số.`;
+   - Nếu người dùng KHÔNG đủ quyền mà hỏi số liệu tài chính/công nợ: từ chối lịch sự, KHÔNG bịa số, chỉ hỗ trợ phần trong quyền hạn (đơn hàng, tồn kho thành phẩm, công việc). Hệ thống cũng chặn cứng ở tầng dữ liệu nên đừng cố đoán số.
+
+12. CHỈ ĐƯỜNG TRONG APP (BÁCH KHOA TOÀN THƯ):
+   - Khi người dùng hỏi "làm X ở đâu", "cách làm X", "tìm chức năng Y", "không biết bấm ở đâu": kích hoạt 'chi_duong_tinh_nang' với 'cau_hoi' là việc họ muốn làm.
+   - Sau khi có kết quả: tóm tắt ngắn gọn các BƯỚC thao tác, và LUÔN nhắc có nút "Mở màn ..." bên dưới để đi thẳng tới đó.
+   - Nếu tính năng ngoài quyền của họ, giải thích nhẹ nhàng rằng mục này thuộc vai trò khác, không hứa mở giúp.`;
 
     // Chuẩn bị nội dung gửi Gemini (Multimodal text + image nếu có)
     const contents = [];
