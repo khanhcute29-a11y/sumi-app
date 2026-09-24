@@ -36,7 +36,7 @@ export async function fetchSumiAppSnapshot(userProfile) {
       countKitchenActiveOrders().catch(() => ({ count: 0 })),
       supabase
         .from('orders')
-        .select('id, order_code, status, status_v2, order_type, customer_name, created_at')
+        .select('id, order_code, status, status_v2, order_type, created_at')
         .gte('created_at', `${today}T00:00:00`)
         .catch(() => ({ data: [] })),
       supabase
@@ -1030,7 +1030,7 @@ export async function executeSearchOrder({ query }) {
       .from('orders')
       .select(`
         id, order_code, status, status_v2, order_type, address, note,
-        required_at, created_at, customer_id, customer_name, customer_phone, total,
+        required_at, created_at, customer_id, total,
         customers(name, phone),
         order_items(name_snapshot, quantity, unit, specification)
       `)
@@ -1042,7 +1042,9 @@ export async function executeSearchOrder({ query }) {
       const today = new Date().toISOString().slice(0, 10);
       q = q.gte('created_at', `${today}T00:00:00`);
     } else if (cleanQ) {
-      q = q.or(`order_code.ilike.%${cleanQ}%,customer_name.ilike.%${cleanQ}%,customer_phone.ilike.%${cleanQ}%`);
+      // Tên/SĐT khách nằm ở bảng customers (không phải cột trên orders) — tìm theo
+      // mã đơn ở đây; nếu không ra thì nhánh fallback bên dưới tra qua customers.
+      q = q.or(`order_code.ilike.%${cleanQ}%`);
     }
 
     const { data: orders, error } = await q;
@@ -1063,7 +1065,7 @@ export async function executeSearchOrder({ query }) {
           .from('orders')
           .select(`
             id, order_code, status, status_v2, order_type, address, note,
-            required_at, created_at, customer_id, customer_name, customer_phone, total,
+            required_at, created_at, customer_id, total,
             customers(name, phone),
             order_items(name_snapshot, quantity, unit, specification)
           `)
@@ -1145,8 +1147,8 @@ export async function executeOrderStatusUpdate({ orderCodeOrId, newStatus, reaso
   // 1. Tìm đơn hàng tương ứng
   const { data: orders, error: findErr } = await supabase
     .from('orders')
-    .select('id, order_code, status, status_v2, customer_name')
-    .or(`order_code.ilike.%${cleanQ}%,customer_name.ilike.%${cleanQ}%`)
+    .select('id, order_code, status, status_v2, customer_id, customers(name)')
+    .or(`order_code.ilike.%${cleanQ}%`)
     .order('created_at', { ascending: false })
     .limit(1);
 
@@ -1245,12 +1247,13 @@ export async function executeOrderStatusUpdate({ orderCodeOrId, newStatus, reaso
   }
 
   playConfirmSound();
+  const custName = order.customers?.name || 'Khách';
   return {
     success: true,
     orderCode: order.order_code,
-    customerName: order.customer_name,
+    customerName: custName,
     newStatus: statusTextVN,
-    message: `Đã cập nhật đơn #${order.order_code} (${order.customer_name || 'Khách'}) sang trạng thái: "${statusTextVN}"!`
+    message: `Đã cập nhật đơn #${order.order_code} (${custName}) sang trạng thái: "${statusTextVN}"!`
   };
 }
 
