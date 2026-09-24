@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
+import { CAKE_BASES, CAKE_FILLINGS, baseSurcharge } from '../../lib/cakePricing';
 
 // Màn hình sửa đơn hàng.
 //
@@ -47,6 +48,8 @@ export default function EditOrderModal({ orderId, onClose, onSaved }) {
   const [themId, setThemId] = useState('');
   const [lyDo, setLyDo] = useState('');
   const [conLai, setConLai] = useState(0);
+  // Món nào đang mở khung "Sửa chi tiết" (size/cốt/nhân/chữ trên bánh/nến...).
+  const [moRong, setMoRong] = useState({});
 
   const tai = async () => {
     setDangTai(true);
@@ -62,7 +65,7 @@ export default function EditOrderModal({ orderId, onClose, onSaved }) {
       const [q, o, m, fin, itemPrices] = await Promise.all([
         supabase.rpc('sumi_quyen_sua_don', { p_order_id: orderId }),
         supabase.from('orders')
-          .select('id,order_code,address,note,required_at,version,created_at,status_v2,customer_id,customers(name,phone)')
+          .select('id,order_code,order_type,address,note,required_at,version,created_at,status_v2,customer_id,customers(name,phone)')
           .eq('id', orderId).single(),
         supabase.from('order_items')
           .select('id,product_id,name,name_snapshot,quantity,unit,specification,display_order')
@@ -108,7 +111,10 @@ export default function EditOrderModal({ orderId, onClose, onSaved }) {
   // Danh sách sản phẩm chỉ cần khi thật sự được sửa.
   useEffect(() => {
     if (!quyen?.duoc_sua) return;
-    supabase.from('products').select('id,name,category,price,unit,product_variants(label)')
+    // Lấy đủ id/price của từng mức giá (product_variants) — không chỉ label —
+    // để khi anh đổi size ở "Sửa chi tiết", giá tự nhảy đúng theo size đó
+    // (giống hệt màn Tạo đơn), thay vì để anh gõ tay size rồi giá đứng yên.
+    supabase.from('products').select('id,name,category,price,unit,product_variants(id,label,price)')
       .eq('active', true).order('name')
       .then(({ data }) => setSanPham(data || []))
       .catch(() => setSanPham([]));
@@ -124,6 +130,18 @@ export default function EditOrderModal({ orderId, onClose, onSaved }) {
   const doiMon = (khoa, thay) =>
     setMon((ds) => ds.map((x) => (x.khoa === khoa ? { ...x, ...thay } : x)));
   const boMon = (khoa) => setMon((ds) => ds.filter((x) => x.khoa !== khoa));
+  // Sửa 1 trường bên trong specification (jsonb) của 1 món — cùng cách CreateOrderV2Modal
+  // lưu size/cốt/nhân/chữ trên bánh/nến, để "Sửa đơn" đọc/ghi đúng chỗ dữ liệu đã có sẵn.
+  const doiSpec = (khoa, truong, giaTri) =>
+    setMon((ds) => ds.map((x) => (x.khoa === khoa ? { ...x, specification: { ...x.specification, [truong]: giaTri } } : x)));
+  // Nhận diện luồng của món để hiện đúng bộ trường chi tiết — dựa vào product_flow đã
+  // lưu lúc tạo đơn (CreateOrderV2Modal), phòng khi thiếu thì suy ra từ dữ liệu cốt/nhân/
+  // chữ trên bánh đã có sẵn (đơn tạo trước khi có product_flow).
+  const luongMon = (x) => x.specification?.product_flow
+    || (x.specification?.cot || x.specification?.filling || x.specification?.content || x.specification?.candle ? 'cake' : null)
+    // Đơn tạo qua Trợ lý AI Gen chưa gắn product_flow vào specification từng món —
+    // rơi về loại đơn (orders.order_type) để vẫn hiện đúng bộ trường cho bánh kem.
+    || (['cake', 'mixed'].includes(don?.order_type) ? 'cake' : null);
 
   const themMon = () => {
     const p = sanPham.find((x) => x.id === themId);
@@ -297,28 +315,86 @@ export default function EditOrderModal({ orderId, onClose, onSaved }) {
     {/* ----- Món ----- */}
     <div style={oNen}>
       <div style={{ ...oNhan, marginBottom: 10 }}>🍰 Các món trong đơn</div>
-      {mon.map((x) => (
-        <div key={x.khoa} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderTop: '1px dashed #ece4da' }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {x.name}{x.specification?.size ? ` (${x.specification.size})` : ''}
+      {mon.map((x) => {
+        const luong = luongMon(x);
+        const daMo = !!moRong[x.khoa];
+        return (
+        <div key={x.khoa} style={{ padding: '8px 0', borderTop: '1px dashed #ece4da' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {x.name}{x.specification?.size ? ` (${x.specification.size})` : ''}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                {(Number(x.unit_price) || 0).toLocaleString('vi-VN')}đ / {x.unit}
+                {!x.product_id && ' · không theo dõi tồn kho'}
+              </div>
+              {(() => {
+                const s0 = x.specification || {};
+                const fillingLabel = CAKE_FILLINGS.find((f) => f.value === s0.filling)?.label;
+                const chiTiet = [s0.cot, fillingLabel, s0.content && `chữ: ${s0.content}`, s0.candle && `nến: ${s0.candle}`, s0.packing].filter(Boolean).join(' · ');
+                return chiTiet ? <div style={{ fontSize: 11.5, color: '#8c5a3c', marginTop: 2 }}>{chiTiet}</div> : null;
+              })()}
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-              {(Number(x.unit_price) || 0).toLocaleString('vi-VN')}đ / {x.unit}
-              {!x.product_id && ' · không theo dõi tồn kho'}
-            </div>
+            <button onClick={() => doiMon(x.khoa, { quantity: Math.max(1, (Number(x.quantity) || 0) - 1) })}
+              style={{ minWidth: 44, minHeight: 44, borderRadius: 12, border: '1.5px solid #e0d5c7', background: '#fff', fontSize: 20, fontWeight: 900, cursor: 'pointer' }}>−</button>
+            <input type="number" min="1" inputMode="numeric" value={x.quantity}
+              onChange={(e) => doiMon(x.khoa, { quantity: e.target.value === '' ? '' : Number(e.target.value) })}
+              style={{ width: 62, minHeight: 44, textAlign: 'center', borderRadius: 12, border: '1.5px solid #e0d5c7', fontSize: 16, fontWeight: 800, boxSizing: 'border-box' }} />
+            <button onClick={() => doiMon(x.khoa, { quantity: (Number(x.quantity) || 0) + 1 })}
+              style={{ minWidth: 44, minHeight: 44, borderRadius: 12, border: '1.5px solid #e0d5c7', background: '#fff', fontSize: 20, fontWeight: 900, cursor: 'pointer' }}>+</button>
+            <button onClick={() => boMon(x.khoa)} aria-label="Bỏ món này"
+              style={{ minWidth: 44, minHeight: 44, borderRadius: 12, border: '1.5px solid #f3c9c2', background: '#fdeceb', fontSize: 16, cursor: 'pointer' }}>🗑</button>
           </div>
-          <button onClick={() => doiMon(x.khoa, { quantity: Math.max(1, (Number(x.quantity) || 0) - 1) })}
-            style={{ minWidth: 44, minHeight: 44, borderRadius: 12, border: '1.5px solid #e0d5c7', background: '#fff', fontSize: 20, fontWeight: 900, cursor: 'pointer' }}>−</button>
-          <input type="number" min="1" inputMode="numeric" value={x.quantity}
-            onChange={(e) => doiMon(x.khoa, { quantity: e.target.value === '' ? '' : Number(e.target.value) })}
-            style={{ width: 62, minHeight: 44, textAlign: 'center', borderRadius: 12, border: '1.5px solid #e0d5c7', fontSize: 16, fontWeight: 800, boxSizing: 'border-box' }} />
-          <button onClick={() => doiMon(x.khoa, { quantity: (Number(x.quantity) || 0) + 1 })}
-            style={{ minWidth: 44, minHeight: 44, borderRadius: 12, border: '1.5px solid #e0d5c7', background: '#fff', fontSize: 20, fontWeight: 900, cursor: 'pointer' }}>+</button>
-          <button onClick={() => boMon(x.khoa)} aria-label="Bỏ món này"
-            style={{ minWidth: 44, minHeight: 44, borderRadius: 12, border: '1.5px solid #f3c9c2', background: '#fdeceb', fontSize: 16, cursor: 'pointer' }}>🗑</button>
+          <button onClick={() => setMoRong((m) => ({ ...m, [x.khoa]: !m[x.khoa] }))}
+            style={{ marginTop: 6, border: 'none', background: 'none', color: '#D96B43', fontWeight: 800, fontSize: 12.5, cursor: 'pointer', padding: '4px 0' }}>
+            {daMo ? '▲ Ẩn chi tiết' : '✏️ Sửa chi tiết (size / chữ trên bánh / nến...)'}
+          </button>
+          {daMo && (() => {
+            // Sản phẩm có sẵn mức giá theo size (product_variants) -> chọn size là NHẢY
+            // GIÁ THEO ĐÚNG SIZE ĐÓ (giống hệt màn Tạo đơn), không cho sửa tay giá nữa —
+            // tránh gõ nhầm lệch với bảng giá đã niêm yết. Sản phẩm KHÔNG có size nào
+            // (giá cố định một mức) thì cho gõ tay size (ghi chú, không đổi giá) và có
+            // thêm ô sửa giá tay riêng, vì không có bảng giá nào để đối chiếu.
+            const bienThe = sanPham.find((p) => p.id === x.product_id)?.product_variants || [];
+            return (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4, padding: 10, background: '#fbf7f1', borderRadius: 12 }}>
+              {bienThe.length > 0 ? (
+                <select value={x.specification?.size || ''} onChange={(e) => {
+                  const v = bienThe.find((b) => b.label === e.target.value);
+                  doiMon(x.khoa, { unit_price: v ? Number(v.price) : x.unit_price, specification: { ...x.specification, size: e.target.value } });
+                }} style={{ ...oO, minHeight: 40, gridColumn: luong === 'cake' ? '1 / -1' : 'auto' }}>
+                  <option value="">Chọn size...</option>
+                  {bienThe.map((v) => <option key={v.id} value={v.label}>{v.label} — {Number(v.price).toLocaleString('vi-VN')}đ</option>)}
+                </select>
+              ) : (
+                <>
+                  <input placeholder="Size (18cm...)" value={x.specification?.size || ''} onChange={(e) => doiSpec(x.khoa, 'size', e.target.value)} style={{ ...oO, minHeight: 40 }} />
+                  <input type="number" inputMode="numeric" placeholder="Giá bánh (đ)" value={x.unit_price ?? ''} onChange={(e) => doiMon(x.khoa, { unit_price: e.target.value === '' ? '' : Number(e.target.value) })} style={{ ...oO, minHeight: 40 }} />
+                </>
+              )}
+              {luong === 'cake' ? (
+                <>
+                  <select value={x.specification?.cot || ''} onChange={(e) => doiSpec(x.khoa, 'cot', e.target.value)} style={{ ...oO, minHeight: 40 }}>
+                    <option value="">Chọn cốt bánh...</option>
+                    {CAKE_BASES.map((b) => <option key={b} value={b}>{baseSurcharge(b) ? `${b} (+${baseSurcharge(b).toLocaleString('vi-VN')}đ)` : b}</option>)}
+                  </select>
+                  <select value={x.specification?.filling || ''} onChange={(e) => doiSpec(x.khoa, 'filling', e.target.value)} style={{ ...oO, minHeight: 40 }}>
+                    <option value="">Chọn nhân...</option>
+                    {CAKE_FILLINGS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+                  </select>
+                  <input placeholder="Chữ trên bánh" value={x.specification?.content || ''} onChange={(e) => doiSpec(x.khoa, 'content', e.target.value)} style={{ ...oO, minHeight: 40, gridColumn: '1 / -1' }} />
+                  <input placeholder="Loại nến (VD: Nến số 25)" value={x.specification?.candle || ''} onChange={(e) => doiSpec(x.khoa, 'candle', e.target.value)} style={{ ...oO, minHeight: 40, gridColumn: '1 / -1' }} />
+                </>
+              ) : (
+                <input placeholder="Ghi chú thêm (quy cách, đóng gói...)" value={x.specification?.packing || ''} onChange={(e) => doiSpec(x.khoa, 'packing', e.target.value)} style={{ ...oO, minHeight: 40, gridColumn: '1 / -1' }} />
+              )}
+            </div>
+            );
+          })()}
         </div>
-      ))}
+        );
+      })}
       {!mon.length && <div style={{ fontSize: 13.5, color: '#b42318', padding: '8px 0' }}>Đơn đang không có món nào. Thêm ít nhất một món trước khi lưu.</div>}
 
       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
