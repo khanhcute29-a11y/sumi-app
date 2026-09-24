@@ -270,20 +270,33 @@ export async function askGenCopilot({ message, imageBase64, userProfile, history
   try {
     // Tự động trích xuất ảnh chụp số liệu thời gian thực từ Supabase nếu chưa truyền vào
     const liveSnapshot = appSnapshot || await fetchSumiAppSnapshot(userProfile).catch(() => null);
+    const payload = { message, imageBase64, userProfile, history, appSnapshot: liveSnapshot };
 
-    // 1. Thử gọi qua endpoint Serverless /api/ai-copilot
+    // 1. ƯU TIÊN: Edge Function 'ai-copilot' trên Supabase của tiệm — "bộ não" AI
+    //    mới, dùng secret khóa trên Supabase (không phụ thuộc Vercel, không khóa
+    //    hardcode). Nếu chưa deploy / lỗi -> TỰ QUAY VỀ /api/ai-copilot cũ để Gen
+    //    không gián đoạn (zero downtime trong lúc chuyển đổi).
+    try {
+      const { data, error } = await supabase.functions.invoke('ai-copilot', { body: payload });
+      if (!error && data && !data.error) return data;
+      console.warn('[askGenCopilot] ai-copilot (Supabase) chưa dùng được, thử /api:', error?.message || data?.error || 'unknown');
+    } catch (invErr) {
+      console.warn('[askGenCopilot] Không gọi được ai-copilot (Supabase), thử /api:', invErr?.message || invErr);
+    }
+
+    // 2. FALLBACK: endpoint Serverless /api/ai-copilot (Vercel) — đường cũ.
     const res = await fetch('/api/ai-copilot', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, imageBase64, userProfile, history, appSnapshot: liveSnapshot })
+      body: JSON.stringify(payload)
     });
 
     if (res.ok) {
       return await res.json();
     }
 
-    // Nếu endpoint serverless chưa sẵn sàng (ví dụ đang chạy dev Vite thuần):
-    // Kiểm tra VITE_GEMINI_API_KEY trong file .env.local
+    // 3. FALLBACK DEV: chạy dev Vite thuần (không có serverless) -> gọi thẳng Gemini
+    //    bằng VITE_GEMINI_API_KEY trong .env.local.
     const clientApiKey = import.meta.env.VITE_GEMINI_API_KEY;
     if (clientApiKey) {
       return await callDirectGemini(clientApiKey, message, imageBase64, userProfile, history, liveSnapshot);
