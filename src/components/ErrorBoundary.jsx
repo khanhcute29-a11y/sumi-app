@@ -16,6 +16,15 @@ export class ErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
+      // Fallback tùy chọn: cho phép nơi gọi tự quyết định UI khi lỗi (VD Trợ lý
+      // Gen truyền fallback={null} để tự biến mất, KHÔNG làm sập app chính).
+      // Không truyền fallback -> giữ nguyên hành vi mặc định (tương thích main.jsx).
+      if (this.props.fallback !== undefined) {
+        const reset = () => this.setState({ hasError: false, error: null });
+        return typeof this.props.fallback === 'function'
+          ? this.props.fallback(this.state.error, reset)
+          : this.props.fallback;
+      }
       return (
         <div style={{
           padding: 24, margin: '20px auto', maxWidth: 540,

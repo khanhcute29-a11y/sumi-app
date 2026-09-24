@@ -70,6 +70,7 @@ import { loadFeatureFlags } from './lib/featureFlags';
 import { GenFloatingButton } from './components/ai/GenFloatingButton';
 import { GenCopilotModal } from './components/ai/GenCopilotModal';
 import { GenVoiceTaskAlert } from './components/ai/GenVoiceTaskAlert';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 const MORE_ITEMS = [
   { key: 'dashboard', label: 'Tổng Quan', Icon: IconDashboard },
@@ -443,41 +444,46 @@ function OpsApp({ onSignOut }) {
           style={{ position: 'static', left: 'auto', right: 'auto', bottom: 'auto', width: '100%', flexShrink: 0 }} />
       </div>
       {showMore && <MoreSheet onClose={() => setShowMore(false)} onSelect={setTab} badges={badgeCounts} items={moreItems} />}
-      {/* Trợ lý AI Gemini 'Gen' */}
-      <GenFloatingButton onClick={() => setShowGen(true)} />
-      <GenCopilotModal
-        isOpen={showGen}
-        onClose={() => setShowGen(false)}
-        userProfile={profile}
-        onOpenOrderForm={(orderData) => {
-          setShowGen(false);
-          setTab('orders');
-          [100, 300].forEach((ms) => {
-            setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-create-order', { detail: orderData })), ms);
-          });
-        }}
-        onViewOrder={(orderId) => {
-          setShowGen(false);
-          setTab('orders');
-          [80, 250, 500].forEach((ms) => {
-            setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-order', { detail: { entityId: orderId } })), ms);
-          });
-        }}
-        onViewTask={(taskId) => {
-          setShowGen(false);
-          setTab('tasks');
-          [80, 250, 500].forEach((ms) => {
-            setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-task', { detail: { entityId: taskId } })), ms);
-          });
-        }}
-      />
-      {voiceTask && (
-        <GenVoiceTaskAlert
-          task={voiceTask}
-          onClose={() => setVoiceTask(null)}
-          onAccepted={() => setVoiceTask(null)}
+      {/* Trợ lý AI Gemini 'Gen' — CÁCH LY: bọc ErrorBoundary fallback=null để nếu
+          Gen lỗi lúc render thì tự biến mất, KHÔNG bao giờ làm sập app chính
+          (order/kho/thanh toán vẫn chạy). Lỗi bất đồng bộ đã được try/catch
+          trong chính GenCopilotModal/geminiCopilot. */}
+      <ErrorBoundary fallback={null}>
+        <GenFloatingButton onClick={() => setShowGen(true)} />
+        <GenCopilotModal
+          isOpen={showGen}
+          onClose={() => setShowGen(false)}
+          userProfile={profile}
+          onOpenOrderForm={(orderData) => {
+            setShowGen(false);
+            setTab('orders');
+            [100, 300].forEach((ms) => {
+              setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-create-order', { detail: orderData })), ms);
+            });
+          }}
+          onViewOrder={(orderId) => {
+            setShowGen(false);
+            setTab('orders');
+            [80, 250, 500].forEach((ms) => {
+              setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-order', { detail: { entityId: orderId } })), ms);
+            });
+          }}
+          onViewTask={(taskId) => {
+            setShowGen(false);
+            setTab('tasks');
+            [80, 250, 500].forEach((ms) => {
+              setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-task', { detail: { entityId: taskId } })), ms);
+            });
+          }}
         />
-      )}
+        {voiceTask && (
+          <GenVoiceTaskAlert
+            task={voiceTask}
+            onClose={() => setVoiceTask(null)}
+            onAccepted={() => setVoiceTask(null)}
+          />
+        )}
+      </ErrorBoundary>
     </div>
   );
 }
