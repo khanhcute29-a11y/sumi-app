@@ -255,6 +255,21 @@ export default async function handler(req, res) {
             },
             required: ['cau_hoi']
           }
+        },
+        {
+          name: 'truy_van_du_lieu',
+          description: 'Truy vấn ĐỌC dữ liệu thật của tiệm để tự phân tích/suy luận trả lời câu hỏi mới khi các tool khác chưa bao. Chỉ đọc; kết quả đã tự lọc theo quyền người dùng.',
+          parameters: {
+            type: Type.OBJECT,
+            properties: {
+              bang: { type: Type.STRING, description: 'Tên bảng: orders, order_items, customers, products, tasks, finished_goods_stock, warehouse_stock, shift_logs, expense_claims, salary_advance_requests, incident_reports, profiles' },
+              cot: { type: Type.STRING, description: 'Cột muốn lấy, cách nhau dấu phẩy (bỏ trống = mặc định)' },
+              loc: { type: Type.STRING, description: "Lọc dạng 'cot op giatri' cách nhau ';'. op: = > < >= <= ~ (~ là chứa)" },
+              sap_xep: { type: Type.STRING, description: "Sắp xếp 'cot desc' hoặc 'cot asc'" },
+              gioi_han: { type: Type.NUMBER, description: 'Số dòng tối đa (mặc định 15, tối đa 25)' }
+            },
+            required: ['bang']
+          }
         }
       ]
     }];
@@ -341,7 +356,9 @@ NGUYÊN TẮC BÁO CÁO SỐ LIỆU KINH DOANH & TRUY VẤN THỜI GIAN THỰC (
 12. CHỈ ĐƯỜNG TRONG APP (BÁCH KHOA TOÀN THƯ):
    - Khi người dùng hỏi "làm X ở đâu", "cách làm X", "tìm chức năng Y", "không biết bấm ở đâu": kích hoạt 'chi_duong_tinh_nang' với 'cau_hoi' là việc họ muốn làm.
    - Sau khi có kết quả: tóm tắt ngắn gọn các BƯỚC thao tác, và LUÔN nhắc có nút "Mở màn ..." bên dưới để đi thẳng tới đó.
-   - Nếu tính năng ngoài quyền của họ, giải thích nhẹ nhàng rằng mục này thuộc vai trò khác, không hứa mở giúp.`;
+   - Nếu tính năng ngoài quyền của họ, giải thích nhẹ nhàng rằng mục này thuộc vai trò khác, không hứa mở giúp.
+
+13. TỰ TRUY VẤN & SUY LUẬN TRÊN DỮ LIỆU THẬT: khi câu hỏi cần dữ liệu mà các tool trên chưa bao -> 'truy_van_du_lieu' đọc bảng phù hợp (orders, order_items, customers, products, tasks, finished_goods_stock, warehouse_stock, shift_logs, expense_claims, salary_advance_requests, incident_reports, profiles) rồi TỰ PHÂN TÍCH trả lời. Kết quả đã tự lọc theo quyền người dùng (cột giá/giá vốn/lương/công nợ tự bị ẩn với tuyến dưới). Rỗng thì báo trung thực; ưu tiên tool chuyên biệt trước.`;
 
     // Chuẩn bị nội dung gửi Gemini (Multimodal text + image nếu có)
     const contents = [];

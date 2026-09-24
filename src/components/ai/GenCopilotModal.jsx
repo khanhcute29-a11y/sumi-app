@@ -13,6 +13,7 @@ import {
   executeBusinessAnalysis, executeDebtLookup, executeLowStockAlert, executeOpsSummary,
   executeAppGuide, resolveOrderId
 } from '../../lib/geminiCopilot';
+import { executeDataQuery } from '../../lib/genDataQuery';
 import { playConfirmSound } from '../../lib/sound';
 
 function getStatusMeta(st) {
@@ -358,6 +359,26 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm,
             actionToConfirm = { type: 'card_display', cardType: 'nav_screen', screens: list };
           } else {
             replyText = `Em chưa tìm thấy chức năng khớp với "${fc.args.cau_hoi}". Anh/chị mô tả rõ hơn giúp em nhé (VD: "sửa giá đơn", "chấm công", "công nợ khách").`;
+          }
+        } else if (fc.name === 'truy_van_du_lieu') {
+          const r = await executeDataQuery(fc.args, userProfile);
+          if (r.denied) {
+            replyText = r.message;
+          } else if (!r.success) {
+            replyText = `⚠️ Em chưa truy vấn được dữ liệu: ${r.error || 'lỗi không xác định'}.`;
+          } else if (!r.rows || r.rows.length === 0) {
+            replyText = `Em đã tra bảng "${fc.args.bang}" nhưng chưa thấy dữ liệu nào khớp yêu cầu.`;
+          } else {
+            // Suy luận: gửi dữ liệu THẬT về Gen để tự phân tích & trả lời (chỗ tạo
+            // cảm giác "biết nghĩ" thay vì rập khuôn). Không kèm history để tránh loop.
+            const follow = await askGenCopilot({
+              message: `Câu hỏi của người dùng: "${text}".\nDưới đây là DỮ LIỆU THẬT vừa truy vấn từ bảng "${fc.args.bang}" (đã lọc đúng quyền, ${r.rows.length} dòng):\n${JSON.stringify(r.rows).slice(0, 6000)}\n\nHãy PHÂN TÍCH và trả lời ngắn gọn, chính xác bằng tiếng Việt, định dạng tiền VNĐ nếu có. CHỈ trả lời bằng lời, TUYỆT ĐỐI KHÔNG gọi thêm công cụ.`,
+              userProfile,
+              history: []
+            });
+            replyText = (follow?.reply && follow.reply.trim())
+              ? follow.reply
+              : `Em tìm thấy ${r.rows.length} kết quả trong "${fc.args.bang}" nhưng chưa tổng hợp được, anh/chị hỏi cụ thể hơn giúp em nhé.`;
           }
         } else {
           actionToConfirm = {

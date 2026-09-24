@@ -8,6 +8,7 @@ import { countNewOrders, countKitchenActiveOrders, fetchSchoolRevenue, fetchWare
 import { localDateStr, mondayOf, weekDates, startOfMonth, endOfMonth } from './date';
 import { FINANCE_ROLES, INVENTORY_VIEW_ROLES, MANAGER_ROLES, hasAnyRole, canViewFinancials } from './roles';
 import { findAppGuide } from './genAppGuide';
+import { DATA_CATALOG } from './genDataQuery';
 import { newId } from './ids';
 import { broadcastEvent, BroadcastEvents, notifyOtherTabs } from './realtimeSync';
 
@@ -529,6 +530,21 @@ async function callDirectGemini(apiKey, message, imageBase64, userProfile, histo
           },
           required: ['cau_hoi']
         }
+      },
+      {
+        name: 'truy_van_du_lieu',
+        description: 'Truy vấn ĐỌC dữ liệu thật của tiệm để tự phân tích/suy luận trả lời câu hỏi mới khi các tool khác chưa bao. Chỉ đọc; kết quả đã tự lọc theo quyền người dùng.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            bang: { type: Type.STRING, description: 'Tên bảng: orders, order_items, customers, products, tasks, finished_goods_stock, warehouse_stock, shift_logs, expense_claims, salary_advance_requests, incident_reports, profiles' },
+            cot: { type: Type.STRING, description: 'Cột muốn lấy, cách nhau dấu phẩy (bỏ trống = mặc định)' },
+            loc: { type: Type.STRING, description: "Lọc dạng 'cot op giatri' cách nhau ';'. op: = > < >= <= ~ (~ là chứa)" },
+            sap_xep: { type: Type.STRING, description: "Sắp xếp 'cot desc' hoặc 'cot asc'" },
+            gioi_han: { type: Type.NUMBER, description: 'Số dòng tối đa (mặc định 15, tối đa 25)' }
+          },
+          required: ['bang']
+        }
       }
     ]
   }];
@@ -605,7 +621,12 @@ NGUYÊN TẮC BÁO CÁO SỐ LIỆU KINH DOANH & TRUY VẤN THỜI GIAN THỰC (
 12. CHỈ ĐƯỜNG TRONG APP (BÁCH KHOA TOÀN THƯ):
    - Khi người dùng hỏi "làm X ở đâu", "cách làm X", "tìm chức năng Y", "không biết bấm ở đâu": kích hoạt 'chi_duong_tinh_nang' với 'cau_hoi' là việc họ muốn làm.
    - Sau khi có kết quả: tóm tắt ngắn gọn các BƯỚC thao tác, và LUÔN nhắc có nút "Mở màn ..." bên dưới để đi thẳng tới đó.
-   - Nếu tính năng ngoài quyền của họ, giải thích nhẹ nhàng rằng mục này thuộc vai trò khác, không hứa mở giúp.`;
+   - Nếu tính năng ngoài quyền của họ, giải thích nhẹ nhàng rằng mục này thuộc vai trò khác, không hứa mở giúp.
+
+13. TỰ TRUY VẤN & SUY LUẬN TRÊN DỮ LIỆU THẬT:
+   - Khi câu hỏi cần dữ liệu mà các tool trên chưa bao (VD "khách nào đặt macaron nhiều nhất", "đơn nào trễ hẹn"): kích hoạt 'truy_van_du_lieu' đọc bảng phù hợp rồi TỰ PHÂN TÍCH trả lời. Danh mục bảng:
+${DATA_CATALOG}
+   - Kết quả ĐÃ TỰ LỌC theo quyền (cột nhạy cảm: giá/giá vốn/lương/công nợ tự bị ẩn với tuyến dưới) — dùng thoải mái, không lo rò rỉ. Rỗng thì báo trung thực. Ưu tiên tool chuyên biệt; chỉ dùng truy_van_du_lieu khi cần linh hoạt.`;
 
   const contents = [];
 

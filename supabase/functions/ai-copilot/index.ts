@@ -220,7 +220,35 @@ const functionDeclarations = [
       required: ["cau_hoi"],
     },
   },
+  {
+    name: "truy_van_du_lieu",
+    description: "Truy vấn ĐỌC dữ liệu thật của tiệm để tự phân tích/suy luận trả lời câu hỏi mới khi các tool khác chưa bao. Chỉ đọc; kết quả đã tự lọc theo quyền người dùng.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        bang: { type: "STRING", description: "Tên bảng: orders, order_items, customers, products, tasks, finished_goods_stock, warehouse_stock, shift_logs, expense_claims, salary_advance_requests, incident_reports, profiles" },
+        cot: { type: "STRING", description: "Cột muốn lấy, cách nhau bởi dấu phẩy (bỏ trống = mặc định)" },
+        loc: { type: "STRING", description: "Lọc dạng 'cot op giatri' cách nhau ';'. op: = > < >= <= ~ (~ là chứa). VD: status = dang_lam; created_at >= 2026-09-24" },
+        sap_xep: { type: "STRING", description: "Sắp xếp: 'cot desc' hoặc 'cot asc'" },
+        gioi_han: { type: "NUMBER", description: "Số dòng tối đa (mặc định 15, tối đa 25)" },
+      },
+      required: ["bang"],
+    },
+  },
 ];
+
+const DATA_CATALOG = `- orders: đơn hàng (order_code, status_v2, order_type, created_at, required_at, customer_id)
+- order_items: chi tiết món trong đơn (name, quantity, size)
+- customers: khách/trường (name, phone, address, is_school)
+- products: sản phẩm & giá (name, category, unit)
+- tasks: công việc (title, status, assignee_id, deadline, completed_at)
+- finished_goods_stock: tồn bánh thành phẩm (qty, size, branch, expiry_date)
+- warehouse_stock: tồn nguyên vật liệu (name, qty, unit, branch, low_stock_threshold)
+- shift_logs: chấm công (staff_name, work_date, type, checkin_time, late_minutes)
+- expense_claims: khoản chi - tài chính (claimant_name, amount, description, status)
+- salary_advance_requests: tạm ứng lương - tài chính (employee_name, amount, status)
+- incident_reports: sự cố (category, label, reporter_name, status)
+- profiles: nhân sự (full_name, role, station)`;
 
 const FINANCE_ROLES = ["owner", "admin", "accountant", "cashier"];
 
@@ -254,7 +282,10 @@ NGUYÊN TẮC BÁO CÁO & TRUY VẤN THỜI GIAN THỰC:
 9. PHONG CÁCH: ấm áp, nhã nhặn, chuyên nghiệp; với người không rành chữ dùng câu ngắn gọn dễ nghe.
 10. CÔNG CỤ PHÂN TÍCH NÂNG CAO (đúng quyền): doanh thu/chi/công nợ theo kỳ -> 'phan_tich_kinh_doanh_theo_ky' (CHỈ GĐ/Kế toán); công nợ -> 'tra_cuu_cong_no' (GĐ/Kế toán/Thu ngân); tồn kho sắp hết -> 'canh_bao_ton_kho_thap' (Thủ kho/GĐ); tóm tắt vận hành -> 'tom_tat_nhat_ky_van_hanh' (Quản lý trở lên).
 11. GIỚI HẠN QUYỀN: Vai trò hiện tại ${role}. ${isDirector ? "Được xem toàn bộ số liệu tài chính." : "KHÔNG được xem doanh thu/giá vốn/công nợ toàn tiệm."} Nếu không đủ quyền mà hỏi tài chính/công nợ: từ chối lịch sự, KHÔNG bịa số.
-12. CHỈ ĐƯỜNG TRONG APP: hỏi "làm X ở đâu / cách làm X / tìm chức năng Y" -> 'chi_duong_tinh_nang'. Sau đó tóm tắt các BƯỚC và nhắc có nút "Mở màn ..." bên dưới.`;
+12. CHỈ ĐƯỜNG TRONG APP: hỏi "làm X ở đâu / cách làm X / tìm chức năng Y" -> 'chi_duong_tinh_nang'. Sau đó tóm tắt các BƯỚC và nhắc có nút "Mở màn ..." bên dưới.
+13. TỰ TRUY VẤN & SUY LUẬN TRÊN DỮ LIỆU THẬT: khi câu hỏi cần dữ liệu mà các tool trên chưa bao (VD "khách nào đặt macaron nhiều nhất tháng này", "đơn nào trễ hẹn", "so sánh...") -> dùng 'truy_van_du_lieu' đọc bảng phù hợp rồi TỰ PHÂN TÍCH để trả lời. Danh mục bảng:
+${DATA_CATALOG}
+   - Kết quả trả về ĐÃ TỰ LỌC theo quyền người dùng (cột nhạy cảm: giá, giá vốn, lương, công nợ tự bị ẩn với tuyến dưới) -> cứ dùng thoải mái, không lo rò rỉ. Nếu dữ liệu rỗng thì báo trung thực, không bịa. Ưu tiên các tool chuyên biệt ở trên; chỉ dùng truy_van_du_lieu khi cần linh hoạt.`;
 }
 
 serve(async (req) => {
