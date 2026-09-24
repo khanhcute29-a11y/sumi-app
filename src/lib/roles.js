@@ -64,6 +64,28 @@ export const ALL_KITCHEN_ROLES = [
   'bakery', 'baker_cold', 'baker_hot', 'baker_macaron', 'baker_x42'
 ];
 
+// Nhóm vai trò được xem số liệu TÀI CHÍNH (doanh thu/chi tiêu/công nợ toàn tiệm).
+// Khớp đúng is_finance_operator() phía Postgres — nguồn dùng chung cho App.jsx
+// (gate menu "Kế Toán Tổng Quan") lẫn Trợ lý Gen (gate snapshot + tool tài chính),
+// tránh mỗi nơi tự viết một danh sách cứng khác nhau gây lệch/rò rỉ.
+export const FINANCE_ROLES = ['owner', 'admin', 'accountant', 'cashier'];
+
+// Nhóm vai trò được xem/nhắc TỒN KHO nguyên vật liệu & thành phẩm.
+export const INVENTORY_VIEW_ROLES = [
+  'owner', 'admin', 'deputy_director_x41', 'deputy_director_x42',
+  'warehouse', 'kho_bakery', 'kho_xuong41', 'kho_xuong42',
+];
+
+// Nhóm Quản lý trở lên — xem báo cáo vận hành tổng hợp (ca/việc/vi phạm).
+export const MANAGER_ROLES = [
+  'owner', 'admin', 'accountant', 'deputy_director_x41', 'deputy_director_x42',
+];
+
+// Tiện ích gate tài chính dùng chung (xét cả vai trò chính lẫn extra_roles/kiêm nhiệm).
+export function canViewFinancials(profile) {
+  return hasAnyRole(profile, FINANCE_ROLES);
+}
+
 export const ROLE_PERMISSIONS = [
   {
     role: 'admin',

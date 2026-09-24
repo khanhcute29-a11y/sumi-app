@@ -10,7 +10,7 @@ import {
   countNewOrders, countKitchenActiveOrders, countPendingApprovals, countOpenIncidents,
   fetchOrderById, deductFinishedGoodsStockForOrder,
 } from './lib/queries';
-import { navBadgeVisibility, hasAnyRole } from './lib/roles';
+import { navBadgeVisibility, hasAnyRole, FINANCE_ROLES } from './lib/roles';
 import { initAudioUnlock } from './lib/sound';
 import { useOrderNotifications } from './lib/useOrderNotifications';
 import { requestNotificationPermission, playAlertSound, preloadAlertAudio, playViecVoiceSound } from './lib/alarmSound';
@@ -64,9 +64,8 @@ import { applyUiScale, getUiScale } from './lib/uiScale';
 import { NavBadge } from './components/navigation/NavBadge';
 import { IconDashboard, IconShipping, IconProducts, IconShifts, IconReports, IconCustomers, IconStaff, IconSettings, IconCheck, IconWarning, IconClipboard, IconMoney, IconReceipt, IconBan } from './components/icons/FrogIcons';
 
-// Vai trò được xử lý thu-chi thật (khớp is_finance_operator() phía database) —
-// chỉ nhóm này mới thấy mục "Kế Toán Tổng Quan" trong menu.
-const FINANCE_ROLES = ['owner', 'admin', 'accountant', 'cashier'];
+// FINANCE_ROLES (khớp is_finance_operator() phía database) — dùng chung từ
+// ./lib/roles để App.jsx và Trợ lý Gen chốt phân quyền tài chính đồng nhất.
 import { loadFeatureFlags } from './lib/featureFlags';
 import { GenFloatingButton } from './components/ai/GenFloatingButton';
 import { GenCopilotModal } from './components/ai/GenCopilotModal';

@@ -5,11 +5,13 @@ import {
   CornerDownLeft, FileText, DollarSign, Cake, ArrowRight,
   ClipboardList, ReceiptText, RotateCcw, Truck, Check, XCircle, Search, Users, Boxes, Eye
 } from 'lucide-react';
-import { 
-  askGenCopilot, speakVietnamese, stopSpeaking, 
+import {
+  askGenCopilot, speakVietnamese, stopSpeaking,
   executeSalaryAdvance, executeExpenseClaim, executeAssignTask,
   executeCreateOrderDirectly, executeSearchOrder, executeSearchTasks, executeOrderStatusUpdate,
-  executeCheckInventory, executeGetStaffAttendance, executeReviewClaimOrAdvance
+  executeCheckInventory, executeGetStaffAttendance, executeReviewClaimOrAdvance,
+  executeBusinessAnalysis, executeDebtLookup, executeLowStockAlert, executeOpsSummary,
+  resolveOrderId
 } from '../../lib/geminiCopilot';
 import { playConfirmSound } from '../../lib/sound';
 
@@ -83,12 +85,19 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm,
     }
   }, [messages, storageKey]);
 
-  const handleOpenOrder = (orderIdOrCode) => {
+  const handleOpenOrder = async (orderIdOrCode) => {
     if (!orderIdOrCode) return;
+    // Deep-link: OrderV2DetailModal cần UUID `id` — nếu nhận mã đơn (SUMI-...) thì
+    // đổi sang id trước khi mở, để bấm vào là ra ĐÚNG chi tiết đơn (không rơi về
+    // màn tổng khi đơn không nằm trong bộ lọc hiện tại).
+    let target = orderIdOrCode;
+    try {
+      target = (await resolveOrderId(orderIdOrCode)) || orderIdOrCode;
+    } catch (_) {}
     if (onViewOrder) {
-      onViewOrder(orderIdOrCode);
+      onViewOrder(target);
     } else {
-      window.dispatchEvent(new CustomEvent('sumi-navigate', { detail: { tab: 'orders', entityId: orderIdOrCode } }));
+      window.dispatchEvent(new CustomEvent('sumi-navigate', { detail: { tab: 'orders', entityId: target } }));
       onClose();
     }
   };
@@ -287,6 +296,51 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm,
           } else {
             const names = (attData.workingList || []).map(s => `• ${s.name} (${s.station || 'Nhân sự'})`).join('\n');
             replyText = `👥 Hiện có ${attData.totalWorking} nhân sự đang trong ca làm việc hôm nay:\n${names || 'Chưa có nhân sự nào trong ca'}`;
+          }
+        } else if (fc.name === 'phan_tich_kinh_doanh_theo_ky') {
+          const r = await executeBusinessAnalysis({ ...fc.args, userProfile });
+          if (r.denied) {
+            replyText = r.message;
+          } else if (r.success) {
+            const kenhStr = (r.kenh || []).filter(k => k.so_tien > 0).map(k => `   • ${k.kenh}: ${Number(k.so_tien).toLocaleString('vi-VN')}đ (${k.so_don} đơn)`).join('\n');
+            replyText = `📊 PHÂN TÍCH KINH DOANH — ${r.ky}\n\n💰 Doanh thu thuần: ${Number(r.doanh_thu_thuan).toLocaleString('vi-VN')}đ${kenhStr ? '\n' + kenhStr : ''}\n💸 Chi tiêu: ${Number(r.tong_chi).toLocaleString('vi-VN')}đ (${r.so_khoan_chi} khoản)\n🏫 Doanh thu trường học: ${Number(r.doanh_thu_truong_hoc).toLocaleString('vi-VN')}đ (${r.so_don_truong} đơn)`;
+          } else {
+            replyText = `⚠️ Không lấy được số liệu phân tích: ${r.error || 'lỗi không xác định'}.`;
+          }
+        } else if (fc.name === 'tra_cuu_cong_no') {
+          const r = await executeDebtLookup({ tu_khoa: fc.args.tu_khoa, userProfile });
+          if (r.denied) {
+            replyText = r.message;
+          } else if (r.success && r.items.length > 0) {
+            const lines = r.items.map(i => `   • ${i.khach} — ${i.ma_don}: còn ${Number(i.con_lai).toLocaleString('vi-VN')}đ`).join('\n');
+            replyText = `🧾 CÔNG NỢ CẦN THU (${r.so_don} đơn · tổng ${Number(r.tong_con_lai).toLocaleString('vi-VN')}đ):\n${lines}`;
+          } else if (r.success) {
+            replyText = `✅ Không có công nợ nào${fc.args.tu_khoa ? ` khớp "${fc.args.tu_khoa}"` : ''} cần thu.`;
+          } else {
+            replyText = `⚠️ Không tra cứu được công nợ: ${r.error || 'lỗi'}.`;
+          }
+        } else if (fc.name === 'canh_bao_ton_kho_thap') {
+          const r = await executeLowStockAlert({ loai: fc.args.loai, nguong: fc.args.nguong, userProfile });
+          if (r.denied) {
+            replyText = r.message;
+          } else if (r.success && r.items.length > 0) {
+            const loaiLabel = r.loai === 'thanh_pham' ? 'Bánh thành phẩm' : 'Nguyên vật liệu';
+            const lines = r.items.map(i => `   • ${i.ten}${i.size ? ` (${i.size})` : ''}: còn ${i.so_luong}${i.don_vi ? ' ' + i.don_vi : ''}${i.chi_nhanh ? ` [${i.chi_nhanh}]` : ''}`).join('\n');
+            replyText = `⚠️ ${loaiLabel} SẮP HẾT (≤ ${r.nguong}):\n${lines}`;
+          } else if (r.success) {
+            replyText = `✅ Không có mặt hàng nào dưới ngưỡng cảnh báo.`;
+          } else {
+            replyText = `⚠️ Không kiểm tra được tồn kho: ${r.error || 'lỗi'}.`;
+          }
+        } else if (fc.name === 'tom_tat_nhat_ky_van_hanh') {
+          const r = await executeOpsSummary({ ky: fc.args.ky, userProfile });
+          if (r.denied) {
+            replyText = r.message;
+          } else if (r.success) {
+            const viStr = (r.vi_pham || []).length > 0 ? '\n' + r.vi_pham.map(v => `   • ${v.nhan_su}: ${v.noi_dung}${v.phat ? ` (phạt ${Number(v.phat).toLocaleString('vi-VN')}đ)` : ''}`).join('\n') : '';
+            replyText = `📋 TÓM TẮT VẬN HÀNH — ${r.ky}\n\n• Báo cáo ca: ${r.so_bao_cao_ca}\n• Việc hoàn thành: ${r.so_viec_hoan_thanh}\n• Vi phạm nội quy: ${r.so_vi_pham}${viStr}`;
+          } else {
+            replyText = `⚠️ Không lấy được tóm tắt vận hành: ${r.error || 'lỗi'}.`;
           }
         } else {
           actionToConfirm = {

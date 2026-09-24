@@ -1,8 +1,12 @@
 import { supabase } from './supabaseClient';
 import { playConfirmSound } from './sound';
-import { fetchRevenueByChannel, fetchDoanhThuDuTinh, fetchExpenseAndAdvanceLedgerToday } from './bossOverviewV3';
-import { countNewOrders, countKitchenActiveOrders } from './queries';
-import { localDateStr } from './date';
+import {
+  fetchRevenueByChannel, fetchDoanhThuDuTinh, fetchExpenseAndAdvanceLedgerToday,
+  fetchCongNoCanThu, fetchTodayShiftReports, fetchCompletedTasksReport, fetchTodayViolationsReport
+} from './bossOverviewV3';
+import { countNewOrders, countKitchenActiveOrders, fetchSchoolRevenue, fetchWarehouseStock } from './queries';
+import { localDateStr, mondayOf, weekDates, startOfMonth, endOfMonth } from './date';
+import { FINANCE_ROLES, INVENTORY_VIEW_ROLES, MANAGER_ROLES, hasAnyRole, canViewFinancials } from './roles';
 import { newId } from './ids';
 import { broadcastEvent, BroadcastEvents, notifyOtherTabs } from './realtimeSync';
 
@@ -15,7 +19,8 @@ import { broadcastEvent, BroadcastEvents, notifyOtherTabs } from './realtimeSync
  */
 export async function fetchSumiAppSnapshot(userProfile) {
   const role = userProfile?.role || 'staff';
-  const isDirector = ['owner', 'admin', 'accountant'].includes(role);
+  // Quyền xem tài chính = FINANCE_ROLES, xét cả vai trò kiêm nhiệm (extra_roles).
+  const isDirector = canViewFinancials(userProfile);
   const today = localDateStr();
   const snapshot = {
     ngay: today,
@@ -300,7 +305,7 @@ async function callDirectGemini(apiKey, message, imageBase64, userProfile, histo
 
   const role = userProfile?.role || 'staff';
   const name = userProfile?.name || 'Bạn';
-  const isDirector = ['owner', 'admin', 'accountant'].includes(role);
+  const isDirector = canViewFinancials(userProfile);
 
   const tools = [{
     functionDeclarations: [
@@ -455,6 +460,50 @@ async function callDirectGemini(apiKey, message, imageBase64, userProfile, histo
           },
           required: ['muc_do', 'noi_dung_vi_pham']
         }
+      },
+      {
+        name: 'phan_tich_kinh_doanh_theo_ky',
+        description: 'Phân tích/tổng hợp doanh thu theo kênh, chi tiêu và công nợ theo một khoảng thời gian (hôm nay, hôm qua, tuần này, tuần trước, tháng này, tháng trước, hoặc khoảng ngày tùy chọn). CHỈ dành cho Ban Giám đốc/Kế toán.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            ky: { type: Type.STRING, enum: ['hom_nay', 'hom_qua', 'tuan_nay', 'tuan_truoc', 'thang_nay', 'thang_truoc', 'tuy_chon'], description: 'Kỳ phân tích' },
+            tu_ngay: { type: Type.STRING, description: 'Ngày bắt đầu YYYY-MM-DD (chỉ dùng khi ky=tuy_chon)' },
+            den_ngay: { type: Type.STRING, description: 'Ngày kết thúc YYYY-MM-DD (chỉ dùng khi ky=tuy_chon)' }
+          },
+          required: ['ky']
+        }
+      },
+      {
+        name: 'tra_cuu_cong_no',
+        description: 'Tra cứu công nợ cần thu của khách hàng hoặc trường học (đơn đã hoàn thành nhưng chưa thu đủ tiền). CHỈ dành cho Ban Giám đốc/Kế toán/Thu ngân.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            tu_khoa: { type: Type.STRING, description: 'Tên khách hoặc trường cần lọc (bỏ trống = xem tất cả)' }
+          }
+        }
+      },
+      {
+        name: 'canh_bao_ton_kho_thap',
+        description: 'Liệt kê nguyên vật liệu hoặc bánh thành phẩm sắp hết / dưới ngưỡng để nhắc nhập thêm. Dành cho Thủ kho/Ban Giám đốc.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            loai: { type: Type.STRING, enum: ['nvl', 'thanh_pham'], description: 'nvl = nguyên vật liệu (kho xưởng); thanh_pham = bánh thành phẩm trong tủ' },
+            nguong: { type: Type.NUMBER, description: 'Ngưỡng số lượng coi là thấp (mặc định 5)' }
+          }
+        }
+      },
+      {
+        name: 'tom_tat_nhat_ky_van_hanh',
+        description: 'Tóm tắt nhật ký vận hành: báo cáo ca, việc đã hoàn thành và vi phạm nội quy trong hôm nay hoặc tuần này. Dành cho Quản lý trở lên.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            ky: { type: Type.STRING, enum: ['hom_nay', 'tuan_nay'], description: 'Phạm vi thời gian tóm tắt' }
+          }
+        }
       }
     ]
   }];
@@ -516,7 +565,17 @@ NGUYÊN TẮC BÁO CÁO SỐ LIỆU KINH DOANH & TRUY VẤN THỜI GIAN THỰC (
    - Khi nhân viên xin tạm ứng hoặc báo chi: Bóc tách đúng số tiền, lý do và tạo thẻ xác nhận 2 bước.
 
 9. PHONG CÁCH GIAO TIẾP:
-   - Ấm áp, nhã nhặn, thông minh, chuyên nghiệp. Với nhân viên phụ bếp/lao động không rành chữ, dùng câu ngắn gọn, mạch lạc, dễ nghe.`;
+   - Ấm áp, nhã nhặn, thông minh, chuyên nghiệp. Với nhân viên phụ bếp/lao động không rành chữ, dùng câu ngắn gọn, mạch lạc, dễ nghe.
+
+10. CÔNG CỤ PHÂN TÍCH & TRA CỨU NÂNG CAO (dùng ĐÚNG quyền hạn):
+   - Hỏi doanh thu/chi tiêu/công nợ theo khoảng thời gian ("doanh thu tuần này", "chi tiêu tháng trước", "so với hôm qua"): kích hoạt 'phan_tich_kinh_doanh_theo_ky' với 'ky' phù hợp. CHỈ khi người dùng là Ban Giám đốc/Kế toán.
+   - Hỏi "ai/trường nào còn nợ", "công nợ cần thu": kích hoạt 'tra_cuu_cong_no'. CHỈ Ban Giám đốc/Kế toán/Thu ngân.
+   - Hỏi "nguyên liệu/bánh nào sắp hết", "cần nhập gì": kích hoạt 'canh_bao_ton_kho_thap' (loai=nvl hoặc thanh_pham). Dành cho Thủ kho/Ban Giám đốc.
+   - Hỏi "tóm tắt hôm nay/tuần này", "báo cáo ca", "có vi phạm gì không": kích hoạt 'tom_tat_nhat_ky_van_hanh'. Dành cho Quản lý trở lên.
+
+11. GIỚI HẠN QUYỀN (BẮT BUỘC TÔN TRỌNG):
+   - Vai trò hiện tại: ${role}. ${isDirector ? 'Được phép xem toàn bộ số liệu tài chính.' : 'KHÔNG được xem doanh thu/giá vốn/công nợ toàn tiệm.'}
+   - Nếu người dùng KHÔNG đủ quyền mà hỏi số liệu tài chính/công nợ: từ chối lịch sự, KHÔNG bịa số, chỉ hỗ trợ phần trong quyền hạn (đơn hàng, tồn kho thành phẩm, công việc). Hệ thống cũng chặn cứng ở tầng dữ liệu nên đừng cố đoán số.`;
 
   const contents = [];
 
@@ -1315,6 +1374,203 @@ export async function executeReviewClaimOrAdvance({ type, id, approve, note }) {
   return {
     success: true,
     message: `${actName} ${targetLabel} thành công!`
+  };
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * DEEP-LINK: đổi mã đơn (SUMI-...) sang UUID `id` mà OrderV2DetailModal cần để
+ * mở ĐÚNG chi tiết đơn. Nếu đã là UUID thì trả nguyên; nếu là mã đơn thì tra
+ * bảng orders lấy id; không tìm thấy thì trả lại giá trị gốc (không làm gãy luồng).
+ */
+export async function resolveOrderId(codeOrId) {
+  const val = String(codeOrId || '').trim().replace(/^#/, '');
+  if (!val) return null;
+  if (UUID_RE.test(val)) return val;
+  try {
+    const { data, error } = await supabase
+      .from('orders')
+      .select('id')
+      .ilike('order_code', val)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    return data?.id || val;
+  } catch (err) {
+    console.warn('[resolveOrderId] Không resolve được, dùng giá trị gốc:', err);
+    return val;
+  }
+}
+
+// Tính khoảng {from, to} (YYYY-MM-DD) + nhãn cho một "kỳ" phân tích.
+function rangeForKy(ky, tuNgay, denNgay) {
+  const now = new Date();
+  if (ky === 'tuy_chon' && tuNgay && denNgay) {
+    return { from: tuNgay, to: denNgay, label: `${tuNgay} → ${denNgay}` };
+  }
+  if (ky === 'hom_nay') {
+    const s = localDateStr(now);
+    return { from: s, to: s, label: 'Hôm nay' };
+  }
+  if (ky === 'hom_qua') {
+    const y = new Date(now); y.setDate(y.getDate() - 1);
+    const s = localDateStr(y);
+    return { from: s, to: s, label: 'Hôm qua' };
+  }
+  if (ky === 'tuan_nay') {
+    const days = weekDates(mondayOf(now));
+    return { from: localDateStr(days[0]), to: localDateStr(days[6]), label: 'Tuần này' };
+  }
+  if (ky === 'tuan_truoc') {
+    const lastWeek = new Date(now); lastWeek.setDate(lastWeek.getDate() - 7);
+    const days = weekDates(mondayOf(lastWeek));
+    return { from: localDateStr(days[0]), to: localDateStr(days[6]), label: 'Tuần trước' };
+  }
+  if (ky === 'thang_truoc') {
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    return { from: localDateStr(startOfMonth(prev)), to: localDateStr(endOfMonth(prev)), label: `Tháng ${prev.getMonth() + 1}/${prev.getFullYear()}` };
+  }
+  // Mặc định thang_nay
+  return { from: localDateStr(startOfMonth(now)), to: localDateStr(endOfMonth(now)), label: `Tháng ${now.getMonth() + 1}/${now.getFullYear()}` };
+}
+
+/**
+ * TOOL MỚI: Phân tích kinh doanh theo kỳ (doanh thu theo kênh + chi tiêu + công nợ).
+ * Gate FINANCE_ROLES (xét cả extra_roles). Dữ liệu chốt cứng thêm bởi RLS phía DB.
+ */
+export async function executeBusinessAnalysis({ ky, tu_ngay, den_ngay, userProfile }) {
+  if (!canViewFinancials(userProfile)) {
+    return { success: false, denied: true, message: 'Xin lỗi, số liệu doanh thu/chi tiêu chỉ dành cho Ban Giám đốc và Kế toán.' };
+  }
+  const { from, to, label } = rangeForKy(ky, tu_ngay, den_ngay);
+  const fromIso = `${from}T00:00:00+07:00`;
+  const toIso = `${to}T23:59:59.999+07:00`;
+
+  const [revenueRes, expenseRes, schoolRes] = await Promise.all([
+    fetchRevenueByChannel({ from: fromIso, to: toIso }).catch((e) => { console.warn('[BusinessAnalysis] revenue:', e); return null; }),
+    fetchExpenseAndAdvanceLedgerToday({ from: fromIso, to: toIso }).catch((e) => { console.warn('[BusinessAnalysis] expense:', e); return []; }),
+    fetchSchoolRevenue({ from, to }).catch((e) => { console.warn('[BusinessAnalysis] school:', e); return []; }),
+  ]);
+
+  const expenseRows = Array.isArray(expenseRes) ? expenseRes : (expenseRes?.rows || []);
+  const tongChi = expenseRows.reduce((s, r) => s + (Number(r.amount ?? r.so_tien) || 0), 0);
+  const schoolRows = Array.isArray(schoolRes) ? schoolRes : [];
+  const tongTruong = schoolRows.reduce((s, r) => s + (Number(r.total) || 0), 0);
+
+  return {
+    success: true,
+    ky: label,
+    doanh_thu_thuan: revenueRes?.total || 0,
+    kenh: (revenueRes?.channels || []).map((c) => ({
+      kenh: c.title || c.name || c.key, so_tien: Number(c.amount) || 0, so_don: c.count || 0,
+    })),
+    tong_chi: tongChi,
+    so_khoan_chi: expenseRows.length,
+    doanh_thu_truong_hoc: tongTruong,
+    so_don_truong: schoolRows.length,
+  };
+}
+
+/**
+ * TOOL MỚI: Tra cứu công nợ cần thu (đơn hoàn thành chưa thu đủ). Gate FINANCE_ROLES.
+ */
+export async function executeDebtLookup({ tu_khoa, userProfile }) {
+  if (!canViewFinancials(userProfile)) {
+    return { success: false, denied: true, message: 'Xin lỗi, thông tin công nợ chỉ dành cho Ban Giám đốc, Kế toán và Thu ngân.' };
+  }
+  try {
+    let rows = await fetchCongNoCanThu();
+    if (tu_khoa && tu_khoa.trim()) {
+      const kw = tu_khoa.toLowerCase().trim();
+      rows = (rows || []).filter((r) =>
+        (r.customerName || '').toLowerCase().includes(kw) ||
+        (r.orderCode || '').toLowerCase().includes(kw)
+      );
+    }
+    const items = (rows || []).slice(0, 20).map((r) => ({
+      ma_don: r.orderCode, khach: r.customerName, con_lai: r.conLai, tong: r.total, da_coc: r.deposit,
+    }));
+    const tongConLai = (rows || []).reduce((s, r) => s + (Number(r.conLai) || 0), 0);
+    return { success: true, tong_con_lai: tongConLai, so_don: (rows || []).length, items };
+  } catch (err) {
+    console.error('[executeDebtLookup] Lỗi:', err);
+    return { success: false, error: err.message, items: [] };
+  }
+}
+
+/**
+ * TOOL MỚI: Cảnh báo tồn kho thấp (NVL kho xưởng hoặc thành phẩm trong tủ). Gate INVENTORY_VIEW_ROLES.
+ */
+export async function executeLowStockAlert({ loai, nguong, userProfile }) {
+  if (!hasAnyRole(userProfile, INVENTORY_VIEW_ROLES)) {
+    return { success: false, denied: true, message: 'Xin lỗi, thông tin tồn kho chỉ dành cho Thủ kho và Ban Giám đốc.' };
+  }
+  const threshold = Number.isFinite(Number(nguong)) && Number(nguong) > 0 ? Number(nguong) : 5;
+  try {
+    if (loai === 'thanh_pham') {
+      const { data, error } = await supabase
+        .from('finished_goods_stock')
+        .select('id, size, qty, branch, store_location, products(name)')
+        .lte('qty', threshold)
+        .order('qty', { ascending: true });
+      if (error) throw error;
+      const items = (data || []).slice(0, 20).map((s) => ({
+        ten: s.products?.name || 'Bánh', size: s.size || 'Chuẩn', so_luong: Number(s.qty) || 0,
+        don_vi: 'cái', chi_nhanh: s.branch || s.store_location || 'Kho tiệm',
+      }));
+      return { success: true, loai: 'thanh_pham', nguong: threshold, items };
+    }
+    // Mặc định: nguyên vật liệu kho xưởng
+    const stock = await fetchWarehouseStock();
+    const items = (stock || [])
+      .filter((s) => (Number(s.qty) || 0) <= threshold)
+      .slice(0, 20)
+      .map((s) => ({
+        ten: s.name || 'Vật tư', so_luong: Number(s.qty) || 0, don_vi: s.unit || '', chi_nhanh: s.branch || 'Kho',
+      }));
+    return { success: true, loai: 'nvl', nguong: threshold, items };
+  } catch (err) {
+    console.error('[executeLowStockAlert] Lỗi:', err);
+    return { success: false, error: err.message, items: [] };
+  }
+}
+
+/**
+ * TOOL MỚI: Tóm tắt nhật ký vận hành (báo cáo ca + việc hoàn thành + vi phạm). Gate MANAGER_ROLES.
+ */
+export async function executeOpsSummary({ ky, userProfile }) {
+  if (!hasAnyRole(userProfile, MANAGER_ROLES)) {
+    return { success: false, denied: true, message: 'Xin lỗi, báo cáo vận hành tổng hợp chỉ dành cho Quản lý trở lên.' };
+  }
+  const now = new Date();
+  let from, to, label;
+  if (ky === 'tuan_nay') {
+    const days = weekDates(mondayOf(now));
+    from = localDateStr(days[0]); to = localDateStr(days[6]); label = 'Tuần này';
+  } else {
+    from = to = localDateStr(now); label = 'Hôm nay';
+  }
+  const [shiftRes, taskRes, violRes] = await Promise.all([
+    fetchTodayShiftReports({ from, to }).catch((e) => { console.warn('[OpsSummary] shift:', e); return []; }),
+    fetchCompletedTasksReport({ from: `${from}T00:00:00+07:00`, to: `${to}T23:59:59.999+07:00` }).catch((e) => { console.warn('[OpsSummary] tasks:', e); return []; }),
+    fetchTodayViolationsReport({ from, to }).catch((e) => { console.warn('[OpsSummary] violations:', e); return []; }),
+  ]);
+  const violList = (violRes || []).slice(0, 8).map((v) => ({
+    nhan_su: v.staff_name, noi_dung: v.title, phat: Number(v.penalty_amount) || 0,
+  }));
+  const taskList = (taskRes || []).slice(0, 8).map((t) => ({
+    viec: t.title, nguoi_lam: t.assignee?.full_name || '—',
+  }));
+  return {
+    success: true,
+    ky: label,
+    so_bao_cao_ca: (shiftRes || []).length,
+    so_viec_hoan_thanh: (taskRes || []).length,
+    so_vi_pham: (violRes || []).length,
+    vi_pham: violList,
+    viec_tieu_bieu: taskList,
   };
 }
 

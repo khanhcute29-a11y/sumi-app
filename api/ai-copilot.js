@@ -200,6 +200,50 @@ export default async function handler(req, res) {
             },
             required: ['muc_do', 'noi_dung_vi_pham']
           }
+        },
+        {
+          name: 'phan_tich_kinh_doanh_theo_ky',
+          description: 'Phân tích/tổng hợp doanh thu theo kênh, chi tiêu và công nợ theo một khoảng thời gian (hôm nay, hôm qua, tuần này, tuần trước, tháng này, tháng trước, hoặc khoảng ngày tùy chọn). CHỈ dành cho Ban Giám đốc/Kế toán.',
+          parameters: {
+            type: Type.OBJECT,
+            properties: {
+              ky: { type: Type.STRING, enum: ['hom_nay', 'hom_qua', 'tuan_nay', 'tuan_truoc', 'thang_nay', 'thang_truoc', 'tuy_chon'], description: 'Kỳ phân tích' },
+              tu_ngay: { type: Type.STRING, description: 'Ngày bắt đầu YYYY-MM-DD (chỉ dùng khi ky=tuy_chon)' },
+              den_ngay: { type: Type.STRING, description: 'Ngày kết thúc YYYY-MM-DD (chỉ dùng khi ky=tuy_chon)' }
+            },
+            required: ['ky']
+          }
+        },
+        {
+          name: 'tra_cuu_cong_no',
+          description: 'Tra cứu công nợ cần thu của khách hàng hoặc trường học (đơn đã hoàn thành nhưng chưa thu đủ tiền). CHỈ dành cho Ban Giám đốc/Kế toán/Thu ngân.',
+          parameters: {
+            type: Type.OBJECT,
+            properties: {
+              tu_khoa: { type: Type.STRING, description: 'Tên khách hoặc trường cần lọc (bỏ trống = xem tất cả)' }
+            }
+          }
+        },
+        {
+          name: 'canh_bao_ton_kho_thap',
+          description: 'Liệt kê nguyên vật liệu hoặc bánh thành phẩm sắp hết / dưới ngưỡng để nhắc nhập thêm. Dành cho Thủ kho/Ban Giám đốc.',
+          parameters: {
+            type: Type.OBJECT,
+            properties: {
+              loai: { type: Type.STRING, enum: ['nvl', 'thanh_pham'], description: 'nvl = nguyên vật liệu (kho xưởng); thanh_pham = bánh thành phẩm trong tủ' },
+              nguong: { type: Type.NUMBER, description: 'Ngưỡng số lượng coi là thấp (mặc định 5)' }
+            }
+          }
+        },
+        {
+          name: 'tom_tat_nhat_ky_van_hanh',
+          description: 'Tóm tắt nhật ký vận hành: báo cáo ca, việc đã hoàn thành và vi phạm nội quy trong hôm nay hoặc tuần này. Dành cho Quản lý trở lên.',
+          parameters: {
+            type: Type.OBJECT,
+            properties: {
+              ky: { type: Type.STRING, enum: ['hom_nay', 'tuan_nay'], description: 'Phạm vi thời gian tóm tắt' }
+            }
+          }
         }
       ]
     }];
@@ -207,7 +251,12 @@ export default async function handler(req, res) {
     // Hướng dẫn nghiệp vụ chi tiết cho Gemini
     const role = userProfile?.role || 'staff';
     const name = userProfile?.name || 'Bạn';
-    const isDirector = ['owner', 'admin', 'accountant'].includes(role);
+    // Quyền xem tài chính = FINANCE_ROLES, xét cả vai trò kiêm nhiệm (extra_roles).
+    // (Đây chỉ điều chỉnh giọng/quy tắc prompt — dữ liệu thật vẫn do client gửi và
+    // được RLS Postgres chốt cứng, nên không tin tuyệt đối vào role client gửi lên.)
+    const FINANCE_ROLES = ['owner', 'admin', 'accountant', 'cashier'];
+    const extraRoles = Array.isArray(userProfile?.extra_roles) ? userProfile.extra_roles : [];
+    const isDirector = FINANCE_ROLES.includes(role) || extraRoles.some((r) => FINANCE_ROLES.includes(r));
 
     let dataSection = '';
     if (appSnapshot) {
@@ -266,7 +315,17 @@ NGUYÊN TẮC BÁO CÁO SỐ LIỆU KINH DOANH & TRUY VẤN THỜI GIAN THỰC (
    - Khi nhân viên xin tạm ứng hoặc báo chi: Bóc tách đúng số tiền, lý do và tạo thẻ xác nhận 2 bước.
 
 9. PHONG CÁCH GIAO TIẾP:
-   - Ấm áp, nhã nhặn, thông minh, chuyên nghiệp. Với nhân viên phụ bếp/lao động không rành chữ, dùng câu ngắn gọn, mạch lạc, dễ nghe.`;
+   - Ấm áp, nhã nhặn, thông minh, chuyên nghiệp. Với nhân viên phụ bếp/lao động không rành chữ, dùng câu ngắn gọn, mạch lạc, dễ nghe.
+
+10. CÔNG CỤ PHÂN TÍCH & TRA CỨU NÂNG CAO (dùng ĐÚNG quyền hạn):
+   - Hỏi doanh thu/chi tiêu/công nợ theo khoảng thời gian ("doanh thu tuần này", "chi tiêu tháng trước", "so với hôm qua"): kích hoạt 'phan_tich_kinh_doanh_theo_ky' với 'ky' phù hợp. CHỈ khi người dùng là Ban Giám đốc/Kế toán.
+   - Hỏi "ai/trường nào còn nợ", "công nợ cần thu": kích hoạt 'tra_cuu_cong_no'. CHỈ Ban Giám đốc/Kế toán/Thu ngân.
+   - Hỏi "nguyên liệu/bánh nào sắp hết", "cần nhập gì": kích hoạt 'canh_bao_ton_kho_thap' (loai=nvl hoặc thanh_pham). Dành cho Thủ kho/Ban Giám đốc.
+   - Hỏi "tóm tắt hôm nay/tuần này", "báo cáo ca", "có vi phạm gì không": kích hoạt 'tom_tat_nhat_ky_van_hanh'. Dành cho Quản lý trở lên.
+
+11. GIỚI HẠN QUYỀN (BẮT BUỘC TÔN TRỌNG):
+   - Vai trò hiện tại: ${role}. ${isDirector ? 'Được phép xem toàn bộ số liệu tài chính.' : 'KHÔNG được xem doanh thu/giá vốn/công nợ toàn tiệm.'}
+   - Nếu người dùng KHÔNG đủ quyền mà hỏi số liệu tài chính/công nợ: từ chối lịch sự, KHÔNG bịa số, chỉ hỗ trợ phần trong quyền hạn (đơn hàng, tồn kho thành phẩm, công việc). Hệ thống cũng chặn cứng ở tầng dữ liệu nên đừng cố đoán số.`;
 
     // Chuẩn bị nội dung gửi Gemini (Multimodal text + image nếu có)
     const contents = [];
