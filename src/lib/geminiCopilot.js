@@ -600,6 +600,20 @@ async function callDirectGemini(apiKey, message, imageBase64, userProfile, histo
           },
           required: ['hanh_dong', 'ten_viec']
         }
+      },
+      {
+        name: 'thao_tac_kho_vat_tu',
+        description: 'Làm hộ nhập/xuất KHO VẬT TƯ (Xưởng 41). CHỈ Thủ kho/Ban Giám đốc dùng được.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            hanh_dong: { type: Type.STRING, enum: ['nhap', 'xuat'], description: 'nhap = nhập kho; xuat = xuất kho' },
+            ten_vat_tu: { type: Type.STRING, description: 'Tên hoặc mã vật tư' },
+            so_luong: { type: Type.NUMBER, description: 'Số lượng nhập/xuất' },
+            ghi_chu: { type: Type.STRING, description: 'Ghi chú (nếu có)' }
+          },
+          required: ['hanh_dong', 'ten_vat_tu', 'so_luong']
+        }
       }
     ]
   }];
@@ -685,7 +699,9 @@ ${DATA_CATALOG}
 
 14. NHẮN TIN CHO NHÂN VIÊN: khi Sếp/Quản lý bảo "nhắn cho [tên] rằng...", "báo [tên]...", "gửi tin cho [tên] nội dung...": kích hoạt 'gui_tin_nhan_cho_nhan_vien' (ten_nhan_vien + noi_dung). Nhân viên sẽ nghe Gen đọc to ngay trên màn hình họ. CHỈ Quản lý/Giám đốc/Kế toán dùng được.
 
-15. LÀM HỘ THAO TÁC CÔNG VIỆC: khi người dùng nói "nhận việc [X]", "báo xong việc [X]", "từ chối việc [X] vì...": kích hoạt 'thao_tac_cong_viec' (hanh_dong + ten_viec [+ ly_do/ghi_chu]). Chỉ tác động việc CỦA CHÍNH họ. Nếu không rõ việc nào (nhiều việc khớp) thì hỏi lại cho rõ, không tự đoán.`;
+15. LÀM HỘ THAO TÁC CÔNG VIỆC: khi người dùng nói "nhận việc [X]", "báo xong việc [X]", "từ chối việc [X] vì...": kích hoạt 'thao_tac_cong_viec' (hanh_dong + ten_viec [+ ly_do/ghi_chu]). Chỉ tác động việc CỦA CHÍNH họ. Nếu không rõ việc nào (nhiều việc khớp) thì hỏi lại cho rõ, không tự đoán.
+
+16. LÀM HỘ NHẬP/XUẤT KHO VẬT TƯ: khi Thủ kho/Sếp nói "nhập [số] [vật tư]", "xuất [số] [vật tư]": kích hoạt 'thao_tac_kho_vat_tu' (hanh_dong nhap/xuat + ten_vat_tu + so_luong [+ ghi_chu]). Nhiều vật tư khớp thì hỏi lại cho rõ. CHỈ Thủ kho/Ban Giám đốc.`;
 
   const contents = [];
 
@@ -1791,6 +1807,52 @@ export async function runTaskAction({ hanh_dong, task_id, ly_do, ghi_chu }) {
       return { success: false, message: 'Việc này cần chụp ảnh nghiệm thu — anh/chị vào màn "Việc của tôi" để báo xong kèm ảnh nhé.' };
     }
     return { success: false, message: `Không thực hiện được: ${err.message}` };
+  }
+}
+
+/**
+ * THAO TÁC LÀM HỘ (KHO VẬT TƯ) — tìm vật tư trong catalog theo tên/mã.
+ * Gate Thủ kho/Ban Giám đốc (RPC cũng tự chặn).
+ */
+export async function findVatTu({ ten_vat_tu, userProfile }) {
+  if (!hasAnyRole(userProfile, INVENTORY_VIEW_ROLES)) {
+    return { denied: true, message: 'Xin lỗi, thao tác kho vật tư chỉ dành cho Thủ kho/Ban Giám đốc.' };
+  }
+  const kw = String(ten_vat_tu || '').trim();
+  try {
+    let q = supabase.from('vat_tu_catalog').select('ma, ten, don_vi').eq('active', true).order('thu_tu').limit(6);
+    if (kw) q = q.or(`ten.ilike.%${kw}%,ma.ilike.%${kw}%`);
+    const { data, error } = await q;
+    if (error) throw error;
+    return { items: data || [] };
+  } catch (err) {
+    console.error('[findVatTu] Lỗi:', err);
+    return { items: [], error: err.message };
+  }
+}
+
+/**
+ * THAO TÁC LÀM HỘ (KHO VẬT TƯ) — nhập/xuất qua RPC có sẵn sumi_vat_tu_nhap/xuat
+ * (trả { thanh_cong, thong_bao }). Gate Thủ kho/Ban Giám đốc.
+ */
+export async function runVatTuAction({ hanh_dong, ma, ten, don_vi, so_luong, ghi_chu, userProfile }) {
+  if (!hasAnyRole(userProfile, INVENTORY_VIEW_ROLES)) {
+    return { success: false, denied: true, message: 'Xin lỗi, thao tác kho vật tư chỉ dành cho Thủ kho/Ban Giám đốc.' };
+  }
+  const qty = Number(so_luong);
+  if (!ma) return { success: false, message: 'Chưa rõ vật tư cần thao tác.' };
+  if (!Number.isFinite(qty) || qty <= 0) return { success: false, message: 'Số lượng không hợp lệ.' };
+  try {
+    const fn = hanh_dong === 'xuat' ? 'sumi_vat_tu_xuat' : 'sumi_vat_tu_nhap';
+    const { data, error } = await supabase.rpc(fn, { p_ma: ma, p_so_luong: qty, p_ghi_chu: ghi_chu ? String(ghi_chu).trim() : null });
+    if (error) throw error;
+    if (data && data.thanh_cong === false) return { success: false, message: data.thong_bao || 'Thao tác kho không thành công.' };
+    playConfirmSound();
+    const label = hanh_dong === 'xuat' ? 'xuất' : 'nhập';
+    return { success: true, message: `Đã ${label} kho ${qty} ${don_vi || ''} ${ten || ma} thành công!`.replace(/\s+/g, ' ').trim() };
+  } catch (err) {
+    console.error('[runVatTuAction] Lỗi:', err);
+    return { success: false, message: `Không thao tác được kho: ${err.message}` };
   }
 }
 

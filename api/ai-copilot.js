@@ -296,6 +296,20 @@ export default async function handler(req, res) {
             },
             required: ['hanh_dong', 'ten_viec']
           }
+        },
+        {
+          name: 'thao_tac_kho_vat_tu',
+          description: 'Làm hộ nhập/xuất KHO VẬT TƯ (Xưởng 41). CHỈ Thủ kho/Ban Giám đốc.',
+          parameters: {
+            type: Type.OBJECT,
+            properties: {
+              hanh_dong: { type: Type.STRING, enum: ['nhap', 'xuat'], description: 'nhap = nhập kho; xuat = xuất kho' },
+              ten_vat_tu: { type: Type.STRING, description: 'Tên hoặc mã vật tư' },
+              so_luong: { type: Type.NUMBER, description: 'Số lượng nhập/xuất' },
+              ghi_chu: { type: Type.STRING, description: 'Ghi chú (nếu có)' }
+            },
+            required: ['hanh_dong', 'ten_vat_tu', 'so_luong']
+          }
         }
       ]
     }];
@@ -386,7 +400,8 @@ NGUYÊN TẮC BÁO CÁO SỐ LIỆU KINH DOANH & TRUY VẤN THỜI GIAN THỰC (
 
 13. TỰ TRUY VẤN & SUY LUẬN TRÊN DỮ LIỆU THẬT: khi câu hỏi cần dữ liệu mà các tool trên chưa bao -> 'truy_van_du_lieu' đọc bảng phù hợp (orders, order_items, customers, products, tasks, finished_goods_stock, warehouse_stock, shift_logs, expense_claims, salary_advance_requests, incident_reports, profiles) rồi TỰ PHÂN TÍCH trả lời. Kết quả đã tự lọc theo quyền người dùng (cột giá/giá vốn/lương/công nợ tự bị ẩn với tuyến dưới). Rỗng thì báo trung thực; ưu tiên tool chuyên biệt trước.
 14. NHẮN TIN CHO NHÂN VIÊN: khi Sếp/Quản lý bảo "nhắn cho [tên] rằng...", "báo [tên]...", "gửi tin cho [tên]" -> 'gui_tin_nhan_cho_nhan_vien' (ten_nhan_vien + noi_dung). Nhân viên sẽ nghe Gen đọc to ngay. CHỈ Quản lý/Giám đốc/Kế toán.
-15. LÀM HỘ THAO TÁC CÔNG VIỆC: khi người dùng nói "nhận việc [X]", "báo xong việc [X]", "từ chối việc [X] vì..." -> 'thao_tac_cong_viec' (hanh_dong + ten_viec [+ ly_do/ghi_chu]). Chỉ tác động việc CỦA CHÍNH họ. Nhiều việc khớp thì hỏi lại cho rõ.`;
+15. LÀM HỘ THAO TÁC CÔNG VIỆC: khi người dùng nói "nhận việc [X]", "báo xong việc [X]", "từ chối việc [X] vì..." -> 'thao_tac_cong_viec' (hanh_dong + ten_viec [+ ly_do/ghi_chu]). Chỉ tác động việc CỦA CHÍNH họ. Nhiều việc khớp thì hỏi lại cho rõ.
+16. LÀM HỘ NHẬP/XUẤT KHO VẬT TƯ: khi Thủ kho/Sếp nói "nhập [số] [vật tư]", "xuất [số] [vật tư]" -> 'thao_tac_kho_vat_tu' (hanh_dong nhap/xuat + ten_vat_tu + so_luong [+ ghi_chu]). Nhiều vật tư khớp thì hỏi lại. CHỈ Thủ kho/Ban Giám đốc.`;
 
     // Chuẩn bị nội dung gửi Gemini (Multimodal text + image nếu có)
     const contents = [];

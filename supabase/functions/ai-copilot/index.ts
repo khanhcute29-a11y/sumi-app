@@ -261,6 +261,20 @@ const functionDeclarations = [
       required: ["hanh_dong", "ten_viec"],
     },
   },
+  {
+    name: "thao_tac_kho_vat_tu",
+    description: "Làm hộ nhập/xuất KHO VẬT TƯ (Xưởng 41). CHỈ Thủ kho/Ban Giám đốc.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        hanh_dong: { type: "STRING", enum: ["nhap", "xuat"], description: "nhap = nhập kho; xuat = xuất kho" },
+        ten_vat_tu: { type: "STRING", description: "Tên hoặc mã vật tư" },
+        so_luong: { type: "NUMBER", description: "Số lượng nhập/xuất" },
+        ghi_chu: { type: "STRING", description: "Ghi chú (nếu có)" },
+      },
+      required: ["hanh_dong", "ten_vat_tu", "so_luong"],
+    },
+  },
 ];
 
 const DATA_CATALOG = `- orders: đơn hàng (order_code, status_v2, order_type, created_at, required_at, customer_id)
@@ -313,7 +327,8 @@ NGUYÊN TẮC BÁO CÁO & TRUY VẤN THỜI GIAN THỰC:
 ${DATA_CATALOG}
    - Kết quả trả về ĐÃ TỰ LỌC theo quyền người dùng (cột nhạy cảm: giá, giá vốn, lương, công nợ tự bị ẩn với tuyến dưới) -> cứ dùng thoải mái, không lo rò rỉ. Nếu dữ liệu rỗng thì báo trung thực, không bịa. Ưu tiên các tool chuyên biệt ở trên; chỉ dùng truy_van_du_lieu khi cần linh hoạt.
 14. NHẮN TIN CHO NHÂN VIÊN: khi Sếp/Quản lý bảo "nhắn cho [tên] rằng...", "báo [tên]...", "gửi tin cho [tên]" -> 'gui_tin_nhan_cho_nhan_vien' (ten_nhan_vien + noi_dung). Nhân viên sẽ nghe Gen đọc to ngay trên màn hình. CHỈ Quản lý/Giám đốc/Kế toán.
-15. LÀM HỘ THAO TÁC CÔNG VIỆC: khi người dùng nói "nhận việc [X]", "báo xong việc [X]", "từ chối việc [X] vì..." -> 'thao_tac_cong_viec' (hanh_dong + ten_viec [+ ly_do/ghi_chu]). Chỉ tác động việc CỦA CHÍNH họ. Nhiều việc khớp thì hỏi lại cho rõ, không tự đoán.`;
+15. LÀM HỘ THAO TÁC CÔNG VIỆC: khi người dùng nói "nhận việc [X]", "báo xong việc [X]", "từ chối việc [X] vì..." -> 'thao_tac_cong_viec' (hanh_dong + ten_viec [+ ly_do/ghi_chu]). Chỉ tác động việc CỦA CHÍNH họ. Nhiều việc khớp thì hỏi lại cho rõ, không tự đoán.
+16. LÀM HỘ NHẬP/XUẤT KHO VẬT TƯ: khi Thủ kho/Sếp nói "nhập [số] [vật tư]", "xuất [số] [vật tư]" -> 'thao_tac_kho_vat_tu' (hanh_dong nhap/xuat + ten_vat_tu + so_luong [+ ghi_chu]). Nhiều vật tư khớp thì hỏi lại. CHỈ Thủ kho/Ban Giám đốc.`;
 }
 
 serve(async (req) => {

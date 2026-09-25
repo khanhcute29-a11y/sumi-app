@@ -11,7 +11,8 @@ import {
   executeCreateOrderDirectly, executeSearchOrder, executeSearchTasks, executeOrderStatusUpdate,
   executeCheckInventory, executeGetStaffAttendance, executeReviewClaimOrAdvance,
   executeBusinessAnalysis, executeDebtLookup, executeLowStockAlert, executeOpsSummary,
-  executeAppGuide, executeSendMessage, findMyTasks, runTaskAction, resolveOrderId
+  executeAppGuide, executeSendMessage, findMyTasks, runTaskAction,
+  findVatTu, runVatTuAction, resolveOrderId
 } from '../../lib/geminiCopilot';
 import { executeDataQuery } from '../../lib/genDataQuery';
 import { playConfirmSound } from '../../lib/sound';
@@ -393,6 +394,21 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm,
             actionToConfirm = { name: 'thao_tac_cong_viec', args: { task_id: t.id, task_title: t.title, hanh_dong: fc.args.hanh_dong, ly_do: fc.args.ly_do, ghi_chu: fc.args.ghi_chu } };
             replyText = `Dạ, em sẽ ${actLabel}: "${t.title}". Anh/chị bấm xác nhận bên dưới nhé!`;
           }
+        } else if (fc.name === 'thao_tac_kho_vat_tu') {
+          const r = await findVatTu({ ten_vat_tu: fc.args.ten_vat_tu, userProfile });
+          const actLabel = fc.args.hanh_dong === 'xuat' ? 'xuất kho' : 'nhập kho';
+          if (r.denied) {
+            replyText = r.message;
+          } else if (!r.items || r.items.length === 0) {
+            replyText = `Em không tìm thấy vật tư "${fc.args.ten_vat_tu}" trong danh mục kho. Anh/chị kiểm tra lại tên/mã giúp em nhé.`;
+          } else if (r.items.length > 1) {
+            const names = r.items.map(i => `• ${i.ten} (mã ${i.ma}, đvt ${i.don_vi})`).join('\n');
+            replyText = `Có ${r.items.length} vật tư khớp "${fc.args.ten_vat_tu}":\n${names}\nAnh/chị nói rõ tên/mã hơn để em ${actLabel} đúng nhé.`;
+          } else {
+            const it = r.items[0];
+            actionToConfirm = { name: 'thao_tac_kho_vat_tu', args: { ma: it.ma, ten: it.ten, don_vi: it.don_vi, hanh_dong: fc.args.hanh_dong, so_luong: fc.args.so_luong, ghi_chu: fc.args.ghi_chu } };
+            replyText = `Dạ, em sẽ ${actLabel} ${fc.args.so_luong} ${it.don_vi} ${it.ten}. Anh/chị bấm xác nhận bên dưới nhé!`;
+          }
         } else {
           actionToConfirm = {
             name: fc.name,
@@ -512,6 +528,22 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm,
           task_id: act.args.task_id,
           ly_do: act.args.ly_do,
           ghi_chu: act.args.ghi_chu
+        });
+        setMessages((prev) => [
+          ...prev,
+          { id: Date.now(), sender: 'gen', text: `${res.success ? '✅' : '⚠️'} ${res.message}` }
+        ]);
+        speakVietnamese(res.message);
+        setPendingAction(null);
+      } else if (act.name === 'thao_tac_kho_vat_tu') {
+        const res = await runVatTuAction({
+          hanh_dong: act.args.hanh_dong,
+          ma: act.args.ma,
+          ten: act.args.ten,
+          don_vi: act.args.don_vi,
+          so_luong: act.args.so_luong,
+          ghi_chu: act.args.ghi_chu,
+          userProfile
         });
         setMessages((prev) => [
           ...prev,
@@ -1358,6 +1390,49 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm,
                       style={{
                         flex: 2, padding: '9px 12px', borderRadius: 10, border: 'none',
                         background: '#16a34a', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
+                      }}
+                    >
+                      <CheckCircle2 size={16} /> Xác nhận
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {m.action && m.action.name === 'thao_tac_kho_vat_tu' && (
+                <div
+                  style={{
+                    background: m.action.args.hanh_dong === 'xuat' ? '#fef2f2' : '#f0fdf4',
+                    border: `1.5px solid ${m.action.args.hanh_dong === 'xuat' ? '#fca5a5' : '#86efac'}`,
+                    borderRadius: '14px',
+                    padding: '14px',
+                    marginTop: '8px'
+                  }}
+                >
+                  <div style={{ fontWeight: 700, color: m.action.args.hanh_dong === 'xuat' ? '#dc2626' : '#16a34a', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Boxes size={18} /> {m.action.args.hanh_dong === 'xuat' ? 'Xuất Kho Vật Tư' : 'Nhập Kho Vật Tư'}
+                  </div>
+                  <div style={{ fontSize: 13, color: '#334155', marginBottom: 12, lineHeight: 1.6 }}>
+                    <div>• Vật tư: <b>{m.action.args.ten}</b> (mã {m.action.args.ma})</div>
+                    <div>• Số lượng: <b>{m.action.args.so_luong} {m.action.args.don_vi}</b></div>
+                    {m.action.args.ghi_chu && <div>• Ghi chú: {m.action.args.ghi_chu}</div>}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => setPendingAction(null)}
+                      style={{
+                        flex: 1, padding: '9px 12px', borderRadius: 10, border: '1px solid #ddd',
+                        background: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer'
+                      }}
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      onClick={() => handleConfirmAction(m.action)}
+                      style={{
+                        flex: 2, padding: '9px 12px', borderRadius: 10, border: 'none',
+                        background: m.action.args.hanh_dong === 'xuat' ? '#dc2626' : '#16a34a',
+                        color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer',
                         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
                       }}
                     >
