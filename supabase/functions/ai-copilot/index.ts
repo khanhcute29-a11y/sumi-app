@@ -247,6 +247,20 @@ const functionDeclarations = [
       required: ["ten_nhan_vien", "noi_dung"],
     },
   },
+  {
+    name: "thao_tac_cong_viec",
+    description: "Làm hộ nhân viên thao tác trên CÔNG VIỆC CỦA CHÍNH HỌ: nhận việc, báo đã xong, hoặc từ chối việc. Chỉ tác động việc của người đang chat.",
+    parameters: {
+      type: "OBJECT",
+      properties: {
+        hanh_dong: { type: "STRING", enum: ["nhan_viec", "bao_xong", "tu_choi"], description: "nhan_viec = nhận việc; bao_xong = báo đã xong; tu_choi = từ chối" },
+        ten_viec: { type: "STRING", description: "Tên/từ khóa công việc cần thao tác" },
+        ly_do: { type: "STRING", description: "Lý do (bắt buộc khi từ chối)" },
+        ghi_chu: { type: "STRING", description: "Ghi chú (khi báo xong, nếu có)" },
+      },
+      required: ["hanh_dong", "ten_viec"],
+    },
+  },
 ];
 
 const DATA_CATALOG = `- orders: đơn hàng (order_code, status_v2, order_type, created_at, required_at, customer_id)
@@ -298,7 +312,8 @@ NGUYÊN TẮC BÁO CÁO & TRUY VẤN THỜI GIAN THỰC:
 13. TỰ TRUY VẤN & SUY LUẬN TRÊN DỮ LIỆU THẬT: khi câu hỏi cần dữ liệu mà các tool trên chưa bao (VD "khách nào đặt macaron nhiều nhất tháng này", "đơn nào trễ hẹn", "so sánh...") -> dùng 'truy_van_du_lieu' đọc bảng phù hợp rồi TỰ PHÂN TÍCH để trả lời. Danh mục bảng:
 ${DATA_CATALOG}
    - Kết quả trả về ĐÃ TỰ LỌC theo quyền người dùng (cột nhạy cảm: giá, giá vốn, lương, công nợ tự bị ẩn với tuyến dưới) -> cứ dùng thoải mái, không lo rò rỉ. Nếu dữ liệu rỗng thì báo trung thực, không bịa. Ưu tiên các tool chuyên biệt ở trên; chỉ dùng truy_van_du_lieu khi cần linh hoạt.
-14. NHẮN TIN CHO NHÂN VIÊN: khi Sếp/Quản lý bảo "nhắn cho [tên] rằng...", "báo [tên]...", "gửi tin cho [tên]" -> 'gui_tin_nhan_cho_nhan_vien' (ten_nhan_vien + noi_dung). Nhân viên sẽ nghe Gen đọc to ngay trên màn hình. CHỈ Quản lý/Giám đốc/Kế toán.`;
+14. NHẮN TIN CHO NHÂN VIÊN: khi Sếp/Quản lý bảo "nhắn cho [tên] rằng...", "báo [tên]...", "gửi tin cho [tên]" -> 'gui_tin_nhan_cho_nhan_vien' (ten_nhan_vien + noi_dung). Nhân viên sẽ nghe Gen đọc to ngay trên màn hình. CHỈ Quản lý/Giám đốc/Kế toán.
+15. LÀM HỘ THAO TÁC CÔNG VIỆC: khi người dùng nói "nhận việc [X]", "báo xong việc [X]", "từ chối việc [X] vì..." -> 'thao_tac_cong_viec' (hanh_dong + ten_viec [+ ly_do/ghi_chu]). Chỉ tác động việc CỦA CHÍNH họ. Nhiều việc khớp thì hỏi lại cho rõ, không tự đoán.`;
 }
 
 serve(async (req) => {

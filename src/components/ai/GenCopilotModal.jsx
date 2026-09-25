@@ -11,7 +11,7 @@ import {
   executeCreateOrderDirectly, executeSearchOrder, executeSearchTasks, executeOrderStatusUpdate,
   executeCheckInventory, executeGetStaffAttendance, executeReviewClaimOrAdvance,
   executeBusinessAnalysis, executeDebtLookup, executeLowStockAlert, executeOpsSummary,
-  executeAppGuide, executeSendMessage, resolveOrderId
+  executeAppGuide, executeSendMessage, findMyTasks, runTaskAction, resolveOrderId
 } from '../../lib/geminiCopilot';
 import { executeDataQuery } from '../../lib/genDataQuery';
 import { playConfirmSound } from '../../lib/sound';
@@ -380,6 +380,19 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm,
               ? follow.reply
               : `Em tìm thấy ${r.rows.length} kết quả trong "${fc.args.bang}" nhưng chưa tổng hợp được, anh/chị hỏi cụ thể hơn giúp em nhé.`;
           }
+        } else if (fc.name === 'thao_tac_cong_viec') {
+          const r = await findMyTasks({ ten_viec: fc.args.ten_viec, userProfile });
+          const actLabel = { nhan_viec: 'nhận việc', bao_xong: 'báo đã xong việc', tu_choi: 'từ chối việc' }[fc.args.hanh_dong] || 'thao tác việc';
+          if (!r.tasks || r.tasks.length === 0) {
+            replyText = `Em không tìm thấy việc "${fc.args.ten_viec}" đang mở của anh/chị. Anh/chị kiểm tra lại tên việc giúp em nhé.`;
+          } else if (r.tasks.length > 1) {
+            const names = r.tasks.map(t => `• ${t.title}`).join('\n');
+            replyText = `Có ${r.tasks.length} việc khớp "${fc.args.ten_viec}":\n${names}\nAnh/chị nói rõ tên việc hơn để em ${actLabel} đúng nhé.`;
+          } else {
+            const t = r.tasks[0];
+            actionToConfirm = { name: 'thao_tac_cong_viec', args: { task_id: t.id, task_title: t.title, hanh_dong: fc.args.hanh_dong, ly_do: fc.args.ly_do, ghi_chu: fc.args.ghi_chu } };
+            replyText = `Dạ, em sẽ ${actLabel}: "${t.title}". Anh/chị bấm xác nhận bên dưới nhé!`;
+          }
         } else {
           actionToConfirm = {
             name: fc.name,
@@ -486,6 +499,19 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm,
           ten_nhan_vien: act.args.ten_nhan_vien,
           noi_dung: act.args.noi_dung,
           userProfile
+        });
+        setMessages((prev) => [
+          ...prev,
+          { id: Date.now(), sender: 'gen', text: `${res.success ? '✅' : '⚠️'} ${res.message}` }
+        ]);
+        speakVietnamese(res.message);
+        setPendingAction(null);
+      } else if (act.name === 'thao_tac_cong_viec') {
+        const res = await runTaskAction({
+          hanh_dong: act.args.hanh_dong,
+          task_id: act.args.task_id,
+          ly_do: act.args.ly_do,
+          ghi_chu: act.args.ghi_chu
         });
         setMessages((prev) => [
           ...prev,
@@ -1294,6 +1320,48 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm,
                       }}
                     >
                       <Send size={16} /> Gửi ngay
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {m.action && m.action.name === 'thao_tac_cong_viec' && (
+                <div
+                  style={{
+                    background: '#f0fdf4',
+                    border: '1.5px solid #86efac',
+                    borderRadius: '14px',
+                    padding: '14px',
+                    marginTop: '8px'
+                  }}
+                >
+                  <div style={{ fontWeight: 700, color: '#16a34a', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <ClipboardList size={18} /> {({ nhan_viec: 'Nhận Việc', bao_xong: 'Báo Xong Việc', tu_choi: 'Từ Chối Việc' })[m.action.args.hanh_dong] || 'Thao Tác Việc'}
+                  </div>
+                  <div style={{ fontSize: 13, color: '#166534', marginBottom: 12, lineHeight: 1.6 }}>
+                    <div>• Công việc: <b>{m.action.args.task_title}</b></div>
+                    {m.action.args.hanh_dong === 'tu_choi' && m.action.args.ly_do && <div>• Lý do: {m.action.args.ly_do}</div>}
+                    {m.action.args.hanh_dong === 'bao_xong' && m.action.args.ghi_chu && <div>• Ghi chú: {m.action.args.ghi_chu}</div>}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={() => setPendingAction(null)}
+                      style={{
+                        flex: 1, padding: '9px 12px', borderRadius: 10, border: '1px solid #ddd',
+                        background: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer'
+                      }}
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      onClick={() => handleConfirmAction(m.action)}
+                      style={{
+                        flex: 2, padding: '9px 12px', borderRadius: 10, border: 'none',
+                        background: '#16a34a', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6
+                      }}
+                    >
+                      <CheckCircle2 size={16} /> Xác nhận
                     </button>
                   </div>
                 </div>

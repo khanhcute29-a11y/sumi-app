@@ -586,6 +586,20 @@ async function callDirectGemini(apiKey, message, imageBase64, userProfile, histo
           },
           required: ['ten_nhan_vien', 'noi_dung']
         }
+      },
+      {
+        name: 'thao_tac_cong_viec',
+        description: 'Làm hộ nhân viên thao tác trên CÔNG VIỆC CỦA CHÍNH HỌ: nhận việc, báo đã xong, hoặc từ chối việc. Chỉ tác động việc của người đang chat.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            hanh_dong: { type: Type.STRING, enum: ['nhan_viec', 'bao_xong', 'tu_choi'], description: 'nhan_viec = nhận việc; bao_xong = báo đã xong; tu_choi = từ chối việc' },
+            ten_viec: { type: Type.STRING, description: 'Tên/từ khóa công việc cần thao tác' },
+            ly_do: { type: Type.STRING, description: 'Lý do (bắt buộc khi từ chối)' },
+            ghi_chu: { type: Type.STRING, description: 'Ghi chú (khi báo xong, nếu có)' }
+          },
+          required: ['hanh_dong', 'ten_viec']
+        }
       }
     ]
   }];
@@ -669,7 +683,9 @@ NGUYÊN TẮC BÁO CÁO SỐ LIỆU KINH DOANH & TRUY VẤN THỜI GIAN THỰC (
 ${DATA_CATALOG}
    - Kết quả ĐÃ TỰ LỌC theo quyền (cột nhạy cảm: giá/giá vốn/lương/công nợ tự bị ẩn với tuyến dưới) — dùng thoải mái, không lo rò rỉ. Rỗng thì báo trung thực. Ưu tiên tool chuyên biệt; chỉ dùng truy_van_du_lieu khi cần linh hoạt.
 
-14. NHẮN TIN CHO NHÂN VIÊN: khi Sếp/Quản lý bảo "nhắn cho [tên] rằng...", "báo [tên]...", "gửi tin cho [tên] nội dung...": kích hoạt 'gui_tin_nhan_cho_nhan_vien' (ten_nhan_vien + noi_dung). Nhân viên sẽ nghe Gen đọc to ngay trên màn hình họ. CHỈ Quản lý/Giám đốc/Kế toán dùng được.`;
+14. NHẮN TIN CHO NHÂN VIÊN: khi Sếp/Quản lý bảo "nhắn cho [tên] rằng...", "báo [tên]...", "gửi tin cho [tên] nội dung...": kích hoạt 'gui_tin_nhan_cho_nhan_vien' (ten_nhan_vien + noi_dung). Nhân viên sẽ nghe Gen đọc to ngay trên màn hình họ. CHỈ Quản lý/Giám đốc/Kế toán dùng được.
+
+15. LÀM HỘ THAO TÁC CÔNG VIỆC: khi người dùng nói "nhận việc [X]", "báo xong việc [X]", "từ chối việc [X] vì...": kích hoạt 'thao_tac_cong_viec' (hanh_dong + ten_viec [+ ly_do/ghi_chu]). Chỉ tác động việc CỦA CHÍNH họ. Nếu không rõ việc nào (nhiều việc khớp) thì hỏi lại cho rõ, không tự đoán.`;
 
   const contents = [];
 
@@ -1712,6 +1728,69 @@ export async function executeSendMessage({ ten_nhan_vien, noi_dung, userProfile 
   } catch (err) {
     console.error('[executeSendMessage] Lỗi:', err);
     return { success: false, error: err.message, message: `Không gửi được tin: ${err.message}` };
+  }
+}
+
+/**
+ * THAO TÁC LÀM HỘ — tìm việc CỦA CHÍNH người dùng (assignee = mình; RLS cũng chỉ
+ * cho thấy việc của mình) khớp từ khóa, còn chưa xong. Trả tối đa 5 để chọn.
+ */
+export async function findMyTasks({ ten_viec, userProfile }) {
+  const me = userProfile?.id;
+  if (!me) return { tasks: [] };
+  const kw = String(ten_viec || '').trim();
+  try {
+    let q = supabase
+      .from('tasks')
+      .select('id, title, status, deadline')
+      .eq('assignee_id', me)
+      .is('deleted_at', null)
+      .not('status', 'in', '("done","completed")')
+      .order('created_at', { ascending: false })
+      .limit(5);
+    if (kw) q = q.ilike('title', `%${kw}%`);
+    const { data, error } = await q;
+    if (error) throw error;
+    return { tasks: data || [] };
+  } catch (err) {
+    console.error('[findMyTasks] Lỗi:', err);
+    return { tasks: [], error: err.message };
+  }
+}
+
+/**
+ * THAO TÁC LÀM HỘ — thực thi hành động vòng đời công việc qua RPC có sẵn
+ * (đã được RLS/RPC chặn: chỉ chủ việc thao tác được). CHỈ ĐỌC/GHI đúng việc mình.
+ */
+export async function runTaskAction({ hanh_dong, task_id, ly_do, ghi_chu }) {
+  if (!task_id) return { success: false, message: 'Chưa rõ công việc cần thao tác.' };
+  try {
+    if (hanh_dong === 'nhan_viec') {
+      const { error } = await supabase.rpc('sumi_nhan_viec', { p_task_id: task_id });
+      if (error) throw error;
+      playConfirmSound();
+      return { success: true, message: 'Đã nhận việc thành công!' };
+    }
+    if (hanh_dong === 'tu_choi') {
+      const { error } = await supabase.rpc('sumi_tu_choi_viec', { p_task_id: task_id, p_ly_do: String(ly_do || 'Không nêu lý do').trim() });
+      if (error) throw error;
+      playConfirmSound();
+      return { success: true, message: 'Đã từ chối việc và gửi lý do cho quản lý.' };
+    }
+    if (hanh_dong === 'bao_xong') {
+      const { error } = await supabase.rpc('sumi_bao_xong_viec', { p_task_id: task_id, p_photo_url: null, p_note: ghi_chu ? String(ghi_chu).trim() : null });
+      if (error) throw error;
+      playConfirmSound();
+      return { success: true, message: 'Đã báo xong việc! Chờ quản lý duyệt.' };
+    }
+    return { success: false, message: 'Hành động không hợp lệ.' };
+  } catch (err) {
+    console.error('[runTaskAction] Lỗi:', err);
+    const msg = String(err.message || '').toLowerCase();
+    if (msg.includes('photo') || msg.includes('proof') || msg.includes('ảnh') || msg.includes('anh')) {
+      return { success: false, message: 'Việc này cần chụp ảnh nghiệm thu — anh/chị vào màn "Việc của tôi" để báo xong kèm ảnh nhé.' };
+    }
+    return { success: false, message: `Không thực hiện được: ${err.message}` };
   }
 }
 
