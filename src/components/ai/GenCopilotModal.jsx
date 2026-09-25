@@ -12,7 +12,7 @@ import {
   executeCheckInventory, executeGetStaffAttendance, executeReviewClaimOrAdvance,
   executeBusinessAnalysis, executeDebtLookup, executeLowStockAlert, executeOpsSummary,
   executeAppGuide, executeSendMessage, findMyTasks, runTaskAction,
-  findVatTu, runVatTuAction, resolveOrderId
+  findVatTu, runVatTuAction, executeSaveMemory, resolveOrderId
 } from '../../lib/geminiCopilot';
 import { executeDataQuery } from '../../lib/genDataQuery';
 import { playConfirmSound } from '../../lib/sound';
@@ -409,6 +409,9 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm,
             actionToConfirm = { name: 'thao_tac_kho_vat_tu', args: { ma: it.ma, ten: it.ten, don_vi: it.don_vi, hanh_dong: fc.args.hanh_dong, so_luong: fc.args.so_luong, ghi_chu: fc.args.ghi_chu } };
             replyText = `Dạ, em sẽ ${actLabel} ${fc.args.so_luong} ${it.don_vi} ${it.ten}. Anh/chị bấm xác nhận bên dưới nhé!`;
           }
+        } else if (fc.name === 'ghi_nho') {
+          const r = await executeSaveMemory({ noi_dung: fc.args.noi_dung, userProfile });
+          replyText = r.message;
         } else {
           actionToConfirm = {
             name: fc.name,

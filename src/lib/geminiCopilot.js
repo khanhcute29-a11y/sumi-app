@@ -177,6 +177,20 @@ export async function fetchSumiAppSnapshot(userProfile) {
     console.warn('[fetchSumiAppSnapshot] Lỗi thu thập dữ liệu:', e);
   }
 
+  // BỘ NHỚ HỘI THOẠI: nạp các điều Gen đã ghi nhớ về CHÍNH người dùng này (RLS
+  // chỉ cho đọc của mình). Nếu bảng chưa tạo thì bỏ qua êm, không làm hỏng snapshot.
+  try {
+    if (userProfile?.id) {
+      const { data: mem } = await supabase
+        .from('gen_memory')
+        .select('noi_dung, created_at')
+        .eq('profile_id', userProfile.id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (mem && mem.length > 0) snapshot.ghi_nho_ve_toi = mem.map((m) => m.noi_dung);
+    }
+  } catch (_) { /* bảng gen_memory chưa tồn tại — bỏ qua */ }
+
   return snapshot;
 }
 
@@ -614,6 +628,17 @@ async function callDirectGemini(apiKey, message, imageBase64, userProfile, histo
           },
           required: ['hanh_dong', 'ten_vat_tu', 'so_luong']
         }
+      },
+      {
+        name: 'ghi_nho',
+        description: 'Ghi nhớ một điều về NGƯỜI DÙNG để lần sau nhớ (thói quen, sở thích, thông tin cá nhân họ muốn Gen nhớ). Dùng khi người dùng nói "nhớ giúp tôi...", "lần sau nhớ...", hoặc khi học được điều ổn định về họ.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            noi_dung: { type: Type.STRING, description: 'Điều cần ghi nhớ, ngắn gọn (VD: "phụ trách bếp lạnh", "thường xin ứng lương đầu tháng")' }
+          },
+          required: ['noi_dung']
+        }
       }
     ]
   }];
@@ -701,7 +726,9 @@ ${DATA_CATALOG}
 
 15. LÀM HỘ THAO TÁC CÔNG VIỆC: khi người dùng nói "nhận việc [X]", "báo xong việc [X]", "từ chối việc [X] vì...": kích hoạt 'thao_tac_cong_viec' (hanh_dong + ten_viec [+ ly_do/ghi_chu]). Chỉ tác động việc CỦA CHÍNH họ. Nếu không rõ việc nào (nhiều việc khớp) thì hỏi lại cho rõ, không tự đoán.
 
-16. LÀM HỘ NHẬP/XUẤT KHO VẬT TƯ: khi Thủ kho/Sếp nói "nhập [số] [vật tư]", "xuất [số] [vật tư]": kích hoạt 'thao_tac_kho_vat_tu' (hanh_dong nhap/xuat + ten_vat_tu + so_luong [+ ghi_chu]). Nhiều vật tư khớp thì hỏi lại cho rõ. CHỈ Thủ kho/Ban Giám đốc.`;
+16. LÀM HỘ NHẬP/XUẤT KHO VẬT TƯ: khi Thủ kho/Sếp nói "nhập [số] [vật tư]", "xuất [số] [vật tư]": kích hoạt 'thao_tac_kho_vat_tu' (hanh_dong nhap/xuat + ten_vat_tu + so_luong [+ ghi_chu]). Nhiều vật tư khớp thì hỏi lại cho rõ. CHỈ Thủ kho/Ban Giám đốc.
+
+17. BỘ NHỚ HỘI THOẠI: mục 'ghi_nho_ve_toi' trong [DỮ LIỆU THỜI GIAN THỰC] là những điều em ĐÃ NHỚ về người này — hãy dùng để cá nhân hóa câu trả lời. Khi người dùng nói "nhớ giúp tôi...", "lần sau nhớ...", hoặc cho biết một thói quen/sở thích ổn định: BẮT BUỘC kích hoạt tool 'ghi_nho' để LƯU THẬT — TUYỆT ĐỐI KHÔNG chỉ trả lời "đã nhớ" mà không gọi tool. Đừng ghi nhớ thông tin nhạy cảm/mật khẩu.`;
 
   const contents = [];
 
@@ -1853,6 +1880,29 @@ export async function runVatTuAction({ hanh_dong, ma, ten, don_vi, so_luong, ghi
   } catch (err) {
     console.error('[runVatTuAction] Lỗi:', err);
     return { success: false, message: `Không thao tác được kho: ${err.message}` };
+  }
+}
+
+/**
+ * BỘ NHỚ HỘI THOẠI — lưu một điều Gen cần nhớ về CHÍNH người dùng (RLS with-check
+ * chỉ cho ghi bản ghi của mình). Được nạp lại vào snapshot ở lần chat sau.
+ */
+export async function executeSaveMemory({ noi_dung, userProfile }) {
+  const me = userProfile?.id;
+  const content = String(noi_dung || '').trim();
+  if (!me) return { success: false, message: 'Chưa xác định được người dùng.' };
+  if (!content) return { success: false, message: 'Chưa có nội dung để ghi nhớ.' };
+  try {
+    const { error } = await supabase.from('gen_memory').insert({ profile_id: me, noi_dung: content });
+    if (error) throw error;
+    playConfirmSound();
+    return { success: true, message: `Dạ, em đã ghi nhớ: "${content}". Lần sau em sẽ nhớ điều này.` };
+  } catch (err) {
+    console.error('[executeSaveMemory] Lỗi:', err);
+    if (/does not exist|schema cache|relation/i.test(String(err.message || ''))) {
+      return { success: false, message: 'Tính năng ghi nhớ chưa được bật (thiếu bảng). Báo quản trị chạy cập nhật database nhé.' };
+    }
+    return { success: false, message: `Không ghi nhớ được: ${err.message}` };
   }
 }
 

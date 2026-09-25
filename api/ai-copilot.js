@@ -310,6 +310,17 @@ export default async function handler(req, res) {
             },
             required: ['hanh_dong', 'ten_vat_tu', 'so_luong']
           }
+        },
+        {
+          name: 'ghi_nho',
+          description: "Ghi nhớ một điều về NGƯỜI DÙNG để lần sau nhớ (thói quen, sở thích, thông tin họ muốn Gen nhớ). Dùng khi họ nói 'nhớ giúp tôi...', 'lần sau nhớ...', hoặc khi học được điều ổn định về họ.",
+          parameters: {
+            type: Type.OBJECT,
+            properties: {
+              noi_dung: { type: Type.STRING, description: 'Điều cần ghi nhớ, ngắn gọn' }
+            },
+            required: ['noi_dung']
+          }
         }
       ]
     }];
@@ -401,7 +412,8 @@ NGUYÊN TẮC BÁO CÁO SỐ LIỆU KINH DOANH & TRUY VẤN THỜI GIAN THỰC (
 13. TỰ TRUY VẤN & SUY LUẬN TRÊN DỮ LIỆU THẬT: khi câu hỏi cần dữ liệu mà các tool trên chưa bao -> 'truy_van_du_lieu' đọc bảng phù hợp (orders, order_items, customers, products, tasks, finished_goods_stock, warehouse_stock, shift_logs, expense_claims, salary_advance_requests, incident_reports, profiles) rồi TỰ PHÂN TÍCH trả lời. Kết quả đã tự lọc theo quyền người dùng (cột giá/giá vốn/lương/công nợ tự bị ẩn với tuyến dưới). Rỗng thì báo trung thực; ưu tiên tool chuyên biệt trước.
 14. NHẮN TIN CHO NHÂN VIÊN: khi Sếp/Quản lý bảo "nhắn cho [tên] rằng...", "báo [tên]...", "gửi tin cho [tên]" -> 'gui_tin_nhan_cho_nhan_vien' (ten_nhan_vien + noi_dung). Nhân viên sẽ nghe Gen đọc to ngay. CHỈ Quản lý/Giám đốc/Kế toán.
 15. LÀM HỘ THAO TÁC CÔNG VIỆC: khi người dùng nói "nhận việc [X]", "báo xong việc [X]", "từ chối việc [X] vì..." -> 'thao_tac_cong_viec' (hanh_dong + ten_viec [+ ly_do/ghi_chu]). Chỉ tác động việc CỦA CHÍNH họ. Nhiều việc khớp thì hỏi lại cho rõ.
-16. LÀM HỘ NHẬP/XUẤT KHO VẬT TƯ: khi Thủ kho/Sếp nói "nhập [số] [vật tư]", "xuất [số] [vật tư]" -> 'thao_tac_kho_vat_tu' (hanh_dong nhap/xuat + ten_vat_tu + so_luong [+ ghi_chu]). Nhiều vật tư khớp thì hỏi lại. CHỈ Thủ kho/Ban Giám đốc.`;
+16. LÀM HỘ NHẬP/XUẤT KHO VẬT TƯ: khi Thủ kho/Sếp nói "nhập [số] [vật tư]", "xuất [số] [vật tư]" -> 'thao_tac_kho_vat_tu' (hanh_dong nhap/xuat + ten_vat_tu + so_luong [+ ghi_chu]). Nhiều vật tư khớp thì hỏi lại. CHỈ Thủ kho/Ban Giám đốc.
+17. BỘ NHỚ HỘI THOẠI: mục 'ghi_nho_ve_toi' trong [DỮ LIỆU THỜI GIAN THỰC] là những điều đã nhớ về người này -> dùng để cá nhân hóa. Khi họ nói "nhớ giúp tôi...", "lần sau nhớ...", hoặc cho biết thói quen/sở thích ổn định: BẮT BUỘC gọi tool 'ghi_nho' để LƯU THẬT — TUYỆT ĐỐI KHÔNG chỉ trả lời "đã nhớ" mà không gọi tool. KHÔNG ghi nhớ mật khẩu/thông tin nhạy cảm.`;
 
     // Chuẩn bị nội dung gửi Gemini (Multimodal text + image nếu có)
     const contents = [];
