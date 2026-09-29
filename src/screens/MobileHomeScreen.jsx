@@ -361,6 +361,9 @@ function HangGioLam({nguoi,tenHienThi,laToi,tu,den}){
 
 function HieuSuatBepSheet({loai,onClose,doiRoster,tenTheoId,doanhThuBep,doanhThuCaNhan,donCuaBep,gioLamDoi,thuongDoi,profile,tu,den}){
  const[xemDon,setXemDon]=useState(null);      // orderId đang xem chi tiết
+ // Đặt ở đầu hàm (trước các nhánh return theo `loai`) — React bắt buộc mọi lần
+ // render gọi cùng số hook; trước đây dòng này nằm sau 2 nhánh return sớm.
+ const[xemThuong,setXemThuong]=useState(null); // reward đang mở chi tiết
  if(loai==='doanhThu'){
   const donCoDoanhThu=(donCuaBep||[]).filter(o=>o.status_v2==='completed');
   return<LeadSheet title="💰 Doanh thu bếp (tháng này)" onClose={onClose}>
@@ -400,7 +403,6 @@ function HieuSuatBepSheet({loai,onClose,doiRoster,tenTheoId,doanhThuBep,doanhThu
  const tongBep=(thuongDoi||[]).reduce((s,r)=>s+Number(r.amount||0),0);
  const cuaToi=(thuongDoi||[]).filter(r=>r.staff_id===profile?.id);
  const tongCaNhan=cuaToi.reduce((s,r)=>s+Number(r.amount||0),0);
- const[xemThuong,setXemThuong]=useState(null); // reward đang mở chi tiết
  const HangThuong=({r,hienTen})=>(
   <button key={r.id} className="eov4-table-row" onClick={()=>setXemThuong(r)} style={{width:'100%',border:0,background:'transparent',cursor:'pointer',textAlign:'left',font:'inherit'}}>
    <div className="eov4-table-main"><strong>{hienTen?`${tenTheoId[r.staff_id]||'?'} — `:''}{r.title||'Thưởng nóng'}</strong><span>Từ {r.ten_nguoi_thuong} · {r.awarded_on}{r.note?` · ${r.note}`:''}</span></div>
