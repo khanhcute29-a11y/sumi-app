@@ -298,6 +298,21 @@ function OpsApp({ onSignOut }) {
           // và kết quả duyệt/từ chối khoản chi + tạm ứng — TRƯỚC ĐÂY 2 loại
           // tài chính này chỉ kêu khi đang mở đúng màn Hộp thư
           // (InboxV2Screen), giờ kêu TOÀN CỤC như các loại tin khác ở trên.
+          // Cảnh báo đơn trễ (máy chủ tự rà, xem migration 202609291000) —
+          // trước đây hàm tạo cảnh báo chưa từng chạy được nên chưa có nhánh
+          // này. Chuông + nhãn cùng 1 playOnce như các loại khác.
+          if (['order_waiting', 'delivery_waiting', 'order_due_soon'].includes(n.notification_type)) {
+            playOnce(n.notification_type + ':' + n.id, () => {
+              playNotificationSound(n.sound_key);
+              showToast({
+                ...NOTIFY_KINDS[n.notification_type],
+                message: n.body || n.title,
+                entityId: n.entity_id,
+              });
+            });
+            return;
+          }
+
           if (['task_progress', 'expense_claim', 'salary_advance', 'chat_mention', 'task_deadline_alert', 'star_reward', 'star_penalty'].includes(n.notification_type)) {
             playOnce(n.notification_type + ':' + n.id, () => {
               playNotificationSound(n.sound_key);

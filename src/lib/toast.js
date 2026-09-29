@@ -171,6 +171,28 @@ export const NOTIFY_KINDS = {
     tone: 'warning',
     tab: 'tasks',
   },
+  // Cảnh báo đơn trễ do máy chủ tự rà mỗi 5 phút (enqueue_order_operational_
+  // alerts, migration 202609291000) — nhắc lại mỗi 15 phút tới khi có người xử lý.
+  order_waiting: {
+    icon: '⏳',
+    title: 'Đơn chưa có bếp nhận',
+    tone: 'warning',
+    tab: 'orders',
+    filter: 'waiting',
+  },
+  delivery_waiting: {
+    icon: '📦',
+    title: 'Đơn chờ giao quá 30 phút',
+    tone: 'warning',
+    tab: 'orders',
+    filter: 'ready',
+  },
+  order_due_soon: {
+    icon: '🚨',
+    title: 'Đơn sắp tới giờ hẹn',
+    tone: 'warning',
+    tab: 'orders',
+  },
   // 14-15. GIEO HẠT — Giám đốc Cộng/Trừ sao trực tiếp (StarRateBar). Báo cho
   // CẢ người được/bị đánh giá LẪN toàn công ty (broadcast) — cùng 2 loại
   // tin này, chỉ khác entity_id (staff_reward:<id> cho người liên quan).
