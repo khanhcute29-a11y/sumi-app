@@ -386,9 +386,12 @@ function stripDiacritics(text: string): string {
 export function BossOverviewV3Inner({ onNavigate }: { onNavigate?: (tab: string) => void } = {}) {
   const { profile } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
+  // Chuông chỉ hiện tới "9+" -> chỉ cần biết có từ 10 tin chưa đọc chưa. Đếm
+  // chính xác (count: 'exact') trên ~14 nghìn dòng mất ~2,3s mỗi lần mở màn
+  // này; lấy tối đa 10 dòng ~0,2s, số hiện ra y hệt (29/09/2026).
   useEffect(() => {
-    supabase.from('notifications').select('*', { count: 'exact', head: true }).is('read_at', null)
-      .then(({ count, error }) => { if (!error) setUnreadCount(count || 0); });
+    supabase.from('notifications').select('id').is('read_at', null).limit(10)
+      .then(({ data, error }) => { if (!error) setUnreadCount((data || []).length); });
   }, []);
 
   // ── States Quản Lý Bottom Sheets & Bộ Lọc Đơn Hàng ──
