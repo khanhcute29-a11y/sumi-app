@@ -3,6 +3,9 @@ import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../lib/AuthContext';
 import { newId } from '../lib/ids';
 import UserAvatar from '../components/UserAvatar';
+import { fetchShiftLogsRange, fetchShiftConfigs } from '../lib/queries';
+import { computeShiftHours } from '../lib/kpi';
+import { localDateStr, mondayOf } from '../lib/date';
 import { ROLE_META, getRoleMeta, formatStationLabel } from '../lib/roles';
 import { IconClock, IconMoney, IconReceipt, IconReports, IconSettings, IconBell, IconImage, IconLogout, IconClipboard } from '../components/icons/FrogIcons';
 
@@ -11,7 +14,10 @@ export default function MobileProfileScreen({onSignOut,onNavigate}){
  const isDirector=['owner','admin'].includes(profile?.role)||(profile?.extra_roles||[]).some(r=>['owner','admin'].includes(r));
  const isFinance=isDirector||['accountant','cashier'].includes(profile?.role)||(profile?.extra_roles||[]).some(r=>['accountant','cashier'].includes(r));
  const [uploading,setUploading]=useState(false); const [error,setError]=useState(''); const inputRef=useRef(null);
- useEffect(()=>{Promise.all([supabase.from('my_task_queue').select('*',{count:'exact',head:true}).eq('status','completed'),supabase.from('work_sessions').select('regular_minutes,overtime_minutes').eq('employee_id',profile?.id)]).then(([t,w])=>{if(!t.error)setDone(t.count||0);if(!w.error){const mins=(w.data||[]).reduce((s,x)=>s+(x.regular_minutes||0)+(x.overtime_minutes||0),0);setHours(`${Math.round(mins/60)}h`)}})},[profile?.id]);
+ // Ô "Giờ làm" (KẾT QUẢ TUẦN NÀY): trước đây đọc bảng work_sessions KHÔNG tồn
+ // tại (lỗi 404) nên luôn hiện 0h. Giờ tính từ chấm công thật (shift_logs) bằng
+ // đúng hàm computeShiftHours mà màn Hôm nay đang dùng, từ thứ Hai tới hôm nay.
+ useEffect(()=>{const tu=localDateStr(mondayOf(new Date())),den=localDateStr();Promise.all([supabase.from('my_task_queue').select('*',{count:'exact',head:true}).eq('status','completed'),Promise.all([fetchShiftLogsRange(tu,den),fetchShiftConfigs()]).then(([logs,cfg])=>computeShiftHours(logs||[],cfg||[],profile?.id,tu,den)).catch(()=>null)]).then(([t,w])=>{if(!t.error)setDone(t.count||0);if(w)setHours(`${Math.round(w.hoursWorked||0)}h`)})},[profile?.id]);
  const changeAvatar=async file=>{if(!file)return;setUploading(true);setError('');try{const ext=(file.name.split('.').pop()||'jpg').toLowerCase();const path=`avatars/${profile.id}/${newId()}.${ext}`;let r=await supabase.storage.from('uploads').upload(path,file,{upsert:false});if(r.error)throw r.error;r=await supabase.from('profiles').update({avatar_path:path}).eq('id',profile.id);if(r.error)throw r.error;reload();}catch(e){setError(e.message||'Không thể cập nhật ảnh');}finally{setUploading(false)}};
  return <div className="sumi-profile-page">
   <div className="sumi-profile-card">
