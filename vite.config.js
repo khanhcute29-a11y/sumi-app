@@ -35,7 +35,11 @@ export default defineConfig({
         // API Supabase KHÔNG cache ở đây — dữ liệu ghi khi offline được xử lý riêng qua hàng đợi (offlineQueue.js).
         globPatterns: ['**/*.{js,css,html,png,svg}'],
         // Ảnh hướng dẫn tải theo nhu cầu để không làm lần cập nhật app quá nặng.
-        globIgnores: ['visual-guides/**'],
+        // heic2any (đổi ảnh HEIC iPhone, ~1,3MB) + exceljs (xuất Excel, ~0,9MB)
+        // vốn đã import động — không tải trước, để mỗi lần cập nhật app không
+        // bắt MỌI điện thoại tải lại 2,2MB hiếm khi dùng. Lần đầu cần sẽ tải qua
+        // mạng rồi được route NetworkFirst trong src/sw.js giữ lại dùng tiếp.
+        globIgnores: ['visual-guides/**', 'assets/heic2any-*.js', 'assets/exceljs*.js'],
       },
     }),
     {
