@@ -49,7 +49,12 @@ export const periodRange = (period, customFrom, customTo) => {
 export default function MobileHomeScreen({onNavigate}){
  const {profile}=useAuth(); const [tasks,setTasks]=useState([]),[orders,setOrders]=useState([]),[staff,setStaff]=useState([]),[unread,setUnread]=useState(0);
  useEffect(()=>{const run=()=>supabase.rpc('enqueue_order_operational_alerts');run();const timer=setInterval(run,300000);return()=>clearInterval(timer)},[]);
- useEffect(()=>{Promise.all([supabase.from('my_task_queue').select('*').in('status',['open','in_progress']).order('deadline').limit(6),listOrdersV2().catch(()=>[]),supabase.from('profiles').select('id,full_name,role,station,active').eq('active',true).limit(5),supabase.from('notifications').select('*',{count:'exact',head:true}).is('read_at',null)]).then(([t,o,s,n])=>{if(!t.error)setTasks(t.data||[]);setOrders(Array.isArray(o)?o:[]);if(!s.error)setStaff(s.data||[]);if(!n.error)setUnread(n.count||0)});},[profile?.id]);
+ // 4 truy vấn dưới chỉ phục vụ khung DirectorHome/LeadHome (Phó GĐ, Bếp trưởng).
+ // Nhân viên thường (EmployeeOverviewV4) và Giám đốc (BossOverviewV3) tự tải dữ
+ // liệu riêng — trước đây vẫn chạy cả 4 (gồm danh sách đơn đầy đủ + đếm chính
+ // xác ~14 nghìn thông báo) rồi bỏ đi, mỗi lần mở tab Hôm nay (29/09/2026).
+ const dungKhungCu=(isDirector(profile)||isLead(profile))&&!(isDirector(profile)&&canViewRevenue(profile));
+ useEffect(()=>{if(!dungKhungCu)return;Promise.all([supabase.from('my_task_queue').select('*').in('status',['open','in_progress']).order('deadline').limit(6),listOrdersV2().catch(()=>[]),supabase.from('profiles').select('id,full_name,role,station,active').eq('active',true).limit(5),supabase.from('notifications').select('*',{count:'exact',head:true}).is('read_at',null)]).then(([t,o,s,n])=>{if(!t.error)setTasks(t.data||[]);setOrders(Array.isArray(o)?o:[]);if(!s.error)setStaff(s.data||[]);if(!n.error)setUnread(n.count||0)});},[profile?.id,dungKhungCu]);
  // Nhân viên thường (không phải Giám đốc/Quản lý, không phải Bếp trưởng) dùng
  // hẳn màn hình Employee Overview V4 — nó tự vẽ header/banner riêng của nó,
  // nên trả về thẳng, không lồng vào khung header+main dùng chung bên dưới
