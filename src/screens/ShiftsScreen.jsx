@@ -603,6 +603,14 @@ function LeaveModal({ staffName, staffId, staffRole, defaultBranch, onClose, onD
   );
 }
 
+// Đồng hồ có giây (giao diện chấm công cũ) — tự nhảy trong khối nhỏ này,
+// không bắt cả màn Chấm công vẽ lại mỗi giây.
+function DongHoGiay() {
+  const [bayGio, setBayGio] = useState(() => new Date());
+  useEffect(() => { const t = setInterval(() => setBayGio(new Date()), 1000); return () => clearInterval(t); }, []);
+  return bayGio.toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+}
+
 export default function ShiftsScreen() {
   const { profile } = useAuth();
   const [date, setDate] = useState(localDateStr());
@@ -622,7 +630,17 @@ export default function ShiftsScreen() {
   const [xemChamCongCuaToi, setXemChamCongCuaToi] = useState(false);
   const [overridesNgay, setOverridesNgay] = useState({});
 
-  useEffect(() => { const timer = setInterval(() => setCurrentTime(new Date()), 1000); return () => clearInterval(timer); }, []);
+  // Chỉ đổi state khi SANG PHÚT MỚI (trả lại đúng object cũ -> React bỏ qua,
+  // không vẽ lại). Trước đây cả màn Chấm công vẽ lại MỖI GIÂY chỉ vì đồng hồ,
+  // trong khi giao diện V2 chỉ hiện giờ:phút. Đồng hồ có giây ở giao diện cũ
+  // tự nhảy riêng trong <DongHoGiay/>.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const bayGio = new Date();
+      setCurrentTime((cu) => (cu.getMinutes() === bayGio.getMinutes() && cu.getHours() === bayGio.getHours() && cu.getDate() === bayGio.getDate() ? cu : bayGio));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
   const loadLogs = () => { setLoading(true); fetchShiftLogs({ date }).then((data) => { setLogs(data || []); setError(''); }).catch((err) => setError(err.message)).finally(() => setLoading(false)); };
   useEffect(loadLogs, [date]);
 
@@ -755,7 +773,7 @@ export default function ShiftsScreen() {
           </div>
           <div style={{ textAlign: 'right', color: '#fff' }}>
             <div style={{ fontSize: 22, fontWeight: 900, fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
-              {currentTime.toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
+              <DongHoGiay />
             </div>
             <div style={{ fontSize: 12, color: 'rgba(255,255,255,.75)' }}>
               {currentTime.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit' })}
