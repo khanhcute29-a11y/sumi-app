@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { Sidebar } from './components/navigation/Sidebar';
 import { BottomNav } from './components/navigation/BottomNav';
 import ChatScreen from './components/Messenger/ChatScreen';
@@ -15,7 +15,7 @@ import { initAudioUnlock } from './lib/sound';
 import { useOrderNotifications } from './lib/useOrderNotifications';
 import { requestNotificationPermission, playAlertSound, preloadAlertAudio, playViecVoiceSound } from './lib/alarmSound';
 import { playKitchenReceiveSound, playKitchenCompleteSound, playShipperReceiveSound, playShipperCompleteSound, playNotificationSound, playOnce } from './lib/sound';
-import { setupAutoRefresh, cleanupAllSubscriptions, subscribeToMultipleTables, subscribeToBroadcast, BroadcastEvents } from './lib/realtimeSync';
+import { setupAutoRefresh, cleanupAllSubscriptions, subscribeToBroadcast, BroadcastEvents } from './lib/realtimeSync';
 import { ConnectivityBanner } from './components/ConnectivityBanner';
 import ToastHost from './components/ToastHost';
 import AudioUnlockBanner from './components/AudioUnlockBanner';
@@ -28,39 +28,51 @@ import { AuthProvider, useAuth } from './lib/AuthContext';
 import LoginScreen from './screens/LoginScreen';
 import ResetPasswordScreen from './screens/ResetPasswordScreen';
 import PendingApprovalScreen from './screens/PendingApprovalScreen';
-import OrdersV2Screen from './screens/OrdersV2Screen';
-import KdsScreen from './screens/KdsScreen';
-import WarehouseScreen from './screens/WarehouseScreen';
-import CashbookScreen from './screens/CashbookScreen';
-import ShippingScreen from './screens/ShippingScreen';
-import ShippingV2Screen from './screens/ShippingV2Screen';
-import ReportsScreen from './screens/ReportsScreen';
-import CustomersScreen from './screens/CustomersScreen';
-import SettingsScreen from './screens/SettingsScreen';
-import ProductsScreen from './screens/ProductsScreen';
-import ShiftsScreen from './screens/ShiftsScreen';
-import DashboardScreen from './screens/DashboardScreen';
-import StaffScreen from './screens/StaffScreen';
-import StaffDeactivatedScreen from './screens/StaffDeactivatedScreen';
-import ApprovalRequestsScreen from './screens/ApprovalRequestsScreen';
-import TasksScreen from './screens/TasksScreen';
-import IncidentsScreen from './screens/IncidentsScreen';
-import KpiScreen from './screens/KpiScreen';
-import SchoolRevenueScreen from './screens/SchoolRevenueScreen';
-import CustomerDebtScreen from './screens/CustomerDebtScreen';
-import InboxV2Screen from './screens/InboxV2Screen';
-import KpiV2Screen from './screens/KpiV2Screen';
-import StaffTasksAssignedScreen from './screens/StaffTasksAssignedScreen';
-import KpiDashboardScreen from './screens/KpiDashboardScreen';
-import KpiTongQuanScreen from './screens/KpiTongQuanScreen';
 import MobileHomeScreen from './screens/MobileHomeScreen';
 import MobileProfileScreen from './screens/MobileProfileScreen';
-import CompensationScreen from './screens/CompensationScreen';
-import FinanceRequestsScreen from './screens/FinanceRequestsScreen';
-import { AccountantOverviewV1Inner } from './components/mockups/AccountantDashboard/AccountantOverviewV1';
-import CompanyFeedScreen from './screens/CompanyFeedScreen';
-import VisualGuidesScreen from './screens/VisualGuidesScreen';
 import { applyUiScale, getUiScale } from './lib/uiScale';
+import { napManHinh } from './lib/napManHinh';
+// Các màn hình nạp theo nhu cầu (xem src/lib/napManHinh.jsx): "Hôm nay", "Của
+// tôi", Chat giữ import thẳng như cũ để hiện ngay khi mở app; phần còn lại
+// OpsApp nạp ngầm ngay sau khi màn đầu tiên đã hiện.
+const OrdersV2Screen = napManHinh(() => import('./screens/OrdersV2Screen'));
+const KdsScreen = napManHinh(() => import('./screens/KdsScreen'));
+const WarehouseScreen = napManHinh(() => import('./screens/WarehouseScreen'));
+const CashbookScreen = napManHinh(() => import('./screens/CashbookScreen'));
+const ShippingScreen = napManHinh(() => import('./screens/ShippingScreen'));
+const ShippingV2Screen = napManHinh(() => import('./screens/ShippingV2Screen'));
+const ReportsScreen = napManHinh(() => import('./screens/ReportsScreen'));
+const CustomersScreen = napManHinh(() => import('./screens/CustomersScreen'));
+const SettingsScreen = napManHinh(() => import('./screens/SettingsScreen'));
+const ProductsScreen = napManHinh(() => import('./screens/ProductsScreen'));
+const ShiftsScreen = napManHinh(() => import('./screens/ShiftsScreen'));
+const DashboardScreen = napManHinh(() => import('./screens/DashboardScreen'));
+const StaffScreen = napManHinh(() => import('./screens/StaffScreen'));
+const StaffDeactivatedScreen = napManHinh(() => import('./screens/StaffDeactivatedScreen'));
+const ApprovalRequestsScreen = napManHinh(() => import('./screens/ApprovalRequestsScreen'));
+const TasksScreen = napManHinh(() => import('./screens/TasksScreen'));
+const IncidentsScreen = napManHinh(() => import('./screens/IncidentsScreen'));
+const KpiScreen = napManHinh(() => import('./screens/KpiScreen'));
+const SchoolRevenueScreen = napManHinh(() => import('./screens/SchoolRevenueScreen'));
+const CustomerDebtScreen = napManHinh(() => import('./screens/CustomerDebtScreen'));
+const InboxV2Screen = napManHinh(() => import('./screens/InboxV2Screen'));
+const KpiV2Screen = napManHinh(() => import('./screens/KpiV2Screen'));
+const StaffTasksAssignedScreen = napManHinh(() => import('./screens/StaffTasksAssignedScreen'));
+const KpiDashboardScreen = napManHinh(() => import('./screens/KpiDashboardScreen'));
+const KpiTongQuanScreen = napManHinh(() => import('./screens/KpiTongQuanScreen'));
+const CompensationScreen = napManHinh(() => import('./screens/CompensationScreen'));
+const FinanceRequestsScreen = napManHinh(() => import('./screens/FinanceRequestsScreen'));
+const CompanyFeedScreen = napManHinh(() => import('./screens/CompanyFeedScreen'));
+const VisualGuidesScreen = napManHinh(() => import('./screens/VisualGuidesScreen'));
+const AccountantOverviewV1Inner = napManHinh(() => import('./components/mockups/AccountantDashboard/AccountantOverviewV1').then((m) => ({ default: m.AccountantOverviewV1Inner })));
+// Trợ lý Gen chỉ nạp khi bấm mở lần đầu (GenCopilotModal tự return null khi
+// đóng nên không chạy gì ngầm — hoãn nạp không đổi hành vi).
+const GenCopilotModal = napManHinh(() => import('./components/ai/GenCopilotModal').then((m) => ({ default: m.GenCopilotModal })));
+const MAN_HINH_THEO_TAB = {
+  orders: OrdersV2Screen, feed: CompanyFeedScreen, tasks: TasksScreen, staffTasks: StaffTasksAssignedScreen,
+  financeRequests: FinanceRequestsScreen, shipping: ShippingScreen, shifts: ShiftsScreen,
+};
+const MAN_HINH_NAP_SAU = [OrdersV2Screen, KdsScreen, WarehouseScreen, CashbookScreen, ShippingScreen, ShippingV2Screen, ReportsScreen, CustomersScreen, SettingsScreen, ProductsScreen, ShiftsScreen, DashboardScreen, StaffScreen, StaffDeactivatedScreen, ApprovalRequestsScreen, TasksScreen, IncidentsScreen, KpiScreen, SchoolRevenueScreen, CustomerDebtScreen, InboxV2Screen, KpiV2Screen, StaffTasksAssignedScreen, KpiDashboardScreen, KpiTongQuanScreen, CompensationScreen, FinanceRequestsScreen, CompanyFeedScreen, VisualGuidesScreen, AccountantOverviewV1Inner];
 import { NavBadge } from './components/navigation/NavBadge';
 import { IconDashboard, IconShipping, IconProducts, IconShifts, IconReports, IconCustomers, IconStaff, IconSettings, IconCheck, IconWarning, IconClipboard, IconMoney, IconReceipt, IconBan } from './components/icons/FrogIcons';
 
@@ -68,7 +80,6 @@ import { IconDashboard, IconShipping, IconProducts, IconShifts, IconReports, Ico
 // ./lib/roles để App.jsx và Trợ lý Gen chốt phân quyền tài chính đồng nhất.
 import { loadFeatureFlags } from './lib/featureFlags';
 import { GenFloatingButton } from './components/ai/GenFloatingButton';
-import { GenCopilotModal } from './components/ai/GenCopilotModal';
 import { GenVoiceTaskAlert } from './components/ai/GenVoiceTaskAlert';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
@@ -139,6 +150,14 @@ function OpsApp({ onSignOut }) {
 
   useOrderNotifications();
 
+  // Màn đầu tiên đã hiện -> nạp ngầm mọi màn còn lại (song song, không chặn
+  // gì), để lúc bấm sang tab khác / bấm thông báo thì màn đích đã sẵn, hiện
+  // tức thì y như trước khi tách file.
+  useEffect(() => {
+    const t = setTimeout(() => MAN_HINH_NAP_SAU.forEach((m) => m.tai().catch(() => {})), 300);
+    return () => clearTimeout(t);
+  }, []);
+
   useEffect(() => {
     initAudioUnlock();
     preloadAlertAudio().catch(err => console.warn('[App] Alert audio preload warning:', err));
@@ -148,14 +167,8 @@ function OpsApp({ onSignOut }) {
     initDeepLinkFromPush();
 
 
-    // Setup real-time subscriptions for critical tables
-    const unsubscribe = subscribeToMultipleTables(
-      ['orders', 'kitchen_work_packages', 'delivery_runsheets', 'company_feed_posts', 'kpi_logs'],
-      () => {
-        // Dispatch event to trigger UI refresh
-        window.dispatchEvent(new Event('sumi-data-changed'));
-      }
-    );
+    // Kênh postgres_changes cho danh sách đơn đã chuyển vào OrdersV2Screen
+    // (chỉ mở khi đang xem Đơn hàng) — xem ghi chú ở đó.
 
     // Global listener for feed announcements
     // Đường phụ: người ĐĂNG tin không được ghi vào bảng notifications (trigger
@@ -299,7 +312,6 @@ function OpsApp({ onSignOut }) {
       .subscribe();
 
     return () => {
-      unsubscribe();
       unsubFeedBroadcast();
       unsubSoundNotifications();
       supabase.removeChannel(chNotify);
@@ -329,6 +341,14 @@ function OpsApp({ onSignOut }) {
       // Tin nhắn Messenger nội bộ trỏ về tab Chat thật trong nav (trước đây
       // là cửa sổ nổi ChatLauncher riêng — đã bỏ, gộp hẳn vào ChatScreen).
       const nextTab = e.detail?.tab === 'messenger' ? 'chat' : (e.detail?.tab || 'orders');
+      // Bấm thông báo ngay lúc vừa mở app: màn đích có thể chưa nạp xong ->
+      // đợi nạp xong rồi mới đổi tab + bắn các sự kiện mở đúng đơn/việc bên
+      // dưới (các mốc 80/250/500ms tính từ lúc màn đích sẵn sàng như trước).
+      const man = MAN_HINH_THEO_TAB[nextTab];
+      if (man && !man.daNap()) {
+        man.tai().then(() => go(e), () => {});
+        return;
+      }
       setTab(nextTab);
       // 80ms (không phải 0) — khi bấm từ 1 tab KHÁC (vd Chat, Hôm nay) vào 1
       // thông báo của tab 'orders'/'tasks'..., setTab() vừa yêu cầu React
@@ -411,17 +431,26 @@ function OpsApp({ onSignOut }) {
       clearTimeout(chatBadgeTimer);
       chatBadgeTimer = setTimeout(loadChatBadgeOnly, 800);
     };
+    // Cùng lý do với chat ở trên: 1 lần đổi trạng thái đơn thường kéo theo vài
+    // dòng orders thay đổi liền nhau -> trước đây chạy lại CẢ 5 QUERY đếm cho
+    // từng dòng trên máy mọi người. Gom lại, chỉ tính 1 lần khi ngừng 0,8s.
+    let badgeTimer;
+    const debouncedBadges = () => {
+      clearTimeout(badgeTimer);
+      badgeTimer = setTimeout(loadBadges, 800);
+    };
     loadBadges();
     window.addEventListener('sumi-badges-changed', loadBadges);
     const channel = supabase
       .channel('nav-badges-live')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, loadBadges)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'approval_requests' }, loadBadges)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'incident_reports' }, loadBadges)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, debouncedBadges)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'approval_requests' }, debouncedBadges)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'incident_reports' }, debouncedBadges)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, debouncedChatBadge)
       .subscribe();
     return () => {
       clearTimeout(chatBadgeTimer);
+      clearTimeout(badgeTimer);
       window.removeEventListener('sumi-badges-changed', loadBadges);
       supabase.removeChannel(channel);
     };
@@ -457,7 +486,9 @@ function OpsApp({ onSignOut }) {
       <div className="sb-body">
         <div className="sb-sidebar"><Sidebar active={tab} activeStation={kdsStation} onSelectStation={setKdsStation} activeBranch={warehouseBranch} onSelectBranch={setWarehouseBranch} onSelect={setTab} badges={badgeCounts} extraItems={desktopExtraItems} /></div>
         <div className="sb-content">
-          {screens[tab]}
+          <Suspense fallback={<div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)', font: 'var(--text-body)' }}>Đang tải...</div>}>
+            {screens[tab]}
+          </Suspense>
         </div>
       </div>
       <div className="sb-bottomnav">
@@ -471,7 +502,7 @@ function OpsApp({ onSignOut }) {
           trong chính GenCopilotModal/geminiCopilot. */}
       <ErrorBoundary fallback={null}>
         <GenFloatingButton onClick={() => setShowGen(true)} />
-        <GenCopilotModal
+        {showGen && <Suspense fallback={null}><GenCopilotModal
           isOpen={showGen}
           onClose={() => setShowGen(false)}
           userProfile={profile}
@@ -496,7 +527,7 @@ function OpsApp({ onSignOut }) {
               setTimeout(() => window.dispatchEvent(new CustomEvent('sumi-open-task', { detail: { entityId: taskId } })), ms);
             });
           }}
-        />
+        /></Suspense>}
         {voiceTask && (
           <GenVoiceTaskAlert
             task={voiceTask}

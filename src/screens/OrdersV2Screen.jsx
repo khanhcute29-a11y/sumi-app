@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { listOrdersV2 } from '../lib/featureFlags';
 import { loadFeatureFlags } from '../lib/featureFlags';
 import CreateOrderV2Modal from '../components/CreateOrderV2Modal';
@@ -7,7 +7,7 @@ import OrderV2DetailModal from '../components/OrderV2DetailModal';
 import { useAuth } from '../lib/AuthContext';
 import { supabase } from '../lib/supabaseClient';
 import { canUserViewOrder, getUserWorkflows } from '../lib/orderVisibility';
-import { subscribeToBroadcast, BroadcastEvents } from '../lib/realtimeSync';
+import { subscribeToBroadcast, subscribeToMultipleTables, BroadcastEvents } from '../lib/realtimeSync';
 import FinishedGoodsInventoryV2 from '../components/warehouse/FinishedGoodsInventoryV2';
 import { fetchOrderNoteCounts } from '../lib/queries';
 import { fetchOrderHearts, addOrderHeart } from '../lib/bossOverviewV3';
@@ -41,6 +41,17 @@ const FLOW_GROUPS = [
   // 202609041100) đếm đúng số bếp đang có việc thật cho đơn đó.
   { key: 'mixed', label: 'Đơn tổng hợp', Icon: IconMixed, desc: 'Nhiều bếp cùng làm', match: o => o.order_type === 'mixed' || (Array.isArray(o.kitchen_codes) && o.kitchen_codes.length > 1) || !['cake', 'bakery', 'macaron', 'teabreak', 'school'].includes(o.order_type) },
 ];
+
+// enqueue_order_operational_alerts là hàm GHI (xếp hàng cảnh báo đơn trễ) —
+// trước đây chạy + chờ xong trước MỌI lần tải danh sách, mà danh sách bị tải
+// lại liên tục theo realtime. Giờ chạy song song, tối đa 1 lần/phút mỗi máy
+// (MobileHomeScreen vẫn chạy định kỳ 5 phút như cũ).
+let lanXepCanhBaoCuoi = 0;
+function xepCanhBaoDonTre() {
+  if (Date.now() - lanXepCanhBaoCuoi < 60_000) return;
+  lanXepCanhBaoCuoi = Date.now();
+  supabase.rpc('enqueue_order_operational_alerts').then(() => {}, () => {});
+}
 
 const minutesText = value => {
   if (value === null || value === undefined) return '';
@@ -85,12 +96,21 @@ export default function OrdersV2Screen() {
   const [noteCounts, setNoteCounts] = useState({});
   const [heartingId, setHeartingId] = useState(null);
 
+  // Chỉ lần tải ĐẦU mới hiện "Đang tải đơn hàng..."; các lần tải lại theo
+  // realtime chạy ngầm, danh sách cũ giữ nguyên trên màn hình tới khi có mới
+  // (trước đây mỗi thay đổi nhỏ đều làm danh sách nhấp nháy màn chờ).
+  const daTaiLanDauRef = useRef(false);
+  const dangTaiRef = useRef(false);
+  const canTaiLaiRef = useRef(false);
   const load = async () => {
-    setLoading(true);
+    if (dangTaiRef.current) { canTaiLaiRef.current = true; return; }
+    dangTaiRef.current = true;
+    if (!daTaiLanDauRef.current) setLoading(true);
     setError('');
     try {
-      await supabase.rpc('enqueue_order_operational_alerts');
+      xepCanhBaoDonTre();
       const list = await listOrdersV2();
+      daTaiLanDauRef.current = true;
       setOrders(list);
       const ids = list.map((o) => o.id).filter(Boolean);
       fetchOrderHearts(ids).then(setOrderHearts).catch(() => {});
@@ -99,8 +119,19 @@ export default function OrdersV2Screen() {
       setError(err?.message || 'Không tải được danh sách đơn hàng.');
     } finally {
       setLoading(false);
+      dangTaiRef.current = false;
+      // Có tín hiệu mới tới trong lúc đang tải -> tải thêm đúng 1 lần nữa.
+      if (canTaiLaiRef.current) { canTaiLaiRef.current = false; taiLaiSau(); }
     }
   };
+  // Gom tín hiệu dồn dập (1 lần đổi trạng thái đơn bắn cả postgres_changes lẫn
+  // broadcast, focus + visibilitychange cùng lúc...) thành 1 lần tải sau 0,7s.
+  const hengioTaiRef = useRef(null);
+  const taiLaiSau = () => {
+    clearTimeout(hengioTaiRef.current);
+    hengioTaiRef.current = setTimeout(load, 700);
+  };
+  useEffect(() => () => clearTimeout(hengioTaiRef.current), []);
 
   const handleHeartOrder = async (e, orderId) => {
     e.stopPropagation();
@@ -135,31 +166,19 @@ export default function OrdersV2Screen() {
     return () => window.removeEventListener('sumi-order-filter', select);
   }, []);
 
-  // Auto-refresh on broadcasts
+  // Auto-refresh on broadcasts + thay đổi thật dưới database. Kênh
+  // postgres_changes trước đây mở ở App.jsx cho MỌI máy (kể cả khi không mở
+  // màn Đơn hàng) và nghe cả bảng tin / KPI không liên quan, cùng 2 bảng không
+  // tồn tại (kitchen_work_packages, delivery_runsheets). Giờ chỉ mở khi màn
+  // này đang hiện, nghe đúng 3 bảng mà danh sách đơn đọc từ đó.
   useEffect(() => {
     const unsubscribers = [
-      subscribeToBroadcast(BroadcastEvents.ORDER_CREATED, () => {
-        console.log('[Orders] New order created, refreshing...');
-        load();
-      }),
-      subscribeToBroadcast(BroadcastEvents.ORDER_STATUS_CHANGED, () => {
-        console.log('[Orders] Order status changed, refreshing...');
-        load();
-      }),
-      subscribeToBroadcast(BroadcastEvents.KITCHEN_WORK_PACKAGE_COMPLETED, () => {
-        console.log('[Orders] Kitchen completed, refreshing...');
-        load();
-      }),
+      subscribeToBroadcast(BroadcastEvents.ORDER_CREATED, taiLaiSau),
+      subscribeToBroadcast(BroadcastEvents.ORDER_STATUS_CHANGED, taiLaiSau),
+      subscribeToBroadcast(BroadcastEvents.KITCHEN_WORK_PACKAGE_COMPLETED, taiLaiSau),
+      subscribeToMultipleTables(['orders', 'order_work_packages', 'delivery_runs'], taiLaiSau),
     ];
-
-    // Also listen to general data changes
-    const dataChangeListener = () => load();
-    window.addEventListener('sumi-data-changed', dataChangeListener);
-
-    return () => {
-      unsubscribers.forEach(unsub => unsub());
-      window.removeEventListener('sumi-data-changed', dataChangeListener);
-    };
+    return () => unsubscribers.forEach(unsub => unsub());
   }, []);
 
   // Lớp bảo hiểm cho việc mất tín hiệu realtime (broadcast không được lưu lại —
@@ -167,7 +186,7 @@ export default function OrdersV2Screen() {
   // vĩnh viễn, không có cách "bù lại"). Mỗi lần app được mở lại/focus, tự tải
   // lại danh sách 1 lần cho chắc, không phụ thuộc hoàn toàn vào broadcast.
   useEffect(() => {
-    const onVisible = () => { if (document.visibilityState === 'visible') load(); };
+    const onVisible = () => { if (document.visibilityState === 'visible') taiLaiSau(); };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', onVisible);
     return () => {

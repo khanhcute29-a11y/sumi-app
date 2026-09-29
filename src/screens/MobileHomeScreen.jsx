@@ -1,11 +1,14 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { listOrdersV2 } from '../lib/featureFlags';
 import { useAuth } from '../lib/AuthContext';
 import UserAvatar from '../components/UserAvatar';
 import EditApprovalPanel from '../components/EditApprovalPanel';
 import { EmployeeOverviewV4Inner } from '../components/mockups/EmployeeDashboard/EmployeeOverviewV4';
-import { BossOverviewV3Inner } from '../components/mockups/BossDashboardV3/BossOverviewV3';
+import { napManHinh } from '../lib/napManHinh';
+// Màn tổng quan Giám đốc (~230KB mã nguồn) chỉ Giám đốc dùng — nạp theo nhu
+// cầu để ~20 nhân viên khác không phải tải nó mỗi lần mở app (29/09/2026).
+const BossOverviewV3Inner = napManHinh(() => import('../components/mockups/BossDashboardV3/BossOverviewV3').then((m) => ({ default: m.BossOverviewV3Inner })));
 import TodayAttendanceWidget from '../components/mockups/EmployeeDashboard/TodayAttendanceWidget';
 import DonTuCuaToi from '../components/shifts/v2/DonTuCuaToi';
 import DeXuatChoDuyet from '../components/shifts/v2/DeXuatChoDuyet';
@@ -53,7 +56,7 @@ export default function MobileHomeScreen({onNavigate}){
  // ở backend) dùng thẳng Boss Overview V3 — màn hình đã nối Supabase thật, tự vẽ
  // header riêng. Phó GĐ xưởng không có quyền owner/admin thật vẫn ở lại DirectorHome
  // cũ để tránh bấm vào các nút duyệt tiền/nhắc nhở mà RPC sẽ từ chối.
- if (isDirector(profile) && canViewRevenue(profile)) return <BossOverviewV3Inner onNavigate={onNavigate} />;
+ if (isDirector(profile) && canViewRevenue(profile)) return <Suspense fallback={<div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>Đang tải...</div>}><BossOverviewV3Inner onNavigate={onNavigate} /></Suspense>;
  return <div className="sumi-mobile-page"><header className="sumi-topbar"><div className="sumi-brand"><div className="sumi-brand-mark"><img src="/sumi-bakery-logo.png" alt="Sumi Bakery" /></div><div><div className="sumi-brand-name">SUMI BAKERY</div><div className="sumi-hello">Chào {profile?.full_name||'nhân viên'}</div></div></div><div className="sumi-top-actions"><button className="sumi-bell" onClick={()=>onNavigate('inbox')} aria-label="Thông báo">🔔{unread>0&&<b>{unread}</b>}</button><button className="sumi-avatar-button" onClick={()=>onNavigate('profile')} aria-label="Mở hồ sơ cá nhân"><UserAvatar profile={profile} size={44}/></button></div></header><main className="sumi-main"><PinnedAnnouncement onOpen={()=>onNavigate('feed')}/>{isDirector(profile)?<DirectorHome orders={orders} staff={staff} onNavigate={onNavigate} canViewRevenue={canViewRevenue(profile)}/>:<LeadHome orders={orders} tasks={tasks} onNavigate={onNavigate} profile={profile}/>}</main></div>;
 }
 function PinnedAnnouncement({onOpen}){const[row,setRow]=useState(null);useEffect(()=>{supabase.from('company_feed_posts').select('id,title,body,severity').eq('post_type','announcement').is('deleted_at',null).in('severity',['important','urgent']).order('created_at',{ascending:false}).limit(1).maybeSingle().then(r=>{if(!r.error)setRow(r.data)})},[]);return row?<button className={`sumi-pinned-announcement ${row.severity}`} onClick={onOpen}><span>📢</span><span><strong>{row.title}</strong><small>{row.body}</small></span><em>›</em></button>:null}
