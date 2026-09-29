@@ -8,14 +8,17 @@ import { EmployeeOverviewV4Inner } from '../components/mockups/EmployeeDashboard
 import { napManHinh } from '../lib/napManHinh';
 // Màn tổng quan Giám đốc (~230KB mã nguồn) chỉ Giám đốc dùng — nạp theo nhu
 // cầu để ~20 nhân viên khác không phải tải nó mỗi lần mở app (29/09/2026).
+// Khung chi tiết đơn (~150KB kèm ô sửa đơn + bình luận) và Kho thành phẩm
+// (~70KB) chỉ hiện khi Giám đốc/Bếp trưởng bấm mở — nạp lúc đó, không bắt mọi
+// người tải sẵn khi mở app.
+const OrderV2DetailModal = napManHinh(() => import('../components/OrderV2DetailModal'));
+const FinishedGoodsInventoryV2 = napManHinh(() => import('../components/warehouse/FinishedGoodsInventoryV2'));
 const BossOverviewV3Inner = napManHinh(() => import('../components/mockups/BossDashboardV3/BossOverviewV3').then((m) => ({ default: m.BossOverviewV3Inner })));
 import TodayAttendanceWidget from '../components/mockups/EmployeeDashboard/TodayAttendanceWidget';
 import DonTuCuaToi from '../components/shifts/v2/DonTuCuaToi';
 import DeXuatChoDuyet from '../components/shifts/v2/DeXuatChoDuyet';
 import TheDeXuat from '../components/shifts/v2/TheDeXuat';
-import FinishedGoodsInventoryV2 from '../components/warehouse/FinishedGoodsInventoryV2';
 import BangLuongCaNhan from '../components/luong/BangLuongCaNhan';
-import OrderV2DetailModal from '../components/OrderV2DetailModal';
 import '../styles/cham-cong-v2.css';
 import '../styles/cong-viec.css';
 import '../components/mockups/EmployeeDashboard/employee-overview-v4.css';
@@ -369,7 +372,7 @@ function HieuSuatBepSheet({loai,onClose,doiRoster,tenTheoId,doanhThuBep,doanhThu
      </button>
     ))}</div>
    )}
-   {xemDon&&<OrderV2DetailModal orderId={xemDon} onClose={()=>setXemDon(null)}/>}
+   {xemDon&&<Suspense fallback={null}><OrderV2DetailModal orderId={xemDon} onClose={()=>setXemDon(null)}/></Suspense>}
   </LeadSheet>;
  }
  if(loai==='gioLam'){
@@ -540,7 +543,7 @@ function LeadHome({orders,tasks,onNavigate,profile}){
   {sheetMo==='bangLuong'&&<LeadSheet title="💰 Bảng lương của tôi" onClose={()=>setSheetMo(null)}><div style={{padding:12}}><BangLuongCaNhan staffId={profile?.id}/></div></LeadSheet>}
   {sheetMo==='donTu'&&<DonTuXinNghiSheet hoSo={profile} onClose={()=>setSheetMo(null)}/>}
   {sheetMo==='baoCao'&&<BaoCaoNgaySheet hoSo={profile} onClose={()=>setSheetMo(null)}/>}
-  {sheetMo==='khoTP'&&<div style={{position:'fixed',inset:0,zIndex:1400,background:'#fdf9f2',overflowY:'auto',padding:16,boxSizing:'border-box'}}><FinishedGoodsInventoryV2 onBack={()=>setSheetMo(null)}/></div>}
+  {sheetMo==='khoTP'&&<div style={{position:'fixed',inset:0,zIndex:1400,background:'#fdf9f2',overflowY:'auto',padding:16,boxSizing:'border-box'}}><Suspense fallback={<div style={{padding:32,textAlign:'center',color:'var(--text-muted)'}}>Đang tải...</div>}><FinishedGoodsInventoryV2 onBack={()=>setSheetMo(null)}/></Suspense></div>}
  </>;
 }
 function TaskQueue({tasks}){return <div className="sumi-task-queue">{tasks.map((t,i)=><button key={t.id}><b>{i+2}</b><span><strong>{t.title}</strong><small>{t.order_code?`Đơn ${t.order_code}`:'Việc trong ngày'}</small></span><em>{t.status==='in_progress'?'ĐANG LÀM':'CHỜ'}</em></button>)}</div>}

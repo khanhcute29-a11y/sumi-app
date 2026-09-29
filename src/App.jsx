@@ -68,11 +68,15 @@ const AccountantOverviewV1Inner = napManHinh(() => import('./components/mockups/
 // Trợ lý Gen chỉ nạp khi bấm mở lần đầu (GenCopilotModal tự return null khi
 // đóng nên không chạy gì ngầm — hoãn nạp không đổi hành vi).
 const GenCopilotModal = napManHinh(() => import('./components/ai/GenCopilotModal').then((m) => ({ default: m.GenCopilotModal })));
+// Khung Gen đọc to việc mới — kéo theo cả bộ não Gen (geminiCopilot). Nạp ngầm
+// cùng các màn khác ngay sau khi mở app (MAN_HINH_NAP_SAU) nên lúc có việc mới
+// vẫn bật lên tức thì như trước.
+const GenVoiceTaskAlert = napManHinh(() => import('./components/ai/GenVoiceTaskAlert').then((m) => ({ default: m.GenVoiceTaskAlert })));
 const MAN_HINH_THEO_TAB = {
   orders: OrdersV2Screen, feed: CompanyFeedScreen, tasks: TasksScreen, staffTasks: StaffTasksAssignedScreen,
   financeRequests: FinanceRequestsScreen, shipping: ShippingScreen, shifts: ShiftsScreen,
 };
-const MAN_HINH_NAP_SAU = [OrdersV2Screen, KdsScreen, WarehouseScreen, CashbookScreen, ShippingScreen, ShippingV2Screen, ReportsScreen, CustomersScreen, SettingsScreen, ProductsScreen, ShiftsScreen, DashboardScreen, StaffScreen, StaffDeactivatedScreen, ApprovalRequestsScreen, TasksScreen, IncidentsScreen, KpiScreen, SchoolRevenueScreen, CustomerDebtScreen, InboxV2Screen, KpiV2Screen, StaffTasksAssignedScreen, KpiDashboardScreen, KpiTongQuanScreen, CompensationScreen, FinanceRequestsScreen, CompanyFeedScreen, VisualGuidesScreen, AccountantOverviewV1Inner];
+const MAN_HINH_NAP_SAU = [GenVoiceTaskAlert, OrdersV2Screen, KdsScreen, WarehouseScreen, CashbookScreen, ShippingScreen, ShippingV2Screen, ReportsScreen, CustomersScreen, SettingsScreen, ProductsScreen, ShiftsScreen, DashboardScreen, StaffScreen, StaffDeactivatedScreen, ApprovalRequestsScreen, TasksScreen, IncidentsScreen, KpiScreen, SchoolRevenueScreen, CustomerDebtScreen, InboxV2Screen, KpiV2Screen, StaffTasksAssignedScreen, KpiDashboardScreen, KpiTongQuanScreen, CompensationScreen, FinanceRequestsScreen, CompanyFeedScreen, VisualGuidesScreen, AccountantOverviewV1Inner];
 import { NavBadge } from './components/navigation/NavBadge';
 import { IconDashboard, IconShipping, IconProducts, IconShifts, IconReports, IconCustomers, IconStaff, IconSettings, IconCheck, IconWarning, IconClipboard, IconMoney, IconReceipt, IconBan } from './components/icons/FrogIcons';
 
@@ -80,7 +84,6 @@ import { IconDashboard, IconShipping, IconProducts, IconShifts, IconReports, Ico
 // ./lib/roles để App.jsx và Trợ lý Gen chốt phân quyền tài chính đồng nhất.
 import { loadFeatureFlags } from './lib/featureFlags';
 import { GenFloatingButton } from './components/ai/GenFloatingButton';
-import { GenVoiceTaskAlert } from './components/ai/GenVoiceTaskAlert';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 const MORE_ITEMS = [
@@ -529,11 +532,11 @@ function OpsApp({ onSignOut }) {
           }}
         /></Suspense>}
         {voiceTask && (
-          <GenVoiceTaskAlert
+          <Suspense fallback={null}><GenVoiceTaskAlert
             task={voiceTask}
             onClose={() => setVoiceTask(null)}
             onAccepted={() => setVoiceTask(null)}
-          />
+          /></Suspense>
         )}
       </ErrorBoundary>
     </div>
