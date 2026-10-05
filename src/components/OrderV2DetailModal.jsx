@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import EditOrderModal from './orders/EditOrderModal';
 import { supabase } from '../lib/supabaseClient';
+import { nenAnh } from '../lib/nenAnh';
 import { assignOrderPackage, acceptOrderPackage } from '../lib/featureFlags';
 import { useAuth } from '../lib/AuthContext';
 import PackageTaskPanel from './PackageTaskPanel';
@@ -595,10 +596,11 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
 
     (async () => {
       try {
-        // Upload photo
-        const cleanExt = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+        // Upload photo — nén trước (ảnh camera 2-4MB -> ~300KB, xem lib/nenAnh.js)
+        const anh = await nenAnh(file);
+        const cleanExt = (anh.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
         const photoPath = `orders/${orderId}/delivery/${crypto.randomUUID()}.${cleanExt}`;
-        const { error: upErr } = await supabase.storage.from('uploads').upload(photoPath, file, { contentType: file.type || 'image/jpeg' });
+        const { error: upErr } = await supabase.storage.from('uploads').upload(photoPath, anh, { contentType: anh.type || 'image/jpeg' });
         if (upErr) throw upErr;
 
         // Get signed URL for photo
@@ -859,10 +861,12 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       if (ord?.order_type !== 'school' && !ord?.customers?.phone) missing.push('số điện thoại');
       if (missing.length) throw new Error(`Thiếu thông tin đơn: ${missing.join(', ')} — bổ sung trước khi hoàn thành.`);
 
-      // Upload completion photo
-      const cleanExt = (photoFile.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+      // Upload completion photo — nén trước (đo thật 1,3-4,3MB/tấm gây đơ khi
+      // giao dồn nhiều đơn; xem lib/nenAnh.js)
+      const anh = await nenAnh(photoFile);
+      const cleanExt = (anh.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
       const photoPath = `orders/${orderId}/delivery/completion-${crypto.randomUUID()}.${cleanExt}`;
-      const { error: upErr } = await supabase.storage.from('uploads').upload(photoPath, photoFile, { contentType: photoFile.type || 'image/jpeg' });
+      const { error: upErr } = await supabase.storage.from('uploads').upload(photoPath, anh, { contentType: anh.type || 'image/jpeg' });
       if (upErr) throw upErr;
 
       // Get signed URL for completion photo
