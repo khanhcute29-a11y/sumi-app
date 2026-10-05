@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import EditOrderModal from './orders/EditOrderModal';
 import { supabase } from '../lib/supabaseClient';
 import { nenAnh } from '../lib/nenAnh';
+import { trongThoiGian } from '../lib/gioiHanCho';
 import { assignOrderPackage, acceptOrderPackage } from '../lib/featureFlags';
 import { useAuth } from '../lib/AuthContext';
 import PackageTaskPanel from './PackageTaskPanel';
@@ -866,7 +867,13 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       const anh = await nenAnh(photoFile);
       const cleanExt = (anh.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
       const photoPath = `orders/${orderId}/delivery/completion-${crypto.randomUUID()}.${cleanExt}`;
-      const { error: upErr } = await supabase.storage.from('uploads').upload(photoPath, anh, { contentType: anh.type || 'image/jpeg' });
+      // Giới hạn thời gian chờ (05/10/2026): trước đây mạng chập chờn là nút
+      // đứng mãi ở "Đang xử lý...", tài xế phải thoát ra làm lại.
+      const { error: upErr } = await trongThoiGian(
+        supabase.storage.from('uploads').upload(photoPath, anh, { contentType: anh.type || 'image/jpeg' }),
+        45000,
+        'Mạng yếu, ảnh chưa gửi được. Kiểm tra mạng rồi bấm "Hoàn Thành Giao" lần nữa.'
+      );
       if (upErr) throw upErr;
 
       // Get signed URL for completion photo
@@ -881,18 +888,36 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       const { data: urlData } = supabase.storage.from('uploads').getPublicUrl(photoPath);
       const publicUrl = urlData.publicUrl;
 
-      // Call RPC to complete delivery
-      const { data: rpcData, error } = await supabase.rpc('complete_delivery_assignment', {
-        p_order_id: orderId,
-        p_staff_id: profile.id,
-        p_staff_name: profile.full_name || profile.email,
-        p_gps_latitude: gpsCoords.lat,
-        p_gps_longitude: gpsCoords.lng,
-        p_photo_url: publicUrl
-      });
+      // Call RPC to complete delivery — bấm lại sau khi hết giờ là AN TOÀN:
+      // máy chủ tự chặn chốt trùng (migration 202610051000, already_completed).
+      const { data: rpcData, error } = await trongThoiGian(
+        supabase.rpc('complete_delivery_assignment', {
+          p_order_id: orderId,
+          p_staff_id: profile.id,
+          p_staff_name: profile.full_name || profile.email,
+          p_gps_latitude: gpsCoords.lat,
+          p_gps_longitude: gpsCoords.lng,
+          p_photo_url: publicUrl
+        }),
+        20000,
+        'Mạng yếu, chưa nhận được phản hồi. Bấm "Hoàn Thành Giao" lần nữa — nếu đơn đã giao rồi, hệ thống tự nhận biết, không tính trùng.'
+      );
 
       if (error) throw error;
       if (!rpcData?.success) throw new Error(rpcData?.message || rpcData?.error || 'Không hoàn thành giao được');
+
+      // Lần bấm trước đã chốt xong (app hết giờ chờ nhưng máy chủ vẫn nhận) —
+      // coi là xong, không phát chuông lần 2, không mở lại bước thanh toán
+      // (màn đơn tự hiện nút "Xác minh thanh toán" nếu chưa xác minh).
+      if (rpcData?.already_completed) {
+        setShowCompletionModal(false);
+        setGpsCoords(null);
+        setPhotoFile(null);
+        setPhotoPreview(null);
+        showToast({ icon: '✅', title: 'Đơn đã giao xong', message: `${data?.order?.order_code || ''} — đơn này đã được ghi nhận giao xong trước đó.`, tone: 'success' });
+        load().catch((err) => console.error('[OrderV2] Tải lại đơn lỗi (bỏ qua):', err));
+        return;
+      }
 
       // Từ đây trở đi đơn ĐÃ GIAO XONG. Bước phụ vấp thì bỏ qua, không báo đỏ.
       try {
@@ -910,8 +935,11 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
       // ĐƠN CHƯA TÍNH DOANH THU THUẦN cho tới khi xác minh thanh toán — mở
       // ngay bước tiếp theo thay vì rời màn hình, để không tạo ra một đơn
       // "đã giao" mà không ai quay lại xác minh.
-      await load();
+      // Mở NGAY (05/10/2026): trước đây phải chờ tải lại cả đơn (13 truy vấn)
+      // dù máy chủ đã chốt xong — mạng yếu là nút vẫn đứng "Đang xử lý...".
+      // Khung xác minh không dùng dữ liệu tải lại nên chạy ngầm phía sau.
       setShowPaymentVerifyModal(true);
+      load().catch((err) => console.error('[OrderV2] Tải lại đơn lỗi (bỏ qua):', err));
     } catch (e) {
       setError(e.message);
     } finally {
