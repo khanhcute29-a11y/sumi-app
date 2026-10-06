@@ -49,12 +49,16 @@ async function mapLimit(list, limit, fn) {
   return out;
 }
 
+const GIAO_HANG_COT = ['Số đơn đã giao', 'Quãng đường (km)', 'Thời gian chạy chuyến (giờ)', 'Đơn có ảnh chứng minh'];
+
 const SUMMARY_HEADERS = [
   'Họ tên', 'Vai trò', 'Điểm KPI /100', 'Xếp loại',
   'Việc được giao', 'Việc hoàn thành', 'Đúng hạn', 'Tỷ lệ hoàn thành (%)', 'Việc hằng ngày xong', 'Loại trừ đã duyệt',
   'Ngày làm việc', 'Tổng giờ làm (giờ)', 'Tăng ca (giờ)', 'Số lần đi trễ', 'Ca quên chấm ra', 'Ngày nghỉ phép',
   'Sản lượng ghi nhận', 'Làm cùng nhau (giờ)',
-  'Số đơn đã giao', 'Quãng đường (km)', 'Thời gian chạy chuyến (giờ)', 'Đơn có ảnh chứng minh',
+  // Giao hàng tách 2 luồng (06/10/2026): Trường học / Đơn khác / Tổng — mỗi
+  // nhóm 4 cột cùng tên để xlsxExport tự định dạng y như trước (theo tên cột).
+  ...GIAO_HANG_COT, ...GIAO_HANG_COT, ...GIAO_HANG_COT,
   'Sao được cộng', 'Tiền thưởng cộng (đ)', 'Sao chưa đạt (không trừ lương)', 'Sao thực nhận', 'Tiền thưởng thực nhận (đ)',
   'Bánh lỗi ghi nhận (lần)', 'Bánh lỗi (số lượng)', 'Khiếu nại khách (lần)',
 ];
@@ -66,10 +70,24 @@ const SUMMARY_GROUPS = [
   { label: 'CÔNG VIỆC', from: 4, to: 9, color: 'FF0369A1' },
   { label: 'GIỜ LÀM & CHUYÊN CẦN', from: 10, to: 15, color: 'FF7C3AED' },
   { label: 'SẢN XUẤT', from: 16, to: 17, color: 'FFB45309' },
-  { label: 'GIAO HÀNG', from: 18, to: 21, color: 'FFBE185D' },
-  { label: 'THƯỞNG CHUYÊN CẦN', from: 22, to: 26, color: 'FFCA8A04' },
-  { label: 'GHI NHẬN MỚI (CHƯA TÍNH ĐIỂM)', from: 27, to: 29, color: 'FF64748B' },
+  { label: 'GIAO TRƯỜNG HỌC', from: 18, to: 21, color: 'FF0E7490' },
+  { label: 'GIAO ĐƠN KHÁC', from: 22, to: 25, color: 'FFBE185D' },
+  { label: 'TỔNG GIAO HÀNG', from: 26, to: 29, color: 'FF9D174D' },
+  { label: 'THƯỞNG CHUYÊN CẦN', from: 30, to: 34, color: 'FFCA8A04' },
+  { label: 'GHI NHẬN MỚI (CHƯA TÍNH ĐIỂM)', from: 35, to: 37, color: 'FF64748B' },
 ];
+
+// 4 ô giao hàng của 1 luồng. tienTo: 'shipper_th_' | 'shipper_khac_' | null (tổng —
+// khoá cũ). Người không phải shipper (khoá tổng không có) -> để trống như trước;
+// app/DB cũ chưa có khoá luồng -> ô luồng để trống, cột Tổng vẫn đúng.
+function oGiaoHang(d, tienTo) {
+  if (d.shipper_order_count === undefined) return ['', '', '', ''];
+  const k = tienTo
+    ? { don: `${tienTo}order_count`, km: `${tienTo}km`, phut: `${tienTo}minutes`, anh: `${tienTo}orders_with_proof` }
+    : { don: 'shipper_order_count', km: 'shipper_total_km', phut: 'shipper_total_minutes', anh: 'shipper_orders_with_proof' };
+  if (d[k.don] === undefined) return ['', '', '', ''];
+  return [num(d[k.don]), num(d[k.km]), hours(d[k.phut]), `${d[k.anh] ?? 0}/${d[k.don]}`];
+}
 
 function summaryRow(st, d, score, defects, complaints) {
   return [
@@ -78,8 +96,7 @@ function summaryRow(st, d, score, defects, complaints) {
     num(d.assigned_tasks), num(d.completed_tasks), num(d.on_time_tasks), num(d.completion_rate), num(d.daily_tasks_completed), num(d.approved_exclusions),
     num(d.work_days), hours(d.work_minutes), hours(d.overtime_minutes), num(d.late_count), num(d.missing_checkout_count), num(d.leave_day_count),
     num(d.output_quantity), num(d.coworking_hours),
-    num(d.shipper_order_count), num(d.shipper_total_km), hours(d.shipper_total_minutes),
-    d.shipper_order_count === undefined ? '' : `${d.shipper_orders_with_proof ?? 0}/${d.shipper_order_count}`,
+    ...oGiaoHang(d, 'shipper_th_'), ...oGiaoHang(d, 'shipper_khac_'), ...oGiaoHang(d, null),
     num(d.star_cong_sao), num(d.star_cong_tien), num(d.star_chua_dat_sao), num(d.star_rong_sao), num(d.star_rong_tien),
     defects.length, defects.reduce((t, x) => t + (Number(x.quantity) || 0), 0), complaints.length,
   ];
@@ -113,8 +130,15 @@ function personSheet(st, d, score, cham, defects, complaints, from, to) {
 
   if (d.shipper_order_count !== undefined) {
     section('GIAO HÀNG');
-    kv('Số đơn đã giao', num(d.shipper_order_count)); kv('Quãng đường (km)', num(d.shipper_total_km));
-    kv('Thời gian chạy chuyến', hoursText(d.shipper_total_minutes)); kv('Đơn có ảnh chứng minh', `${d.shipper_orders_with_proof ?? 0}/${d.shipper_order_count}`);
+    // Bảng 3 cột: Trường học / Đơn khác / Tổng (06/10/2026).
+    const coLuong = d.shipper_th_order_count !== undefined;
+    const dong = (ten, th, khac, tong) => add([ten, coLuong ? th : '', coLuong ? khac : '', tong], 'item');
+    add(['', 'Trường học', 'Đơn khác', 'Tổng'], 'order');
+    dong('Số đơn đã giao', num(d.shipper_th_order_count), num(d.shipper_khac_order_count), num(d.shipper_order_count));
+    dong('Quãng đường (km)', num(d.shipper_th_km), num(d.shipper_khac_km), num(d.shipper_total_km));
+    dong('Thời gian chạy chuyến', hoursText(d.shipper_th_minutes), hoursText(d.shipper_khac_minutes), hoursText(d.shipper_total_minutes));
+    dong('Đơn có ảnh chứng minh', `${d.shipper_th_orders_with_proof ?? 0}/${d.shipper_th_order_count ?? 0}`,
+      `${d.shipper_khac_orders_with_proof ?? 0}/${d.shipper_khac_order_count ?? 0}`, `${d.shipper_orders_with_proof ?? 0}/${d.shipper_order_count}`);
   }
 
   section('THƯỞNG CHUYÊN CẦN (GIEO HẠT)');

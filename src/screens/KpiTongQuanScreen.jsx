@@ -61,6 +61,34 @@ const cardStyle = {
   border: '1px solid var(--border-default)',
 };
 
+// Giao hàng tách 2 luồng Trường học / Đơn khác (06/10/2026) — 4 thẻ tổng phía
+// trên giữ nguyên; 2 luồng cộng lại luôn bằng tổng (get_employee_kpi_overview).
+function GiaoHangTheoLuong({ data }) {
+  const dong = [
+    ['Số đơn đã giao', data.shipper_th_order_count, data.shipper_khac_order_count],
+    ['Quãng đường', `${data.shipper_th_km} km`, `${data.shipper_khac_km} km`],
+    ['Thời gian chạy', formatPhut(data.shipper_th_minutes), formatPhut(data.shipper_khac_minutes)],
+    ['Đơn có ảnh', `${data.shipper_th_orders_with_proof}/${data.shipper_th_order_count}`, `${data.shipper_khac_orders_with_proof}/${data.shipper_khac_order_count}`],
+  ];
+  const o = { padding: '8px 6px', borderTop: '1px solid var(--border-default)', font: 'var(--text-body-sm)' };
+  return (
+    <div style={{ ...cardStyle, marginTop: 8, padding: 0, overflow: 'hidden' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.2fr) minmax(0,1fr) minmax(0,1fr)' }}>
+        <div style={{ ...o, borderTop: 0, fontWeight: 800, color: 'var(--text-secondary)' }}>Theo luồng</div>
+        <div style={{ ...o, borderTop: 0, fontWeight: 800, textAlign: 'right', color: '#0e7490' }}>🏫 Trường học</div>
+        <div style={{ ...o, borderTop: 0, fontWeight: 800, textAlign: 'right', color: '#be185d' }}>🎂 Đơn khác</div>
+        {dong.map(([ten, th, khac]) => (
+          <React.Fragment key={ten}>
+            <div style={{ ...o, color: 'var(--text-secondary)' }}>{ten}</div>
+            <div style={{ ...o, textAlign: 'right', fontWeight: 700 }}>{th}</div>
+            <div style={{ ...o, textAlign: 'right', fontWeight: 700 }}>{khac}</div>
+          </React.Fragment>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ThongKe({ label, value, mau }) {
   return (
     <div style={cardStyle}>
@@ -392,6 +420,7 @@ function ChiTietNhanVien({ staffId, from, to }) {
             <ThongKe label="Thời gian chạy chuyến" value={formatPhut(data.shipper_total_minutes)} />
             <ThongKe label="Đơn có ảnh chứng minh" value={`${data.shipper_orders_with_proof}/${data.shipper_order_count}`} />
           </div>
+          {data.shipper_th_order_count !== undefined && <GiaoHangTheoLuong data={data} />}
         </div>
       )}
 
