@@ -418,9 +418,11 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
     try {
       let photoPath = null;
       if (photoFile) {
-        const cleanExt = (photoFile.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+        // Nén trước khi tải (06/10/2026, cùng lý do ảnh giao hàng — xem lib/nenAnh.js)
+        const anh = await nenAnh(photoFile);
+        const cleanExt = ((anh.name || 'anh.jpg').split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
         photoPath = `orders/${orderId}/production/${crypto.randomUUID()}.${cleanExt}`;
-        const {error: upErr} = await supabase.storage.from('uploads').upload(photoPath, photoFile, { contentType: photoFile.type || 'image/jpeg' });
+        const {error: upErr} = await supabase.storage.from('uploads').upload(photoPath, anh, { contentType: anh.type || 'image/jpeg' });
         if (upErr) throw upErr;
       }
       const {error} = await supabase.rpc('complete_kitchen_work_package_with_proof', {
@@ -485,9 +487,11 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
     if (!whExpiryDate) { setWhError('Bắt buộc nhập hạn sử dụng.'); return; }
     setWhBusy(true); setWhError('');
     try {
-      const cleanExt = (whPhoto.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+      // Nén trước khi tải (06/10/2026 — xem lib/nenAnh.js)
+      const anhKho = await nenAnh(whPhoto);
+      const cleanExt = ((anhKho.name || 'anh.jpg').split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
       const photoPath = `internal-orders/${orderId}/warehouse/${crypto.randomUUID()}.${cleanExt}`;
-      const { error: upErr } = await supabase.storage.from('uploads').upload(photoPath, whPhoto, { contentType: whPhoto.type || 'image/jpeg' });
+      const { error: upErr } = await supabase.storage.from('uploads').upload(photoPath, anhKho, { contentType: anhKho.type || 'image/jpeg' });
       if (upErr) throw upErr;
       const { data: urlData } = supabase.storage.from('uploads').getPublicUrl(photoPath);
       const photoUrl = urlData.publicUrl;
@@ -643,7 +647,9 @@ export default function OrderV2DetailModal({ orderId, onClose, onChanged }) {
   // Tải các ảnh thành phẩm lên storage 'uploads', trả về mảng path.
   const uploadProofFiles = async (files) => {
     const paths = [];
-    for (const f of files) {
+    for (const fGoc of files) {
+      // Nén từng ảnh trước khi tải (06/10/2026 — ảnh camera 2-4MB, xem lib/nenAnh.js)
+      const f = await nenAnh(fGoc);
       const cleanExt = ((f.name || 'anh.jpg').split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
       const path = `orders/${orderId}/production/${crypto.randomUUID()}.${cleanExt}`;
       const { error: upErr } = await supabase.storage.from('uploads').upload(path, f, { contentType: f.type || 'image/jpeg' });
