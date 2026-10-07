@@ -16,6 +16,7 @@ import {
 } from '../../lib/geminiCopilot';
 import { executeDataQuery } from '../../lib/genDataQuery';
 import { playConfirmSound } from '../../lib/sound';
+import { docGioNhan, hienGioNhan } from '../../lib/genGioNhan';
 
 function getStatusMeta(st) {
   const map = {
@@ -425,7 +426,15 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm,
           } else if (fc.name === 'bao_khoan_chi') {
             replyText = `Dạ, em đã lập phiếu ghi nhận khoản chi ${Number(fc.args.so_tien).toLocaleString('vi-VN')}đ (${fc.args.noi_dung_chi}). Bạn kiểm tra và bấm xác nhận bên dưới nhé!`;
           } else if (fc.name === 'tao_don_hang_banh') {
-            replyText = `Dạ, em đã bóc tách thông tin đơn bánh cho khách ${fc.args.ten_khach || 'chưa rõ'}: Món ${fc.args.loai_banh || 'bánh'} - Số lượng/Size: ${fc.args.size_banh || 'chuẩn'}. Sếp/bạn bấm "🚀 Tạo Đơn & Chuyển Bếp Ngay" bên dưới để em gửi lệnh sản xuất xuống Bếp ngay lập tức nhé!`;
+            // Chốt giờ nhận NGAY lúc bóc tách và hiện ra thẻ — giờ trên thẻ chính là
+            // giờ sẽ lưu (trước đây thẻ chỉ lặp lại chữ "15h", lưu thành 15h ngày mai
+            // mà không ai biết).
+            const gio = docGioNhan(fc.args.thoi_gian_nhan);
+            actionToConfirm = {
+              name: fc.name,
+              args: { ...fc.args, gio_nhan_iso: gio.thoiDiem.toISOString(), gio_nhan_doan: !(gio.roNgay && gio.roGio) }
+            };
+            replyText = `Dạ, em đã bóc tách thông tin đơn bánh cho khách ${fc.args.ten_khach || 'chưa rõ'}: Món ${fc.args.loai_banh || 'bánh'} - Số lượng/Size: ${fc.args.size_banh || 'chuẩn'}, nhận lúc ${hienGioNhan(gio.thoiDiem)}. Sếp/bạn kiểm tra lại giờ nhận rồi bấm "🚀 Tạo Đơn & Chuyển Bếp Ngay" bên dưới để em gửi lệnh sản xuất xuống Bếp ngay lập tức nhé!`;
           } else if (fc.name === 'cap_nhat_trang_thai_don') {
             replyText = `Dạ, em đã chuẩn bị đổi trạng thái đơn ${fc.args.ma_don_hang} sang "${getStatusLabelVN(fc.args.trang_thai_moi)}". Bạn bấm xác nhận bên dưới để em cập nhật ngay nhé!`;
           } else if (fc.name === 'duyet_khoan_chi_hoac_ung') {
@@ -583,7 +592,7 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm,
                 customer_name: res.customerName || act.args.ten_khach,
                 cake_name: act.args.loai_banh,
                 size: act.args.size_banh,
-                required_at: act.args.thoi_gian_nhan,
+                required_at: res.requiredAt ? hienGioNhan(new Date(res.requiredAt)) : act.args.thoi_gian_nhan,
                 address: act.args.dia_chi
               }
             }
@@ -1204,7 +1213,17 @@ export function GenCopilotModal({ isOpen, onClose, userProfile, onOpenOrderForm,
                   <div style={{ fontSize: 13, color: '#524338', marginBottom: 10, lineHeight: 1.6 }}>
                     <div>• Khách hàng: <b>{m.action.args.ten_khach || 'Khách lẻ'}</b> {m.action.args.so_dien_thoai ? `(${m.action.args.so_dien_thoai})` : ''}</div>
                     <div>• Món: <b>{m.action.args.loai_banh}</b> - Size: {m.action.args.size_banh || 'Tiêu chuẩn'}</div>
-                    {m.action.args.thoi_gian_nhan && <div>• Giờ nhận: <b>{m.action.args.thoi_gian_nhan}</b></div>}
+                    {m.action.args.gio_nhan_iso && (
+                      <div>
+                        • Nhận bánh: <b>{hienGioNhan(new Date(m.action.args.gio_nhan_iso))}</b>
+                        {m.action.args.thoi_gian_nhan && <span style={{ color: '#8C5A3C' }}> (khách nói: "{m.action.args.thoi_gian_nhan}")</span>}
+                      </div>
+                    )}
+                    {m.action.args.gio_nhan_doan && (
+                      <div style={{ color: '#b45309', fontWeight: 700 }}>
+                        ⚠️ Tin nhắn chưa ghi rõ {m.action.args.thoi_gian_nhan ? 'ngày/giờ' : 'giờ nhận'} — Gen đang đoán. Kiểm tra kỹ trước khi tạo đơn.
+                      </div>
+                    )}
                     {m.action.args.chu_viet_len_banh && <div>• Chữ ghi bánh: <i>"{m.action.args.chu_viet_len_banh}"</i></div>}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

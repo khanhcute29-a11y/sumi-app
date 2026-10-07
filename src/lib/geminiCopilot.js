@@ -10,6 +10,7 @@ import { FINANCE_ROLES, INVENTORY_VIEW_ROLES, MANAGER_ROLES, hasAnyRole, canView
 import { findAppGuide } from './genAppGuide';
 import { DATA_CATALOG } from './genDataQuery';
 import { newId } from './ids';
+import { docGioNhan } from './genGioNhan';
 import { broadcastEvent, BroadcastEvents, notifyOtherTabs } from './realtimeSync';
 
 // Thư viện hỗ trợ Trợ lý AI 'Gen' cho giao diện React
@@ -998,16 +999,18 @@ export async function executeCreateOrderDirectly(orderArgs, userProfile) {
         .from('customers')
         .select('id, name')
         .eq('phone', trimmedPhone)
-        .maybeSingle();
-      if (cByPhone) customerId = cByPhone.id;
+        .limit(1);
+      // limit(1) thay maybeSingle(): có 2 khách trùng SĐT/tên thì maybeSingle()
+      // báo lỗi -> data rỗng -> trước đây lại tạo thêm 1 khách trùng nữa.
+      if (cByPhone?.[0]) customerId = cByPhone[0].id;
     }
     if (!customerId && trimmedName && trimmedName !== 'Khách lẻ') {
       const { data: cByName } = await supabase
         .from('customers')
         .select('id, name')
         .eq('name', trimmedName)
-        .maybeSingle();
-      if (cByName) customerId = cByName.id;
+        .limit(1);
+      if (cByName?.[0]) customerId = cByName[0].id;
     }
     if (!customerId) {
       const { data: newCust, error: cErr } = await supabase
@@ -1026,56 +1029,56 @@ export async function executeCreateOrderDirectly(orderArgs, userProfile) {
     }
   }
 
-  // 3. Xử lý thời gian giao bánh
-  let requiredAt = null;
-  const timeRaw = (orderArgs.thoi_gian_nhan || '').toLowerCase();
+  // 3. Xử lý thời gian giao bánh — xem genGioNhan.js (trước đây mọi cách viết
+  // không có chữ "mai"/"nay" đều bị đặt thành ngày mai).
   const now = new Date();
-
-  let hours = 8;
-  let minutes = 0;
-  const timeMatch = timeRaw.match(/(\d{1,2})(?:[:h](\d{2}))?/);
-  if (timeMatch) {
-    hours = parseInt(timeMatch[1], 10);
-    if (timeMatch[2]) minutes = parseInt(timeMatch[2], 10);
-  }
-
-  if (timeRaw.includes('mai') || timeRaw.includes('ngày mai') || timeRaw.includes('sáng mai')) {
-    const tmr = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, hours, minutes, 0);
-    requiredAt = tmr.toISOString();
-  } else if (timeRaw.includes('hôm nay') || timeRaw.includes('chiều nay') || timeRaw.includes('tối nay')) {
-    const todayTarget = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0);
-    requiredAt = todayTarget.toISOString();
-  } else {
-    // Mặc định 8h sáng mai nếu không rõ mốc ngày
-    const defaultTarget = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, hours, minutes, 0);
-    requiredAt = defaultTarget.toISOString();
-  }
+  // GenCopilotModal đã chốt sẵn giờ (gio_nhan_iso) và hiện lên thẻ cho người dùng
+  // xem trước — dùng đúng giờ đó để lưu khớp với thứ họ đã thấy.
+  const daChot = orderArgs.gio_nhan_iso ? new Date(orderArgs.gio_nhan_iso) : null;
+  const requiredAt = daChot && !Number.isNaN(daChot.getTime())
+    ? daChot.toISOString()
+    : docGioNhan(orderArgs.thoi_gian_nhan, now).thoiDiem.toISOString();
 
   // 4. Bóc tách số lượng món
   let qty = 1;
   const qtyMatch = sizeText.match(/(\d+)\s*(?:cái|ổ|hộp|phần|bánh)/i) || cakeName.match(/(\d+)\s*(?:cái|ổ|hộp|phần|bánh)/i);
   if (qtyMatch) {
     qty = parseInt(qtyMatch[1], 10);
-  } else {
+  } else if (/^\d+$/.test(sizeText)) {
+    // Chỉ nhận số trơn ("5"). Trước đây parseInt("20cm") = 20 nên bánh size
+    // 20cm bị lưu thành 20 cái và chuyển xuống Bếp làm 20 bánh.
     const numOnly = parseInt(sizeText, 10);
-    if (!isNaN(numOnly) && numOnly > 0) qty = numOnly;
+    if (numOnly > 0) qty = numOnly;
   }
 
+  // Tổng tạm tính chia về đơn giá món: trước đây món lưu giá 0 nên mở "Sửa đơn"
+  // rồi bấm lưu là tổng đơn bị tính lại thành 0đ.
+  const tamTinh = Number(orderArgs.tam_tinh_gia) || 0;
   const items = [
     {
       name: cakeName,
       quantity: qty,
       display_order: 0,
       unit: 'cái',
+      unit_price: tamTinh > 0 ? Math.round(tamTinh / qty) : null,
       specification: {
         size: sizeText || `${qty} cái`,
         product_flow: orderType,
-        writing: orderArgs.chu_viet_len_banh || null,
-        cake_note: orderArgs.ghi_chu_tho_banh || null,
-        candles: orderArgs.nen_tuoi || null
+        // content/candle: đúng tên trường mà màn Tạo đơn, Sửa đơn và chi tiết đơn
+        // đang đọc (trước đây lưu writing/candles nên "Sửa đơn" không thấy chữ/nến).
+        content: orderArgs.chu_viet_len_banh || null,
+        candle: orderArgs.nen_tuoi
+          ? (/^\d+$/.test(String(orderArgs.nen_tuoi).trim()) ? `Nến số ${String(orderArgs.nen_tuoi).trim()}` : String(orderArgs.nen_tuoi))
+          : null,
+        cake_note: orderArgs.ghi_chu_tho_banh || null
       }
     }
   ];
+
+  // Hình thức nhận: tool AI trả 'lay_tai_tiem'/'giao_hang', còn database dùng
+  // 'pickup'/'delivery' như màn Tạo đơn — trước đây 'lay_tai_tiem' bị lưu thô
+  // và đơn tự lấy lại hiện là giao tận nơi.
+  const hinhThuc = ['lay_tai_tiem', 'pickup'].includes(orderArgs.hinh_thuc_nhan) ? 'pickup' : 'delivery';
 
   // 5. Sinh mã đơn hàng
   const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
@@ -1099,7 +1102,8 @@ export async function executeCreateOrderDirectly(orderArgs, userProfile) {
     p_order_type: orderType,
     p_customer_id: customerId,
     p_required_at: requiredAt,
-    p_fulfillment_method: orderArgs.dia_chi ? 'delivery' : (orderArgs.hinh_thuc_nhan || 'delivery'),
+    p_fulfillment_method: hinhThuc,
+    // Giữ địa chỉ kể cả đơn tự lấy — AI có thể hiểu nhầm hình thức, mất địa chỉ khó tìm lại.
     p_address: orderArgs.dia_chi || null,
     p_note: customerNote,
     p_confidentiality: orderType === 'school' ? 'school_restricted' : 'normal',
@@ -1137,6 +1141,7 @@ export async function executeCreateOrderDirectly(orderArgs, userProfile) {
     orderCode,
     orderType,
     customerName: trimmedName,
+    requiredAt,
     message: `Đã tạo thành công đơn hàng #${orderCode} cho ${trimmedName} (${cakeName} - ${qty} cái) và chuyển ngay xuống Bếp làm bánh!`
   };
 }
