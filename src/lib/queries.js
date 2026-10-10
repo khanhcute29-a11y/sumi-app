@@ -973,11 +973,12 @@ export async function addLeaveRequest({ staffId, staffName, workDate, shiftLabel
   if (error) throw error;
 }
 
-export async function addShiftCheckout({ staffId, staffName, workDate, shiftLabel, branch, photoUrl, gpsCoords, gpsAccuracy, checkoutTime }) {
+export async function addShiftCheckout({ staffId, staffName, workDate, shiftLabel, branch, photoUrl, gpsCoords, gpsAccuracy, checkoutTime, reason }) {
   const { lat, lng } = tachToaDo(gpsCoords);
   const { error } = await supabase.from('shift_logs').insert({
     staff_id: staffId, staff_name: staffName, work_date: workDate, shift_label: shiftLabel, branch: branch || null,
     type: 'checkout', checkin_time: checkoutTime || new Date().toISOString(), photo_url: photoUrl || null,
+    reason: reason || null, // "[BỔ SUNG] ..." khi thêm giờ ra cho ca quên chấm (boSungCa.js)
     gps_lat: lat, gps_lng: lng, gps_accuracy_m: Number.isFinite(gpsAccuracy) ? gpsAccuracy : null,
   });
   if (error) {

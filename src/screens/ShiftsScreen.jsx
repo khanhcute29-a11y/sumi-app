@@ -21,6 +21,7 @@ import { IconClipboard, IconCheck, IconClock, IconQuestion } from '../components
 import { WeeklyScheduleSection } from '../components/WeeklyScheduleSection';
 import { supabase } from '../lib/supabaseClient';
 import { chuanHoaCa, gomChamCongNgay, tomTatThang, boPhanCuaHoSo, TEN_BO_PHAN } from '../lib/chamCong';
+import { timLanVaoQuenChamRa, kiemTraGioRa, kiemTraCaMoi, caGanNhat, hienGioNgay } from '../lib/boSungCa';
 import ChamCongNhanVien from '../components/shifts/ChamCongNhanVien';
 import ChamCongQuanLy from '../components/shifts/ChamCongQuanLy';
 import ChamCongV2 from '../components/shifts/v2/ChamCongV2';
@@ -502,9 +503,20 @@ function CheckoutModal({ staffName, staffId, activeCheckins, defaultBranch, onCl
   );
 }
 
+// Bổ sung ca đã làm (quên chấm). Sửa 10/10/2026 — xem src/lib/boSungCa.js:
+// trước đây form luôn tạo 1 cặp vào/ra MỚI với ngày mặc định là hôm nay, nên
+// ai quên chấm ra hôm qua mà vào đây bổ sung là bị ghi ca sang hôm nay, chồng
+// lên ca thật. Giờ: nếu còn lần vào ca quên chấm ra thì mặc định chỉ THÊM GIỜ
+// RA cho đúng lần đó; tạo ca mới thì chặn trùng giờ và chặn giờ chưa tới.
 function AddManualShiftModal({ staffName, staffId, defaultBranch, onClose, onDone }) {
   const now = new Date();
-  const [workDate, setWorkDate] = useState(localDateStr(now));
+  const homNay = localDateStr(now);
+  const [lichSu, setLichSu] = useState(null); // null = đang tải
+  const [cheDo, setCheDo] = useState('ca_moi'); // 'them_gio_ra' | 'ca_moi'
+  const [lanVaoId, setLanVaoId] = useState('');
+  const [ngayRa, setNgayRa] = useState(homNay);
+  const [gioRa, setGioRa] = useState('');
+  const [workDate, setWorkDate] = useState(homNay);
   const [startTime, setStartTime] = useState('07:30');
   const [endTime, setEndTime] = useState('16:30');
   const [shiftLabel, setShiftLabel] = useState(SHIFT_PRESETS[0]);
@@ -513,15 +525,75 @@ function AddManualShiftModal({ staffName, staffId, defaultBranch, onClose, onDon
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const inTimeStr = `${workDate}T${startTime}:00`;
-  const outTimeStr = `${workDate}T${endTime}:00`;
-  const timeCalc = calculateNetWorkHours(inTimeStr, outTimeStr);
+  // 14 ngày gần nhất của chính mình — đủ để thấy lần quên chấm ra và để chặn trùng giờ.
+  useEffect(() => {
+    let huy = false;
+    const tu = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 14);
+    supabase.from('shift_logs')
+      .select('id,type,work_date,checkin_time,shift_label,branch,reason')
+      .eq('staff_id', staffId).in('type', ['checkin', 'checkout'])
+      .gte('work_date', localDateStr(tu))
+      .order('checkin_time', { ascending: true })
+      .then(({ data, error: loi }) => {
+        if (huy) return;
+        if (loi) { setLichSu([]); setError('Không tải được lịch sử chấm công. Thử đóng và mở lại.'); return; }
+        const ds = data || [];
+        setLichSu(ds);
+        const quen = timLanVaoQuenChamRa(ds, homNay);
+        if (quen.length) {
+          setCheDo('them_gio_ra');
+          setLanVaoId(quen[0].log.id);
+          setNgayRa(quen[0].log.work_date);
+        }
+        const ca = caGanNhat(ds);
+        if (ca) setShiftLabel(ca);
+      });
+    return () => { huy = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [staffId]);
+
+  const quenChamRa = useMemo(() => (lichSu ? timLanVaoQuenChamRa(lichSu, homNay) : []), [lichSu, homNay]);
+  const lanVao = quenChamRa.find((x) => x.log.id === lanVaoId) || quenChamRa[0];
+
+  const inTimeStr = cheDo === 'them_gio_ra' ? lanVao?.log.checkin_time : `${workDate}T${startTime}:00`;
+  const outTimeStr = cheDo === 'them_gio_ra' ? (gioRa ? `${ngayRa}T${gioRa}:00` : null) : `${workDate}T${endTime}:00`;
+  const timeCalc = inTimeStr && outTimeStr ? calculateNetWorkHours(inTimeStr, outTimeStr) : null;
+
+  const chonLanVao = (id) => {
+    setLanVaoId(id);
+    const x = quenChamRa.find((q) => q.log.id === id);
+    if (x) setNgayRa(x.log.work_date);
+    setError('');
+  };
 
   const submit = async () => {
-    if (!shiftLabel.trim()) { setError('Vui lòng chọn hoặc nhập tên ca làm việc.'); return; }
-    if (startTime >= endTime) { setError('Giờ kết thúc phải sau giờ bắt đầu.'); return; }
-    setSaving(true);
     setError('');
+    if (cheDo === 'them_gio_ra') {
+      if (!lanVao) return;
+      if (!gioRa) { setError('Vui lòng nhập giờ ra.'); return; }
+      const ra = new Date(`${ngayRa}T${gioRa}:00`);
+      const loi = kiemTraGioRa({ lanVao, gioRa: ra, now: new Date() });
+      if (loi) { setError(loi); return; }
+      setSaving(true);
+      try {
+        await addShiftCheckout({
+          staffId, staffName, workDate: lanVao.log.work_date, shiftLabel: lanVao.log.shift_label,
+          branch: lanVao.log.branch || null, photoUrl: null, checkoutTime: ra.toISOString(),
+          reason: '[BỔ SUNG] Quên chấm ra' + (reason.trim() ? ` — ${reason.trim()}` : ''),
+        });
+        onDone();
+      } catch (err) {
+        setError(err.message || 'Không thể lưu giờ ra.');
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
+    if (!shiftLabel.trim()) { setError('Vui lòng chọn hoặc nhập tên ca làm việc.'); return; }
+    const loi = kiemTraCaMoi({ logs: lichSu || [], gioVao: new Date(inTimeStr), gioRa: new Date(outTimeStr), now: new Date() });
+    if (loi) { setError(loi); return; }
+    setSaving(true);
     try {
       await addShiftCheckin({ staffId, staffName, workDate, shiftLabel: shiftLabel.trim(), branch, expectedStart: `${startTime}:00`, lateMinutes: 0, wageEarned: 0, reason: '[BỔ SUNG] ' + (reason.trim() || 'Bổ sung ca làm'), checkinTime: new Date(inTimeStr).toISOString() });
       await addShiftCheckout({ staffId, staffName, workDate, shiftLabel: shiftLabel.trim(), branch, photoUrl: null, checkoutTime: new Date(outTimeStr).toISOString() });
@@ -533,27 +605,64 @@ function AddManualShiftModal({ staffName, staffId, defaultBranch, onClose, onDon
     }
   };
 
+  const nutCheDo = (gt, nhan) => (
+    <button type="button" onClick={() => { setCheDo(gt); setError(''); }}
+      style={{ flex: 1, minHeight: 44, borderRadius: 10, border: '1px solid var(--border-default)', background: cheDo === gt ? 'var(--action-primary)' : 'var(--surface-sunken)', color: cheDo === gt ? 'var(--text-on-primary)' : 'var(--text-primary)', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>{nhan}</button>
+  );
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'var(--surface-overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 16 }} onClick={onClose}>
       <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: 440, maxWidth: '100%', maxHeight: '90dvh', overflowY: 'auto', padding: 20, paddingBottom: 'calc(20px + env(safe-area-inset-bottom))', boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 14 }} onClick={(e) => e.stopPropagation()}>
         <div><div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>＋ Thêm ca / Bổ sung giờ làm</div></div>
-        <Input label="Ngày làm việc" type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <Input label="Giờ bắt đầu" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} style={{ flex: '1 1 120px' }} />
-          <Input label="Giờ kết thúc" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} style={{ flex: '1 1 120px' }} />
-        </div>
-        <div>
-          <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Chọn ca / Bộ phận</label>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-            {SHIFT_PRESETS.map((p) => (<button key={p} type="button" onClick={() => setShiftLabel(p)} style={{ padding: '5px 10px', borderRadius: 999, border: '1px solid var(--border-default)', background: shiftLabel === p ? 'var(--action-primary)' : 'var(--surface-sunken)', color: shiftLabel === p ? 'var(--text-on-primary)' : 'var(--text-primary)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{p}</button>))}
+        {lichSu === null && <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Đang xem lịch sử chấm công…</div>}
+
+        {quenChamRa.length > 0 && (
+          <div style={{ display: 'flex', gap: 8 }}>
+            {nutCheDo('them_gio_ra', 'Thêm giờ ra cho ca quên chấm')}
+            {nutCheDo('ca_moi', 'Thêm ca mới')}
           </div>
-          <Input placeholder="Hoặc tự gõ tên ca..." value={shiftLabel} onChange={(e) => setShiftLabel(e.target.value)} />
-        </div>
-        <Select label="Chi nhánh" value={branch} onChange={(e) => setBranch(e.target.value)} options={BRANCHES.map(b => ({ value: b, label: b }))} />
+        )}
+
+        {cheDo === 'them_gio_ra' && lanVao ? (
+          <>
+            <div style={{ padding: '10px 12px', borderRadius: 10, background: '#fff8e6', color: '#96690a', fontSize: 13, fontWeight: 700 }}>
+              Bạn có {quenChamRa.length} lần vào ca chưa chấm ra. Chọn đúng lần đó rồi nhập giờ bạn đã về.
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {quenChamRa.map((x) => (
+                <button key={x.log.id} type="button" onClick={() => chonLanVao(x.log.id)}
+                  style={{ minHeight: 44, textAlign: 'left', padding: '8px 12px', borderRadius: 10, border: `2px solid ${x.log.id === lanVao.log.id ? 'var(--action-primary)' : 'var(--border-default)'}`, background: 'var(--surface-card)', fontSize: 14, cursor: 'pointer' }}>
+                  <b>Vào lúc {hienGioNgay(x.log.checkin_time)}</b>
+                  <span style={{ color: 'var(--text-secondary)' }}> · {x.log.shift_label || 'Ca làm việc'}</span>
+                </button>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <Input label="Ngày về" type="date" value={ngayRa} onChange={(e) => setNgayRa(e.target.value)} style={{ flex: '1 1 140px' }} />
+              <Input label="Giờ ra" type="time" value={gioRa} onChange={(e) => setGioRa(e.target.value)} style={{ flex: '1 1 120px' }} />
+            </div>
+          </>
+        ) : (
+          <>
+            <Input label="Ngày làm việc" type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <Input label="Giờ bắt đầu" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} style={{ flex: '1 1 120px' }} />
+              <Input label="Giờ kết thúc" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} style={{ flex: '1 1 120px' }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Chọn ca / Bộ phận</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                {SHIFT_PRESETS.map((p) => (<button key={p} type="button" onClick={() => setShiftLabel(p)} style={{ padding: '5px 10px', borderRadius: 999, border: '1px solid var(--border-default)', background: shiftLabel === p ? 'var(--action-primary)' : 'var(--surface-sunken)', color: shiftLabel === p ? 'var(--text-on-primary)' : 'var(--text-primary)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{p}</button>))}
+              </div>
+              <Input placeholder="Hoặc tự gõ tên ca..." value={shiftLabel} onChange={(e) => setShiftLabel(e.target.value)} />
+            </div>
+            <Select label="Chi nhánh" value={branch} onChange={(e) => setBranch(e.target.value)} options={BRANCHES.map(b => ({ value: b, label: b }))} />
+          </>
+        )}
         {timeCalc && (<div style={{ padding: '10px 12px', borderRadius: 10, background: 'var(--surface-sunken)', fontSize: 13 }}><span>Thời lượng: <b>{timeCalc.grossHours}h</b></span>{timeCalc.lunchDeduction > 0 && <span style={{ color: '#b93e13' }}> (Đã trừ {timeCalc.lunchDeduction}h ăn trưa 11:30–12:30)</span>}<span style={{ display: 'block', marginTop: 4, fontWeight: 800, color: 'var(--action-primary)' }}>→ Giờ làm thực tế: {timeCalc.netHours} giờ</span></div>)}
-        <Input label="Lý do bổ sung" placeholder="VD: Bổ sung ca làm phụ bánh ngày 23/8..." value={reason} onChange={(e) => setReason(e.target.value)} />
+        <Input label={cheDo === 'them_gio_ra' ? 'Ghi chú (tuỳ chọn)' : 'Lý do bổ sung'} placeholder={cheDo === 'them_gio_ra' ? 'VD: Quên bấm kết thúc ca' : 'VD: Bổ sung ca làm phụ bánh ngày 23/8...'} value={reason} onChange={(e) => setReason(e.target.value)} />
         {error && <div style={{ font: 'var(--text-body-sm)', color: 'var(--status-danger)' }}>{error}</div>}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}><Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>Huỷ</Button><Button variant="primary" size="sm" onClick={submit} disabled={saving || !shiftLabel.trim()}>{saving ? 'Đang lưu...' : '✓ Lưu ca làm'}</Button></div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}><Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>Huỷ</Button><Button variant="primary" size="sm" onClick={submit} disabled={saving || lichSu === null || (cheDo === 'ca_moi' && !shiftLabel.trim())}>{saving ? 'Đang lưu...' : (cheDo === 'them_gio_ra' ? '✓ Lưu giờ ra' : '✓ Lưu ca làm')}</Button></div>
       </div>
     </div>
   );
