@@ -37,18 +37,24 @@ function suKienDaXep(logs) {
 /**
  * Các lần VÀO CA bị quên chấm ra: sau nó là một lần vào ca khác (chứ không phải
  * giờ ra), hoặc là lần cuối cùng nhưng thuộc ngày trước hôm nay.
- * Lần vào ca hôm nay đang làm dở KHÔNG tính (đó là ca đang chạy, không phải quên).
- * @returns {Array<{log, gioRaMuonNhat: number|null}>} gioRaMuonNhat = mốc lần chấm kế
- *   tiếp — giờ ra bổ sung phải trước mốc này.
+ * Lần vào ca hôm nay đang làm dở mặc định KHÔNG tính (đó là ca đang chạy). Truyền
+ * kemCaDangMo = true để kèm cả ca đó (dangMo: true) — từ 12/10/2026 database chặn
+ * vào ca lần 2 khi ca trước còn mở, nên ai nghỉ trưa quên chấm ra cần chỗ nhập
+ * đúng giờ đã nghỉ cho ca đang mở này.
+ * @returns {Array<{log, gioRaMuonNhat: number|null, dangMo?: boolean}>} gioRaMuonNhat =
+ *   mốc lần chấm kế tiếp — giờ ra bổ sung phải trước mốc này.
  */
-export function timLanVaoQuenChamRa(logs, homNay) {
+export function timLanVaoQuenChamRa(logs, homNay, { kemCaDangMo = false } = {}) {
   const ds = suKienDaXep(logs);
   const ket = [];
   ds.forEach((l, i) => {
     if (l.type !== 'checkin') return;
     const sau = ds[i + 1];
     if (sau && sau.type === 'checkout') return;
-    if (!sau && l.work_date >= homNay) return;
+    if (!sau && l.work_date >= homNay) {
+      if (kemCaDangMo) ket.push({ log: l, gioRaMuonNhat: null, dangMo: true });
+      return;
+    }
     ket.push({ log: l, gioRaMuonNhat: sau ? ms(sau.checkin_time) : null });
   });
   return ket.reverse(); // mới nhất trước

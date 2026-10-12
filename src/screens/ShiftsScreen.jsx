@@ -552,7 +552,8 @@ function AddManualShiftModal({ staffName, staffId, defaultBranch, onClose, onDon
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [staffId]);
 
-  const quenChamRa = useMemo(() => (lichSu ? timLanVaoQuenChamRa(lichSu, homNay) : []), [lichSu, homNay]);
+  // Kèm cả ca đang mở hôm nay (vd nghỉ trưa quên chấm ra) — mặc định vẫn ưu tiên ca quên thật.
+  const quenChamRa = useMemo(() => (lichSu ? timLanVaoQuenChamRa(lichSu, homNay, { kemCaDangMo: true }) : []), [lichSu, homNay]);
   const lanVao = quenChamRa.find((x) => x.log.id === lanVaoId) || quenChamRa[0];
 
   const inTimeStr = cheDo === 'them_gio_ra' ? lanVao?.log.checkin_time : `${workDate}T${startTime}:00`;
@@ -626,14 +627,14 @@ function AddManualShiftModal({ staffName, staffId, defaultBranch, onClose, onDon
         {cheDo === 'them_gio_ra' && lanVao ? (
           <>
             <div style={{ padding: '10px 12px', borderRadius: 10, background: '#fff8e6', color: '#96690a', fontSize: 13, fontWeight: 700 }}>
-              Bạn có {quenChamRa.length} lần vào ca chưa chấm ra. Chọn đúng lần đó rồi nhập giờ bạn đã về.
+              Bạn có {quenChamRa.length} lần vào ca chưa chấm ra. Chọn đúng lần đó rồi nhập giờ bạn đã về (hoặc giờ bắt đầu nghỉ).
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {quenChamRa.map((x) => (
                 <button key={x.log.id} type="button" onClick={() => chonLanVao(x.log.id)}
                   style={{ minHeight: 44, textAlign: 'left', padding: '8px 12px', borderRadius: 10, border: `2px solid ${x.log.id === lanVao.log.id ? 'var(--action-primary)' : 'var(--border-default)'}`, background: 'var(--surface-card)', fontSize: 14, cursor: 'pointer' }}>
                   <b>Vào lúc {hienGioNgay(x.log.checkin_time)}</b>
-                  <span style={{ color: 'var(--text-secondary)' }}> · {x.log.shift_label || 'Ca làm việc'}</span>
+                  <span style={{ color: 'var(--text-secondary)' }}> · {x.log.shift_label || 'Ca làm việc'}{x.dangMo ? ' · đang mở hôm nay' : ''}</span>
                 </button>
               ))}
             </div>
