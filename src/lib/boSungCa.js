@@ -86,12 +86,18 @@ export function kiemTraCaMoi({ logs, gioVao, gioRa, now = new Date() }) {
   if (ra > bayGio + NAM_PHUT) return 'Giờ kết thúc chưa tới. Chỉ bổ sung ca đã làm xong — ca đang làm thì bấm "Kết thúc ca".';
 
   const ds = suKienDaXep(logs);
+  const dv = new Date(vao);
+  const ngayVao = `${dv.getFullYear()}-${String(dv.getMonth() + 1).padStart(2, '0')}-${String(dv.getDate()).padStart(2, '0')}`;
   for (let i = 0; i < ds.length; i += 1) {
     const l = ds[i];
     if (l.type !== 'checkin') continue;
     const batDau = ms(l.checkin_time);
     const sau = ds[i + 1];
-    const ketThuc = sau ? ms(sau.checkin_time) : bayGio;
+    // Lần vào cuối cùng còn mở nhưng thuộc NGÀY TRƯỚC (quên chấm ra hôm qua) —
+    // không biết giờ về thật, coi như hết trong 16 tiếng để không chặn oan việc
+    // bổ sung ca hôm nay (ca hôm qua để Giám đốc sửa).
+    const ketThuc = sau ? ms(sau.checkin_time)
+      : (l.work_date && l.work_date < ngayVao ? Math.min(bayGio, batDau + 16 * 3600 * 1000) : bayGio);
     if (vao < ketThuc && ra > batDau) {
       if (!sau) {
         return `Trùng với ca bắt đầu lúc ${hienGioNgay(batDau)} chưa kết thúc. Đang làm thì bấm "Kết thúc ca"; đã về mà quên chấm thì chọn "Thêm giờ ra cho ca quên chấm".`;

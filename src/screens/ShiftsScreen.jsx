@@ -508,7 +508,10 @@ function CheckoutModal({ staffName, staffId, activeCheckins, defaultBranch, onCl
 // ai quên chấm ra hôm qua mà vào đây bổ sung là bị ghi ca sang hôm nay, chồng
 // lên ca thật. Giờ: nếu còn lần vào ca quên chấm ra thì mặc định chỉ THÊM GIỜ
 // RA cho đúng lần đó; tạo ca mới thì chặn trùng giờ và chặn giờ chưa tới.
-function AddManualShiftModal({ staffName, staffId, defaultBranch, onClose, onDone }) {
+// Giám đốc chốt 12/10/2026: nhân viên CHỈ tự bổ sung trong NGÀY HÔM NAY; ca quên
+// của ngày đã qua để Giám đốc sửa (SuaChamCongPanel). Database chặn thật bằng
+// trigger sumi_chan_cham_cong_ngay_cu — ở đây chỉ ẩn/khoá cho dễ hiểu.
+function AddManualShiftModal({ staffName, staffId, defaultBranch, laGiamDoc = false, onClose, onDone }) {
   const now = new Date();
   const homNay = localDateStr(now);
   const [lichSu, setLichSu] = useState(null); // null = đang tải
@@ -539,7 +542,7 @@ function AddManualShiftModal({ staffName, staffId, defaultBranch, onClose, onDon
         if (loi) { setLichSu([]); setError('Không tải được lịch sử chấm công. Thử đóng và mở lại.'); return; }
         const ds = data || [];
         setLichSu(ds);
-        const quen = timLanVaoQuenChamRa(ds, homNay);
+        const quen = timLanVaoQuenChamRa(ds, homNay).filter((x) => laGiamDoc || x.log.work_date === homNay);
         if (quen.length) {
           setCheDo('them_gio_ra');
           setLanVaoId(quen[0].log.id);
@@ -553,7 +556,9 @@ function AddManualShiftModal({ staffName, staffId, defaultBranch, onClose, onDon
   }, [staffId]);
 
   // Kèm cả ca đang mở hôm nay (vd nghỉ trưa quên chấm ra) — mặc định vẫn ưu tiên ca quên thật.
-  const quenChamRa = useMemo(() => (lichSu ? timLanVaoQuenChamRa(lichSu, homNay, { kemCaDangMo: true }) : []), [lichSu, homNay]);
+  const tatCaCaMo = useMemo(() => (lichSu ? timLanVaoQuenChamRa(lichSu, homNay, { kemCaDangMo: true }) : []), [lichSu, homNay]);
+  const quenChamRa = tatCaCaMo.filter((x) => laGiamDoc || x.log.work_date === homNay);
+  const quenNgayCu = tatCaCaMo.filter((x) => !laGiamDoc && x.log.work_date !== homNay);
   const lanVao = quenChamRa.find((x) => x.log.id === lanVaoId) || quenChamRa[0];
 
   const inTimeStr = cheDo === 'them_gio_ra' ? lanVao?.log.checkin_time : `${workDate}T${startTime}:00`;
@@ -597,7 +602,7 @@ function AddManualShiftModal({ staffName, staffId, defaultBranch, onClose, onDon
     setSaving(true);
     try {
       await addShiftCheckin({ staffId, staffName, workDate, shiftLabel: shiftLabel.trim(), branch, expectedStart: `${startTime}:00`, lateMinutes: 0, wageEarned: 0, reason: '[BỔ SUNG] ' + (reason.trim() || 'Bổ sung ca làm'), checkinTime: new Date(inTimeStr).toISOString() });
-      await addShiftCheckout({ staffId, staffName, workDate, shiftLabel: shiftLabel.trim(), branch, photoUrl: null, checkoutTime: new Date(outTimeStr).toISOString() });
+      await addShiftCheckout({ staffId, staffName, workDate, shiftLabel: shiftLabel.trim(), branch, photoUrl: null, checkoutTime: new Date(outTimeStr).toISOString(), reason: '[BỔ SUNG] ' + (reason.trim() || 'Bổ sung ca làm') });
       onDone();
     } catch (err) {
       setError(err.message || 'Không thể lưu ca bổ sung.');
@@ -616,6 +621,12 @@ function AddManualShiftModal({ staffName, staffId, defaultBranch, onClose, onDon
       <div style={{ background: 'var(--surface-card)', borderRadius: 'var(--radius-lg)', width: 440, maxWidth: '100%', maxHeight: '90dvh', overflowY: 'auto', padding: 20, paddingBottom: 'calc(20px + env(safe-area-inset-bottom))', boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 14 }} onClick={(e) => e.stopPropagation()}>
         <div><div style={{ font: 'var(--text-title)', color: 'var(--text-primary)' }}>＋ Thêm ca / Bổ sung giờ làm</div></div>
         {lichSu === null && <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Đang xem lịch sử chấm công…</div>}
+        {quenNgayCu.length > 0 && (
+          <div style={{ padding: '10px 12px', borderRadius: 10, background: '#fdeceb', color: '#b42318', fontSize: 13, fontWeight: 700 }}>
+            {quenNgayCu.map((x) => <div key={x.log.id}>• Ca vào lúc {hienGioNgay(x.log.checkin_time)} chưa chấm ra.</div>)}
+            <div style={{ fontWeight: 600, marginTop: 4 }}>Đã qua ngày nên chỉ Giám đốc sửa được — bạn báo Giám đốc nhé.</div>
+          </div>
+        )}
 
         {quenChamRa.length > 0 && (
           <div style={{ display: 'flex', gap: 8 }}>
@@ -639,13 +650,17 @@ function AddManualShiftModal({ staffName, staffId, defaultBranch, onClose, onDon
               ))}
             </div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <Input label="Ngày về" type="date" value={ngayRa} onChange={(e) => setNgayRa(e.target.value)} style={{ flex: '1 1 140px' }} />
+              {laGiamDoc
+                ? <Input label="Ngày về" type="date" value={ngayRa} onChange={(e) => setNgayRa(e.target.value)} style={{ flex: '1 1 140px' }} />
+                : <div style={{ flex: '1 1 140px', fontSize: 13, color: 'var(--text-secondary)', alignSelf: 'flex-end', paddingBottom: 12 }}>Ngày về: <b>hôm nay</b></div>}
               <Input label="Giờ ra" type="time" value={gioRa} onChange={(e) => setGioRa(e.target.value)} style={{ flex: '1 1 120px' }} />
             </div>
           </>
         ) : (
           <>
-            <Input label="Ngày làm việc" type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
+            {laGiamDoc
+              ? <Input label="Ngày làm việc" type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
+              : <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Ngày làm việc: <b>hôm nay</b> — ca của ngày đã qua chỉ Giám đốc bổ sung được.</div>}
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <Input label="Giờ bắt đầu" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} style={{ flex: '1 1 120px' }} />
               <Input label="Giờ kết thúc" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} style={{ flex: '1 1 120px' }} />
@@ -1017,6 +1032,7 @@ export default function ShiftsScreen() {
 
       {showAddManual && (
         <AddManualShiftModal
+          laGiamDoc={laGiamDoc}
           staffId={profile?.id}
           staffName={profile?.full_name}
           defaultBranch={profile?.station}

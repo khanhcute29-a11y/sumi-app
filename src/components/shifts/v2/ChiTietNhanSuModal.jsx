@@ -7,6 +7,7 @@ import { haversineKm } from '../../../lib/geo';
 import { hasAnyRole } from '../../../lib/roles';
 import GioLamRiengPanel from '../../staff/GioLamRiengPanel';
 import CaCaNhanPanel from '../../staff/CaCaNhanPanel';
+import SuaChamCongPanel from '../../staff/SuaChamCongPanel';
 
 // Hộp chi tiết một nhân sự — Quản lý bấm vào người trong danh sách thì mở ra.
 // Gồm: giờ vào/ra hôm nay, khu vực ĐÁNH GIÁ SAO, và lịch sử chấm công.
@@ -150,6 +151,7 @@ export default function ChiTietNhanSuModal({
 
         {duocSuaCaQuyDinh && <CaCaNhanPanel hoSo={nhanSu} danhSachCa={danhSachCa} onDone={onXong} />}
         {duocSuaCa && <GioLamRiengPanel hoSo={nhanSu} onDone={onXong} />}
+        {duocSuaCaQuyDinh && <SuaChamCongPanel hoSo={nhanSu} onDone={onXong} />}
 
         <div className="cc2-section-title"><span>LỊCH SỬ CHẤM CÔNG</span></div>
         <LichSuCham
