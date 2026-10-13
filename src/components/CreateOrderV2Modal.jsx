@@ -203,7 +203,20 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
  const customerSuggestions=(customerFieldFocus&&customerSuggestQuery.trim().length>=2)
   ?customerDirectory.filter(c=>normalizeSearch(`${c.name||''} ${c.phone||''} ${c.address||''}`).includes(normalizeSearch(customerSuggestQuery))).slice(0,8)
   :[];
- const chooseCustomer=(c)=>{setCustomerName(c.name||'');setCustomerPhone(c.phone||'');if(c.address)setAddress(c.address);setCustomerFieldFocus(null);};
+ const chooseCustomer=(c)=>{setCustomerName(c.name||'');setCustomerPhone(c.phone||'');if(c.address)setAddress(c.address);setCustomerFieldFocus(null);daTuDienCho.current=c.id;};
+ // Gõ tay ĐÚNG tên + SĐT của khách cũ (không bấm chọn gợi ý) cũng tự điền địa chỉ
+ // — trước đây chỉ điền khi bấm chọn trong danh sách gợi ý. Khớp CẢ tên lẫn SĐT
+ // (giống lúc lưu đơn bên dưới) vì nhiều khách dùng chung 1 SĐT văn phòng. Chỉ
+ // điền khi ô địa chỉ đang trống và mỗi khách chỉ tự điền 1 lần (xoá đi thì thôi).
+ const daTuDienCho=useRef(null);
+ useEffect(()=>{
+  if(type==='school'||address.trim())return;
+  const so=(customerPhone||'').replace(/\D/g,'');
+  if(so.length<9)return;
+  const ten=(customerName||'').trim().toLowerCase().replace(/\s+/g,' ');
+  const c=customerDirectory.find(x=>(x.phone||'').replace(/\D/g,'')===so&&(x.name||'').trim().toLowerCase().replace(/\s+/g,' ')===ten);
+  if(c&&c.address&&daTuDienCho.current!==c.id){daTuDienCho.current=c.id;setAddress(c.address);}
+ },[type,customerName,customerPhone,customerDirectory]); // eslint-disable-line react-hooks/exhaustive-deps
  const [entryMode,setEntryMode]=useState('manual'); const [cakeLine,setCakeLine]=useState('decorated_cake');
  const [hasShipFee,setHasShipFee]=useState('no'); const [shipFee,setShipFee]=useState('');
  const [paymentMethod,setPaymentMethod]=useState('cod'); const [deposit,setDeposit]=useState('');
@@ -456,9 +469,19 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
   // đã đọc customers.address từ trước, chỉ là trước giờ luôn trống với khách
   // lẻ nên chưa bao giờ có tác dụng). Không chặn/báo lỗi tạo đơn nếu bước này
   // thất bại — đơn đã tạo xong là việc chính, lưu địa chỉ chỉ là tiện ích thêm.
+  // LỖI THẬT đã vá 13/10/2026: trước đây update thẳng bảng customers — RLS chỉ cho
+  // owner/admin/cashier/sale ở vai trò CHÍNH, người có vai trò phụ (phó GĐ xưởng,
+  // bếp trưởng...) bị lọc mất dòng, sửa 0 dòng mà không báo lỗi -> 18 khách không
+  // bao giờ được lưu địa chỉ. Giờ đi qua RPC sumi_luu_dia_chi_khach (database tự
+  // kiểm tra đúng đơn giao của người tạo) và báo nhẹ nếu không lưu được.
   if(customerId&&fulfillment==='delivery'&&!customerHasAddress&&effAddress&&effAddress.trim()){
-    supabase.from('customers').update({address:effAddress.trim()}).eq('id',customerId)
-      .then(({error:addrErr})=>{ if(addrErr) console.warn('Không lưu được địa chỉ vào hồ sơ khách hàng:',addrErr.message); });
+    supabase.rpc('sumi_luu_dia_chi_khach',{p_customer_id:customerId,p_address:effAddress.trim()})
+      .then(({data:kq,error:addrErr})=>{
+        if(addrErr||(kq&&kq.da_luu===false&&kq.ly_do==='khong_co_don_giao')){
+          console.warn('Không lưu được địa chỉ vào hồ sơ khách hàng:',addrErr?.message||kq?.ly_do);
+          showToast({icon:'📍',title:'Chưa lưu được địa chỉ khách',message:'Đơn đã tạo xong. Địa chỉ chưa lưu vào hồ sơ khách — lần sau nhập lại giúp nhé.',tone:'warning'});
+        }
+      });
   }
   for(const file of photos){
     try {

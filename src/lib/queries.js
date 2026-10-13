@@ -99,18 +99,22 @@ export async function findOrCreateCustomer({ name, phone, channel }) {
   return data;
 }
 
-// Sửa hồ sơ khách hàng (tên/SĐT/địa chỉ) — dùng ở màn Khách Hàng. RLS chỉ
-// cho owner/cashier/admin/sale được update bảng customers, các vai trò khác
-// gọi hàm này sẽ nhận lỗi quyền từ Supabase (ném ra để UI tự hiện thông báo).
+// Sửa hồ sơ khách hàng (tên/SĐT/địa chỉ) — dùng ở màn Khách Hàng. RLS cho
+// owner/cashier/admin/sale (vai trò chính HOẶC phụ — migration 202610131000).
+// LỖI THẬT đã vá 13/10/2026: RLS chặn UPDATE KHÔNG báo lỗi, chỉ sửa 0 dòng —
+// trước đây màn hình vẫn báo "đã lưu". Giờ đọc lại số dòng đã sửa để báo đúng.
 export async function updateCustomerProfile(id, { name, phone, address, taxCode, schoolCode }) {
-  const { error } = await supabase.from('customers').update({
+  const { data, error } = await supabase.from('customers').update({
     name: name?.trim() || null,
     phone: phone?.trim() || null,
     address: address?.trim() || null,
     tax_code: taxCode?.trim() || null,
     school_code: schoolCode?.trim() || null,
-  }).eq('id', id);
+  }).eq('id', id).select('id');
   if (error) throw error;
+  if (!data || data.length === 0) {
+    throw new Error('Tài khoản của bạn chưa có quyền sửa hồ sơ khách hàng. Nhờ Giám đốc hoặc Thu ngân sửa giúp.');
+  }
 }
 
 // ---- Products (menu + giá) ----
