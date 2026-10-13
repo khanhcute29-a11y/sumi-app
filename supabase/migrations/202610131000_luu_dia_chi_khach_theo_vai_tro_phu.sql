@@ -7,10 +7,11 @@
 -- bị RLS lọc mất dòng -> UPDATE sửa 0 dòng, KHÔNG báo lỗi -> app tưởng đã lưu.
 -- Đo thật: 18 khách / 22 đơn giao, toàn bộ do 2 người có vai trò chính khác tạo.
 --
--- 1) sumi_luu_dia_chi_khach: lưu địa chỉ đơn giao vào hồ sơ khách KHI HỒ SƠ
---    ĐANG TRỐNG, cho bất kỳ nhân sự nào vừa tạo đơn giao cho khách đó (database
---    tự kiểm tra có đúng đơn giao của chính người gọi, cùng địa chỉ, trong 1
---    ngày) — không cần mở quyền sửa khách cho mọi người.
+-- 1) sumi_luu_dia_chi_khach: lưu địa chỉ đơn giao vào hồ sơ khách — hồ sơ trống
+--    thì điền, khách ĐỔI địa chỉ thì cập nhật theo đơn giao MỚI NHẤT (Giám đốc
+--    chốt 13/10/2026) — cho bất kỳ nhân sự nào vừa tạo đơn giao cho khách đó
+--    (database tự kiểm tra có đúng đơn giao của chính người gọi, cùng địa chỉ,
+--    trong 1 ngày) — không cần mở quyền sửa khách cho mọi người.
 -- 2) policy "update customers" xét cả vai trò phụ (màn Khách hàng): ai có
 --    owner/admin/cashier/sale ở vai trò chính HOẶC phụ đều sửa được. Không đụng
 --    policy xoá khách.
@@ -59,8 +60,8 @@ begin
   if coalesce(v_khach.is_school, false) then
     return jsonb_build_object('da_luu', false, 'ly_do', 'truong_hoc');
   end if;
-  if nullif(btrim(coalesce(v_khach.address, '')), '') is not null then
-    return jsonb_build_object('da_luu', false, 'ly_do', 'da_co_dia_chi');
+  if btrim(coalesce(v_khach.address, '')) = v_dc then
+    return jsonb_build_object('da_luu', false, 'ly_do', 'khong_doi');
   end if;
 
   -- Chỉ lưu khi chính người gọi vừa tạo đơn GIAO cho khách này với đúng địa chỉ đó.
@@ -76,7 +77,8 @@ begin
   end if;
 
   update public.customers set address = v_dc where id = p_customer_id;
-  return jsonb_build_object('da_luu', true);
+  return jsonb_build_object('da_luu', true,
+    'loai', case when nullif(btrim(coalesce(v_khach.address, '')), '') is null then 'dien_moi' else 'cap_nhat' end);
 end;
 $fn$;
 revoke all on function public.sumi_luu_dia_chi_khach(uuid, text) from public, anon;
@@ -107,7 +109,7 @@ where c.id = d.customer_id
 
 insert into public.migration_runs(migration_key, status, finished_at, notes)
 values ('202610131000_luu_dia_chi_khach_theo_vai_tro_phu', 'completed', now(),
-  'Policy update customers chi xet profiles.role -> nguoi co vai tro phu (phó GĐ co admin, bep truong) update 0 dong im lang, dia chi khach khong bao gio duoc luu (18 khach/22 don). Them sumi_co_vai_tro(text[]) (role + extra_roles, SECURITY DEFINER), sumi_luu_dia_chi_khach (luu khi ho so trong, chi khi chinh nguoi goi vua tao don giao cung dia chi trong 1 ngay), policy update customers xet ca vai tro phu, dien bu dia chi tu don giao gan nhat cho khach le dang trong.')
+  'Policy update customers chi xet profiles.role -> nguoi co vai tro phu (phó GĐ co admin, bep truong) update 0 dong im lang, dia chi khach khong bao gio duoc luu (18 khach/22 don). Them sumi_co_vai_tro(text[]) (role + extra_roles, SECURITY DEFINER), sumi_luu_dia_chi_khach (dien khi trong / cap nhat theo don giao moi nhat, chi khi chinh nguoi goi vua tao don giao cung dia chi trong 1 ngay), policy update customers xet ca vai tro phu, dien bu dia chi tu don giao gan nhat cho khach le dang trong.')
 on conflict (migration_key) do update set status = 'completed', finished_at = now(), notes = excluded.notes;
 
 commit;

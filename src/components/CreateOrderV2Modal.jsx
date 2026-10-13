@@ -376,7 +376,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
   // Khách ĐÃ có địa chỉ hồ sơ chưa — dùng để quyết định có lưu địa chỉ đơn
   // này ngược vào hồ sơ khách hay không (chỉ lưu khi hồ sơ đang trống, không
   // ghi đè địa chỉ đã có — tránh 1 đơn giao chỗ khác làm sai hồ sơ khách).
-  let customerHasAddress=false;
+  let diaChiHoSo='';
   if(type==='school'){
     if(school?.code){
       const {data: schoolCust} = await supabase.from('customers').select('id').eq('school_code', school.code).maybeSingle();
@@ -418,7 +418,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
       const {data} = await supabase.from('customers').select('id,address').eq('name', trimmedName).is('phone', null).maybeSingle();
       cust = data;
     }
-    customerHasAddress=!!(cust?.address&&cust.address.trim());
+    diaChiHoSo=(cust?.address||'').trim();
     if(!cust) {
       // LỖI THẬT đã vá: trước đây insert kèm `created_by` — cột KHÔNG tồn tại
       // trên bảng `customers` (chỉ `orders`/`customer_debt_entries` mới có),
@@ -474,7 +474,9 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
   // bếp trưởng...) bị lọc mất dòng, sửa 0 dòng mà không báo lỗi -> 18 khách không
   // bao giờ được lưu địa chỉ. Giờ đi qua RPC sumi_luu_dia_chi_khach (database tự
   // kiểm tra đúng đơn giao của người tạo) và báo nhẹ nếu không lưu được.
-  if(customerId&&fulfillment==='delivery'&&!customerHasAddress&&effAddress&&effAddress.trim()){
+  // Khách đổi địa chỉ thì hồ sơ cập nhật theo địa chỉ giao MỚI NHẤT (Giám đốc chốt
+  // 13/10/2026) — lần sau chọn khách sẽ tự điền đúng chỗ giao gần nhất.
+  if(customerId&&type!=='school'&&fulfillment==='delivery'&&effAddress&&effAddress.trim()&&effAddress.trim()!==diaChiHoSo){
     supabase.rpc('sumi_luu_dia_chi_khach',{p_customer_id:customerId,p_address:effAddress.trim()})
       .then(({data:kq,error:addrErr})=>{
         if(addrErr||(kq&&kq.da_luu===false&&kq.ly_do==='khong_co_don_giao')){
