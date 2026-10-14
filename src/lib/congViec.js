@@ -64,11 +64,20 @@ export function phutGiua(a, b) {
   return Math.round((t2 - t1) / 60000);
 }
 
+// Giờ ngắn kèm NGÀY khi không phải hôm nay (yêu cầu 14/10/2026: thẻ việc giao từ
+// 58 ngày trước vẫn chỉ hiện "09:27", nhìn tưởng vừa giao hôm nay).
+//   hôm nay        -> "09:27"
+//   cùng năm       -> "09:27 17/08"
+//   khác năm       -> "09:27 17/08/2025"
 export function gioNgan(iso) {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const gio = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const homNay = new Date();
+  if (d.toDateString() === homNay.toDateString()) return gio;
+  const ngay = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+  return d.getFullYear() === homNay.getFullYear() ? `${gio} ${ngay}` : `${gio} ${ngay}/${d.getFullYear()}`;
 }
 
 export function ngayGio(iso) {
@@ -130,6 +139,9 @@ export function nhanKpiNhanViec(t) {
   if (!t?.accepted_at || !t?.created_at) return null;
   const phut = phutGiua(t.created_at, t.accepted_at);
   if (phut === null) return null;
+  // Miễn trừ do lỗi app (nút "Nhận việc" trên popup Gen báo lỗi 21/09–14/10/2026,
+  // migration 202610141000) — vẫn ghi đúng là nhận chậm nhưng không trừ điểm.
+  if (phut > 15 && t.nhan_viec_tre_mien) return { loai: 'dung', chu: `Nhận chậm ${doDaiThoiGian(phut)} (đã miễn trừ điểm)` };
   if (phut > 15) return { loai: 'tre', chu: `Trễ xác nhận ${doDaiThoiGian(phut)}` };
   return { loai: 'dung', chu: `Nhận việc sau ${doDaiThoiGian(phut)}` };
 }

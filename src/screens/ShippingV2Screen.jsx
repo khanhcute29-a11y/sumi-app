@@ -197,6 +197,7 @@ export default function ShippingV2Screen() {
                   key={s.id}
                   stop={s}
                   runActive={r.status === 'in_transit'}
+                  runStatus={r.status}
                   onViewOrder={id => setSelectedOrderId(id)}
                   onDone={load}
                   setError={setError}
@@ -401,7 +402,7 @@ function DispatchPanel({ onCreated, setError }) {
   );
 }
 
-function StopCard({ stop, runActive, onViewOrder, onDone, setError }) {
+function StopCard({ stop, runActive, runStatus, onViewOrder, onDone, setError }) {
   const { profile } = useAuth();
   const [recipient, setRecipient] = useState('');
   const [file, setFile] = useState(null);
@@ -483,15 +484,26 @@ function StopCard({ stop, runActive, onViewOrder, onDone, setError }) {
         <b style={{ fontSize: 15, color: 'var(--text-primary)' }}>
           Điểm {stop.sequence_no} · Đơn #{order?.order_code || stop.order_id?.slice(0, 8)}
         </b>
+        {/* Yêu cầu 14/10/2026: "Đã giao" kèm NGÀY THÁNG NĂM; điểm chưa giao hiện
+            đúng theo trạng thái CHUYẾN — trước đây luôn ghi "Đang đi giao" kể cả khi
+            tài xế còn chưa nhận chuyến. */}
         {stop.status === 'delivered' ? (
           <span style={{ fontSize: 13, fontWeight: 800, color: '#087f5b' }}>
-            ✅ Đã giao {stop.delivered_at ? new Date(stop.delivered_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : ''}
+            ✅ Đã giao {stop.delivered_at ? new Date(stop.delivered_at).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' }).replace(',', ' ·') : ''}
           </span>
-        ) : (
-          <span style={{ fontSize: 12, fontWeight: 700, color: '#b93e13', background: '#fff0d4', padding: '2px 8px', borderRadius: 999 }}>
-            🛵 Đang đi giao
-          </span>
-        )}
+        ) : (() => {
+          const nhan = stop.status === 'failed' ? ['❌ Giao không thành công', '#b42318', '#fdeceb']
+            : stop.status === 'cancelled' ? ['🚫 Đã huỷ', '#725f50', '#f4efe8']
+            : stop.status === 'arrived' ? ['📍 Đã tới nơi', '#b93e13', '#fff0d4']
+            : runStatus === 'in_transit' ? ['🛵 Đang đi giao', '#b93e13', '#fff0d4']
+            : runStatus === 'accepted' ? ['📋 Chờ xuất phát', '#725f50', '#f4efe8']
+            : ['⏳ Chờ tài xế nhận', '#725f50', '#f4efe8'];
+          return (
+            <span style={{ fontSize: 12, fontWeight: 700, color: nhan[1], background: nhan[2], padding: '2px 8px', borderRadius: 999 }}>
+              {nhan[0]}
+            </span>
+          );
+        })()}
       </div>
 
       {/* Thông tin khách hàng & Ghi chú */}
