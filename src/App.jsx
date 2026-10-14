@@ -261,7 +261,10 @@ function OpsApp({ onSignOut }) {
               setVoiceTask({
                 id: n.entity_id || n.id,
                 title: n.body || n.title,
-                assignee_name: profile?.name
+                assignee_name: profile?.name,
+                // Chỉ VIỆC MỚI GIAO (đầu việc thường) mới có nút "Nhận việc"; nhắc
+                // việc / checklist / việc trong đơn chỉ đọc to (GenVoiceTaskAlert).
+                kind: n.notification_type === 'task_assigned' && n.entity_type === 'task' ? 'task' : 'reminder',
               });
               showToast({
                 ...NOTIFY_KINDS[n.notification_type],

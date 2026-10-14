@@ -16,10 +16,17 @@ export function GenVoiceTaskAlert({ task, onClose, onAccepted }) {
   const employeeName = task.assignee_name || 'Bạn';
   // kind='message' -> tin nhắn tự do từ Sếp (không phải giao việc): Gen đọc to
   // nội dung, nút "TÔI ĐÃ NGHE" chỉ đóng lại (không có bước nhận việc).
-  const isMessage = task.kind === 'message';
-  const taskTitle = task.title || task.content || (isMessage ? 'Tin nhắn mới' : 'Công việc mới');
+  // kind='reminder' -> NHẮC VIỆC (checklist định kỳ, nhắc giờ làm, việc trong đơn —
+  // App.jsx phân loại): chỉ nghe, KHÔNG có bước nhận việc. Trước 14/10/2026 nhắc
+  // việc cũng hiện "Có việc mới được giao + Nhận việc", bấm vào là báo lỗi
+  // "permission denied for table tasks" (mã gửi kèm là mẫu checklist/đơn hàng).
+  const laNhac = task.kind === 'reminder';
+  const isMessage = task.kind === 'message' || laNhac;
+  const taskTitle = task.title || task.content || (laNhac ? 'Việc cần làm' : isMessage ? 'Tin nhắn mới' : 'Công việc mới');
   const fromLabel = task.from_title || 'Sếp';
-  const speechMessage = isMessage
+  const speechMessage = laNhac
+    ? `${employeeName} ơi! Nhắc việc cần làm: ${taskTitle}`
+    : isMessage
     ? `${employeeName} ơi! ${fromLabel} nhắn: ${taskTitle}`
     : `${employeeName} ơi! Sếp vừa giao việc mới: ${taskTitle}. Bấm nút màu xanh để nhận việc nhé!`;
 
@@ -108,11 +115,11 @@ export function GenVoiceTaskAlert({ task, onClose, onAccepted }) {
         </div>
 
         <h2 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 900, color: '#111827' }}>
-          {isMessage ? 'CÓ TIN NHẮN MỚI!' : 'CÓ VIỆC MỚI ĐƯỢC GIAO!'}
+          {laNhac ? 'NHẮC VIỆC CẦN LÀM!' : isMessage ? 'CÓ TIN NHẮN MỚI!' : 'CÓ VIỆC MỚI ĐƯỢC GIAO!'}
         </h2>
 
         <p style={{ margin: '0 0 16px', fontSize: 16, color: '#4b5563', lineHeight: 1.5 }}>
-          <b>{employeeName}</b> ơi, {isMessage ? `${fromLabel} nhắn:` : 'Sếp vừa giao:'}
+          <b>{employeeName}</b> ơi, {laNhac ? 'nhớ làm việc này nhé:' : isMessage ? `${fromLabel} nhắn:` : 'Sếp vừa giao:'}
         </p>
 
         {/* Khung nội dung to bản */}

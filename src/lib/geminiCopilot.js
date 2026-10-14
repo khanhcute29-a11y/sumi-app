@@ -843,10 +843,11 @@ export async function executeExpenseClaim({ soTien, noiDungChi, ghiChu }) {
  */
 export async function executeAcceptTask(taskId) {
   if (!taskId) return { success: false };
-  const { error } = await supabase.from('tasks').update({
-    status: 'dang_lam',
-    started_at: new Date().toISOString()
-  }).eq('id', taskId);
+  // LỖI THẬT đã vá 14/10/2026: trước đây update thẳng bảng tasks — quyền ghi trực
+  // tiếp đã bị thu hồi từ 202608220011 nên LUÔN báo "permission denied for table
+  // tasks". Đi qua sumi_nhan_viec như màn "Việc của tôi" (kiểm tra đúng người được
+  // giao, ghi giờ nhận, tính nhận việc chậm).
+  const { error } = await supabase.rpc('sumi_nhan_viec', { p_task_id: taskId });
 
   if (error) throw error;
   playConfirmSound();
