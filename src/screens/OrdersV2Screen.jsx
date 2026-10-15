@@ -276,6 +276,13 @@ export default function OrdersV2Screen() {
   // làm...) tách theo GIỜ CẦN GIAO (required_at) để bếp biết đơn nào làm
   // trước — 2 mục đích khác nhau nên dùng field khác nhau.
   const isHistoryTab = filter === 'completed';
+  // Yêu cầu 14/10/2026: tab "Đơn chờ làm" và "Chưa thực hiện" cũng có ô Từ ngày /
+  // Đến ngày như "Giao thành công" — lọc theo NGÀY CẦN GIAO (đơn chưa giao thì
+  // chưa có ngày hoàn thành). Đơn Trường học đã có bộ lọc ngày riêng ở trên.
+  const locNgayCanGiao = !schoolMode && (filter === 'waiting' || filter === 'overdue');
+  const coLocNgay = isHistoryTab || locNgayCanGiao;
+  // Đổi tab thì xoá ngày đang chọn — 2 loại tab lọc theo 2 mốc ngày khác nhau.
+  useEffect(() => { setHistoryFrom(''); setHistoryTo(''); setHistoryKeyword(''); }, [filter, schoolMode]);
   const { todayOrders, otherOrders } = useMemo(() => {
     // Đang lọc ngày → hiển thị dạng gom theo ngày (khối riêng bên dưới), không tách Hôm nay/Ngày khác.
     if (dateActive) return { todayOrders: [], otherOrders: [] };
@@ -294,16 +301,17 @@ export default function OrdersV2Screen() {
   // UX: lọc/tìm kiếm không được làm gián đoạn luồng hiển thị cố định của
   // Hôm Nay).
   const historyOrders = useMemo(() => {
-    if (!isHistoryTab) return otherOrders;
+    if (!coLocNgay) return otherOrders;
     let list = otherOrders;
-    if (historyFrom) list = list.filter(o => o.completed_at && localDateStr(new Date(o.completed_at)) >= historyFrom);
-    if (historyTo) list = list.filter(o => o.completed_at && localDateStr(new Date(o.completed_at)) <= historyTo);
-    if (historyKeyword.trim()) {
+    const moc = (o) => (isHistoryTab ? o.completed_at : o.required_at);
+    if (historyFrom) list = list.filter(o => moc(o) && localDateStr(new Date(moc(o))) >= historyFrom);
+    if (historyTo) list = list.filter(o => moc(o) && localDateStr(new Date(moc(o))) <= historyTo);
+    if (isHistoryTab && historyKeyword.trim()) {
       const q = historyKeyword.toLowerCase().trim();
       list = list.filter(o => (o.customer_name || '').toLowerCase().includes(q));
     }
     return list;
-  }, [otherOrders, isHistoryTab, historyFrom, historyTo, historyKeyword]);
+  }, [otherOrders, isHistoryTab, coLocNgay, historyFrom, historyTo, historyKeyword]);
 
   // Gom theo NGÀY CẦN GIAO khi đang lọc: mỗi ngày có số đơn + tổng số lượng (total_quantity) để bếp lên kế hoạch.
   const DOW = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
@@ -744,20 +752,28 @@ export default function OrdersV2Screen() {
           )}
           {todayOrders.map(renderOrderCard)}
 
-          {isHistoryTab && (
+          {coLocNgay && (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 18, marginBottom: 4, alignItems: 'flex-end' }}>
               <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 700, color: '#725f50' }}>
-                Từ ngày
-                <input type="date" className="mock-flow-search" style={{ marginBottom: 0 }} value={historyFrom} onChange={e => setHistoryFrom(e.target.value)} />
+                {isHistoryTab ? 'Từ ngày' : 'Từ ngày (cần giao)'}
+                <input type="date" className="mock-flow-search" style={{ marginBottom: 0 }} value={historyFrom} max={historyTo || undefined} onChange={e => setHistoryFrom(e.target.value)} />
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 700, color: '#725f50' }}>
-                Đến ngày
-                <input type="date" className="mock-flow-search" style={{ marginBottom: 0 }} value={historyTo} onChange={e => setHistoryTo(e.target.value)} />
+                {isHistoryTab ? 'Đến ngày' : 'Đến ngày (cần giao)'}
+                <input type="date" className="mock-flow-search" style={{ marginBottom: 0 }} value={historyTo} min={historyFrom || undefined} onChange={e => setHistoryTo(e.target.value)} />
               </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 700, color: '#725f50', flex: '1 1 200px' }}>
-                Tên khách hàng
-                <input placeholder="🔍 Gõ tên khách..." className="mock-flow-search" style={{ marginBottom: 0 }} value={historyKeyword} onChange={e => setHistoryKeyword(e.target.value)} />
-              </label>
+              {isHistoryTab && (
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 700, color: '#725f50', flex: '1 1 200px' }}>
+                  Tên khách hàng
+                  <input placeholder="🔍 Gõ tên khách..." className="mock-flow-search" style={{ marginBottom: 0 }} value={historyKeyword} onChange={e => setHistoryKeyword(e.target.value)} />
+                </label>
+              )}
+              {!isHistoryTab && (historyFrom || historyTo) && (
+                <button type="button" onClick={() => { setHistoryFrom(''); setHistoryTo(''); }}
+                  style={{ minHeight: 44, padding: '0 14px', borderRadius: 12, border: '1px solid #d7c3aa', background: '#fff', cursor: 'pointer', fontWeight: 800, color: '#725f50' }}>
+                  Xoá lọc ngày
+                </button>
+              )}
             </div>
           )}
 
@@ -767,7 +783,7 @@ export default function OrdersV2Screen() {
             </div>
           )}
           {historyOrders.map(renderOrderCard)}
-          {isHistoryTab && otherOrders.length > 0 && historyOrders.length === 0 && (
+          {coLocNgay && otherOrders.length > 0 && historyOrders.length === 0 && (
             <div className="mock-empty" style={{ padding: '20px 0' }}>
               <span>🔍</span>
               <p>Không có đơn nào khớp bộ lọc.</p>
