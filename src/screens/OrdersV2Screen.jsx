@@ -332,6 +332,12 @@ export default function OrdersV2Screen() {
   const fmtQty = (n) => Math.round(n).toLocaleString('vi-VN');
   const fmtDay = (d) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}` : '…');
 
+  // Ô chọn ngày gọn cho điện thoại (yêu cầu 16/10/2026): ô date của iPhone có độ
+  // rộng tối thiểu riêng — xếp flex không giới hạn thì 2 ô tràn và ĐÈ lên nhau,
+  // chạm ô này trúng ô kia ("bấm nút khác không ăn"). Lưới 2 cột + minWidth 0.
+  const oNgayNhan = { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 700, color: '#725f50', minWidth: 0 };
+  const oNgayInput = { marginBottom: 0, minHeight: 44, padding: '0 10px', fontSize: 14, borderRadius: 12, width: '100%', minWidth: 0, display: 'block', WebkitAppearance: 'none', appearance: 'none' };
+
   const renderOrderCard = (o) => (
     <button className="mock-order-card" key={o.id} onClick={() => setSelectedId(o.id)}>
       <div className="mock-order-top">
@@ -696,17 +702,17 @@ export default function OrdersV2Screen() {
                           border: dateFilter.mode === m ? '2px solid #15803d' : '1px solid #eadcca', background: dateFilter.mode === m ? '#f0fdf4' : '#fff', color: dateFilter.mode === m ? '#15803d' : '#725f50' }}>{label}</button>
                     ))}
                   </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 700, color: '#725f50' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: dateFilter.mode === 'range' ? '1fr 1fr' : '1fr', gap: 8 }}>
+                    <label style={oNgayNhan}>
                       {dateFilter.mode === 'day' ? 'Ngày' : 'Từ ngày'}
-                      <input type="date" className="mock-flow-search" style={{ marginBottom: 0 }} value={dateFilter.from}
+                      <input type="date" className="mock-flow-search" style={oNgayInput} value={dateFilter.from}
                         max={dateFilter.mode === 'range' && dateFilter.to ? dateFilter.to : undefined}
                         onChange={e => setDateFilter((f) => ({ ...f, from: e.target.value }))} />
                     </label>
                     {dateFilter.mode === 'range' && (
-                      <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 700, color: '#725f50' }}>
+                      <label style={oNgayNhan}>
                         Đến ngày
-                        <input type="date" className="mock-flow-search" style={{ marginBottom: 0 }} value={dateFilter.to}
+                        <input type="date" className="mock-flow-search" style={oNgayInput} value={dateFilter.to}
                           min={dateFilter.from || undefined}
                           onChange={e => setDateFilter((f) => ({ ...f, to: e.target.value }))} />
                       </label>
@@ -753,25 +759,25 @@ export default function OrdersV2Screen() {
           {todayOrders.map(renderOrderCard)}
 
           {coLocNgay && (
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 18, marginBottom: 4, alignItems: 'flex-end' }}>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 700, color: '#725f50' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 18, marginBottom: 4, maxWidth: 520 }}>
+              <label style={oNgayNhan}>
                 {isHistoryTab ? 'Từ ngày' : 'Từ ngày (cần giao)'}
-                <input type="date" className="mock-flow-search" style={{ marginBottom: 0 }} value={historyFrom} max={historyTo || undefined} onChange={e => setHistoryFrom(e.target.value)} />
+                <input type="date" className="mock-flow-search" style={oNgayInput} value={historyFrom} max={historyTo || undefined} onChange={e => setHistoryFrom(e.target.value)} />
               </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 700, color: '#725f50' }}>
+              <label style={oNgayNhan}>
                 {isHistoryTab ? 'Đến ngày' : 'Đến ngày (cần giao)'}
-                <input type="date" className="mock-flow-search" style={{ marginBottom: 0 }} value={historyTo} min={historyFrom || undefined} onChange={e => setHistoryTo(e.target.value)} />
+                <input type="date" className="mock-flow-search" style={oNgayInput} value={historyTo} min={historyFrom || undefined} onChange={e => setHistoryTo(e.target.value)} />
               </label>
               {isHistoryTab && (
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 700, color: '#725f50', flex: '1 1 200px' }}>
+                <label style={{ ...oNgayNhan, gridColumn: '1 / -1' }}>
                   Tên khách hàng
-                  <input placeholder="🔍 Gõ tên khách..." className="mock-flow-search" style={{ marginBottom: 0 }} value={historyKeyword} onChange={e => setHistoryKeyword(e.target.value)} />
+                  <input placeholder="🔍 Gõ tên khách..." className="mock-flow-search" style={{ ...oNgayInput, WebkitAppearance: undefined, appearance: undefined }} value={historyKeyword} onChange={e => setHistoryKeyword(e.target.value)} />
                 </label>
               )}
-              {!isHistoryTab && (historyFrom || historyTo) && (
+              {(historyFrom || historyTo) && (
                 <button type="button" onClick={() => { setHistoryFrom(''); setHistoryTo(''); }}
-                  style={{ minHeight: 44, padding: '0 14px', borderRadius: 12, border: '1px solid #d7c3aa', background: '#fff', cursor: 'pointer', fontWeight: 800, color: '#725f50' }}>
-                  Xoá lọc ngày
+                  style={{ gridColumn: '1 / -1', justifySelf: 'start', minHeight: 40, padding: '0 14px', borderRadius: 10, border: '1px solid #d7c3aa', background: '#fff', cursor: 'pointer', fontWeight: 800, fontSize: 13, color: '#725f50' }}>
+                  ✕ Xoá lọc ngày
                 </button>
               )}
             </div>
