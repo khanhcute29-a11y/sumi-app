@@ -153,12 +153,27 @@ function OpsApp({ onSignOut }) {
 
   useOrderNotifications();
 
-  // Màn đầu tiên đã hiện -> nạp ngầm mọi màn còn lại (song song, không chặn
-  // gì), để lúc bấm sang tab khác / bấm thông báo thì màn đích đã sẵn, hiện
-  // tức thì y như trước khi tách file.
+  // Màn đầu tiên đã hiện -> nạp ngầm mọi màn còn lại, để lúc bấm sang tab
+  // khác / bấm thông báo thì màn đích đã sẵn, hiện tức thì y như trước khi
+  // tách file. Nạp LẦN LƯỢT từng màn lúc máy rảnh (requestIdleCallback), không
+  // nạp cả 31 màn cùng lúc: máy yếu phải dịch hết JS 1 lượt -> đứng vài giây
+  // ngay lúc mở app, bấm nút không ăn (Giám đốc báo 15/10/2026). Màn nào chưa
+  // kịp nạp mà được mở thì napManHinh tự nạp ngay lúc đó.
   useEffect(() => {
-    const t = setTimeout(() => MAN_HINH_NAP_SAU.forEach((m) => m.tai().catch(() => {})), 300);
-    return () => clearTimeout(t);
+    let huy = false;
+    let hen = null;
+    const choRanh = (fn) => (window.requestIdleCallback
+      ? window.requestIdleCallback(fn, { timeout: 1500 })
+      : setTimeout(fn, 50));
+    const boHen = (id) => (window.cancelIdleCallback ? window.cancelIdleCallback(id) : clearTimeout(id));
+    let i = 0;
+    const napTiep = () => {
+      if (huy || i >= MAN_HINH_NAP_SAU.length) return;
+      const m = MAN_HINH_NAP_SAU[i++];
+      m.tai().catch(() => {}).finally(() => { if (!huy) hen = choRanh(napTiep); });
+    };
+    const t = setTimeout(() => { hen = choRanh(napTiep); }, 800);
+    return () => { huy = true; clearTimeout(t); if (hen != null) boHen(hen); };
   }, []);
 
   useEffect(() => {

@@ -1,14 +1,29 @@
-/* Phản hồi chạm rõ ràng cho người dùng điện thoại. */
+/* Phản hồi chạm rõ ràng cho người dùng điện thoại.
+ * Máy yếu bấm trễ / bấm nút sau không ăn (Giám đốc báo 15/10/2026):
+ *  - KHÔNG ép mỗi nút thành 1 lớp đồ hoạ riêng (translateZ(0)) — danh sách đơn
+ *    có hàng trăm thẻ là <button> -> hàng trăm lớp, máy yếu hết bộ nhớ đồ hoạ.
+ *  - Lúc nhấn chỉ co nhẹ (transform) + mờ nhẹ (opacity), không dùng filter /
+ *    box-shadow vì 2 thứ đó bắt vẽ lại cả nút ở mỗi khung hình.
+ *  - touch-action: manipulation cho mọi thứ bấm được -> bỏ chờ "chạm 2 lần để
+ *    phóng to" (~300ms) trên Android/iOS. */
+button,
+a,
+input,
+select,
+textarea,
+label,
+summary,
+[role='button'] {
+  touch-action: manipulation;
+}
+
 button:not(:disabled),
 [role='button']:not([aria-disabled='true']) {
   -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-  transform: translateZ(0);
   transform-origin: center;
   transition:
-    transform 140ms cubic-bezier(.2, .8, .2, 1),
-    filter 140ms ease,
-    box-shadow 140ms ease;
+    transform 120ms cubic-bezier(.2, .8, .2, 1),
+    opacity 120ms ease;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -21,10 +36,9 @@ button:not(:disabled),
 
 button:not(:disabled):active,
 [role='button']:not([aria-disabled='true']):active {
-  transform: translateY(2px) scale(.965);
-  filter: brightness(.94);
-  box-shadow: inset 0 2px 4px rgba(45, 28, 16, .16);
-  transition-duration: 65ms;
+  transform: translateY(1px) scale(.97);
+  opacity: .88;
+  transition-duration: 50ms;
 }
 
 button:focus-visible,
