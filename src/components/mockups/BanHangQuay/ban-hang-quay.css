@@ -100,6 +100,24 @@
 .bhq-dong-chon{min-height:44px;border:1.5px solid #eadcca;border-radius:12px;background:#fff;text-align:left;padding:0 12px;color:#2C1D11}
 .bhq-bao{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#2C1D11;color:#fff;padding:12px 16px;border-radius:12px;font-weight:700;z-index:120;max-width:calc(100% - 32px)}
 
+/* Giai đoạn 1: VAT, thu khác, thẻ kho, công nợ, cuối ngày */
+.bhq-vat{display:flex;align-items:center;gap:8px;min-height:44px;font-size:14px;color:#8C5A3C;font-weight:700;cursor:pointer}
+.bhq-vat input{width:22px;height:22px;accent-color:#D96B43}
+.bhq-hang-o{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) auto;gap:6px;align-items:center}
+.bhq-ton-dong{width:100%;min-height:44px;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;border:0;border-bottom:1px solid #f1e6d8;background:#fff;text-align:left;color:#2C1D11}
+.bhq-ton-dong small{color:#8C5A3C}
+.bhq-ton-dong b.het{color:#b42318}
+.bhq-ton-bang>.bhq-the-kho{display:block;padding:6px 12px 10px}
+.bhq-the-kho{background:#FDFBF7;padding:6px 12px 10px;border-bottom:1px solid #eadcca;font-size:12.5px}
+.bhq-the-kho>div{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;padding:4px 0;border-bottom:1px dashed #eadcca}
+.bhq-the-kho .am{color:#b42318}.bhq-the-kho .duong{color:#09663d}
+.bhq-the.no-vang{border-color:#f5c26b;background:#fffaf0}
+.bhq-the.no-do{border-color:#f3a6a0;background:#fff5f4}
+.bhq-nut.nho{min-height:44px;flex:0 0 auto;margin-left:auto}
+.bhq-luoi-bc{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+.bhq-luoi-bc h3{margin:0 0 6px;color:#2C1D11;font-size:15px}
+.bhq-luoi-bc small,.bhq-ds h3 small,.bhq-bang small{font-weight:600;color:#8C5A3C;font-size:11px}
+
 /* Biên lai 80mm */
 .bhq-giay{background:#fff;border:1px solid #eadcca;border-radius:6px;padding:10px;max-width:300px;margin:0 auto}
 .bl{font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.45;color:#000}
