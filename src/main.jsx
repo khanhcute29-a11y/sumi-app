@@ -84,6 +84,11 @@ async function mountApp() {
     const mod = await import('./components/mockups/ViecLifecycleDemo.jsx');
     RootComponent = mod.default;
     wrapWithErrorBoundary = false;
+  } else if (_mkParam === 'ban-hang') {
+    // Bản xem trước Bán tại quầy kiểu KiotViet (30/10/2026) — chỉ đọc, không lưu.
+    const mod = await import('./components/mockups/BanHangQuay/BanHangQuay.jsx');
+    RootComponent = mod.default;
+    wrapWithErrorBoundary = false;
   } else if (_mkParam === 'accountant' || _mkParam === 'accountant-v1') {
     const mod = await import('./components/mockups/AccountantDashboard/AccountantOverviewV1.tsx');
     RootComponent = mod.default;
