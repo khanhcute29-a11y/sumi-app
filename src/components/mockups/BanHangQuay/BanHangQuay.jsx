@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../../../lib/supabaseClient';
 import {
-  CHI_NHANH, DANH_MUC, THU_KHAC_GOI_Y, LOAI_PHIEU, LY_DO_HUY, LOAI_NOI_BO,
+  CHI_NHANH, DANH_MUC, THU_KHAC_GOI_Y, LOAI_PHIEU, LY_DO_HUY, LY_DO_HUY_HD, LOAI_NOI_BO,
   vnd, taoMatHang, tonGia, tienDong, tinhHoaDon, tinhThanhToan, tinhKetCa, apPhieuKho, tinhCongNo, baoCaoNgay,
 } from './banHangQuayLogic';
 import './ban-hang-quay.css';
@@ -171,10 +171,12 @@ export default function BanHangQuay() {
     return '';
   };
 
-  const huyHoaDon = (ma) => {
+  // Thu ngân chỉ tự huỷ được hoá đơn trong ca đang mở (bấm nhầm món / sai số lượng); đã kết ca → Quản lý / Giám đốc.
+  const huyDuoc = (h) => !!ca && h.luc >= ca.moLuc && h.chiNhanh === chiNhanh;
+  const huyHoaDon = (ma, lyDo) => {
     const h = daBan.find((x) => x.ma === ma);
-    if (!h || h.daHuy) return;
-    setDaBan((ds) => ds.map((x) => (x.ma === ma ? { ...x, daHuy: true } : x)));
+    if (!h || h.daHuy || !huyDuoc(h)) return;
+    setDaBan((ds) => ds.map((x) => (x.ma === ma ? { ...x, daHuy: true, lyDoHuy: lyDo, nguoiHuy: nguoi, lucHuy: Date.now() } : x)));
     if (h.dong.length) ghiKho(h.chiNhanh, h.dong.map((d) => ({ ma: d.ma, sl: d.sl })), ma, 'Huỷ hoá đơn');
     nhan(`Đã huỷ ${ma} — đã cộng lại tồn kho${h.no ? ', xoá phần nợ' : ''}`);
   };
@@ -324,10 +326,13 @@ export default function BanHangQuay() {
                 {h.daHuy ? <span className="chip huy">Đã huỷ</span> : !h.mau && (
                   <>
                     <button type="button" className="bhq-nut phu" onClick={() => setHop({ loai: 'bien_lai', hoaDon: h })}>In lại</button>
-                    <button type="button" className="bhq-nut nguy" onClick={() => huyHoaDon(h.ma)}>Huỷ hoá đơn</button>
+                    {huyDuoc(h)
+                      ? <button type="button" className="bhq-nut nguy" onClick={() => setHop({ loai: 'huy_hd', hoaDon: h })}>Huỷ hoá đơn</button>
+                      : <span className="bhq-ghi">Đã kết ca — chỉ Quản lý / Giám đốc huỷ được</span>}
                   </>
                 )}
               </div>
+              {h.daHuy && h.lyDoHuy && <div className="bhq-ghi">Huỷ lúc {gio(h.lucHuy)} · {h.nguoiHuy} · lý do: {h.lyDoHuy}</div>}
             </div>
           ))}
           {!daBan.some((h) => h.chiNhanh === chiNhanh) && <p className="bhq-rong">Chưa có hoá đơn ở chi nhánh này.</p>}
@@ -371,6 +376,7 @@ export default function BanHangQuay() {
           soPhieu={phieuKho.filter((p) => p.loai === hop.phieuLoai).length + 1} onDong={() => setHop(null)}
           onLuu={(p, xong) => { luuPhieu(p, xong); setHop(null); }} />
       )}
+      {hop?.loai === 'huy_hd' && <HuyHoaDon hd={hop.hoaDon} onDong={() => setHop(null)} onHuy={(lyDo) => { huyHoaDon(hop.hoaDon.ma, lyDo); setHop(null); }} />}
       {hop?.loai === 'thu_no' && <ThuNo no={hop.no} onDong={() => setHop(null)} onThu={(tien, pt) => { thuNo(hop.no.khach.id, tien, pt); setHop(null); }} />}
 
       {bao && <div className="bhq-bao">{bao}</div>}
@@ -656,6 +662,18 @@ function CongNo({ ds, onThu }) {
       ))}
       {!ds.length && <p className="bhq-rong">Không còn khách nào nợ.</p>}
     </main>
+  );
+}
+
+function HuyHoaDon({ hd, onDong, onHuy }) {
+  const [lyDo, setLyDo] = useState(LY_DO_HUY_HD[0]);
+  return (
+    <Hop tieuDe={`Huỷ ${hd.ma}`} onDong={onDong}
+      chan={<button type="button" className="bhq-nut nguy" disabled={!lyDo.trim()} onClick={() => onHuy(lyDo.trim())}>Huỷ hoá đơn {vnd(hd.canTra)}</button>}>
+      <p className="bhq-ghi">Hoá đơn huỷ vẫn giữ trong danh sách (không xoá), bánh được cộng lại vào kho. Bán sai thì huỷ rồi bán lại hoá đơn đúng.</p>
+      <div className="bhq-goi">{LY_DO_HUY_HD.map((l) => <button key={l} type="button" className={lyDo === l ? 'on' : ''} onClick={() => setLyDo(l)}>{l}</button>)}</div>
+      <label className="bhq-nhan">Lý do huỷ (bắt buộc)<input className="bhq-o" value={lyDo} onChange={(e) => setLyDo(e.target.value)} /></label>
+    </Hop>
   );
 }
 

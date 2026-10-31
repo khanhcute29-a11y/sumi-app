@@ -38,6 +38,7 @@ export const LOAI_PHIEU = {
   kiem: { ten: 'Kiểm kho', tienTo: 'KK', dau: 0 },
 };
 export const LY_DO_HUY = ['Hết hạn cuối ngày', 'Hỏng / móp', 'Rơi vỡ', 'Khác'];
+export const LY_DO_HUY_HD = ['Bấm nhầm món', 'Sai số lượng', 'Khách đổi ý', 'Khác'];
 export const LOAI_NOI_BO = ['Làm bánh đặt', 'Biếu tặng', 'Nhân viên dùng', 'Khác'];
 
 export const vnd = (n) => `${Math.round(Number(n) || 0).toLocaleString('vi-VN')}đ`;
