@@ -104,11 +104,29 @@ export function tinhThanhToan({ canTra, khachDua, phuongThuc, laKhachLe }) {
   return { thucThu, thua, no, loi };
 }
 
-// Kết ca: TM phải có = đầu ca + thu TM (bán + thu nợ); CK/thẻ chỉ để đối chiếu sao kê.
-export function tinhKetCa({ dauCa, hoaDons, thuNos = [] }) {
+// Trả hàng theo hoá đơn gốc: tiền trả lại = giá trị dòng (sau giảm dòng) × SL trả,
+// trừ phần giảm giá HĐ theo tỉ lệ, cộng VAT nếu HĐ gốc có VAT. Thu khác (ship…) không hoàn.
+// daTra = { ma: SL đã trả ở các phiếu trước } — không cho trả quá SL đã mua.
+export function tinhTraHang(hd, slTra, daTra = {}) {
+  const tiLeSauGiam = hd.tongHang > 0 ? hd.sauGiam / hd.tongHang : 1;
+  const dong = [];
+  for (const d of hd.dong) {
+    const toiDa = d.sl - (daTra[d.ma] || 0);
+    const sl = Math.min(Math.max(Number(slTra[d.ma]) || 0, 0), toiDa);
+    if (sl > 0) dong.push({ ma: d.ma, ten: d.ten, size: d.size, sl, tien: (tienDong(d) / d.sl) * sl * tiLeSauGiam });
+  }
+  const tienHang = Math.round(dong.reduce((s, d) => s + d.tien, 0));
+  const vat = hd.vat > 0 ? Math.round(tienHang * THUE_VAT) : 0;
+  return { dong: dong.map((d) => ({ ...d, tien: Math.round(d.tien) })), tienHang, vat, tienTra: tienHang + vat };
+}
+
+// Kết ca: TM phải có = đầu ca + thu TM (bán + thu nợ) − TM trả khách (trả hàng);
+// CK/thẻ chỉ để đối chiếu sao kê.
+export function tinhKetCa({ dauCa, hoaDons, thuNos = [], traHangs = [] }) {
   const hopLe = hoaDons.filter((h) => !h.daHuy);
   const theo = (pt) => hopLe.filter((h) => h.phuongThuc === pt).reduce((s, h) => s + h.thucThu, 0)
-    + thuNos.filter((t) => t.phuongThuc === pt).reduce((s, t) => s + t.tien, 0);
+    + thuNos.filter((t) => t.phuongThuc === pt).reduce((s, t) => s + t.tien, 0)
+    - traHangs.filter((t) => t.phuongThuc === pt).reduce((s, t) => s + t.tienTra, 0);
   const tienMat = theo('tien_mat');
   return {
     soHoaDon: hopLe.length,
@@ -116,6 +134,7 @@ export function tinhKetCa({ dauCa, hoaDons, thuNos = [] }) {
     tienMat, chuyenKhoan: theo('chuyen_khoan'), the: theo('the'),
     ghiNo: hopLe.reduce((s, h) => s + h.no, 0),
     thuNo: thuNos.reduce((s, t) => s + t.tien, 0),
+    traHang: traHangs.reduce((s, t) => s + t.tienTra, 0),
     heThong: (Number(dauCa) || 0) + tienMat,
   };
 }
@@ -172,19 +191,21 @@ export function tinhCongNo(hoaDons, thuNos, now = Date.now()) {
 }
 
 // Báo cáo cuối ngày 1 chi nhánh: tiền + hàng + lãi gộp.
-export function baoCaoNgay({ hoaDons, phieuKho, thuNos = [], matHang }) {
+export function baoCaoNgay({ hoaDons, phieuKho, thuNos = [], traHangs = [], matHang }) {
   const hd = hoaDons.filter((h) => !h.daHuy);
   const giaVonCua = (ma) => matHang.find((m) => m.ma === ma)?.giaVon || 0;
   const tongPhieu = (loai) => phieuKho.filter((p) => p.loai === loai && p.trangThai === 'xong')
     .reduce((s, p) => ({ sl: s.sl + p.dong.reduce((a, d) => a + d.sl, 0), giaTri: s.giaTri + p.dong.reduce((a, d) => a + d.sl * giaVonCua(d.ma), 0) }), { sl: 0, giaTri: 0 });
-  const doanhThuThuan = hd.reduce((s, h) => s + h.sauGiam, 0);
-  const giaVon = hd.reduce((s, h) => s + h.giaVon, 0);
-  const ketCa = tinhKetCa({ dauCa: 0, hoaDons: hoaDons, thuNos });
+  const giaVonTra = traHangs.reduce((s, t) => s + t.dong.reduce((a, d) => a + d.sl * giaVonCua(d.ma), 0), 0);
+  const traHang = traHangs.reduce((s, t) => s + t.tienHang, 0);
+  const doanhThuThuan = hd.reduce((s, h) => s + h.sauGiam, 0) - traHang;
+  const giaVon = hd.reduce((s, h) => s + h.giaVon, 0) - giaVonTra;
+  const ketCa = tinhKetCa({ dauCa: 0, hoaDons, thuNos, traHangs });
   return {
     soHoaDon: hd.length, soHuy: hoaDons.length - hd.length,
     tongHang: hd.reduce((s, h) => s + h.tongHang, 0), giamGia: hd.reduce((s, h) => s + h.giamHd, 0),
     thuKhac: hd.reduce((s, h) => s + h.thuKhac, 0), vat: hd.reduce((s, h) => s + h.vat, 0),
-    doanhThuThuan, giaVon, laiGop: doanhThuThuan - giaVon,
+    traHang, soTra: traHangs.length, doanhThuThuan, giaVon, laiGop: doanhThuThuan - giaVon,
     tienMat: ketCa.tienMat, chuyenKhoan: ketCa.chuyenKhoan, the: ketCa.the, ghiNo: ketCa.ghiNo, thuNo: ketCa.thuNo,
     giao: tongPhieu('giao'), huy: tongPhieu('huy'), noibo: tongPhieu('noibo'),
   };
