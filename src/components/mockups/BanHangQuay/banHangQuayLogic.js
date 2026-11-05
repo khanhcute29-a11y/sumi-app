@@ -73,7 +73,8 @@ export function tonGia(ma, chiNhanh) {
 // Tiền 1 dòng = SL × đơn giá − giảm dòng (VND hoặc %), không âm.
 export function tienDong(d) {
   const goc = d.sl * d.gia;
-  const giam = d.giamKieu === '%' ? goc * Math.min(Number(d.giam) || 0, 100) / 100 : Math.min(Number(d.giam) || 0, goc);
+  // Như KiotViet: giảm giá dòng tính TRÊN MỖI ĐƠN VỊ (Đơn giá − giảm = Giá bán; thành tiền = Giá bán × SL).
+  const giam = d.giamKieu === '%' ? goc * Math.min(Number(d.giam) || 0, 100) / 100 : Math.min(Number(d.giam) || 0, d.gia) * d.sl;
   return Math.max(goc - giam, 0);
 }
 
