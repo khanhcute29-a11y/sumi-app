@@ -31,15 +31,23 @@ export const THU_KHAC_GOI_Y = [
 export const THUE_VAT = 0.08;
 
 // Loại phiếu kho (vòng đời KiotViet: tạm -> hoàn thành -> huỷ).
+// Tên + tiền tố mã phiếu theo đúng KiotViet tiệm đang dùng (PN / XH / XD / KK).
+// "Nhập hàng" = bếp giao bánh ra quầy (KiotViet tiệm đang ghi phiếu nhập không nhà cung cấp).
 export const LOAI_PHIEU = {
-  giao: { ten: 'Bếp giao ra quầy', tienTo: 'GQ', dau: 1 },
-  huy: { ten: 'Xuất huỷ', tienTo: 'XH', dau: -1 },
+  giao: { ten: 'Nhập hàng', tienTo: 'PN', dau: 1 },
+  huy: { ten: 'Xuất hủy', tienTo: 'XH', dau: -1 },
   noibo: { ten: 'Xuất dùng nội bộ', tienTo: 'XD', dau: -1 },
   kiem: { ten: 'Kiểm kho', tienTo: 'KK', dau: 0 },
 };
-export const LY_DO_HUY = ['Hết hạn cuối ngày', 'Hỏng / móp', 'Rơi vỡ', 'Khác'];
+export const LY_DO_HUY = ['Hết date', 'Hỏng / móp', 'Rơi vỡ', 'Khác'];
 export const LY_DO_HUY_HD = ['Bấm nhầm món', 'Sai số lượng', 'Khách đổi ý', 'Khác'];
-export const LOAI_NOI_BO = ['Làm bánh đặt', 'Biếu tặng', 'Nhân viên dùng', 'Khác'];
+// Loại xuất nội bộ: đúng danh sách tiệm đã tạo trên KiotViet (05/11/2026).
+export const LUAN_CHUYEN = 'Luân chuyển bánh giữa 2 cửa hàng';
+export const LOAI_NOI_BO = [
+  LUAN_CHUYEN, 'Làm bánh kem', 'Xuất HD', 'Xuất quà tặng khách hàng, đối tác', 'Xuất mẫu trưng bày, demo sản phẩm',
+  'Xuất bồi thường, đền bù', 'Xuất phục vụ sự kiện, hội nghị nội bộ', 'Xuất vật tư tiêu hao, công cụ dụng cụ',
+  'Xuất văn phòng phẩm, dụng cụ làm việc', 'Khác',
+];
 
 export const vnd = (n) => `${Math.round(Number(n) || 0).toLocaleString('vi-VN')}đ`;
 
