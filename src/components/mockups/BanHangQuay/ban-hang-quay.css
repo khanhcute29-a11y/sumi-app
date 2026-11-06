@@ -845,3 +845,11 @@ button.kv-gach:hover{color:var(--xanh)}
 .cot-ds .cot .gt{font-size:11px;color:var(--chu-phu);white-space:nowrap}
 .cot-ds .cot small{position:absolute;bottom:2px;font-size:12px;color:var(--chu-phu)}
 .kvm-tq2-bc{margin:18px 0 0;padding:0 0 6px;color:var(--chu-phu);font-weight:500}
+
+/* Hàng hoá (điện thoại): phần đầu đứng yên, chỉ danh sách cuộn — không còn bị cắt nửa hàng lọc khi kéo */
+.kvm-trang-ql.kvm-hh-trang{overflow:hidden}
+.kvm-hh-trang>.kvm-hh-dau{flex:none;background:var(--xam)}
+.kvm-hh-trang>.kvm-hh-dau>.kvm-dau{position:static}
+.kvm-hh-trang>.kvm-hh-ds{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.kq-dau .kq-them{margin-left:auto;display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 14px}
+.bhq-ghi.do{color:#d92d20}
