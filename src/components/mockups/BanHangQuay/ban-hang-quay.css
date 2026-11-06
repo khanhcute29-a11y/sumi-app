@@ -365,7 +365,7 @@ button.kv-gach:hover{color:var(--xanh)}
 .bhq-nut.phu{background:#fff}
 .bhq-nut.nguy{color:#b42318;border-color:#f3c1bb}
 .bhq-nut:disabled{opacity:.45}
-.bhq-man{position:fixed;inset:0;background:rgba(21,23,26,.45);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px}
+.bhq-man{position:fixed;inset:0;background:rgba(21,23,26,.45);z-index:110;display:flex;align-items:center;justify-content:center;padding:16px}
 .bhq-hop{background:#fff;border-radius:16px;width:100%;max-width:440px;max-height:90dvh;display:flex;flex-direction:column;box-shadow:0 18px 40px rgba(21,23,26,.2)}
 .bhq-hop-dau{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid #e3e6ea}
 .bhq-hop-dau button{width:44px;height:44px;border:0;background:none;font-size:18px}
@@ -881,3 +881,94 @@ button.kv-gach:hover{color:var(--xanh)}
 .kvm-luoi-kh .ic.xanh{color:#1a7cf5!important}.kvm-luoi-kh .ic.la{color:#1fb35a!important}.kvm-luoi-kh .ic.cam{color:#f08a24!important}
 .kvm-bd .cot-ds{overflow:visible}
 .kvm-bd .vung{border-bottom:1px solid var(--vien)}
+
+/* ===== Giỏ hàng điện thoại — y ảnh app KiotViet (thẻ trắng bo góc trên nền xám, nút ± viền đỏ) ===== */
+.kvm-gio{background:var(--xam)}
+.kvm-gio-dau{flex:none;background:#fff;border-radius:0 0 16px 16px;box-shadow:0 2px 8px rgba(21,23,26,.05);position:relative;z-index:2}
+.kvm-gio .kvm-dau.trang h1{font-size:22px;font-weight:500}
+.kvm-ic-tt{position:relative;color:var(--chu-phu)!important}
+.kvm-ic-tt svg:last-child{position:absolute;right:7px;bottom:8px;background:#fff;border-radius:50%;color:var(--chu-phu)}
+.kvm-goi-y-ds{padding:0 16px;max-height:40dvh;overflow:auto}
+.kvm-gio-kh{padding:0 16px 4px}
+.kvm-gio-kh .kvm-dong-mo{min-height:56px;font-size:17px}
+.kvm-gio-kh .kvm-dong-mo:last-child{border-bottom:0}
+.kvm-gio-ds{background:#fff;border-radius:16px;margin-top:12px;padding:4px 16px}
+.kvm-gio-mon{display:flex;gap:14px;padding:14px 0}
+.kvm-gio-mon .kv-anh{background:#E8F2FE!important;color:#3B9BF5;border-radius:10px}
+.kvm-gio-mon .g{flex:1;min-width:0;display:flex;flex-direction:column;gap:10px}
+.kvm-gio-mon .t{border:0;background:none;padding:0;text-align:left;font-size:17px;color:var(--chu);display:flex;flex-direction:column;gap:2px;min-height:24px}
+.kvm-gio-mon .t small{color:var(--chu-phu);font-style:italic;font-size:13.5px}
+.kvm-gio-mon .h{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.kvm-gio-mon .h .xanh{font-size:17px;font-weight:500}
+.kvm-bac.do{border:1.5px solid #E5303F;border-radius:8px;width:146px;height:36px;justify-content:space-between}
+.kvm-bac.do button{width:44px;height:36px;color:#8a94a0!important}
+.kvm-bac.do span{font-size:17px;font-weight:600;color:var(--chu)!important}
+.kvm-gio-chan{border-radius:16px 16px 0 0;padding:16px 16px calc(12px + env(safe-area-inset-bottom));gap:14px}
+.kvm-gio-chan .kvm-tong span{font-size:17px;display:inline-flex;align-items:center}
+.kvm-tron.vien{background:none;border:1.5px solid var(--xanh);color:var(--xanh);min-width:28px;height:28px;font-size:15px;margin-left:8px}
+.kvm-gio-chan .kvm-hai>button{min-height:54px;border-radius:10px;font-size:18px}
+
+/* ===== Chi tiết hoá đơn điện thoại — y ảnh app KiotViet ===== */
+.kvm-ct-hd{background:var(--xam)}
+.kvm-ct-hd .kvm-dau{position:relative;z-index:3;transition:box-shadow .15s}
+.kvm-ct-hd .kvm-dau.cuon{box-shadow:0 1px 0 var(--vien)}
+.kvm-ct-hd .tieu{flex:1;min-width:0;display:flex;flex-direction:column;opacity:0;transition:opacity .15s}
+.kvm-ct-hd .cuon .tieu{opacity:1}
+.kvm-ct-hd .tieu b{font-size:18px;font-weight:600}
+.kvm-ct-hd .tieu small{color:var(--chu-phu);font-size:13px}
+.kvm-ct-hd .la{color:#11883E}.kvm-ct-hd .do{color:var(--do)!important}
+.kvm-ct-hd .kvm-than{padding-bottom:calc(20px + env(safe-area-inset-bottom))}
+.kvm-ct-the{background:#fff;border-radius:16px;margin-top:12px;padding:16px;font-size:16px}
+.kvm-ct-the.dau{margin-top:0;border-radius:0 0 16px 16px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.kvm-ct-the.dau h2{margin:0;font-size:24px;font-weight:700;display:flex;align-items:center;gap:2px}
+.kvm-ct-the.dau h2 button{width:40px;height:40px;border:0;background:none;display:inline-flex;align-items:center;justify-content:center;color:var(--chu-phu)!important}
+.kvm-ct-the.dau>div>span{font-size:16px}
+.kvm-ct-tt{flex:none;font-style:normal;background:#E3F6EA;color:#11883E;border-radius:6px;padding:5px 9px;font-size:15px;font-weight:500}
+.kvm-ct-tt.huy{background:#FDECEC;color:var(--do)}
+.kvm-ct-the.kh{display:flex;align-items:center;gap:16px}
+.kvm-ct-the.kh .av{flex:0 0 52px;width:52px;height:52px;border-radius:50%;background:#E8F2FE;color:#3B9BF5;display:inline-flex;align-items:center;justify-content:center}
+.kvm-ct-the.kh b{font-size:18px;font-weight:500}
+.kvm-ct-the.kh small{margin-left:auto;color:var(--chu-phu)}
+.kvm-ct-mon{display:flex;gap:16px;padding:6px 0}
+.kvm-ct-mon+.kvm-ct-mon{border-top:1px solid #eef0f2;padding-top:14px;margin-top:8px}
+.kvm-ct-mon .kv-anh{background:#E8F2FE!important;color:#3B9BF5;border-radius:10px}
+.kvm-ct-mon .g{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.kvm-ct-mon .g b{font-size:18px;font-weight:500}
+.kvm-ct-mon .g small{color:var(--chu-phu);font-size:15px}
+.kvm-ct-mon .h{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.kvm-ct-mon .h .tt{font-size:18px;font-weight:500}
+.kvm-ct-the.tien{padding-top:4px;padding-bottom:4px}
+.kvm-ct-the.tien>div{display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:52px;border-bottom:1px solid #eef0f2;font-size:17px}
+.kvm-ct-the.tien>div>span:first-child{display:inline-flex;align-items:center}
+.kvm-ct-the.tien>div.dam{font-weight:600}
+.kvm-ct-the.tien>div:has(+ .pt),.kvm-ct-the.tien>div:last-child{border-bottom:0}
+.kvm-ct-the.tien .lon{font-size:20px;font-weight:600}
+.kvm-ct-the.tien .pt{display:flex;align-items:center;gap:6px;margin-left:auto;border:0;background:none;color:var(--chu-phu)!important;font-size:16px;min-height:40px;padding:0 0 8px}
+.kvm-ct-the.tien .pt-ct{min-height:36px;color:var(--chu-phu);font-size:15px;border-bottom:0}
+.kvm-ct-the.tien .no{color:var(--do)}
+.kvm-ct-the.ghi small{color:var(--chu-phu);font-size:15px;letter-spacing:.3px}
+.kvm-ct-the.ghi p{margin:12px 0 0;font-size:17px}
+.kvm-ct-the.ghi p.mo{color:#9aa3ae}
+.kvm-ct-the.luoi{display:grid;grid-template-columns:1fr 1fr;gap:20px 16px}
+.kvm-ct-the.luoi small{display:block;color:var(--chu-phu);font-size:15px}
+.kvm-ct-the.luoi b{display:block;margin-top:4px;font-size:17px;font-weight:500}
+
+/* ===== Biên lai — theo mẫu in KiotViet tiệm đang dùng (chữ thường, không monospace) ===== */
+.bl{font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.4}
+.bl-ten{text-align:center;font-weight:700;font-size:15px;line-height:1.25;margin-bottom:4px}
+.bl-nho{font-size:11px}
+.bl-tieu{margin:10px 0 12px}
+.bl-tieu b{font-size:13px}
+.bl-kh{margin-bottom:8px}
+.bl-ghi{margin-top:6px}
+.bl-bang{border-top:1.5px solid #000;margin-top:6px}
+.bl-cot{display:grid;grid-template-columns:1fr 34px 1fr}
+.bl-cot span:nth-child(2){text-align:center}
+.bl-cot span:last-child{text-align:right}
+.bl-cot.dau{font-weight:700;padding:3px 0;border-bottom:1px solid #000}
+.bl-mon{padding:3px 0;border-bottom:1px dashed #000}
+.bl-tong{margin-top:10px;display:flex;flex-direction:column;gap:3px}
+.bl-tong>div{display:grid;grid-template-columns:1fr 80px;text-align:right;gap:6px}
+.bl-tong span{font-weight:700}
+.bl-chu{font-style:italic;margin-top:6px;font-size:11px}
+.bl-cam{margin-top:10px}

@@ -249,3 +249,28 @@ export const locXep = (ds, layChuoi, q, gioiHan = Infinity) => {
   kq.sort((a, b) => b.diem - a.diem || a.i - b.i);
   return kq.slice(0, gioiHan).map((k) => k.x);
 };
+
+// Đọc số tiền thành chữ cho biên lai: 260000 → "Hai trăm sáu mươi nghìn đồng chẵn".
+const CHU_SO = ['không', 'một', 'hai', 'ba', 'bốn', 'năm', 'sáu', 'bảy', 'tám', 'chín'];
+const doc3 = (n, du) => {
+  const tr = Math.floor(n / 100); const ch = Math.floor((n % 100) / 10); const dv = n % 10; const r = [];
+  if (du || tr) r.push(CHU_SO[tr], 'trăm');
+  if (ch === 0) { if (dv && (du || tr)) r.push('linh'); } else if (ch === 1) r.push('mười'); else r.push(CHU_SO[ch], 'mươi');
+  if (dv) r.push(dv === 1 && ch > 1 ? 'mốt' : dv === 5 && ch > 0 ? 'lăm' : CHU_SO[dv]);
+  return r.join(' ');
+};
+export const docSoTien = (tien) => {
+  let n = Math.round(Math.abs(Number(tien) || 0));
+  if (!n) return 'Không đồng';
+  const nhom = [];
+  while (n > 0) { nhom.push(n % 1000); n = Math.floor(n / 1000); }
+  const ra = [];
+  for (let i = nhom.length - 1; i >= 0; i -= 1) {
+    if (!nhom[i]) continue;
+    ra.push(doc3(nhom[i], i < nhom.length - 1));
+    const dv = ['', 'nghìn', 'triệu', 'tỷ', 'nghìn tỷ'][i];
+    if (dv) ra.push(dv);
+  }
+  const s = `${ra.join(' ')} đồng chẵn`;
+  return s[0].toUpperCase() + s.slice(1);
+};
