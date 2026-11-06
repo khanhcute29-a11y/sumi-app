@@ -139,7 +139,7 @@ export default function BanHangQuay() {
       const bay = Date.now();
       setDaBan(ds.slice(0, 2).map((k, i) => ({
         ma: `HD-MAU${i + 1}`, luc: bay - (i ? 95 : 12) * NGAY, chiNhanh: CHI_NHANH[0], thuNgan: 'Dữ liệu mẫu', khach: k,
-        dong: [], tongHang: 0, giamHd: 0, sauGiam: 0, thuKhac: 0, vat: 0, giaVon: 0, canTra: i ? 450000 : 180000,
+        dong: [], tongHang: i ? 450000 : 180000, giamHd: 0, sauGiam: i ? 450000 : 180000, thuKhac: 0, vat: 0, giaVon: 0, canTra: i ? 450000 : 180000,
         phuongThuc: 'tien_mat', khachDua: 0, thucThu: 0, thua: 0, no: i ? 450000 : 180000, daHuy: false, mau: true,
       })));
     })();
@@ -534,7 +534,7 @@ export default function BanHangQuay() {
       )}
 
       {manHinh === 'ls' && (
-        <QlHoaDon ds={daBan.filter((h) => h.chiNhanh === chiNhanh)} traHangs={traHangs} dienThoai={dienThoai} huyDuoc={huyDuoc}
+        <QlHoaDon ds={daBan.filter((h) => !h.mau && h.chiNhanh === chiNhanh)} traHangs={traHangs} dienThoai={dienThoai} huyDuoc={huyDuoc}
           onIn={(h) => setHop({ loai: 'bien_lai', hoaDon: h })} onTra={(h) => setHop({ loai: 'tra_hang', hoaDon: h })}
           onHuy={(h) => setHop({ loai: 'huy_hd', hoaDon: h })} onChiaSe={chiaSe} />
       )}
@@ -718,10 +718,21 @@ function KhachO({ khach, ds, noCua, inputRef, onChon, onThem }) {
 // giá (bấm ra ô Đơn giá / Giảm giá VND-% / Giá bán) · thành tiền · ⋮ (ghi chú).
 function GioHang({ hd, onSl, onChotSl, onBo, onSuaDong }) {
   const [mo, setMo] = useState(null); // { ma, loai: 'gia' | 'ghi' }
+  // Như KiotViet: bấm ra ngoài hoặc Esc là đóng ô giá / ghi chú.
+  useEffect(() => {
+    if (!mo) return undefined;
+    const bam = (e) => { if (!e.target.closest('.kv-pop, .kv-dong .gia, .kv-dong .them')) setMo(null); };
+    const phim = (e) => { if (e.key === 'Escape') setMo(null); };
+    document.addEventListener('mousedown', bam);
+    document.addEventListener('keydown', phim);
+    return () => { document.removeEventListener('mousedown', bam); document.removeEventListener('keydown', phim); };
+  }, [mo]);
   if (!hd.dong.length) return <div className="kv-gio kv-gio-rong" />;
+  // Như KiotViet: món mới thêm nằm TRÊN CÙNG, STT lớn nhất ở trên.
+  const dsHien = hd.dong.map((d, i) => [d, i]).reverse();
   return (
     <div className="kv-gio">
-      {hd.dong.map((d, i) => {
+      {dsHien.map(([d, i]) => {
         const tien = tienDong(d);
         const giaBan = d.sl ? tien / d.sl : d.gia;
         return (
@@ -1754,14 +1765,27 @@ function ChiTietHd({ h, tra, huyDuoc, dienThoai, onIn, onTra, onHuy, onChiaSe })
   );
 }
 
+// Bộ lọc Thời gian như KiotViet (mặc định "Tháng này").
+const KY_LOC = [['hom_nay', 'Hôm nay'], ['hom_qua', 'Hôm qua'], ['7_ngay', '7 ngày qua'], ['thang', 'Tháng này'], ['thang_truoc', 'Tháng trước'], ['tat_ca', 'Toàn thời gian']];
+function trongKy(luc, ky) {
+  const n = new Date(); const dau = new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime();
+  if (ky === 'hom_nay') return luc >= dau;
+  if (ky === 'hom_qua') return luc >= dau - NGAY && luc < dau;
+  if (ky === '7_ngay') return luc >= dau - 6 * NGAY;
+  if (ky === 'thang') return luc >= new Date(n.getFullYear(), n.getMonth(), 1).getTime();
+  if (ky === 'thang_truoc') return luc >= new Date(n.getFullYear(), n.getMonth() - 1, 1).getTime() && luc < new Date(n.getFullYear(), n.getMonth(), 1).getTime();
+  return true;
+}
+
 function QlHoaDon({ ds, traHangs, dienThoai, huyDuoc, onIn, onTra, onHuy, onChiaSe }) {
   const [q, setQ] = useState('');
+  const [ky, setKy] = useState('thang');
   const [loc, setLoc] = useState({ xong: true, huy: false });
   const [pt, setPt] = useState('');
   const [mo, setMo] = useState(null);
   const [trang, setTrang] = useState(0);
   const t = q.trim().toLowerCase();
-  const loc2 = ds.filter((h) => loc[h.daHuy ? 'huy' : 'xong'] && (!pt || h.phuongThuc === pt)
+  const loc2 = ds.filter((h) => loc[h.daHuy ? 'huy' : 'xong'] && trongKy(h.luc, ky) && (!pt || h.phuongThuc === pt)
     && khop(`${h.ma} ${h.khach?.name || ''} ${h.khach?.phone || ''}`, t));
   const tr = Math.min(trang, Math.max(Math.ceil(loc2.length / MOI_TRANG_QL), 1) - 1);
   const traCua = (ma) => traHangs.filter((x) => x.hdGoc === ma);
@@ -1792,6 +1816,7 @@ function QlHoaDon({ ds, traHangs, dienThoai, huyDuoc, onIn, onTra, onHuy, onChia
       <main className="kvm-ds-hd">
         <div className="kvm-tim"><label><Search size={17} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Theo mã hóa đơn, khách hàng" /></label></div>
         <div className="kvm-loc">
+          <select className="kvm-ky" value={ky} onChange={(e) => setKy(e.target.value)} aria-label="Thời gian">{KY_LOC.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
           {[['xong', 'Hoàn thành'], ['huy', 'Đã hủy']].map(([k, l]) => <button key={k} type="button" className={loc[k] ? 'on' : ''} onClick={() => setLoc((x) => ({ ...x, [k]: !x[k] }))}>{l}</button>)}
           <span className="kvm-tong-hd">Tổng: <b>{so(tongCan)}</b></span>
         </div>
@@ -1815,6 +1840,8 @@ function QlHoaDon({ ds, traHangs, dienThoai, huyDuoc, onIn, onTra, onHuy, onChia
       </div>
       <div className="kq-than">
         <aside className="kq-loc">
+          <div className="kq-hop-loc"><b>Thời gian</b>
+            <select value={ky} onChange={(e) => { setKy(e.target.value); setTrang(0); }} aria-label="Thời gian">{KY_LOC.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
           {locTT}
           <div className="kq-hop-loc"><b>Phương thức thanh toán</b>
             <select value={pt} onChange={(e) => { setPt(e.target.value); setTrang(0); }}>
