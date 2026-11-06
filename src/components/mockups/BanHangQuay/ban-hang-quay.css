@@ -811,3 +811,37 @@ button.kv-gach:hover{color:var(--xanh)}
 .kvm-phieu-ct{background:#fff;padding:0 12px 12px;border-bottom:1px solid #eef0f2;overflow-x:auto}
 /* Nhân viên không thấy giá vốn / giá trị theo giá vốn (chỉ Giám đốc). */
 .bhq.nv .gv{display:none!important}
+
+/* Tổng quan Giám đốc (điện thoại) — theo app KiotViet */
+.kvm-tq.bhq-ds{background:var(--xam)}
+.kvm-tq2{margin:-12px -12px 12px;background:#fff;padding:calc(10px + env(safe-area-inset-top)) 16px 4px;border-radius:0 0 16px 16px}
+.kvm-tq2-dau{display:flex;align-items:center;gap:4px;min-height:56px}
+.kvm-tq2-dau .logo{flex:1;display:flex;align-items:center;gap:10px;font-size:26px;font-weight:700;color:#0b4fb3}
+.kvm-tq2-dau .logo span{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#1a7cf5,#20b15a);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:22px}
+.kvm-tq2-dau>button{position:relative;width:48px;height:48px;border:0;background:none;color:var(--chu)!important;display:inline-flex;align-items:center;justify-content:center}
+.kvm-tq2-dau .kvm-nav-dem{top:4px;left:24px}
+.kvm-tq2-ky{margin:10px 0 14px}
+.kvm-tq2-ky select{font-weight:400;font-size:16px}
+.kvm-tq2-the{border:1px solid var(--vien);border-radius:14px;padding:16px;box-shadow:0 2px 8px rgba(21,23,26,.06)}
+.kvm-tq2-the .hai{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding-bottom:14px;border-bottom:1px solid var(--vien)}
+.kvm-tq2-the small{display:flex;align-items:center;gap:6px;color:var(--chu-phu);font-size:15px}
+.kvm-tq2-the small button{width:32px;height:32px;border:0;background:none;color:var(--chu)!important;display:inline-flex;align-items:center;justify-content:center;padding:0}
+.kvm-tq2-the .so-lon{margin:6px 0 0;font-size:18px}
+.kvm-tq2-the .so-lon b{font-size:34px;font-weight:600;color:var(--xanh)}
+.kvm-tq2-the .lai{margin:10px 0 0;font-size:22px;font-weight:600;color:#1fb35a;letter-spacing:1px}
+.kvm-tq2-the .tra{display:flex;align-items:center;gap:6px;padding-top:12px;color:var(--chu-phu)}
+.kvm-tq2-the .tra b{color:var(--chu);font-size:17px}
+.kvm-tq2-tat{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin:16px -8px 8px}
+.kvm-tq2-tat button{display:flex;flex-direction:column;align-items:center;gap:6px;min-height:72px;border:0;background:none;font-size:13px;color:var(--chu)!important;padding:4px 0}
+.kvm-tq2-tat button span{width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;color:#1a7cf5}
+.kvm-tq2-bd{margin:12px -16px 0;padding:16px;border-top:10px solid var(--xam)}
+.kvm-tq2-bd h2{margin:0 0 12px;font-size:21px;font-weight:500}
+.kvm-tq2-bd .tieu-de{display:flex;align-items:center;justify-content:space-between;width:100%;border:0;background:none;padding:0;color:var(--chu)!important}
+.kvm-tq2-bd .tieu-de h2{margin:0}
+.kvm-tq2-bd .r{display:flex;justify-content:space-between;min-height:40px;align-items:center;border-bottom:1px solid #eef0f2}
+.cot-ds{display:flex;align-items:flex-end;gap:10px;height:200px;margin-top:14px;padding:0 4px;border-bottom:1px solid var(--vien);overflow-x:auto}
+.cot-ds .cot{flex:0 0 auto;min-width:36px;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;position:relative;padding-bottom:22px}
+.cot-ds .cot i{width:14px;background:var(--xanh);border-radius:4px 4px 0 0}
+.cot-ds .cot .gt{font-size:11px;color:var(--chu-phu);white-space:nowrap}
+.cot-ds .cot small{position:absolute;bottom:2px;font-size:12px;color:var(--chu-phu)}
+.kvm-tq2-bc{margin:18px 0 0;padding:0 0 6px;color:var(--chu-phu);font-weight:500}
