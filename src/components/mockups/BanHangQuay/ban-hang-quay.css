@@ -249,7 +249,7 @@ button.kv-gach:hover{color:var(--xanh)}
 .kvm-dau .kv-ic-tr{color:var(--chu)!important}
 .kvm-so-hd{font-size:12.5px;color:var(--xanh);background:var(--xanh-nhat);padding:3px 8px;border-radius:999px}
 .kvm-than{flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch}
-.kvm-tim{display:flex;align-items:center;gap:4px;padding:6px 8px 8px 16px;background:#fff}
+.kvm-tim{display:flex;align-items:center;gap:8px;padding:6px 16px 8px 16px;background:#fff}
 .kvm-tim label{flex:1;min-width:0;height:44px;display:flex;align-items:center;gap:8px;padding:0 12px;background:var(--xam);border-radius:8px;color:var(--chu-phu)}
 .kvm-tim input{flex:1;min-width:0;height:100%;border:0;outline:0;background:none;font-size:16px;color:var(--chu)}
 .kvm-tim>button{width:44px;height:44px;border:0;border-radius:8px;background:none;display:inline-flex;align-items:center;justify-content:center}
@@ -699,3 +699,88 @@ button.kv-gach:hover{color:var(--xanh)}
 .kvm-hd-mon small{font-size:13px;color:#6b7280}
 .kvm-hd-mon s{color:#9aa0a6;margin-left:4px}
 .kvm-hd-mon li>span{flex:none;font-weight:600;font-size:15px;color:#1f2329}
+
+/* ===== Điện thoại — bám theo app KiotViet (ảnh chụp 06/11/2026) ===== */
+.kvm{position:relative}
+.kvm-dau-lon{min-height:64px}
+.kvm-dau-lon h1{font-size:28px;font-weight:700}
+.kvm-dau-lon>button{color:var(--chu)!important}
+.kvm-dau-lon>button.on{color:var(--xanh)!important}
+.kvm-tim>button.o{background:var(--xam);border-radius:10px}
+.kvm-loc .kvm-loc-phai{margin-left:auto;width:44px;justify-content:center;color:var(--chu)!important}
+.kvm-loc .kvm-loc-phai.on{color:var(--xanh)!important}
+.kvm-nhan i.het{background:#fde8e8;color:#e5484d}
+.kvm-mon-cham{min-height:84px}
+.kvm-mon .t>span:first-child{font-size:16px}
+.kvm-ds{padding-bottom:76px}
+.kvm-pill{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);display:flex;gap:2px;padding:4px;background:#fff;border-radius:999px;box-shadow:0 4px 18px rgba(21,23,26,.16);z-index:5}
+.kvm-pill button{min-height:44px;min-width:44px;padding:0 18px;border:0;border-radius:999px;background:none;font-size:16px;color:var(--chu-phu)!important;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap}
+.kvm-pill button.on{background:var(--xanh);color:#fff!important}
+.kvm-nav button{min-height:60px;font-size:12px}
+.kvm-nav button.on .ic{color:var(--xanh)}
+
+.kvm-trang-ql{position:relative;background:var(--xam);display:flex;flex-direction:column}
+.kvm-trang-ql>.kvm-dau{position:sticky;top:0;z-index:3}
+.kvm-loc-hd{display:flex;align-items:center;gap:10px;padding:4px 16px 10px;background:#fff;overflow-x:auto;scrollbar-width:none}
+.kvm-loc-ic{flex:0 0 44px;width:44px;height:44px;border:0;border-radius:50%;background:var(--xam);display:inline-flex;align-items:center;justify-content:center;color:var(--chu)!important}
+.kvm-loc-ic.on{background:var(--xanh-nhat);color:var(--xanh)!important}
+.kvm-ky{position:relative;flex:0 0 auto;display:inline-flex;align-items:center;height:40px;border-radius:999px;background:var(--xanh-nhat);color:var(--xanh)}
+.kvm-ky select{appearance:none;-webkit-appearance:none;border:0;background:none;height:100%;padding:0 34px 0 16px;font:inherit;font-size:15px;font-weight:500;color:inherit;outline:0}
+.kvm-ky svg{position:absolute;right:12px;pointer-events:none}
+.kvm-ky.xam{background:var(--xam);color:var(--chu)}
+.kvm-trang-ql>.kvm-loc{background:#fff}
+.kvm-tong-ql{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:6px 16px 16px;background:#fff;border-radius:0 0 16px 16px;margin-bottom:12px}
+.kvm-tong-ql>div{display:flex;flex-direction:column;gap:2px}
+.kvm-tong-ql b{font-size:18px;font-weight:600}
+.kvm-tong-ql small{font-size:14px;color:var(--chu)}
+.kvm-hd-ds,.kvm-hh-ds{flex:1 0 auto;background:#fff;border-radius:16px 16px 0 0;padding-bottom:88px}
+.kvm-hd-ds h3{margin:0;padding:18px 16px 6px;font-size:14px;font-weight:500;color:var(--chu-phu);letter-spacing:.2px}
+.kvm-hd-dong{display:flex;flex-direction:column;gap:4px;width:100%;padding:12px 16px;border:0;border-bottom:1px solid #eef0f2;background:#fff;text-align:left;color:var(--chu)}
+.kvm-hd-dong .r1,.kvm-hd-dong .r2{display:flex;justify-content:space-between;gap:12px;width:100%}
+.kvm-hd-dong .r1 b{font-size:16px;font-weight:500}
+.kvm-hd-dong .r2,.kvm-hd-dong .r3{color:var(--chu-phu);font-size:14px}
+.kvm-hd-dong .r2 .do{color:var(--do)}
+.kvm-hd-dong .r3 b{color:var(--chu);font-weight:600}
+.kvm-hd-dong.huy .r1 b{text-decoration:line-through;color:var(--chu-phu)}
+.kvm-fab{position:fixed;right:16px;bottom:calc(76px + env(safe-area-inset-bottom));width:56px;height:56px;border:0;border-radius:50%;background:var(--xanh);color:#fff!important;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 16px rgba(0,112,244,.35);z-index:6}
+.kvm-hh-dong{display:flex;align-items:center;gap:12px;width:100%;padding:12px 16px;border:0;border-bottom:1px solid #eef0f2;background:#fff;text-align:left;color:var(--chu)}
+.kvm-hh-dong .t{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.kvm-hh-dong .t>span{font-size:16px}
+.kvm-hh-dong small{color:var(--chu-phu);font-size:14px}
+.kvm-hh-dong .p{display:flex;flex-direction:column;align-items:flex-end;gap:4px;font-size:16px;white-space:nowrap}
+.kvm-hh-dong .p small.do,.kvm-hh-ct b.do,.kvm-the-kho .do{color:var(--do)}
+.kvm-hh-ct{display:flex;flex-direction:column;gap:2px}
+.kvm-hh-ct .kq-hh-anh{align-self:center}
+.kvm-hh-ct h2{margin:8px 0 0;font-size:18px}
+.kvm-hh-ct .r,.kvm-the>.r,.kvm-the-kho .r{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:36px}
+.kvm-the-kho{display:flex;flex-direction:column;padding:6px 0;border-bottom:1px solid #eef0f2}
+.kvm-the-kho .r{min-height:28px}
+.kvm-ghi-nho{padding:0 16px;font-size:13px}
+
+.kvm-them.kvm-trang-ql{padding-top:calc(12px + env(safe-area-inset-top))}
+.kvm-cua-hang .dau{display:flex;align-items:center;gap:12px;padding:4px 0 8px}
+.kvm-cua-hang .logo{flex:0 0 52px;width:52px;height:52px;border-radius:50%;background:#F7EFE2;color:#8C5A3C;font-weight:700;font-size:24px;display:inline-flex;align-items:center;justify-content:center}
+.kvm-cua-hang .dau>div{display:flex;flex-direction:column}
+.kvm-cua-hang .dau b{font-size:18px}
+.kvm-cua-hang .cn{position:relative;display:inline-flex;align-items:center;color:var(--chu-phu)}
+.kvm-cua-hang .cn select{appearance:none;-webkit-appearance:none;border:0;background:none;font:inherit;padding:0 22px 0 0;color:inherit;min-height:32px}
+.kvm-cua-hang .cn svg{position:absolute;right:0;pointer-events:none}
+.kvm-luoi-kh .luoi{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px}
+.kvm-luoi-kh .luoi button{position:relative;display:flex;align-items:center;gap:12px;min-height:52px;border:0;background:none;text-align:left;font-size:16px;color:var(--chu)!important;padding:0}
+.kvm-luoi-kh .ic{flex:0 0 32px;width:32px;height:32px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;color:#fff!important}
+.kvm-luoi-kh .ic.xanh{background:#1a7cf5}.kvm-luoi-kh .ic.la{background:#1fb35a}.kvm-luoi-kh .ic.cam{background:#f08a24}
+
+.kvm-tq{background:var(--xam)}
+.kvm-tq-dau{margin:-12px -12px 12px;background:linear-gradient(180deg,#0b4fb3 0%,#1a7cf5 78%,var(--xam) 78%);padding:calc(18px + env(safe-area-inset-top)) 16px 0;color:#fff}
+.kvm-tq-dau .logo{display:flex;align-items:center;gap:10px;font-size:24px;font-weight:700}
+.kvm-tq-dau .logo span{width:38px;height:38px;border-radius:50%;background:#fff;color:#0b4fb3;display:inline-flex;align-items:center;justify-content:center;font-size:20px}
+.kvm-tq-dau .ngay{margin:26px 0 2px;font-size:18px;font-weight:500}
+.kvm-tq-dau .cn{margin:0 0 16px;opacity:.85}
+.kvm-tq-so{color:var(--chu);border-radius:16px;margin:0!important;padding:14px 16px!important}
+.kvm-tq-so small{color:var(--chu-phu)}
+.kvm-tq-so .ba{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+.kvm-tq-so .ba div{display:flex;flex-direction:column;gap:2px}
+.kvm-tq-so .ba span{font-size:13px;color:var(--chu-phu)}
+.kvm-tq-so .ba b{font-size:18px}
+.kvm-them .kvm-luoi-kh h2{font-size:19px;font-weight:600;color:var(--chu);text-transform:none;letter-spacing:0;margin:14px 0 6px}
+.kvm-hd .kvm-the>h2{font-size:15px;font-weight:600;margin:14px 0 4px}
