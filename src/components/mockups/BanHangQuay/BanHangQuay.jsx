@@ -11,7 +11,7 @@ const veApp = () => { window.location.href = '/'; };
 import { supabase } from '../../../lib/supabaseClient';
 import {
   CHI_NHANH, DANH_MUC, THU_KHAC_GOI_Y, LOAI_PHIEU, LY_DO_HUY, LY_DO_HUY_HD, LOAI_NOI_BO, LUAN_CHUYEN,
-  taoMatHang, tonGia, tienDong, tinhHoaDon, tinhThanhToan, tinhKetCa, tinhTraHang, apPhieuKho, tinhCongNo, baoCaoNgay,
+  taoMatHang, tonGia, tienDong, tinhHoaDon, tinhThanhToan, tinhKetCa, tinhTraHang, apPhieuKho, tinhCongNo, baoCaoNgay, khop, locXep,
 } from './banHangQuayLogic';
 import './ban-hang-quay.css';
 
@@ -641,7 +641,7 @@ function TimHang({ matHang, ton, inputRef, onChon, goiY = 'Tìm hàng hóa (F3)'
   const loc = useMemo(() => {
     const t = q.trim().toLowerCase();
     if (!t) return [];
-    return matHang.filter((m) => m.ma.toLowerCase().includes(t) || `${m.ten} ${m.size}`.toLowerCase().includes(t)).slice(0, 10);
+    return locXep(matHang, (m) => `${m.ma} ${m.ten} ${m.size}`, t, 10);
   }, [matHang, q]);
   const lay = (m) => { onChon(m); setQ(''); setChon(0); };
   const onKey = (e) => {
@@ -692,7 +692,7 @@ function KhachO({ khach, ds, noCua, inputRef, onChon, onThem }) {
     );
   }
   const t = q.trim().toLowerCase();
-  const loc = t ? ds.filter((k) => `${k.name} ${k.phone || ''}`.toLowerCase().includes(t)).slice(0, 8) : [];
+  const loc = t ? locXep(ds, (k) => `${k.name} ${k.phone || ''}`, t, 8) : [];
   const lay = (k) => { onChon(k); setQ(''); };
   return (
     <div className="kv-khach">
@@ -864,7 +864,7 @@ function DienThoai({
 }) {
   const [q, setQ] = useState('');
   const t = q.trim().toLowerCase();
-  const ds = t ? monLoc.filter((m) => m.ma.toLowerCase().includes(t) || `${m.ten} ${m.size}`.toLowerCase().includes(t)) : monLoc;
+  const ds = t ? locXep(monLoc, (m) => `${m.ma} ${m.ten} ${m.size}`, t) : monLoc;
   const onTimKey = (e) => {
     if (e.key !== 'Enter') return;
     const m = monLoc.find((x) => x.ma === q.trim().toUpperCase()) || (ds.length === 1 ? ds[0] : null);
@@ -1014,7 +1014,7 @@ function DienThoai({
 function ChonKhachDt({ ds, noCua, onDong, onThem, onChon }) {
   const [q, setQ] = useState('');
   const t = q.trim().toLowerCase();
-  const loc = ds.filter((k) => !t || `${k.name} ${k.phone || ''}`.toLowerCase().includes(t)).slice(0, 60);
+  const loc = locXep(ds, (k) => `${k.name} ${k.phone || ''}`, t, 60);
   return (
     <div className="kvm kvm-phu">
       <header className="kvm-dau trang">
@@ -1100,7 +1100,7 @@ function ThuKhac({ ds, onDong, onLuu }) {
 function ChonHdTra({ ds, onDong, onChon }) {
   const [q, setQ] = useState('');
   const t = q.trim().toLowerCase();
-  const loc = ds.filter((h) => !t || `${h.ma} ${h.khach.name} ${h.khach.phone || ''}`.toLowerCase().includes(t)).slice(0, 30);
+  const loc = ds.filter((h) => khop(`${h.ma} ${h.khach.name} ${h.khach.phone || ''}`, t)).slice(0, 30);
   return (
     <Hop tieuDe="Chọn hoá đơn trả hàng" onDong={onDong}>
       <input className="bhq-o" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Mã hoá đơn, tên hoặc SĐT khách" />
@@ -1258,7 +1258,7 @@ function QlHangHoa({ matHang, tonCN, chiNhanh, theKho }) {
   const [trang, setTrang] = useState(0);
   const dmCo = DANH_MUC.filter((d) => matHang.some((m) => m.danhMuc === d.value));
   const t = q.trim().toLowerCase();
-  const ds = matHang.filter((m) => (!t || `${m.ma} ${m.ten} ${m.size}`.toLowerCase().includes(t))
+  const ds = matHang.filter((m) => khop(`${m.ma} ${m.ten} ${m.size}`, t)
     && (nhom === 'all' || m.danhMuc === nhom)
     && (locTon === 'all' || (locTon === 'con' ? (ton[m.ma] ?? 0) > 0 : locTon === 'het' ? (ton[m.ma] ?? 0) === 0 : (ton[m.ma] ?? 0) < 0)));
   const tongTon = ds.reduce((s, m) => s + (ton[m.ma] ?? 0), 0);
@@ -1362,7 +1362,7 @@ function QlPhieu({ loai, ds, matHang, ton, onTao, onMo, onSaoChep, onHuy, onIn }
   const [mo, setMo] = useState(null);
   const [trang, setTrang] = useState(0);
   const t = q.trim().toLowerCase();
-  const loc2 = ds.filter((p) => loc[p.trangThai] && (!t || p.ma.toLowerCase().includes(t)) && (!loaiXuat || p.loaiXuat === loaiXuat));
+  const loc2 = ds.filter((p) => loc[p.trangThai] && khop(p.ma, t) && (!loaiXuat || p.loaiXuat === loaiXuat));
   const tr = Math.min(trang, Math.max(Math.ceil(loc2.length / MOI_TRANG_QL), 1) - 1);
   const soCot = { giao: 6, huy: 6, noibo: 7, kiem: 8 }[loai];
   return (
@@ -1698,7 +1698,21 @@ function ChiTietHd({ h, tra, huyDuoc, dienThoai, onIn, onTra, onHuy, onChiaSe })
         <div><small>Kênh bán:</small><span>Bán trực tiếp</span></div>
         <div><small>Thanh toán:</small><span>{PT[h.phuongThuc]}</span></div>
       </div>
-      {h.dong.length > 0 && (
+      {dienThoai && h.dong.length > 0 && (
+        <ul className="kvm-hd-mon">
+          {h.dong.map((d) => {
+            const tien = tienDong(d);
+            const giam = d.gia * d.sl - tien;
+            return (
+              <li key={d.ma}>
+                <div><b>{d.ten}{d.size ? ` - ${d.size}` : ''}</b><small>{d.ma} · {so(d.sl)} x {so(tien / d.sl)}{giam > 0 ? <s> {so(d.gia)}</s> : null}</small>{d.ghiChu ? <small className="kv-dong-ghi">{d.ghiChu}</small> : null}</div>
+                <span>{so(tien)}</span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {!dienThoai && h.dong.length > 0 && (
         <div className="kq-cuon"><table className="phu">
           <thead><tr><th>Mã hàng</th><th>Tên hàng</th><th className="so">Số lượng</th><th className="so">Đơn giá</th><th className="so">Giảm giá</th><th className="so">Giá bán</th><th className="so">Thành tiền</th></tr></thead>
           <tbody>
@@ -1748,7 +1762,7 @@ function QlHoaDon({ ds, traHangs, dienThoai, huyDuoc, onIn, onTra, onHuy, onChia
   const [trang, setTrang] = useState(0);
   const t = q.trim().toLowerCase();
   const loc2 = ds.filter((h) => loc[h.daHuy ? 'huy' : 'xong'] && (!pt || h.phuongThuc === pt)
-    && (!t || `${h.ma} ${h.khach?.name || ''} ${h.khach?.phone || ''}`.toLowerCase().includes(t)));
+    && khop(`${h.ma} ${h.khach?.name || ''} ${h.khach?.phone || ''}`, t));
   const tr = Math.min(trang, Math.max(Math.ceil(loc2.length / MOI_TRANG_QL), 1) - 1);
   const traCua = (ma) => traHangs.filter((x) => x.hdGoc === ma);
   const chiTiet = (h) => (

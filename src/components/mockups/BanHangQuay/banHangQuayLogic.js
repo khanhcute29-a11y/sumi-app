@@ -219,3 +219,31 @@ export function baoCaoNgay({ hoaDons, phieuKho, thuNos = [], traHangs = [], matH
     giao: tongPhieu('giao'), huy: tongPhieu('huy'), noibo: tongPhieu('noibo'),
   };
 }
+
+// Tìm kiểu KiotViet: không phân biệt hoa/thường, có dấu/không dấu (đ = d), gõ nhiều
+// chữ rời nhau vẫn khớp ("banh bo" ra "Bánh Bò Thốt Nốt").
+export const boDau = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
+export const khop = (chuoi, q) => {
+  const tu = boDau(q).trim().split(/\s+/).filter(Boolean);
+  if (!tu.length) return true;
+  const c = boDau(chuoi);
+  return tu.every((x) => c.includes(x));
+};
+
+// Lọc + xếp hạng: chữ gõ khớp ĐẦU từ (chị "Yến") đứng trước khớp lưng chừng ("Hu-yền").
+// Cùng điểm thì giữ thứ tự cũ. Dùng cho mọi ô tìm hàng / tìm khách.
+export const locXep = (ds, layChuoi, q, gioiHan = Infinity) => {
+  const tu = boDau(q).trim().split(/\s+/).filter(Boolean);
+  if (!tu.length) return ds.slice(0, gioiHan);
+  const kq = [];
+  ds.forEach((x, i) => {
+    const c = boDau(layChuoi(x));
+    if (!tu.every((t) => c.includes(t))) return;
+    const cacTu = c.split(/[\s\-·,()/]+/);
+    const dauTu = tu.filter((t) => cacTu.some((w) => w.startsWith(t))).length;
+    const ca = c.includes(tu.join(' ')) ? 1 : 0;
+    kq.push({ x, i, diem: dauTu * 2 + ca });
+  });
+  kq.sort((a, b) => b.diem - a.diem || a.i - b.i);
+  return kq.slice(0, gioiHan).map((k) => k.x);
+};

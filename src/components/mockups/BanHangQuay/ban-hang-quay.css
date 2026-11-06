@@ -364,6 +364,8 @@ button.kv-gach:hover{color:var(--xanh)}
 .bhq-hop-chan{display:flex;gap:8px;padding:12px 14px calc(14px + env(safe-area-inset-bottom));border-top:1px solid #e3e6ea}
 .bhq-nhan{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:500;color:#677484}
 .bhq-goi{display:flex;flex-wrap:wrap;gap:6px}
+.bhq-goi button{min-height:40px;padding:0 12px;border:1px solid #d0d5dd;border-radius:8px;background:#fff;color:#1f2329;font:inherit;font-size:14px;cursor:pointer}
+.bhq-goi button.on{border-color:#0070F4;background:#e8f1fe;color:#0070F4;font-weight:500}
 .bhq-ghi{font-size:13px;color:#677484;margin:0}
 .bhq-can-tra{font-size:15px}
 .bhq-can-tra b{display:block;font-size:30px;color:#0070F4}
@@ -677,3 +679,13 @@ button.kv-gach:hover{color:var(--xanh)}
 .pgc-3 b{text-align:right;font-weight:500}
 .pgc-3.dau{border-top:0;background:#F5F6F8;color:var(--chu-phu);font-weight:500}
 .pgc-3.dau span:not(:first-child){text-align:right}
+
+/* Chi tiết hóa đơn trên điện thoại: danh sách món như app KiotViet (tên · SL x giá · thành tiền) */
+.kvm-hd-mon{list-style:none;margin:8px 0;padding:0;background:#fff;border-top:1px solid #e8eaed;border-bottom:1px solid #e8eaed}
+.kvm-hd-mon li{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:10px 16px;border-bottom:1px solid #f0f1f3}
+.kvm-hd-mon li:last-child{border-bottom:0}
+.kvm-hd-mon li>div{min-width:0;display:grid;gap:3px}
+.kvm-hd-mon b{font-weight:500;font-size:15px;color:#1f2329}
+.kvm-hd-mon small{font-size:13px;color:#6b7280}
+.kvm-hd-mon s{color:#9aa0a6;margin-left:4px}
+.kvm-hd-mon li>span{flex:none;font-weight:600;font-size:15px;color:#1f2329}
