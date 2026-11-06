@@ -685,7 +685,7 @@ button.kv-gach:hover{color:var(--xanh)}
 .kvm-cn{margin-left:auto;min-height:40px;border:1px solid var(--vien);border-radius:6px;background:#fff;padding:0 8px}
 /* Phiếu bàn giao ca */
 .pgc-bang{border:1px solid var(--vien);border-radius:6px;overflow:hidden}
-.pgc-3{display:grid;grid-template-columns:minmax(0,1.2fr) repeat(3,minmax(0,1fr));gap:6px;padding:8px 10px;border-top:1px solid #eef0f2;font-size:13.5px}
+.pgc-3{display:grid;grid-template-columns:minmax(0,1.2fr) repeat(2,minmax(0,1fr));gap:6px;padding:8px 10px;border-top:1px solid #eef0f2;font-size:13.5px}
 .pgc-3 b{text-align:right;font-weight:500}
 .pgc-3.dau{border-top:0;background:#F5F6F8;color:var(--chu-phu);font-weight:500}
 .pgc-3.dau span:not(:first-child){text-align:right}
@@ -972,3 +972,5 @@ button.kv-gach:hover{color:var(--xanh)}
 .bl-tong span{font-weight:700}
 .bl-chu{font-style:italic;margin-top:6px;font-size:11px}
 .bl-cam{margin-top:10px}
+button.kv-xo-them{display:block;width:100%;text-align:left;background:#fff;border:0;border-top:1px solid var(--vien);cursor:pointer}
+button.kv-xo-them:hover{background:var(--xanh-nhat)}
