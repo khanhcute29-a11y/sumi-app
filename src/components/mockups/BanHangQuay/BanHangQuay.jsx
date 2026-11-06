@@ -3,8 +3,11 @@ import { createPortal } from 'react-dom';
 import {
   ArrowLeft, ArrowLeftRight, Check, ChevronDown, ChevronLeft, ChevronRight, CirclePlus, Clock, EllipsisVertical, Filter, Image as IconAnh,
   List, Menu, Minus, Pencil, PersonStanding, Plus, Printer, ReceiptText, Repeat, ScanBarcode, Search, ShoppingBag, Tag,
-  Trash2, Undo2, User, X, Zap, Copy, LayoutGrid, Save, SquarePen, CircleUser, Warehouse, Share2, ClipboardCheck, Package,
+  Trash2, Undo2, User, X, Zap, Copy, LayoutGrid, Save, SquarePen, CircleUser, Warehouse, Share2, ClipboardCheck, Package, House,
 } from 'lucide-react';
+
+// Rời máy bán hàng, quay về trang chủ app Sumi (nút "Bán tại quầy" ở màn Hôm nay mở vào đây).
+const veApp = () => { window.location.href = '/'; };
 import { supabase } from '../../../lib/supabaseClient';
 import {
   CHI_NHANH, DANH_MUC, THU_KHAC_GOI_Y, LOAI_PHIEU, LY_DO_HUY, LY_DO_HUY_HD, LOAI_NOI_BO, LUAN_CHUYEN,
@@ -509,6 +512,8 @@ export default function BanHangQuay() {
             </label>
             <button type="button" onClick={() => moHop({ loai: 'thiet_lap_in' })}><Printer size={18} /> Thiết lập in</button>
             {!dienThoai && <button type="button" onClick={() => moHop({ loai: 'phim_tat' })}><EllipsisVertical size={18} /> Phím tắt</button>}
+            <hr />
+            <button type="button" onClick={veApp}><House size={18} /> Về app Sumi</button>
           </div>
         </div>
       )}
@@ -1853,6 +1858,9 @@ function NhieuHon({ congNo, chiNhanh, setChiNhanh, onMo, onHop }) {
         <label className="kvm-dong-mo tinh"><Warehouse size={18} /><span>Chi nhánh</span>
           <select className="kvm-cn" value={chiNhanh} onChange={(e) => setChiNhanh(e.target.value)}>{CHI_NHANH.map((c) => <option key={c}>{c}</option>)}</select></label>
         <button type="button" className="kvm-dong-mo" onClick={() => onHop({ loai: 'thiet_lap_in' })}><Printer size={18} /><span>Thiết lập máy in</span><ChevronRight size={18} className="mui" /></button>
+      </section>
+      <section className="kvm-the">
+        <button type="button" className="kvm-dong-mo" onClick={veApp}><House size={18} /><span>Về app Sumi</span><ChevronRight size={18} className="mui" /></button>
       </section>
     </main>
   );
