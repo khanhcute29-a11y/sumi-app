@@ -59,7 +59,7 @@ export default function MobileHomeScreen({onNavigate}){
  // hẳn màn hình Employee Overview V4 — nó tự vẽ header/banner riêng của nó,
  // nên trả về thẳng, không lồng vào khung header+main dùng chung bên dưới
  // (khung đó chỉ dành cho DirectorHome/LeadHome).
- if (!isDirector(profile) && !isLead(profile)) return <><NutBanQuay /><EmployeeOverviewV4Inner onNavigate={onNavigate} /></>;
+ if (!isDirector(profile) && !isLead(profile)) return <><NutBanQuay rong={420} /><EmployeeOverviewV4Inner onNavigate={onNavigate} /></>;
  // Giám đốc/Chủ sở hữu thật (owner/admin, đúng điều kiện RPC is_business_director()
  // ở backend) dùng thẳng Boss Overview V3 — màn hình đã nối Supabase thật, tự vẽ
  // header riêng. Phó GĐ xưởng không có quyền owner/admin thật vẫn ở lại DirectorHome
@@ -70,7 +70,7 @@ export default function MobileHomeScreen({onNavigate}){
 // Nút nhỏ mở máy "Bán tại quầy" (bản sao KiotViet, ?mockup=ban-hang). Đặt ở đầu
 // màn Hôm nay của mọi vai trò — gắn từ đây để không phải sửa màn EmployeeOverviewV4 /
 // BossOverviewV3 của đồng đội. Không nổi (fixed) để khỏi đè nút Gen kéo thả được.
-function NutBanQuay({trong}){return <div style={{display:'flex',justifyContent:'flex-end',padding:trong?'0 0 10px':'10px 16px 0',maxWidth:trong?undefined:480,margin:trong?undefined:'0 auto',boxSizing:'border-box'}}><button type="button" onClick={()=>{window.location.href='/?mockup=ban-hang'}} aria-label="Mở máy bán tại quầy" style={{minHeight:44,display:'inline-flex',alignItems:'center',gap:7,padding:'0 14px 0 12px',border:0,borderRadius:999,background:'#0070F4',color:'#fff',font:'inherit',fontSize:14,fontWeight:800,boxShadow:'0 4px 12px rgba(0,112,244,.25)',cursor:'pointer'}}><IconStore size={18}/>Bán tại quầy<ChevronRight size={16}/></button></div>}
+function NutBanQuay({trong,rong=480}){return <div style={{display:'flex',justifyContent:'flex-end',padding:trong?'0 0 10px':'10px 16px 0',maxWidth:trong?undefined:rong,margin:trong?undefined:'0 auto',boxSizing:'border-box'}}><button type="button" onClick={()=>{window.location.href='/?mockup=ban-hang'}} aria-label="Mở máy bán tại quầy" style={{minHeight:44,display:'inline-flex',alignItems:'center',gap:7,padding:'0 14px 0 12px',border:0,borderRadius:999,background:'#0070F4',color:'#fff',font:'inherit',fontSize:14,fontWeight:800,boxShadow:'0 4px 12px rgba(0,112,244,.25)',cursor:'pointer'}}><IconStore size={18}/>Bán tại quầy<ChevronRight size={16}/></button></div>}
 function PinnedAnnouncement({onOpen}){const[row,setRow]=useState(null);useEffect(()=>{supabase.from('company_feed_posts').select('id,title,body,severity').eq('post_type','announcement').is('deleted_at',null).in('severity',['important','urgent']).order('created_at',{ascending:false}).limit(1).maybeSingle().then(r=>{if(!r.error)setRow(r.data)})},[]);return row?<button className={`sumi-pinned-announcement ${row.severity}`} onClick={onOpen}><span>📢</span><span><strong>{row.title}</strong><small>{row.body}</small></span><em>›</em></button>:null}
 function SectionHead({title,value,onClick}){return <div className="sumi-section-head"><span>{title}</span>{onClick?<button onClick={onClick}>{value}</button>:<span>{value}</span>}</div>}
 // Bộ lọc kỳ hạn (Tất cả/Hôm nay/7 ngày/Tháng/Tuỳ chọn) giống hệt Dashboard
