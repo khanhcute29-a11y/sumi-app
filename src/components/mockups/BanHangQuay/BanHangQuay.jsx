@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   ArrowLeft, ArrowLeftRight, Check, ChevronDown, ChevronLeft, ChevronRight, CirclePlus, Clock, EllipsisVertical, Filter, Image as IconAnh,
   List, Menu, Minus, Pencil, PersonStanding, Plus, Printer, ReceiptText, Repeat, ScanBarcode, Search, ShoppingBag, Tag,
-  Trash2, Undo2, User, X, Zap, Copy, LayoutGrid, Save, SquarePen, CircleUser, Warehouse,
+  Trash2, Undo2, User, X, Zap, Copy, LayoutGrid, Save, SquarePen, CircleUser, Warehouse, Share2, ClipboardCheck, Package,
 } from 'lucide-react';
 import { supabase } from '../../../lib/supabaseClient';
 import {
@@ -36,6 +36,7 @@ const NGAY = 86400000;
 const MOI_TRANG = 15; // KiotViet: 15 hàng / trang ở chế độ Bán thường
 const MAU_ANH = ['#F9C6D3', '#C9DCF7', '#F8D9B5', '#CDE8D2', '#E3D3F5', '#F7E3A8'];
 // Thanh quản lý giống KiotViet: Hóa đơn · Hàng hóa ▾ (Danh sách hàng hóa | Kiểm kho · Xuất dùng nội bộ · Xuất hủy) · Nhập hàng · Công nợ · Báo cáo.
+const TEN_DT = { ls: 'Hóa đơn', hh: 'Hàng hóa', pn: 'Nhập hàng', xh: 'Xuất hủy', xd: 'Xuất dùng nội bộ', kk: 'Kiểm kho', no: 'Công nợ', ngay: 'Báo cáo cuối ngày', them: 'Nhiều hơn' };
 const MENU_HH = [['hh', 'Danh sách hàng hóa'], ['kk', 'Kiểm kho'], ['xd', 'Xuất dùng nội bộ'], ['xh', 'Xuất hủy']];
 const gio = (t) => new Date(t).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 const ngayGio = (t) => new Date(t).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
@@ -86,6 +87,7 @@ export default function BanHangQuay() {
   const [hop, setHop] = useState(null);
   const [menuMo, setMenuMo] = useState(false);
   const [moHH, setMoHH] = useState(false); // menu "Hàng hóa ▾" ở thanh quản lý
+  const [soCaDong, setSoCaDong] = useState(0);
   const [form, setForm] = useState(null); // { loai, phieu } — màn lập phiếu kho toàn trang
   const [ttMo, setTtMo] = useState(false); // Bán thường: khung thanh toán trượt ra
   const [dtMan, setDtMan] = useState('chon'); // điện thoại: chon → gio → tt (như app KiotViet)
@@ -312,6 +314,14 @@ export default function BanHangQuay() {
   const khachNo = noCua(hd.khach);
   const nguoiBanDs = [...new Set([hd.nguoiBan || nguoi, nguoi, 'Nhân viên quầy 2 (mẫu)'])];
   const moManHinh = (m) => { setManHinh(m); setMenuMo(false); setTtMo(false); setMoHH(false); };
+  const chiaSe = async (h) => {
+    const text = vanBanHd(h);
+    try {
+      if (window.navigator.share) { await window.navigator.share({ title: `Hóa đơn ${h.ma}`, text }); return; }
+      await window.navigator.clipboard.writeText(text);
+      nhan('Đã sao chép hóa đơn — dán vào Zalo để gửi khách');
+    } catch { /* người dùng bấm hủy chia sẻ */ }
+  };
   const moForm = (loai, phieu = null) => { setForm({ loai, phieu }); setMenuMo(false); };
   const moHop = (h) => { setHop(h); setMenuMo(false); };
   const chonKhach = (k) => sua({ khach: k, dua: null });
@@ -355,7 +365,13 @@ export default function BanHangQuay() {
 
   return (
     <div className={`bhq kv ${dienThoai ? 'dt' : ''}`}>
-      {manHinh !== 'ban' && (
+      {manHinh !== 'ban' && dienThoai && (
+        <header className="kvm-dau kvm-dau-ql">
+          {['pn', 'xh', 'xd', 'kk', 'no'].includes(manHinh) && <button type="button" aria-label="Quay lại" onClick={() => moManHinh('them')}><ChevronLeft size={22} /></button>}
+          <h1>{TEN_DT[manHinh]}</h1>{nutMenu}
+        </header>
+      )}
+      {manHinh !== 'ban' && !dienThoai && (
         <header className="kv-top kv-ql">
           <nav className="kv-ql-tabs">
             <button type="button" className={manHinh === 'ls' ? 'on' : ''} onClick={() => moManHinh('ls')}>Hóa đơn</button>
@@ -462,6 +478,17 @@ export default function BanHangQuay() {
           inTamTinh={inTamTinh} hoanTat={hoanTat} nutMenu={nutMenu} soHd={hds.length} onSuaDong={(ma) => setHop({ loai: 'sua_dong_dt', ma })} />
       )}
 
+      {dienThoai && !form && !(manHinh === 'ban' && dtMan !== 'chon') && (
+        <nav className="kvm-nav" aria-label="Điều hướng">
+          {[['ngay', 'Tổng quan', LayoutGrid], ['ls', 'Hóa đơn', ReceiptText], ['ban', 'Bán hàng', ShoppingBag], ['hh', 'Hàng hóa', Package], ['them', 'Nhiều hơn', Menu]].map(([k, l, Ic]) => (
+            <button key={k} type="button" className={`${manHinh === k || (k === 'them' && ['pn', 'xh', 'xd', 'kk', 'no'].includes(manHinh)) ? 'on' : ''} ${k === 'ban' ? 'giua' : ''}`}
+              onClick={() => { moManHinh(k); if (k === 'ban') setDtMan('chon'); }}>
+              <span className="ic"><Ic size={k === 'ban' ? 22 : 20} /></span>{l}
+            </button>
+          ))}
+        </nav>
+      )}
+
       {menuMo && (
         <div className="kv-menu-nen" onClick={() => setMenuMo(false)}>
           <div className="kv-menu" onClick={(e) => e.stopPropagation()} role="menu">
@@ -502,35 +529,11 @@ export default function BanHangQuay() {
       )}
 
       {manHinh === 'ls' && (
-        <main className="bhq-ds">
-          <h2>Hóa đơn · {chiNhanh}</h2>
-          {daBan.filter((h) => h.chiNhanh === chiNhanh).map((h) => {
-            const tra = traHangs.filter((t) => t.hdGoc === h.ma);
-            return (
-              <div key={h.ma} className={`bhq-the ${h.daHuy ? 'huy' : ''}`}>
-                <div><b>{h.ma}</b> · {ngayGio(h.luc)} · {h.khach.name} · {PT[h.phuongThuc]} · người bán: {h.nguoiBan || h.thuNgan}</div>
-                {h.dong.length > 0 && <div>{h.dong.map((d) => `${d.sl}× ${d.ten}${d.size ? ` ${d.size}` : ''}`).join(', ')}</div>}
-                {h.ghiChu && <div className="bhq-ghi">Ghi chú: {h.ghiChu}</div>}
-                <div className="hang">
-                  <b>{so(h.canTra)}</b>{h.vat > 0 && <span className="chip">VAT {so(h.vat)}</span>}{h.no > 0 && <span className="no">Nợ {so(h.no)}</span>}
-                  {h.daHuy ? <span className="chip huy">Đã hủy</span> : !h.mau && (
-                    <>
-                      <button type="button" className="bhq-nut phu" onClick={() => setHop({ loai: 'bien_lai', hoaDon: h })}>In</button>
-                      <button type="button" className="bhq-nut phu" onClick={() => setHop({ loai: 'tra_hang', hoaDon: h })}>Trả hàng</button>
-                      {huyDuoc(h)
-                        ? <button type="button" className="bhq-nut nguy" onClick={() => setHop({ loai: 'huy_hd', hoaDon: h })}>Hủy bỏ</button>
-                        : <span className="bhq-ghi">Đã kết ca — chỉ Quản lý / Giám đốc hủy được</span>}
-                    </>
-                  )}
-                </div>
-                {tra.map((t) => <div key={t.ma} className="bhq-ghi">Trả hàng {t.ma} · {ngayGio(t.luc)} · {t.dong.map((d) => `${d.sl}× ${d.ten}`).join(', ')} · hoàn {so(t.tienTra)}{t.lyDo ? ` · ${t.lyDo}` : ''}</div>)}
-                {h.daHuy && h.lyDoHuy && <div className="bhq-ghi">Hủy lúc {gio(h.lucHuy)} · {h.nguoiHuy} · lý do: {h.lyDoHuy}</div>}
-              </div>
-            );
-          })}
-          {!daBan.some((h) => h.chiNhanh === chiNhanh) && <p className="bhq-rong">Chưa có hóa đơn ở chi nhánh này.</p>}
-        </main>
+        <QlHoaDon ds={daBan.filter((h) => h.chiNhanh === chiNhanh)} traHangs={traHangs} dienThoai={dienThoai} huyDuoc={huyDuoc}
+          onIn={(h) => setHop({ loai: 'bien_lai', hoaDon: h })} onTra={(h) => setHop({ loai: 'tra_hang', hoaDon: h })}
+          onHuy={(h) => setHop({ loai: 'huy_hd', hoaDon: h })} onChiaSe={chiaSe} />
       )}
+      {manHinh === 'them' && <NhieuHon congNo={congNo.length} chiNhanh={chiNhanh} setChiNhanh={setChiNhanh} onMo={moManHinh} onHop={setHop} />}
 
       {manHinh === 'no' && <CongNo ds={congNo} onThu={(k) => setHop({ loai: 'thu_no', no: k })} />}
 
@@ -546,9 +549,12 @@ export default function BanHangQuay() {
       )}
 
       {hop?.loai === 'ket_ca' && (
-        <KetCa ca={ca} chiNhanh={chiNhanh} hoaDons={daBan.filter((h) => !h.mau && trongCa(h))}
+        <KetCa ca={ca} chiNhanh={chiNhanh} hoaDons={daBan.filter((h) => !h.mau && trongCa(h))} soCa={soCaDong + 1}
           thuNos={thuNos.filter(trongCa)} traHangs={traHangs.filter(trongCa)} onDong={() => setHop(null)}
-          onKet={() => { setCa({ nguoi, dauCa: 0, moLuc: Date.now() }); setHop(null); nhan('Đã kết ca — đã in phiếu bàn giao, ca mới bắt đầu'); }} />
+          onKet={(phieu) => {
+            setSoCaDong((n) => n + 1); setCa({ nguoi, dauCa: 0, moLuc: Date.now() }); setHop(null); setBanIn({ banGiao: phieu });
+            nhan(`Đã đóng ca ${phieu.ma} — đã in phiếu bàn giao, ca mới bắt đầu`);
+          }} />
       )}
       {hop?.loai === 'them_khach' && (
         <ThemKhach onDong={() => setHop(null)}
@@ -608,7 +614,7 @@ export default function BanHangQuay() {
           {bao.hoaDon && <button type="button" onClick={() => setBanIn({ ...bao.hoaDon })}>In lại</button>}
         </div>
       )}
-      {banIn && createPortal(<div id="bhq-in">{banIn.phieu ? <NoiDungPhieu p={banIn.phieu} matHang={matHang} /> : <NoiDungBienLai hd={banIn} />}</div>, document.body)}
+      {banIn && createPortal(<div id="bhq-in">{banIn.banGiao ? <NoiDungBanGiao p={banIn.banGiao} /> : banIn.phieu ? <NoiDungPhieu p={banIn.phieu} matHang={matHang} /> : <NoiDungBienLai hd={banIn} />}</div>, document.body)}
     </div>
   );
 }
@@ -1068,35 +1074,6 @@ function ThemKhach({ onDong, onLuu }) {
     </Hop>
   );
 }
-function KetCa({ ca, chiNhanh, hoaDons, thuNos, traHangs, onDong, onKet }) {
-  const [dauCa, setDauCa] = useState(String(ca.dauCa || ''));
-  const [dem, setDem] = useState('');
-  const soLieu = tinhKetCa({ dauCa, hoaDons, thuNos, traHangs });
-  const chenh = (Number(dem) || 0) - soLieu.heThong;
-  return (
-    <Hop tieuDe={`Kết ca · ${ca.nguoi} · ${chiNhanh}`} onDong={onDong}
-      chan={<button type="button" className="bhq-nut chinh" disabled={dem === ''} onClick={onKet}>Kết ca & in phiếu bàn giao</button>}>
-      <div className="bhq-bang">
-        <div><span>Ca từ</span><b>{gio(ca.moLuc)} → {gio(Date.now())}</b></div>
-        <div><span>Số hoá đơn · doanh thu</span><b>{soLieu.soHoaDon} · {so(soLieu.doanhThu)}</b></div>
-        <div><span>Chuyển khoản <small>(đối chiếu sao kê)</small></span><b>{so(soLieu.chuyenKhoan)}</b></div>
-        <div><span>Thẻ</span><b>{so(soLieu.the)}</b></div>
-        <div><span>Ghi nợ khách · thu nợ</span><b>{so(soLieu.ghiNo)} · {so(soLieu.thuNo)}</b></div>
-        {soLieu.traHang > 0 && <div><span>Trả hàng (đã hoàn khách)</span><b>−{so(soLieu.traHang)}</b></div>}
-        <div><span>Thu tiền mặt trong ca</span><b>{so(soLieu.tienMat)}</b></div>
-      </div>
-      <label className="bhq-nhan">Tiền mặt đầu ca (tiền lẻ để sẵn trong két)<input className="bhq-o" inputMode="numeric" value={dauCa} onChange={(e) => setDauCa(soTien(e.target.value))} placeholder="0" /></label>
-      <div className="bhq-bang"><div className="lon"><span>Tiền mặt phải có trong két</span><b>{so(soLieu.heThong)}</b></div></div>
-      <label className="bhq-nhan">Tiền mặt đếm thực tế<input className="bhq-o lon" inputMode="numeric" value={dem} onChange={(e) => setDem(soTien(e.target.value))} placeholder="Đếm két rồi nhập" /></label>
-      {dem !== '' && (
-        <p className={`bhq-chenh ${chenh < 0 ? 'thieu' : chenh > 0 ? 'du' : 'khop'}`}>
-          {chenh === 0 ? '✅ Khớp tiền' : chenh < 0 ? `⚠️ Thiếu ${so(-chenh)}` : `Dư ${so(chenh)}`}
-        </p>
-      )}
-    </Hop>
-  );
-}
-
 function ThuKhac({ ds, onDong, onLuu }) {
   const [dong, setDong] = useState(ds?.length ? ds : []);
   return (
@@ -1688,6 +1665,279 @@ function NoiDungPhieu({ p, matHang }) {
       <div className="bl-h"><span>{kiem ? 'Tổng thực tế' : 'Tổng số lượng'}</span><b>{so(sl.tongSl)}</b></div>
       {p.ghiChu && <div>Ghi chú: {p.ghiChu}</div>}
       <div className="bl-h" style={{ marginTop: 18 }}><span>Người lập</span><span>Người nhận</span></div>
+    </div>
+  );
+}
+
+// ===== HÓA ĐƠN — máy tính: bảng + bấm dòng xem chi tiết như KiotViet;
+// điện thoại: danh sách thẻ, chạm mở chi tiết, ⋮ Trả hàng / In / Chia sẻ / Hủy đơn như app KiotViet.
+function vanBanHd(h) {
+  return [
+    `SUMI BAKERY · ${h.chiNhanh}`, `Hóa đơn ${h.ma} · ${ngayDayDu(h.luc)}`, `Khách: ${h.khach?.name || 'Khách lẻ'}`,
+    ...h.dong.map((d) => `${d.sl} x ${d.ten}${d.size ? ` ${d.size}` : ''}: ${so(tienDong(d))}`),
+    `Khách cần trả: ${so(h.canTra)}`,
+  ].join('\n');
+}
+
+function ChiTietHd({ h, tra, huyDuoc, dienThoai, onIn, onTra, onHuy, onChiaSe }) {
+  const daTra = tra.reduce((s, t) => s + t.tienTra, 0);
+  return (
+    <div className="kq-ct">
+      {!dienThoai && <nav className="kq-ct-tab"><button type="button" className="on">Thông tin</button></nav>}
+      <div className="kq-ct-dau"><b>{h.ma}</b><span className={`kq-tt ${h.daHuy ? 'huy' : 'xong'}`}>{h.daHuy ? 'Đã hủy' : 'Hoàn thành'}</span><span className="cn">{h.chiNhanh}</span></div>
+      <div className="kq-ct-tt">
+        <div><small>Người tạo:</small><span>{h.thuNgan}</span></div>
+        <div><small>Người bán:</small><span>{h.nguoiBan || h.thuNgan}</span></div>
+        <div><small>Ngày bán:</small><span>{ngayDayDu(h.luc)}</span></div>
+        <div><small>Khách hàng:</small><span className="xanh">{h.khach?.name || 'Khách lẻ'}</span></div>
+        <div><small>Kênh bán:</small><span>Bán trực tiếp</span></div>
+        <div><small>Thanh toán:</small><span>{PT[h.phuongThuc]}</span></div>
+      </div>
+      {h.dong.length > 0 && (
+        <div className="kq-cuon"><table className="phu">
+          <thead><tr><th>Mã hàng</th><th>Tên hàng</th><th className="so">Số lượng</th><th className="so">Đơn giá</th><th className="so">Giảm giá</th><th className="so">Giá bán</th><th className="so">Thành tiền</th></tr></thead>
+          <tbody>
+            {h.dong.map((d) => {
+              const tien = tienDong(d);
+              return (
+                <tr key={d.ma}><td className="xanh">{d.ma}</td><td>{d.ten}{d.size ? ` - ${d.size}` : ''}{d.ghiChu ? <small className="kv-dong-ghi"> · {d.ghiChu}</small> : null}</td>
+                  <td className="so">{so(d.sl)}</td><td className="so">{so(d.gia)}</td><td className="so">{so(d.gia - tien / d.sl)}</td><td className="so">{so(tien / d.sl)}</td><td className="so">{so(tien)}</td></tr>
+              );
+            })}
+          </tbody>
+        </table></div>
+      )}
+      <div className="kq-ct-duoi">
+        <div className={`ghi ${h.ghiChu ? '' : 'mo'}`}>{h.ghiChu || 'Ghi chú...'}</div>
+        <div className="tong">
+          <div><span>Tổng tiền hàng ({h.dong.reduce((s, d) => s + d.sl, 0)})</span><b>{so(h.tongHang)}</b></div>
+          <div><span>Giảm giá hóa đơn</span><b>{so(h.giamHd)}</b></div>
+          {h.thuKhac > 0 && <div><span>Thu khác</span><b>{so(h.thuKhac)}</b></div>}
+          {h.vat > 0 && <div><span>VAT 8%</span><b>{so(h.vat)}</b></div>}
+          <div><span>Khách cần trả</span><b className="xanh">{so(h.canTra)}</b></div>
+          <div><span>Khách đã trả</span><b>{so(h.thucThu ?? h.canTra - h.no)}</b></div>
+          {h.no > 0 && <div><span>Còn nợ</span><b className="do">{so(h.no)}</b></div>}
+          {daTra > 0 && <div><span>Đã trả hàng</span><b>−{so(daTra)}</b></div>}
+        </div>
+      </div>
+      {tra.map((t) => <p key={t.ma} className="kq-ct-ghi">Phiếu trả hàng <b>{t.ma}</b> · {ngayDayDu(t.luc)} · {t.dong.map((d) => `${d.sl} ${d.ten}`).join(', ')} · hoàn {so(t.tienTra)}{t.lyDo ? ` · ${t.lyDo}` : ''}</p>)}
+      {h.daHuy && <p className="kq-ct-ghi">Hủy lúc {ngayDayDu(h.lucHuy)} · {h.nguoiHuy} · lý do: {h.lyDoHuy}</p>}
+      {!h.daHuy && !h.mau && (
+        <div className="kq-ct-chan">
+          {huyDuoc ? <button type="button" onClick={onHuy}><Trash2 size={17} />Hủy</button> : <span className="mo">Đã đóng ca — chỉ Quản lý / Giám đốc hủy được</span>}
+          <span className="gian" />
+          {dienThoai && <button type="button" onClick={onChiaSe}><Share2 size={17} />Chia sẻ</button>}
+          <button type="button" onClick={onTra}><Undo2 size={17} />Trả hàng</button>
+          <button type="button" className="chinh" onClick={onIn}><Printer size={17} />In</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QlHoaDon({ ds, traHangs, dienThoai, huyDuoc, onIn, onTra, onHuy, onChiaSe }) {
+  const [q, setQ] = useState('');
+  const [loc, setLoc] = useState({ xong: true, huy: false });
+  const [pt, setPt] = useState('');
+  const [mo, setMo] = useState(null);
+  const [trang, setTrang] = useState(0);
+  const t = q.trim().toLowerCase();
+  const loc2 = ds.filter((h) => loc[h.daHuy ? 'huy' : 'xong'] && (!pt || h.phuongThuc === pt)
+    && (!t || `${h.ma} ${h.khach?.name || ''} ${h.khach?.phone || ''}`.toLowerCase().includes(t)));
+  const tr = Math.min(trang, Math.max(Math.ceil(loc2.length / MOI_TRANG_QL), 1) - 1);
+  const traCua = (ma) => traHangs.filter((x) => x.hdGoc === ma);
+  const chiTiet = (h) => (
+    <ChiTietHd h={h} tra={traCua(h.ma)} huyDuoc={huyDuoc(h)} dienThoai={dienThoai}
+      onIn={() => onIn(h)} onTra={() => onTra(h)} onHuy={() => onHuy(h)} onChiaSe={() => onChiaSe(h)} />
+  );
+  const tongCan = loc2.filter((h) => !h.daHuy).reduce((s, h) => s + h.canTra, 0);
+  const locTT = (
+    <div className="kq-hop-loc"><b>Trạng thái</b>
+      {[['xong', 'Hoàn thành'], ['huy', 'Đã hủy']].map(([k, l]) => (
+        <label key={k} className="kq-chk"><input type="checkbox" checked={loc[k]} onChange={() => { setLoc((x) => ({ ...x, [k]: !x[k] })); setTrang(0); }} /><i />{l}</label>
+      ))}
+    </div>
+  );
+
+  if (dienThoai) {
+    const hdMo = ds.find((h) => h.ma === mo);
+    if (hdMo) {
+      return (
+        <div className="kvm kvm-phu kvm-hd">
+          <header className="kvm-dau trang"><button type="button" aria-label="Quay lại" onClick={() => setMo(null)}><ChevronLeft size={22} /></button><h1>{hdMo.ma}</h1></header>
+          <div className="kvm-than">{chiTiet(hdMo)}</div>
+        </div>
+      );
+    }
+    return (
+      <main className="kvm-ds-hd">
+        <div className="kvm-tim"><label><Search size={17} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Theo mã hóa đơn, khách hàng" /></label></div>
+        <div className="kvm-loc">
+          {[['xong', 'Hoàn thành'], ['huy', 'Đã hủy']].map(([k, l]) => <button key={k} type="button" className={loc[k] ? 'on' : ''} onClick={() => setLoc((x) => ({ ...x, [k]: !x[k] }))}>{l}</button>)}
+          <span className="kvm-tong-hd">Tổng: <b>{so(tongCan)}</b></span>
+        </div>
+        {loc2.map((h) => (
+          <button key={h.ma} type="button" className={`kvm-hd-the ${h.daHuy ? 'huy' : ''}`} onClick={() => setMo(h.ma)}>
+            <span className="r1"><b>{h.ma}</b><b className="xanh">{so(h.canTra)}</b></span>
+            <span className="r2"><span>{ngayDayDu(h.luc)}</span><span className={`kq-tt ${h.daHuy ? 'huy' : 'xong'}`}>{h.daHuy ? 'Đã hủy' : 'Hoàn thành'}</span></span>
+            <span className="r2"><span>{h.khach?.name || 'Khách lẻ'}</span>{h.no > 0 ? <span className="do">Nợ {so(h.no)}</span> : <span>{PT[h.phuongThuc]}</span>}</span>
+          </button>
+        ))}
+        {!loc2.length && <KhongCo chu="Chưa có hóa đơn nào." />}
+      </main>
+    );
+  }
+
+  return (
+    <main className="kq">
+      <div className="kq-dau">
+        <h1>Hóa đơn</h1>
+        <label className="kq-tim"><Search size={17} /><input value={q} onChange={(e) => { setQ(e.target.value); setTrang(0); }} placeholder="Theo mã hóa đơn" /></label>
+      </div>
+      <div className="kq-than">
+        <aside className="kq-loc">
+          {locTT}
+          <div className="kq-hop-loc"><b>Phương thức thanh toán</b>
+            <select value={pt} onChange={(e) => { setPt(e.target.value); setTrang(0); }}>
+              <option value="">Chọn phương thức thanh toán</option>{Object.entries(PT).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+            </select></div>
+        </aside>
+        <section className="kq-bang">
+          <div className="kq-cuon">
+            <table>
+              <thead><tr><th>Mã hóa đơn</th><th>Thời gian</th><th>Khách hàng</th><th className="so">Tổng tiền hàng</th><th className="so">Giảm giá</th><th className="so">Khách cần trả</th><th className="so">Khách đã trả</th><th>Trạng thái</th></tr></thead>
+              <tbody>
+                <tr className="tong"><td /><td /><td /><td className="so">{so(loc2.filter((h) => !h.daHuy).reduce((s, h) => s + h.tongHang, 0))}</td><td className="so">{so(loc2.filter((h) => !h.daHuy).reduce((s, h) => s + h.giamHd, 0))}</td><td className="so">{so(tongCan)}</td><td className="so">{so(loc2.filter((h) => !h.daHuy).reduce((s, h) => s + (h.thucThu ?? h.canTra - h.no), 0))}</td><td /></tr>
+                {loc2.slice(tr * MOI_TRANG_QL, (tr + 1) * MOI_TRANG_QL).map((h) => (
+                  <React.Fragment key={h.ma}>
+                    <tr className={`${mo === h.ma ? 'dang-mo' : ''} ${h.daHuy ? 'da-huy' : ''}`} onClick={() => setMo(mo === h.ma ? null : h.ma)}>
+                      <td>{h.ma}</td><td>{ngayDayDu(h.luc)}</td><td>{h.khach?.name || 'Khách lẻ'}</td><td className="so">{so(h.tongHang)}</td><td className="so">{so(h.giamHd)}</td>
+                      <td className="so">{so(h.canTra)}</td><td className="so">{so(h.thucThu ?? h.canTra - h.no)}</td>
+                      <td><span className={`kq-tt ${h.daHuy ? 'huy' : 'xong'}`}>{h.daHuy ? 'Đã hủy' : 'Hoàn thành'}</span></td>
+                    </tr>
+                    {mo === h.ma && <tr className="kq-mo"><td colSpan={8}>{chiTiet(h)}</td></tr>}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+            {!loc2.length && <KhongCo chu="Không tìm thấy hóa đơn nào phù hợp." />}
+          </div>
+          <PhanTrang trang={tr} soDong={loc2.length} setTrang={setTrang} donVi="hóa đơn" />
+        </section>
+      </div>
+    </main>
+  );
+}
+
+// "Nhiều hơn" trên điện thoại — như menu Nhiều hơn của app KiotViet.
+function NhieuHon({ congNo, chiNhanh, setChiNhanh, onMo, onHop }) {
+  const nhom = [
+    ['Hàng hóa', [['pn', 'Nhập hàng', Warehouse], ['kk', 'Kiểm kho', ClipboardCheck], ['xh', 'Xuất hủy', Trash2], ['xd', 'Xuất dùng nội bộ', Package]]],
+    ['Giao dịch', [['tra', 'Trả hàng', Undo2], ['no', 'Công nợ khách hàng', ReceiptText]]],
+    ['Ca làm việc', [['ket_ca', 'Đóng ca làm việc', Clock], ['ngay', 'Báo cáo cuối ngày', ReceiptText]]],
+  ];
+  return (
+    <main className="kvm-them">
+      {nhom.map(([ten, ds]) => (
+        <section key={ten} className="kvm-the">
+          <h2>{ten}</h2>
+          {ds.map(([k, l, Ic]) => (
+            <button key={k} type="button" className="kvm-dong-mo" onClick={() => (k === 'tra' ? onHop({ loai: 'chon_hd_tra' }) : k === 'ket_ca' ? onHop({ loai: 'ket_ca' }) : onMo(k))}>
+              <Ic size={18} /><span>{l}</span>{k === 'no' && congNo ? <i className="kvm-dem">{congNo}</i> : null}<ChevronRight size={18} className="mui" />
+            </button>
+          ))}
+        </section>
+      ))}
+      <section className="kvm-the">
+        <h2>Thiết lập</h2>
+        <label className="kvm-dong-mo tinh"><Warehouse size={18} /><span>Chi nhánh</span>
+          <select className="kvm-cn" value={chiNhanh} onChange={(e) => setChiNhanh(e.target.value)}>{CHI_NHANH.map((c) => <option key={c}>{c}</option>)}</select></label>
+        <button type="button" className="kvm-dong-mo" onClick={() => onHop({ loai: 'thiet_lap_in' })}><Printer size={18} /><span>Thiết lập máy in</span><ChevronRight size={18} className="mui" /></button>
+      </section>
+    </main>
+  );
+}
+
+// ===== ĐÓNG CA LÀM VIỆC — theo KiotViet: (1) Tiền mặt bàn giao thực tế + Ghi chú → Xác nhận;
+// (2) xem Phiếu bàn giao ca → "Đóng ca và in". Đóng rồi không mở lại được.
+function KetCa({ ca, chiNhanh, hoaDons, thuNos, traHangs, soCa, onDong, onKet }) {
+  const [buoc, setBuoc] = useState(1);
+  const [dauCa, setDauCa] = useState(String(ca.dauCa || ''));
+  const [dem, setDem] = useState('');
+  const [ghiChu, setGhiChu] = useState('');
+  const soLieu = tinhKetCa({ dauCa, hoaDons, thuNos, traHangs });
+  const hopLe = hoaDons.filter((h) => !h.daHuy);
+  const theoPt = (ds, truong) => Object.fromEntries(Object.keys(PT).map((k) => [k, ds.filter((x) => x.phuongThuc === k).reduce((s, x) => s + (x[truong] || 0), 0)]));
+  const ban = theoPt(hopLe, 'thucThu');
+  const thu = theoPt(thuNos, 'tien');
+  const tra = theoPt(traHangs, 'tienTra');
+  const chenh = (Number(dem) || 0) - soLieu.heThong;
+  const phieu = {
+    ma: `PGC${String(soCa).padStart(6, '0')}`, nguoi: ca.nguoi, chiNhanh, moLuc: ca.moLuc, dongLuc: Date.now(),
+    dauCa: Number(dauCa) || 0, banGiao: Number(dem) || 0, ghiChu: ghiChu.trim(), ban, thu, tra, ghiNo: soLieu.ghiNo,
+    soHoaDon: soLieu.soHoaDon, tienMatTrongCa: soLieu.tienMat, cuoiCa: soLieu.heThong, chenh,
+  };
+  if (buoc === 1) {
+    return (
+      <Hop tieuDe="Đóng ca làm việc" onDong={onDong}
+        chan={<><button type="button" className="bhq-nut phu" onClick={onDong}>Bỏ qua</button><button type="button" className="bhq-nut chinh" disabled={dem === ''} onClick={() => setBuoc(2)}>Xác nhận</button></>}>
+        <div className="bhq-bang">
+          <div><span>Nhân viên</span><b>{ca.nguoi}</b></div>
+          <div><span>Chi nhánh</span><b>{chiNhanh}</b></div>
+          <div><span>Mở ca lúc</span><b>{ngayDayDu(ca.moLuc)}</b></div>
+        </div>
+        <label className="bhq-nhan">Tiền mặt đầu ca<input className="bhq-o" inputMode="numeric" value={dauCa ? so(dauCa) : ''} onChange={(e) => setDauCa(soTien(e.target.value))} placeholder="0" /></label>
+        <label className="bhq-nhan">Tiền mặt bàn giao thực tế<input className="bhq-o lon" autoFocus inputMode="numeric" value={dem ? so(dem) : dem} onChange={(e) => setDem(soTien(e.target.value))} placeholder="Đếm tiền trong két rồi nhập" /></label>
+        <label className="bhq-nhan">Ghi chú<input className="bhq-o" value={ghiChu} onChange={(e) => setGhiChu(e.target.value)} /></label>
+      </Hop>
+    );
+  }
+  const Dong3 = ({ t, k }) => <div className="pgc-3"><span>{t}</span><b>{so(ban[k])}</b><b>{so(thu[k])}</b><b>{so(tra[k])}</b></div>;
+  return (
+    <Hop tieuDe="Phiếu bàn giao ca" onDong={onDong}
+      chan={<><button type="button" className="bhq-nut phu" onClick={() => setBuoc(1)}>Quay lại</button><button type="button" className="bhq-nut chinh" onClick={() => onKet(phieu)}>Đóng ca và in</button></>}>
+      <div className="bhq-bang">
+        <div><span>Mã ca</span><b>{phieu.ma}</b></div>
+        <div><span>Nhân viên · chi nhánh</span><b>{ca.nguoi} · {chiNhanh}</b></div>
+        <div><span>Thời gian</span><b>{gio(ca.moLuc)} → {gio(phieu.dongLuc)}</b></div>
+        <div><span>Số hóa đơn</span><b>{soLieu.soHoaDon}</b></div>
+      </div>
+      <div className="pgc-bang">
+        <div className="pgc-3 dau"><span /><span>Bán hàng</span><span>Thu nợ</span><span>Trả hàng</span></div>
+        <Dong3 t="Tiền mặt" k="tien_mat" /><Dong3 t="Chuyển khoản" k="chuyen_khoan" /><Dong3 t="Thẻ" k="the" />
+        <div className="pgc-3"><span>Công nợ</span><b>{so(soLieu.ghiNo)}</b><b>—</b><b>—</b></div>
+      </div>
+      <div className="bhq-bang">
+        <div><span>Tiền mặt đầu ca</span><b>{so(phieu.dauCa)}</b></div>
+        <div><span>Tiền mặt trong ca</span><b>{so(phieu.tienMatTrongCa)}</b></div>
+        <div><span>Tiền mặt cuối ca <small>(hệ thống)</small></span><b>{so(phieu.cuoiCa)}</b></div>
+        <div><span>Tiền mặt bàn giao thực tế</span><b>{so(phieu.banGiao)}</b></div>
+        <div className="lon"><span>Chênh lệch</span><b className={chenh < 0 ? 'do' : chenh > 0 ? 'cam' : 'xanh-la'}>{chenh > 0 ? '+' : ''}{so(chenh)}</b></div>
+      </div>
+      {chenh < 0 && <p className="bhq-chenh thieu">Thiếu {so(-chenh)} so với hệ thống — kiểm lại két trước khi đóng ca.</p>}
+      {ghiChu && <p className="bhq-ghi">Ghi chú: {ghiChu}</p>}
+      <p className="bhq-ghi">Đóng ca rồi sẽ không mở lại được. Phiếu bàn giao ca không sửa được.</p>
+    </Hop>
+  );
+}
+
+function NoiDungBanGiao({ p }) {
+  const r = (t, v) => <div className="bl-h"><span>{t}</span><span>{so(v)}</span></div>;
+  return (
+    <div className="bl">
+      <div className="bl-c"><b>SUMI BAKERY · {p.chiNhanh}</b><br /><b className="bl-to">PHIẾU BÀN GIAO CA</b><br />{p.ma}</div>
+      <div>Nhân viên: {p.nguoi}</div>
+      <div>Ca: {ngayDayDu(p.moLuc)} → {gio(p.dongLuc)}</div>
+      <div>Số hóa đơn: {p.soHoaDon}</div>
+      <hr />
+      <b>Bán hàng</b>{r('Tiền mặt', p.ban.tien_mat)}{r('Chuyển khoản', p.ban.chuyen_khoan)}{r('Thẻ', p.ban.the)}{r('Công nợ', p.ghiNo)}
+      <b>Thu nợ</b>{r('Tiền mặt', p.thu.tien_mat)}{r('Chuyển khoản', p.thu.chuyen_khoan)}
+      <b>Trả hàng</b>{r('Tiền mặt', p.tra.tien_mat)}{r('Chuyển khoản', p.tra.chuyen_khoan)}
+      <hr />
+      {r('Tiền mặt đầu ca', p.dauCa)}{r('Tiền mặt trong ca', p.tienMatTrongCa)}{r('Tiền mặt cuối ca', p.cuoiCa)}{r('Bàn giao thực tế', p.banGiao)}
+      <div className="bl-h bl-to"><span>Chênh lệch</span><span>{p.chenh > 0 ? '+' : ''}{so(p.chenh)}</span></div>
+      {p.ghiChu && <div>Ghi chú: {p.ghiChu}</div>}
+      <div className="bl-h" style={{ marginTop: 18 }}><span>Người giao ca</span><span>Người nhận ca</span></div>
     </div>
   );
 }
