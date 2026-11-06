@@ -38,6 +38,8 @@ export const LOAI_PHIEU = {
   huy: { ten: 'Xuất hủy', tienTo: 'XH', dau: -1 },
   noibo: { ten: 'Xuất dùng nội bộ', tienTo: 'XD', dau: -1 },
   kiem: { ten: 'Kiểm kho', tienTo: 'KK', dau: 0 },
+  // Chuyển hàng giữa 2 cửa hàng: trừ chi nhánh gửi; chi nhánh nhận được cộng cùng lúc (phieu.denCN).
+  chuyen: { ten: 'Chuyển hàng', tienTo: 'CH', dau: -1 },
 };
 export const LY_DO_HUY = ['Hết date', 'Hỏng / móp', 'Rơi vỡ', 'Khác'];
 export const LY_DO_HUY_HD = ['Bấm nhầm món', 'Sai số lượng', 'Khách đổi ý', 'Khác'];

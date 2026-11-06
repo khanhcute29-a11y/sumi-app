@@ -784,3 +784,30 @@ button.kv-gach:hover{color:var(--xanh)}
 .kvm-tq-so .ba b{font-size:18px}
 .kvm-them .kvm-luoi-kh h2{font-size:19px;font-weight:600;color:var(--chu);text-transform:none;letter-spacing:0;margin:14px 0 6px}
 .kvm-hd .kvm-the>h2{font-size:15px;font-weight:600;margin:14px 0 4px}
+
+/* Màn nhân viên: Thông báo, Khách hàng, phiếu dạng thẻ */
+.kvm-nav .ic{position:relative}
+.kvm-nav-dem{position:absolute;top:-6px;left:14px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#e5484d;color:#fff;font-size:11px;font-style:normal;font-weight:600;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box}
+.kvm-khe{height:8px;background:#fff;border-radius:0 0 16px 16px;margin-bottom:12px}
+.kvm-tb{background:#fff}
+.kvm-tb-loc{display:flex;align-items:center;justify-content:space-between;padding:0 16px 8px;background:#fff}
+.kvm-tb-chon{position:relative;display:inline-flex;align-items:center;color:var(--chu-phu)}
+.kvm-tb-chon select{appearance:none;-webkit-appearance:none;border:0;background:none;font:inherit;font-size:15px;color:inherit;min-height:44px;padding:0 22px 0 0;letter-spacing:.3px}
+.kvm-tb-chon svg{position:absolute;right:0;pointer-events:none}
+.kvm-tb-doc{min-height:44px;border:0;background:none;color:var(--xanh)!important;font-size:15px;padding:0}
+.kvm-tb-ds{flex:1 0 auto;background:#fff}
+.kvm-tb-dong{display:flex;align-items:flex-start;gap:14px;width:100%;padding:14px 16px;border:0;background:#fff;text-align:left;color:var(--chu)}
+.kvm-tb-dong.moi{background:#eef5ff}
+.kvm-tb-dong .ic{flex:0 0 auto;margin-top:2px;color:var(--chu-phu)}
+.kvm-tb-dong .t{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;font-size:15.5px;line-height:1.45}
+.kvm-tb-dong .t small{color:var(--chu-phu);font-size:14px}
+.kvm-tb-dong .cham{flex:0 0 10px;width:10px;height:10px;border-radius:50%;background:var(--xanh);align-self:center}
+.kvm-kh-anh{flex:0 0 44px;width:44px;height:44px;border-radius:50%;background:var(--xanh-nhat);color:var(--xanh);display:inline-flex;align-items:center;justify-content:center}
+.kvm-hh-dong .p .do,.kh-ct .do{color:var(--do)}
+.kh-ct{padding:10px 0}
+.kh-ct h4{margin:14px 0 6px}
+.kh-hd{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eef0f2}
+.kh-hd .gach{text-decoration:line-through;color:var(--chu-phu)}
+.kvm-phieu-ct{background:#fff;padding:0 12px 12px;border-bottom:1px solid #eef0f2;overflow-x:auto}
+/* Nhân viên không thấy giá vốn / giá trị theo giá vốn (chỉ Giám đốc). */
+.bhq.nv .gv{display:none!important}
