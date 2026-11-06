@@ -853,3 +853,31 @@ button.kv-gach:hover{color:var(--xanh)}
 .kvm-hh-trang>.kvm-hh-ds{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 .kq-dau .kq-them{margin-left:auto;display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 14px}
 .bhq-ghi.do{color:#d92d20}
+
+/* Rà soát theo ảnh KiotViet 06/11 */
+/* Biểu đồ Doanh thu có trục 0 · 1Tr · 2Tr… và lưới ngang */
+.kvm-bd-cu{display:flex;align-items:center;gap:14px;margin:4px 0 8px}
+.kvm-bd-cu>*{width:44px;height:44px;border:0;border-radius:50%;background:none;display:inline-flex;align-items:center;justify-content:center;color:var(--chu)!important}
+.kvm-bd-cu .on{background:var(--xanh-nhat);color:var(--xanh)!important}
+.kvm-bd{display:flex;gap:6px;height:220px;padding-bottom:26px;position:relative}
+.kvm-bd.to{height:360px}
+.kvm-bd .truc{display:flex;flex-direction:column;justify-content:space-between;align-items:flex-end;font-size:12px;color:var(--chu-phu);min-width:30px;margin:-7px 0}
+.kvm-bd .vung{flex:1;position:relative;border-left:1px solid var(--vien)}
+.kvm-bd .luoi{position:absolute;left:0;right:0;height:0;border-top:1px solid #eef0f2}
+.kvm-bd .cot-ds{position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:space-around;gap:6px;height:auto;margin:0;padding:0 6px;border:0;overflow-x:auto}
+.kvm-bd .cot{flex:0 0 auto;min-width:28px;height:100%;padding:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;position:relative}
+.kvm-bd .cot i{width:12px;background:var(--xanh);border-radius:2px 2px 0 0}
+.kvm-bd .cot small{position:absolute;bottom:-22px;font-size:12px;color:var(--chu-phu);white-space:nowrap}
+/* Thông báo: nút bánh răng + bật/tắt loại */
+.kvm-tb-bat{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;border-bottom:1px solid #eef0f2;font-size:15px}
+.kvm-tb-bat input{width:22px;height:22px;accent-color:var(--xanh)}
+/* Hàng hoá: menu "…" */
+.kvm-ba-cham{position:fixed;inset:0;z-index:20}
+.kvm-ba-cham>div{position:absolute;top:calc(60px + env(safe-area-inset-top));right:12px;min-width:210px;background:#fff;border-radius:12px;box-shadow:0 8px 28px rgba(21,23,26,.18);padding:6px 0}
+.kvm-ba-cham button{display:flex;align-items:center;gap:12px;width:100%;min-height:48px;padding:0 16px;border:0;background:none;font-size:16px;color:var(--chu)!important;text-align:left}
+.kvm-ba-cham button svg{color:var(--xanh)}
+/* Nhiều hơn: icon màu không nền như KiotViet */
+.kvm-luoi-kh .ic{background:none!important;width:32px;height:32px}
+.kvm-luoi-kh .ic.xanh{color:#1a7cf5!important}.kvm-luoi-kh .ic.la{color:#1fb35a!important}.kvm-luoi-kh .ic.cam{color:#f08a24!important}
+.kvm-bd .cot-ds{overflow:visible}
+.kvm-bd .vung{border-bottom:1px solid var(--vien)}
