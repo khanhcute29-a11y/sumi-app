@@ -338,7 +338,7 @@ export default function BanHangQuay() {
     nhan(`Đã thu nợ ${so(tien)}`);
   };
 
-  const datHang = () => nhan('Đơn đặt bánh tạo ở app Sumi → mục Đơn hàng (có cọc, ngày giao).');
+  const datHang = () => nhan('Bản xem trước: đơn đặt bánh thật vẫn tạo ở app Sumi → mục Đơn hàng (có cọc, ngày giao).');
   // Thông báo như app KiotViet: gom hoạt động theo người + giờ ("X đã bán N đơn hàng với tổng trị giá Y tại …"),
   // phiếu nhập/hủy/chuyển, và cảnh báo tồn âm. Chỉ đọc dữ liệu trong phiên — không đụng chuông/thông báo đẩy của app.
   const thongBao = useMemo(() => {
@@ -933,6 +933,11 @@ function DienThoai({
   khachNo, chonKhach, onThuKhac, inTamTinh, hoanTat, soHd, onSuaDong, onMoHd, onMenu, onDatHang, onThemHang, onThongTin,
 }) {
   const [q, setQ] = useState('');
+  // Như app KiotViet: bấm "Đặt hàng" trên thanh tròn → cả luồng đổi tên thành "Đặt hàng"
+  // (danh sách, giỏ, nút chính). Bấm "Bán hàng" để quay lại.
+  const [cheDo, setCheDo] = useState('ban');
+  const laDat = cheDo === 'dat';
+  const tieuDe = laDat ? 'Đặt hàng' : 'Bán hàng';
   const t = q.trim().toLowerCase();
   const ds = t ? locXep(monLoc, (m) => `${m.ma} ${m.ten} ${m.size}`, t) : monLoc;
   const onTimKey = (e) => {
@@ -993,7 +998,7 @@ function DienThoai({
     return (
       <div className="kvm kvm-gio">
         <div className="kvm-gio-dau">
-          <header className="kvm-dau trang"><button type="button" aria-label="Đóng giỏ hàng" onClick={() => setDtMan('chon')}><X size={24} /></button><h1>Bán hàng</h1>
+          <header className="kvm-dau trang"><button type="button" aria-label="Đóng giỏ hàng" onClick={() => setDtMan('chon')}><X size={24} /></button><h1>{tieuDe}</h1>
             <button type="button" className="kvm-ic-tt" aria-label="Thông tin hóa đơn" onClick={onThongTin}><FileText size={24} strokeWidth={1.7} /><Info size={13} strokeWidth={2.4} /></button></header>
           {oTim}
           {t && ds.length > 0 && (
@@ -1032,7 +1037,9 @@ function DienThoai({
           <div className="kvm-tong"><span>Tổng tiền hàng <i className="kvm-tron vien">{tong.soMon}</i></span><span>{so(tong.tongHang)}</span></div>
           <div className="kvm-hai">
             <button type="button" className="kvm-nut-vien" disabled={!hd.dong.length} onClick={luuTam}>Lưu tạm</button>
-            <button type="button" className="kv-nut-tt" disabled={!hd.dong.length} onClick={() => setDtMan('tt')}>Thanh toán</button>
+            {laDat
+              ? <button type="button" className="kv-nut-tt" disabled={!hd.dong.length} onClick={onDatHang}>Đặt hàng</button>
+              : <button type="button" className="kv-nut-tt" disabled={!hd.dong.length} onClick={() => setDtMan('tt')}>Thanh toán</button>}
           </div>
         </div>
       </div>
@@ -1041,7 +1048,7 @@ function DienThoai({
 
   return (
     <div className="kvm">
-      <header className="kvm-dau kvm-dau-lon"><h1>Bán hàng</h1>
+      <header className="kvm-dau kvm-dau-lon"><h1>{tieuDe}</h1>
         {soHd > 1 && <span className="kvm-so-hd">{soHd} hóa đơn</span>}
         <button type="button" aria-label="Xem hóa đơn đã bán" onClick={onMoHd}><FileClock size={24} /></button>
       </header>
@@ -1081,8 +1088,8 @@ function DienThoai({
       </div>
       {!hd.dong.length && (
         <div className="kvm-pill" role="group" aria-label="Loại giao dịch">
-          <button type="button" onClick={onDatHang}>Đặt hàng</button>
-          <button type="button" className="on">Bán hàng</button>
+          <button type="button" className={laDat ? 'on' : ''} onClick={() => setCheDo('dat')}>Đặt hàng</button>
+          <button type="button" className={laDat ? '' : 'on'} onClick={() => setCheDo('ban')}>Bán hàng</button>
           <button type="button" aria-label="Thêm" onClick={onMenu}><Ellipsis size={22} /></button>
         </div>
       )}
