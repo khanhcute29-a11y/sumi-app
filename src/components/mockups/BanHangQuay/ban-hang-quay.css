@@ -247,7 +247,7 @@ button.kv-gach:hover{color:var(--xanh)}
 .kvm-dau.trang h1{font-size:18px;font-weight:500}
 .kvm-dau>button{width:44px;height:44px;border:0;background:none;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
 .kvm-dau .kv-ic-tr{color:var(--chu)!important}
-.kvm-so-hd{font-size:12.5px;color:var(--xanh);background:var(--xanh-nhat);padding:3px 8px;border-radius:999px}
+.kvm-so-hd{font-size:12.5px;color:var(--xanh);background:var(--xanh-nhat);padding:3px 8px;border-radius:999px;border:0;display:inline-flex;align-items:center;gap:2px;min-height:28px}
 .kvm-than{flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch}
 .kvm-tim{display:flex;align-items:center;gap:8px;padding:6px 16px 8px 16px;background:#fff}
 .kvm-tim label{flex:1;min-width:0;height:44px;display:flex;align-items:center;gap:8px;padding:0 12px;background:var(--xam);border-radius:8px;color:var(--chu-phu)}
@@ -974,3 +974,10 @@ button.kv-gach:hover{color:var(--xanh)}
 .bl-cam{margin-top:10px}
 button.kv-xo-them{display:block;width:100%;text-align:left;background:#fff;border:0;border-top:1px solid var(--vien);cursor:pointer}
 button.kv-xo-them:hover{background:var(--xanh-nhat)}
+
+/* Danh sách hoá đơn đang mở trên điện thoại (bấm "n hóa đơn" để mở lại hoá đơn đã Lưu tạm) */
+.kvm-ds-hd{background:#fff;border-radius:12px;margin:8px 0;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.kvm-ds-hd button{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;min-height:48px;padding:10px 14px;border:0;border-bottom:1px solid #eee;background:none;font-size:14.5px;text-align:left}
+.kvm-ds-hd button:last-child{border-bottom:0}
+.kvm-ds-hd button.on{color:var(--xanh);font-weight:600}
+.kvm-ds-hd button span:last-child{color:#777;font-size:13px;white-space:nowrap}

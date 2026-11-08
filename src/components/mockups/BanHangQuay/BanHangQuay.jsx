@@ -254,7 +254,17 @@ export default function BanHangQuay() {
     };
     setDaBan((ds) => [banGhi, ...ds]);
     ghiKho(chiNhanh, hd.dong.map((d) => ({ ma: d.ma, sl: -d.sl })), ma, 'Bán hàng');
-    dongHd(hd.id);
+    if (dienThoai) {
+      // Điện thoại không có thanh tab hoá đơn: bán xong phải về giỏ TRỐNG, không tự bật hoá đơn
+      // đang Lưu tạm lên (thu ngân dễ bán nhầm món của khách trước). Hoá đơn tạm vẫn mở lại được ở "n hóa đơn".
+      const con = hds.filter((h) => h.id !== hd.id);
+      const trong = con.find((h) => !h.dong.length);
+      if (trong) { setHds(con); setHdId(trong.id); } else {
+        demHd.current = con.length ? demHd.current + 1 : 1;
+        const moi = hdMoi(demHd.current, nguoi);
+        setHds([...con, moi]); setHdId(moi.id);
+      }
+    } else dongHd(hd.id);
     setTtMo(false);
     setDtMan(dienThoai ? 'xong' : 'chon');
     setHdXong(ma);
@@ -535,7 +545,8 @@ export default function BanHangQuay() {
           boChon={() => sua({ dong: [], dua: null })} luuTam={() => { themHd(); setDtMan('chon'); nhan(`Đã lưu tạm Hóa đơn ${hd.so}`); }}
           khachNo={khachNo} chonKhach={() => setHop({ loai: 'chon_khach_dt' })} onThuKhac={() => setHop({ loai: 'thu_khac' })}
           inTamTinh={inTamTinh} hoanTat={hoanTat} onThongTin={() => setHop({ loai: 'thong_tin_hd' })} soHd={hds.length} onThemHang={() => setHop({ loai: 'them_hang' })} onSuaDong={(ma) => setHop({ loai: 'sua_dong_dt', ma })}
-          onMoHd={() => moManHinh('ls')} onMenu={() => setMenuMo(true)} onDatHang={datHang} />
+          onMoHd={() => moManHinh('ls')} onMenu={() => setMenuMo(true)} onDatHang={datHang}
+          hds={hds} onChonHd={(id) => { setHdId(id); const h = hds.find((x) => x.id === id); setDtMan(h && h.dong.length ? 'gio' : 'chon'); }} />
       )}
 
       {dienThoai && !form && !(manHinh === 'ban' && dtMan !== 'chon') && (
@@ -930,9 +941,10 @@ function KhungThanhToan({ hd, tong, bayGio, nguoiBanDs, khachNo, duaRef, onSua, 
 // "Tổng tiền hàng (n)" + "Lưu tạm | Thanh toán" → (3) "‹ Thanh toán" … "Hoàn thành".
 function DienThoai({
   dtMan, setDtMan, hd, tong, monLoc, ton, slTrongGio, chips, locMo, setLocMo, themMon, datSl, boDong, sua, boChon, luuTam,
-  khachNo, chonKhach, onThuKhac, inTamTinh, hoanTat, soHd, onSuaDong, onMoHd, onMenu, onDatHang, onThemHang, onThongTin,
+  khachNo, chonKhach, onThuKhac, inTamTinh, hoanTat, soHd, onSuaDong, onMoHd, onMenu, onDatHang, onThemHang, onThongTin, hds, onChonHd,
 }) {
   const [q, setQ] = useState('');
+  const [dsHdMo, setDsHdMo] = useState(false); // danh sách hoá đơn đang mở (lưu tạm) để mở lại
   // Như app KiotViet: bấm "Đặt hàng" trên thanh tròn → cả luồng đổi tên thành "Đặt hàng"
   // (danh sách, giỏ, nút chính). Bấm "Bán hàng" để quay lại.
   const [cheDo, setCheDo] = useState('ban');
@@ -1049,7 +1061,7 @@ function DienThoai({
   return (
     <div className="kvm">
       <header className="kvm-dau kvm-dau-lon"><h1>{tieuDe}</h1>
-        {soHd > 1 && <span className="kvm-so-hd">{soHd} hóa đơn</span>}
+        {soHd > 1 && <button type="button" className="kvm-so-hd" aria-expanded={dsHdMo} onClick={() => setDsHdMo((v) => !v)}>{soHd} hóa đơn <ChevronDown size={14} /></button>}
         <button type="button" aria-label="Xem hóa đơn đã bán" onClick={onMoHd}><FileClock size={24} /></button>
       </header>
       <div className="kvm-than">
@@ -1059,6 +1071,16 @@ function DienThoai({
           <span><Tag size={15} />Bảng giá chung</span>
           <button type="button" className={`kvm-loc-phai ${locMo ? 'on' : ''}`} aria-label="Lọc theo nhóm hàng" onClick={() => setLocMo((v) => !v)}><ListFilter size={22} /></button>
         </div>
+        {dsHdMo && soHd > 1 && (
+          <div className="kvm-ds-hd" role="list" aria-label="Hóa đơn đang mở">
+            {hds.map((h) => (
+              <button key={h.id} type="button" role="listitem" className={h.id === hd.id ? 'on' : ''} onClick={() => { setDsHdMo(false); onChonHd(h.id); }}>
+                <span>Hóa đơn {h.so}{h.khach.id ? ` · ${h.khach.name}` : ''}</span>
+                <span>{h.dong.length ? `${h.dong.reduce((a, d) => a + d.sl, 0)} món · ${so(h.dong.reduce((a, d) => a + tienDong(d), 0))}` : 'Trống'}</span>
+              </button>
+            ))}
+          </div>
+        )}
         {locMo && chips}
         <div className="kvm-ds">
           {ds.map((m) => {
