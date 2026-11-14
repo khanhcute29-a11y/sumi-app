@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { PGlite } from './pglite/index.js';
 import { supabase } from '/src/lib/supabaseClient.js';
 import BanHangQuay from '/src/components/mockups/BanHangQuay/BanHangQuay.jsx';
+import { doiKhoThu } from '/src/components/mockups/BanHangQuay/posThat.js';
 
 const NHUNG = {
   pos_invoices: { pos_invoice_lines: ['nhieu', 'invoice_id'] },
@@ -22,6 +23,7 @@ const lit = (v) => (v === null ? 'null' : typeof v === 'number' ? String(v) : ty
 
 export async function chay({ vaiTro = 'sale', ten = 'Thu ngân thử' } = {}) {
   window.__ghiLog = [];
+  doiKhoThu('bhq-thu-gia-lap'); // hàng đợi mất mạng riêng — không bao giờ để máy thật gửi lên database thật
   try { localStorage.setItem('bhq-in-tu-dong', '0'); } catch { /* */ }
   window.print = () => { window.__daIn = (window.__daIn || 0) + 1; };
   const that = { rpc: supabase.rpc.bind(supabase), from: supabase.from.bind(supabase) };
@@ -32,6 +34,7 @@ export async function chay({ vaiTro = 'sale', ten = 'Thu ngân thử' } = {}) {
   const db = new PGlite();
   await db.exec(await (await fetch('/.thu-that/stub.sql')).text());
   await db.exec(await (await fetch('/supabase/migrations/202611141000_ban_hang_quay_that.sql')).text());
+  await db.exec(await (await fetch('/supabase/migrations/202611141010_ban_hang_quay_mat_mang_va_thu_don.sql')).text());
   await db.exec(`update feature_flags set enabled = true, rollout_percentage = 100 where key = 'pos_ban_hang_that';
     insert into profiles(id, full_name, role) values (${lit(uid)}, ${lit(ten)}, ${lit(vaiTro)}), ('00000000-0000-0000-0000-0000000000a2', 'Quản lý thử', 'admin');
     select set_config('test.uid', ${lit(uid)}, false);`);
@@ -55,6 +58,7 @@ export async function chay({ vaiTro = 'sale', ten = 'Thu ngân thử' } = {}) {
     const ks = Object.keys(thamSo || {});
     const sql = `select public.${ten2}(${ks.map((k) => `${k} => ${(() => { const v = thamSo[k]; return v != null && typeof v === 'object' ? `${lit(JSON.stringify(v))}::jsonb` : lit(v ?? null); })()}`).join(', ')}) as r`;
     window.__ghiLog.push(['rpc', ten2, thamSo]);
+    if (window.__matMang) return { data: null, error: { message: 'TypeError: Failed to fetch' } }; // giả mất mạng
     try { const r = await db.query(sql); return { data: doiGiaTri(r.rows[0].r, r.fields[0].dataTypeID), error: null }; } catch (e) { return { data: null, error: { message: e.message } }; }
   };
   supabase.from = (bang) => {

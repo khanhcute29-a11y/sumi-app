@@ -16,7 +16,7 @@ import {
   taoMatHang, tonGia, tienDong, tinhHoaDon, tinhThanhToan, tinhKetCa, apPhieuKho, tinhCongNo, baoCaoNgay, khop, locXep, docSoTien,
 } from './banHangQuayLogic';
 import {
-  kiemTraThat, taiDuLieu, taiViecCho, laKeToan, goi, goiHoacXep, xepHang, dsCho, guiHangDoi, laLoiMang, chuLoi, maMoi, tachId,
+  kiemTraThat, taiDuLieu, taiViecCho, laKeToan, goi, goiHoacXep, xepHang, dsCho, guiHangDoi, demCho, boViecLoi, guiLaiViecLoi, laLoiMang, chuLoi, maMoi, tachId,
   LOAI_LEN_DB, phieuTuDb, lapBanDoHang, congNoTuDb, taiAnh,
 } from './posThat';
 import {
@@ -137,6 +137,7 @@ export default function BanHangQuay() {
   const [viec, setViec] = useState({ duyet: [], ck: [], ca: [] });
   const [hdCho, setHdCho] = useState([]); // hoá đơn bán lúc mất mạng, đang đợi gửi
   const [soCho, setSoCho] = useState(0);
+  const [viecLoi, setViecLoi] = useState([]); // việc làm lúc mất mạng mà database từ chối — giữ lại, chờ người xử lý
   const [mang, setMang] = useState(() => typeof navigator === 'undefined' || navigator.onLine !== false);
   const [diemKhach, setDiemKhach] = useState({});
   const [dangBan, setDangBan] = useState(false);
@@ -193,7 +194,7 @@ export default function BanHangQuay() {
       if (kt?.bat) {
         napThat(mh);
         laKeToan().then((x) => !huy && setLaKT(!!x));
-        dsCho().then((cho) => !huy && setHdCho(cho.filter((v) => v.banGhi).map((v) => v.banGhi)));
+        dsCho().then((cho) => { if (huy) return; setHdCho(cho.filter((v) => v.banGhi).map((v) => (v.loi ? { ...v.banGhi, guiLoi: v.loi } : v.banGhi))); setViecLoi(cho.filter((v) => v.loi)); });
         return; // chạy thật: không có nợ mẫu
       }
       // Nợ MẪU để thấy màn Công nợ (tuổi nợ): 2 khách đầu danh sách.
@@ -230,16 +231,21 @@ export default function BanHangQuay() {
     let dung = false; let soDuyetCu = -1;
     const vong = async () => {
       if (dung) return;
-      const truoc = (await dsCho()).length;
+      const { conLai: truoc } = await demCho();
       if (truoc) {
         const { conLai } = await guiHangDoi(({ viec: v, kq, loi }) => {
-          if (v.ham === 'pos_ban') setHdCho((x) => x.filter((h) => h.id !== v.khoa));
-          if (loi) nhan(`Việc làm lúc mất mạng bị từ chối khi gửi lại: ${loi}`);
-          else if (v.ham === 'pos_ban' && kq?.code) nhan(`Đã gửi hoá đơn bán lúc mất mạng → ${kq.code}`);
+          if (v.ham === 'pos_ban') setHdCho((x) => (loi ? x.map((h) => (h.id === v.khoa ? { ...h, guiLoi: loi } : h)) : x.filter((h) => h.id !== v.khoa)));
+          if (loi) nhan(`Có việc làm lúc mất mạng gửi không được — đã giữ lại trên máy, báo Quản lý xem: ${loi}`);
+          else if (v.ham === 'pos_ban' && kq?.code) nhan(`Đã gửi hoá đơn bán lúc mất mạng → ${kq.code}${kq.canh_bao?.length ? ' · có điểm lệch, Giám đốc đã được báo' : ''}`);
         });
         if (!dung) setSoCho(conLai);
         if (conLai < truoc) napThat();
       } else setSoCho(0);
+      const cho = await dsCho();
+      if (!dung) {
+        setViecLoi(cho.filter((x) => x.loi));
+        setHdCho((ds) => ds.map((h) => { const c = cho.find((x) => x.khoa === h.id); return c?.loi && h.guiLoi !== c.loi ? { ...h, guiLoi: c.loi } : h; }));
+      }
       const coQuyen = that.cap === 'gd' || that.cap === 'ql' || laKT;
       if (coQuyen) {
         const v = await taiViecCho(that.cap, laKT).catch(() => null);
@@ -408,7 +414,7 @@ export default function BanHangQuay() {
       lines: hd.dong.map((d) => { const t = tachId(d.id ? d : matHang.find((m) => m.ma === d.ma)); return { product_id: t.product_id, variant_id: t.variant_id, size: d.size || null, name: d.ten, qty: d.sl, list_price: d.gia, unit_price: donGia(d), eod: !!d.eod, note: d.ghiChu || null }; }),
       invoice_discount: tong.giamHd, other_fees: hd.thuKhac, vat: !!hd.vat, points_used: diemDung, pay_method: hd.pt,
       received: Number(dua) || 0, note: hd.ghiChu || null, seller_name: hd.nguoiBan || nguoi, approval_id: duyetId || null,
-      client_created_at: new Date().toISOString(),
+      client_created_at: new Date().toISOString(), shift_id: caMo?.id || null,
     };
     const banGhi = {
       id: hd.id, luc: Date.now(), chiNhanh, thuNgan: nguoi, nguoiBan: hd.nguoiBan || nguoi, khach: hd.khach, dong: hd.dong,
@@ -1002,6 +1008,35 @@ export default function BanHangQuay() {
           onNhan={async (nh) => { await goi('pos_nhan_hang', { p_id: hop.phieu.id, p_received: nh, p_note: null }); setHop(null); napThat(); nhan(`Đã nhận hàng ${hop.phieu.ma} — tồn quầy đã cộng`); }} />
       )}
       {hop?.loai === 'nhat_ky' && that && <NhatKy chiNhanh={chiNhanh} onDong={() => setHop(null)} />}
+      {that && viecLoi.length > 0 && (
+        <button type="button" className="kv-viec-loi" onClick={() => setHop({ loai: 'viec_loi' })}>
+          ⚠ {viecLoi.length} việc làm lúc mất mạng gửi không được — bấm để xem, báo Quản lý</button>
+      )}
+      {hop?.loai === 'viec_loi' && that && (
+        <HopT tieuDe="Việc gửi không được" onDong={() => setHop(null)}>
+          <p className="bhq-ghi">Những việc dưới đây làm lúc mất mạng nhưng database từ chối khi gửi lại. Chúng vẫn nằm trên máy này (không mất).
+            Quản lý xem lý do, xử lý tay (VD: bán lại đúng giá, thu nợ lại) rồi bấm <b>Đã xử lý</b>.</p>
+          {viecLoi.length ? viecLoi.map((v) => (
+            <div key={v.khoa} className="bhq-the">
+              <div><b>{({ pos_ban: 'Hoá đơn bán', pos_thu_no: 'Thu nợ', pos_luu_phieu: 'Phiếu kho' })[v.ham] || v.ham}</b> · làm lúc {new Date(v.luc).toLocaleString('vi-VN')}
+                {v.banGhi ? ` · ${so(v.banGhi.canTra)} · ${v.banGhi.khach?.name || 'Khách lẻ'}` : v.thamSo?.p_amount ? ` · ${so(v.thamSo.p_amount)}` : ''}</div>
+              {v.banGhi?.dong?.length ? <div>{v.banGhi.dong.map((d) => `${d.sl} × ${d.ten}`).join(', ')}</div> : null}
+              <div className="do">Lý do: {v.loi}</div>
+              <div className="hang"><span />
+                <span>
+                  <button type="button" className="bhq-nut phu nho" onClick={async () => { await guiLaiViecLoi(v.khoa); setViecLoi((x) => x.filter((y) => y.khoa !== v.khoa)); setSoCho((n) => n + 1); setHop(null); nhan('Đã đưa vào hàng gửi lại'); }}>Gửi lại</button>{' '}
+                  {(that.cap === 'gd' || that.cap === 'ql') && (
+                    <button type="button" className="bhq-nut chinh nho" onClick={async () => {
+                      await boViecLoi(v.khoa);
+                      setViecLoi((x) => x.filter((y) => y.khoa !== v.khoa)); setHdCho((x) => x.filter((h) => h.id !== v.khoa)); nhan('Đã đánh dấu xử lý xong');
+                    }}>Đã xử lý</button>
+                  )}
+                </span></div>
+            </div>
+          )) : <p className="bhq-rong">Không còn việc nào.</p>}
+          {that.cap === 'nv' && <p className="bhq-ghi">Chỉ Quản lý / Giám đốc bấm "Đã xử lý" được.</p>}
+        </HopT>
+      )}
       {that && dienThoai && (!mang || soCho > 0) && <div className="kv-mat-mang" role="status">{mang ? `Đang gửi ${soCho} việc làm lúc mất mạng…` : `Mất mạng — vẫn bán được${soCho ? ` · ${soCho} việc chờ gửi` : ''}`}</div>}
       {bao && (
         <div className="kv-bao" role="status">
@@ -2366,7 +2401,7 @@ function ChiTietHdDt({ h, huyDuoc, onLui, onIn, onHuy, onChiaSe, onSaoChep }) {
   const [moPt, setMoPt] = useState(false);
   const [daChep, setDaChep] = useState(false);
   const daTra = h.thucThu ?? h.canTra - h.no;
-  const trangThai = h.daHuy ? 'Đã hủy' : h.choGui ? 'Chờ gửi' : 'Hoàn thành';
+  const trangThai = h.daHuy ? 'Đã hủy' : h.guiLoi ? 'Gửi lỗi' : h.choGui ? 'Chờ gửi' : 'Hoàn thành';
   const chep = () => {
     try { window.navigator.clipboard?.writeText(h.ma); } catch { /* trình duyệt chặn — bỏ qua */ }
     setDaChep(true); setTimeout(() => setDaChep(false), 1500);
@@ -2393,7 +2428,7 @@ function ChiTietHdDt({ h, huyDuoc, onLui, onIn, onHuy, onChiaSe, onSaoChep }) {
       <div className="kvm-than" onScroll={(e) => setCuon(e.currentTarget.scrollTop > 56)}>
         <section className="kvm-ct-the dau">
           <div><h2>{h.ma}<button type="button" aria-label="Sao chép mã hóa đơn" onClick={chep}>{daChep ? <Check size={20} /> : <Copy size={20} />}</button></h2><span>{ngayDayDu(h.luc)}</span></div>
-          <i className={`kvm-ct-tt ${h.daHuy ? 'huy' : h.choGui ? 'cho' : ''}`}>{trangThai}</i>
+          <i className={`kvm-ct-tt ${h.daHuy || h.guiLoi ? 'huy' : h.choGui ? 'cho' : ''}`}>{trangThai}</i>
         </section>
         <section className="kvm-ct-the kh"><span className="av"><User size={30} fill="currentColor" strokeWidth={0} /></span><b>{h.khach?.name || 'Khách lẻ'}</b>{h.khach?.phone ? <small>{h.khach.phone}</small> : null}</section>
         <section className="kvm-ct-the">
@@ -2418,7 +2453,8 @@ function ChiTietHdDt({ h, huyDuoc, onLui, onIn, onHuy, onChiaSe, onSaoChep }) {
           <button type="button" className="pt" aria-expanded={moPt} onClick={() => setMoPt((v) => !v)}>{moPt ? <ChevronUp size={18} /> : <ChevronDown size={18} />}{PT[h.phuongThuc]}</button>
           {moPt && <div className="pt-ct"><span>{PT[h.phuongThuc]}</span><span>{so(daTra)}</span></div>}
           {h.ckTrangThai === 'cho_xac_nhan' && <div className="ck-cho"><span>Tiền chuyển khoản chờ Quản lý / Kế toán xác nhận đã về</span></div>}
-          {h.choGui && <div className="ck-cho"><span>Đang mất mạng — hoá đơn giữ trên máy, có mạng sẽ tự gửi lên</span></div>}
+          {h.choGui && !h.guiLoi && <div className="ck-cho"><span>Đang mất mạng — hoá đơn giữ trên máy, có mạng sẽ tự gửi lên</span></div>}
+          {h.guiLoi && <div className="ck-cho"><span>Gửi lên không được: {h.guiLoi} — hoá đơn vẫn giữ trên máy, báo Quản lý</span></div>}
           {h.no > 0 && <div className="no"><span>Còn nợ</span><span>{so(h.no)}</span></div>}
         </section>
         <section className="kvm-ct-the ghi"><small>GHI CHÚ</small><p className={h.ghiChu ? '' : 'mo'}>{h.ghiChu || 'Chưa có ghi chú...'}</p></section>

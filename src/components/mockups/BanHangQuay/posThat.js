@@ -195,7 +195,10 @@ export async function laKeToan() {
 
 // ── Hàng đợi khi mất mạng ──
 let dbHua = null;
-const moKho = () => { if (!dbHua) dbHua = openDB('bhq-that', 1, { upgrade(db) { db.createObjectStore('cho', { keyPath: 'khoa' }); } }); return dbHua; };
+let tenKho = 'bhq-that';
+const moKho = () => { if (!dbHua) dbHua = openDB(tenKho, 1, { upgrade(db) { db.createObjectStore('cho', { keyPath: 'khoa' }); } }); return dbHua; };
+// Chỉ cho bài thử giao diện (supabase/tests/ban_hang_quay): hàng đợi riêng, không lẫn hàng đợi thật của máy.
+export function doiKhoThu(ten) { dbHua = null; tenKho = ten; }
 
 export async function xepHang(viec) {
   const db = await moKho();
@@ -204,26 +207,44 @@ export async function xepHang(viec) {
 export async function dsCho() {
   try { const db = await moKho(); return (await db.getAll('cho')).sort((a, b) => a.luc - b.luc); } catch { return []; }
 }
-// Gửi lần lượt; gặp lỗi mạng thì dừng (giữ thứ tự), gặp lỗi nghiệp vụ thì bỏ việc đó và báo lại.
+// Gửi lần lượt; gặp lỗi mạng thì dừng (giữ thứ tự). Database từ chối thì KHÔNG xoá — tiền đã thu,
+// hàng đã giao, mất việc này là mất dấu tiền. Giữ lại trên máy với lý do (`loi`), không gửi lại tự động
+// nữa, hiện cho người bán thấy để báo Quản lý xử lý; chỉ xoá khi có người bấm "Đã xử lý".
 let dangGui = false;
 export async function guiHangDoi(onXong) {
-  if (dangGui) return { conLai: (await dsCho()).length };
+  if (dangGui) return demCho();
   dangGui = true;
   try {
     const db = await moKho();
     for (const v of await dsCho()) {
+      if (v.loi) continue;
       try {
         const kq = await goi(v.ham, v.thamSo);
         await db.delete('cho', v.khoa);
         onXong?.({ viec: v, kq });
       } catch (e) {
         if (laLoiMang(e)) break;
-        await db.delete('cho', v.khoa);
-        onXong?.({ viec: v, loi: chuLoi(e) });
+        const loi = chuLoi(e);
+        await db.put('cho', { ...v, loi, lucLoi: Date.now() });
+        onXong?.({ viec: v, loi });
       }
     }
   } finally { dangGui = false; }
-  return { conLai: (await dsCho()).length };
+  return demCho();
+}
+// conLai = còn chờ gửi (sẽ tự gửi khi có mạng) · biLoi = database đã từ chối, cần người xử lý.
+export async function demCho() {
+  const ds = await dsCho();
+  return { conLai: ds.filter((v) => !v.loi).length, biLoi: ds.filter((v) => v.loi).length };
+}
+export async function boViecLoi(khoa) {
+  const db = await moKho();
+  await db.delete('cho', khoa);
+}
+export async function guiLaiViecLoi(khoa) {
+  const db = await moKho();
+  const v = await db.get('cho', khoa);
+  if (v) { delete v.loi; delete v.lucLoi; await db.put('cho', v); }
 }
 
 // Gọi ngay; mất mạng thì xếp hàng đợi (chỉ cho các việc gửi lại an toàn). Trả { kq } hoặc { choGui: true }.

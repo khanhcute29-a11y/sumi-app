@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { X, RefreshCw, Camera, Search } from 'lucide-react';
 import { supabase } from '../../../lib/supabaseClient';
-import { goi, chuLoi, anhVietQr, noiDungCk, NGAN_HANG, maMoi, tachId, linkAnh } from './posThat';
+import { goi, chuLoi, anhVietQr, noiDungCk, NGAN_HANG, maMoi, tachId, linkAnh, guiHangDoi } from './posThat';
 import { locXep } from './banHangQuayLogic';
 
 // Các hộp thoại chỉ có ở chế độ CHẠY THẬT (ca, duyệt, chuyển khoản, thiết lập, đặt cọc, nhận hàng, báo cáo, nhật ký).
@@ -587,6 +587,12 @@ export function KetCaThat({ caMo, chiNhanh, onDong, onKet }) {
   const dong = async () => {
     setDang(true); setLoi('');
     try {
+      // Việc làm lúc mất mạng phải lên database TRƯỚC khi chốt két — không thì tiền của chúng rơi sang ca sau.
+      const { conLai } = await guiHangDoi();
+      if (conLai > 0) {
+        setLoi(`Còn ${conLai} việc làm lúc mất mạng chưa gửi lên được. Đợi có mạng (thanh đỏ trên cùng biến mất) rồi bấm Đóng ca lại.`);
+        setDang(false); return;
+      }
       const s = await goi('pos_dong_ca', { p_shift: caMo.id, p_counted: Number(dem) || 0, p_note: ghi.trim() || null });
       const sl = s.summary || {};
       setXong({

@@ -2,7 +2,7 @@ import { PGlite } from '@electric-sql/pglite';
 import fs from 'fs';
 const db = new PGlite();
 await db.exec(fs.readFileSync(process.argv[2], 'utf8'));
-await db.exec(fs.readFileSync(process.argv[3], 'utf8'));
+for (const f of process.argv.slice(3)) await db.exec(fs.readFileSync(f, 'utf8'));
 const GD='00000000-0000-0000-0000-0000000000a1', QL='00000000-0000-0000-0000-0000000000a2', NV='00000000-0000-0000-0000-0000000000a3', KT='00000000-0000-0000-0000-0000000000a4';
 const P1='00000000-0000-0000-0000-0000000000b1', P2='00000000-0000-0000-0000-0000000000b2', V14='00000000-0000-0000-0000-0000000000c1';
 await db.exec(`insert into profiles values ('${GD}','Sếp','owner','{}',true,true),('${QL}','Quản lý','admin','{}',true,true),('${NV}','Thu ngân A','sale','{}',true,true),('${KT}','Kế toán','accountant','{}',true,true);
@@ -102,4 +102,33 @@ await chan('NV gọi tổng kết cuối ngày', async()=>{await db.exec(`set ro
 await ok('Tổng kết cuối ngày: báo sếp 1 cửa hàng', ()=>v(`select public.pos_bao_cuoi_ngay()`),1);
 await ok('Tin tổng kết tới đúng sếp, có cảnh báo', ()=>v(`select severity||'|'||(title like '📊 Vĩnh Phú 42 hôm nay:%')::text from notifications where event_key like 'pos-cuoi-ngay:%' and recipient_profile_id='${GD}'`),'warning|true');
 await ok('Chạy lại không gửi trùng', async()=>{await q(`select public.pos_bao_cuoi_ngay()`); return v(`select count(*)::int from notifications where event_key like 'pos-cuoi-ngay:%'`);},1);
+
+// ── Vá 202611141010: bán lúc mất mạng luôn được ghi + chặn thu trùng đơn đặt ──
+if (process.argv.length > 4) {
+  await as(NV);
+  const caMo = await v(`select (public.pos_mo_ca('Vĩnh Phú 42',0))->>'id'`);
+  const soTb = () => v(`select count(*)::int from notifications where event_key like 'pos-mat-mang:%'`);
+  const tb0 = await soTb();
+  const o1 = id();
+  await ok('Mất mạng: giá đổi lúc chờ gửi → vẫn ghi theo giá lúc bán', async()=>{const r=await ban({id:o1,offline:true,shift_id:caMo,client_created_at:new Date(Date.now()-3600e3).toISOString(),lines:[{product_id:P1,name:'Bánh bò',qty:1,list_price:85000,unit_price:85000}]}); return [r.total, r.canh_bao[0].loai];},[85000,'gia_lech']);
+  await ok('… hoá đơn có cờ cảnh báo + giờ bán = giờ trên máy', ()=>v(`select (canh_bao->0->>'gia_dung')||'|'||(abs(extract(epoch from created_at - (now()-interval '1 hour')))<5)::text from pos_invoices where id='${o1}'`),'90000|true');
+  await ok('… Giám đốc được báo ngay', async()=>(await soTb())-tb0, 1);
+  await ok('Mất mạng: giờ máy ở tương lai bị kéo về hiện tại', async()=>{const x=id(); await ban({id:x,offline:true,client_created_at:new Date(Date.now()+86400e3).toISOString()}); return v(`select (created_at<=now())::text from pos_invoices where id='${x}'`);},'true');
+  await ok('Mất mạng: giờ máy cũ 10 ngày bị giới hạn 3 ngày', async()=>{const x=id(); await ban({id:x,offline:true,client_created_at:new Date(Date.now()-10*86400e3).toISOString()}); return v(`select (created_at>now()-interval '3 days 1 minute')::text from pos_invoices where id='${x}'`);},'true');
+  await ok('Mất mạng đúng giá: không gắn cờ, không báo', async()=>{const t=await soTb(); const x=id(); const r=await ban({id:x,offline:true,shift_id:caMo}); return [r.canh_bao.length, (await soTb())-t];},[0,0]);
+  await chan('CÓ mạng mà sửa giá vẫn bị chặn', ()=>ban({lines:[{product_id:P1,name:'Bánh bò',qty:1,list_price:85000}]}),'đã thay đổi');
+  await chan('Mất mạng nhưng khách lẻ ghi nợ vẫn bị chặn', ()=>ban({offline:true,received:1000}),'Khách lẻ');
+  const caCu = await v(`select coalesce((select id::text from pos_shifts where status<>'open' limit 1),'')`);
+  if (caCu) await ok('Mất mạng: ca lúc bán đã đóng → ghi ca đang mở + gắn cờ', async()=>(await ban({offline:true,shift_id:caCu})).canh_bao.map((x)=>x.loai),['khac_ca']);
+  await ok('Mất mạng: NV giảm 20% (không xin được duyệt) → vẫn ghi, gắn cờ', async()=>(await ban({offline:true,lines:[{product_id:P1,name:'Bánh bò',qty:1,list_price:90000,unit_price:72000}]})).canh_bao.map((x)=>x.loai),['giam_qua_muc']);
+  // Đơn đặt
+  await chan('Thu nốt đơn đã thu đủ → chặn (2 máy bấm trùng)', ()=>q(`select public.pos_thu_don('${id()}','00000000-0000-0000-0000-0000000000d1','thu_con_lai',300000,'tien_mat','Vĩnh Phú 42')`),'đã thu đủ');
+  await db.exec(`insert into orders(id,order_code,customer_id,required_at,status_v2,total,deposit) values ('00000000-0000-0000-0000-0000000000d2','SUMI-20261114-2',null,now()+interval '1 day','in_production',400000,100000)`);
+  await chan('Ghi cọc lớn hơn tiền cọc trên đơn', ()=>q(`select public.pos_thu_don('${id()}','00000000-0000-0000-0000-0000000000d2','coc',150000,'tien_mat','Vĩnh Phú 42')`),'tiền cọc');
+  await ok('Ghi cọc đúng 100k', async()=>(await v(`select public.pos_thu_don('${id()}','00000000-0000-0000-0000-0000000000d2','coc',100000,'tien_mat','Vĩnh Phú 42')`)).order_code,'SUMI-20261114-2');
+  await chan('Ghi cọc lần 2 (bấm trùng)', ()=>q(`select public.pos_thu_don('${id()}','00000000-0000-0000-0000-0000000000d2','coc',100000,'tien_mat','Vĩnh Phú 42')`),'tiền cọc');
+  await chan('Thu nốt quá số còn lại (300k)', ()=>q(`select public.pos_thu_don('${id()}','00000000-0000-0000-0000-0000000000d2','thu_con_lai',350000,'tien_mat','Vĩnh Phú 42')`),'còn phải thu');
+  await ok('Thu nốt đúng 300k', async()=>(await v(`select public.pos_thu_don('${id()}','00000000-0000-0000-0000-0000000000d2','thu_con_lai',300000,'chuyen_khoan','Vĩnh Phú 42')`)).order_code,'SUMI-20261114-2');
+  await chan('Thu 0đ', ()=>q(`select public.pos_thu_don('${id()}','00000000-0000-0000-0000-0000000000d2','thu_con_lai',0,'tien_mat','Vĩnh Phú 42')`),'Nhập số tiền');
+}
 console.log(`\n${dem-loi}/${dem} đạt`); process.exit(loi?1:0);
