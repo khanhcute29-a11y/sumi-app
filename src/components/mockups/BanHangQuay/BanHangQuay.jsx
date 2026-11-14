@@ -1001,7 +1001,7 @@ export default function BanHangQuay() {
       )}
       {hop?.loai === 'lay_banh' && that && (
         <LayBanhDat chiNhanh={chiNhanh} onDong={() => setHop(null)}
-          onXong={(don, con) => { setHop(null); nhan(con ? `Đã thu ${so(con)} · ${don.order_code} — giao bánh cho khách` : `${don.order_code} đã trả đủ — giao bánh cho khách`); }} />
+          onXong={(don, con, kq) => { setHop(null); nhan(`${con ? `Đã thu ${so(con)} · ` : ''}${don.order_code} ${kq === 'da_xong_truoc' ? 'đã hoàn thành từ trước' : 'đã giao — đơn chuyển Hoàn thành'}`); }} />
       )}
       {hop?.loai === 'nhan_hang' && that && (
         <NhanHang phieu={hop.phieu} matHang={matHang} onDong={() => setHop(null)}

@@ -1078,3 +1078,6 @@ button.kv-xo-them:hover{background:var(--xanh-nhat)}
 .bct-khoang label{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--chu-phu);flex:1 1 150px}
 .bct-khoang input{min-height:44px;padding:0 12px;border:1px solid var(--vien);border-radius:10px;background:#fff;font:inherit;font-size:16px;color:var(--chu)}
 .kv-viec-loi{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + env(safe-area-inset-bottom));z-index:61;max-width:calc(100% - 32px);min-height:44px;border:0;border-radius:12px;background:#b42318;color:#fff!important;font-weight:600;font-size:14px;padding:10px 14px;box-shadow:0 4px 14px rgba(0,0,0,.2)}
+.bhq-nhan-tt{font-style:normal;font-size:12px;font-weight:600;border-radius:6px;padding:2px 7px;margin-left:6px;white-space:nowrap;background:#FFF4E0;color:#B25E00}
+.bhq-nhan-tt.san{background:#E3F6EA;color:#11883E}
+.bhq-nhan-tt.xong{background:#ECEEF1;color:#5b6573}

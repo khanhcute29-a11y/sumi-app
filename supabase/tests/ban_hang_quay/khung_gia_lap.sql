@@ -5,7 +5,7 @@ create table public.profiles(id uuid primary key, full_name text, role text, ext
 create table public.customers(id uuid primary key default gen_random_uuid(), name text, phone text, is_school boolean default false);
 create table public.products(id uuid primary key default gen_random_uuid(), name text, category text, price numeric, active boolean default true, created_at timestamptz default now());
 create table public.product_variants(id uuid primary key default gen_random_uuid(), product_id uuid references products(id), label text, price numeric);
-create table public.orders(id uuid primary key default gen_random_uuid(), order_code text, customer_id uuid, required_at timestamptz, status_v2 text, total numeric, deposit numeric, confidentiality text default 'normal', created_at timestamptz default now());
+create table public.orders(id uuid primary key default gen_random_uuid(), order_code text, customer_id uuid, required_at timestamptz, status_v2 text, total numeric, deposit numeric, confidentiality text default 'normal', created_at timestamptz default now(), status text, completed_at timestamptz);
 create table public.order_items(id uuid primary key default gen_random_uuid(), order_id uuid, name text, qty int, size text);
 create table public.finished_goods_stock(id uuid primary key default gen_random_uuid(), product_id uuid, size text, branch text, qty numeric, updated_at timestamptz default now(), store_location text, is_semi_finished boolean not null default false, expiry_date timestamptz);
 create unique index on public.finished_goods_stock(product_id,size,branch,store_location) nulls not distinct;

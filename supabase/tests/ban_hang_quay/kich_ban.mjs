@@ -131,4 +131,22 @@ if (process.argv.length > 4) {
   await ok('Thu nốt đúng 300k', async()=>(await v(`select public.pos_thu_don('${id()}','00000000-0000-0000-0000-0000000000d2','thu_con_lai',300000,'chuyen_khoan','Vĩnh Phú 42')`)).order_code,'SUMI-20261114-2');
   await chan('Thu 0đ', ()=>q(`select public.pos_thu_don('${id()}','00000000-0000-0000-0000-0000000000d2','thu_con_lai',0,'tien_mat','Vĩnh Phú 42')`),'Nhập số tiền');
 }
+
+// ── 202611141020: khách lấy bánh đặt tại quầy → đơn Hoàn thành ──
+if (process.argv.length > 5) {
+  await as(NV);
+  const D2='00000000-0000-0000-0000-0000000000d2', D3='00000000-0000-0000-0000-0000000000d3';
+  // d2: tổng 400k, cọc 100k, đã thu nốt 300k ở trên, bếp đang làm
+  await chan('Bếp chưa xong → chưa đóng đơn được', ()=>q(`select public.pos_giao_don('${D2}','Vĩnh Phú 42')`),'Bếp chưa báo xong');
+  await db.exec(`update orders set status_v2='ready_for_fulfillment' where id='${D2}'`);
+  await ok('Bếp xong + thu đủ → đơn Hoàn thành', async()=>{const r=await v(`select public.pos_giao_don('${D2}','Vĩnh Phú 42')`); return [r.already_completed, await v(`select status_v2||'|'||status||'|'||(completed_at is not null)::text from orders where id='${D2}'`)];},[false,'completed|hoan_thanh|true']);
+  await ok('Bấm Giao bánh lần 2 không ghi trùng', async()=>(await v(`select public.pos_giao_don('${D2}','Vĩnh Phú 42')`)).already_completed,true);
+  await ok('Có dòng nhật ký giao đơn (1 dòng)', ()=>v(`select count(*)::int from pos_audit_log where action='giao_don_dat'`),1);
+  await db.exec(`insert into orders(id,order_code,status_v2,total,deposit) values ('${D3}','SUMI-20261114-3','ready_for_fulfillment',500000,100000)`);
+  await chan('Chưa thu đủ → chặn giao', ()=>q(`select public.pos_giao_don('${D3}','Vĩnh Phú 42')`),'còn phải thu');
+  await db.exec(`update orders set status_v2='in_delivery' where id='${D3}'`);
+  await chan('Đơn đang giao shipper → chặn', ()=>q(`select public.pos_giao_don('${D3}','Vĩnh Phú 42')`),'shipper');
+  await chan('Chi nhánh lạ', ()=>q(`select public.pos_giao_don('${D3}','Kho X')`),'Chi nhánh');
+  await chan('Người chưa duyệt', async()=>{await as('00000000-0000-0000-0000-0000000000ff'); try { await q(`select public.pos_giao_don('${D3}','Vĩnh Phú 42')`); } finally { await as(NV); }},'chưa được duyệt');
+}
 console.log(`\n${dem-loi}/${dem} đạt`); process.exit(loi?1:0);

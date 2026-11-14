@@ -374,25 +374,41 @@ export function LayBanhDat({ chiNhanh, onXong, onDong }) {
   const [pt, setPt] = useState('tien_mat');
   const [dang, setDang] = useState(false);
   const [loi, setLoi] = useState('');
+  const [daThu, setDaThu] = useState(0); // vừa thu ở bước này (để báo lại nếu đơn chưa đóng được)
   useEffect(() => {
     if (q.trim().length < 3) { setDs([]); return undefined; }
     const t = setTimeout(() => goi('pos_tim_don', { p_q: q.trim() }).then((x) => setDs(x || [])).catch((e) => setLoi(chuLoi(e))), 300);
     return () => clearTimeout(t);
   }, [q]);
-  const con = chon ? Math.max(Number(chon.total) - Number(chon.deposit) - Number(chon.da_thu_quay), 0) : 0;
+  const con = chon ? Math.max(Number(chon.total) - Number(chon.deposit) - Number(chon.da_thu_quay) - daThu, 0) : 0;
+  const daGiao = chon?.status_v2 === 'completed';
+  // Đưa bánh = đóng đơn bên mục Đơn hàng (giống shipper bấm "Hoàn Thành Giao").
+  const giao = async (tienVuaThu) => {
+    try {
+      const r = await goi('pos_giao_don', { p_order: chon.id, p_store: chiNhanh });
+      onXong(chon, tienVuaThu, r?.already_completed ? 'da_xong_truoc' : 'xong');
+    } catch (e) { setLoi(tienVuaThu ? `Đã thu ${so(tienVuaThu)}. ${chuLoi(e)}` : chuLoi(e)); setDang(false); }
+  };
   const thu = async () => {
     setDang(true); setLoi('');
-    try { await goi('pos_thu_don', { p_id: maMoi(), p_order: chon.id, p_kind: 'thu_con_lai', p_amount: con, p_method: pt, p_store: chiNhanh }); onXong(chon, con); } catch (e) { setLoi(chuLoi(e)); setDang(false); }
+    try { await goi('pos_thu_don', { p_id: maMoi(), p_order: chon.id, p_kind: 'thu_con_lai', p_amount: con, p_method: pt, p_store: chiNhanh }); }
+    catch (e) { setLoi(chuLoi(e)); setDang(false); return; }
+    const vuaThu = con; setDaThu((x) => x + vuaThu);
+    setDs((x) => x.map((o) => (o.id === chon.id ? { ...o, da_thu_quay: Number(o.da_thu_quay) + vuaThu } : o))); // chọn lại đơn này không hiện nợ cũ
+    await giao(vuaThu);
   };
+  const nhanTt = (o) => (o.status_v2 === 'completed' ? ['Đã giao', 'xong'] : o.status_v2 === 'ready_for_fulfillment' ? ['Bánh đã xong', 'san'] : o.status_v2 === 'in_delivery' ? ['Đang giao shipper', 'cho'] : ['Bếp đang làm', 'cho']);
+  const chonDon = (o) => { setChon(o); setDaThu(0); setLoi(''); };
   return (
     <HopT tieuDe="Khách lấy bánh đặt" onDong={onDong}
-      chan={chon ? <><button type="button" className="bhq-nut phu" onClick={() => setChon(null)}>Chọn đơn khác</button>
-        <button type="button" className="bhq-nut chinh" disabled={dang} onClick={con > 0 ? thu : () => onXong(chon, 0)}>{con > 0 ? `Thu ${so(con)}` : 'Đã trả đủ — giao bánh'}</button></> : null}>
+      chan={chon ? <><button type="button" className="bhq-nut phu" onClick={() => { setChon(null); setLoi(''); }}>Chọn đơn khác</button>
+        {!daGiao && <button type="button" className="bhq-nut chinh" disabled={dang} onClick={con > 0 ? thu : () => { setDang(true); setLoi(''); giao(daThu); }}>
+          {dang ? 'Đang lưu…' : con > 0 ? `Thu ${so(con)} · giao bánh` : 'Giao bánh cho khách'}</button>}</> : null}>
       {!chon ? <>
         <label className="bhq-tim"><Search size={16} /><input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Mã đơn, SĐT hoặc tên khách" /></label>
         {ds.map((o) => (
-          <button key={o.id} type="button" className="bhq-the nut" onClick={() => setChon(o)}>
-            <div><b>{o.order_code}</b> · lấy {o.required_at ? ngayGio(o.required_at) : '—'}</div>
+          <button key={o.id} type="button" className="bhq-the nut" onClick={() => chonDon(o)}>
+            <div><b>{o.order_code}</b> · lấy {o.required_at ? ngayGio(o.required_at) : '—'} <i className={`bhq-nhan-tt ${nhanTt(o)[1]}`}>{nhanTt(o)[0]}</i></div>
             <div>{o.customer_name || 'Khách'} {o.customer_phone ? `· ${o.customer_phone}` : ''}</div>
             <div className="mo">{(o.items || []).map((i) => `${i.name}${i.size ? ` ${i.size}` : ''} ×${i.qty}`).join(', ')}</div>
           </button>
@@ -400,15 +416,16 @@ export function LayBanhDat({ chiNhanh, onXong, onDong }) {
         {q.trim().length >= 3 && !ds.length && <p className="bhq-rong">Không tìm thấy đơn.</p>}
       </> : <>
         <div className="bhq-bang">
-          <div><span>Đơn</span><b>{chon.order_code}</b></div>
+          <div><span>Đơn</span><b>{chon.order_code} <i className={`bhq-nhan-tt ${nhanTt(chon)[1]}`}>{nhanTt(chon)[0]}</i></b></div>
           <div><span>Khách</span><b>{chon.customer_name} {chon.customer_phone}</b></div>
           <div><span>Tổng đơn</span><b>{so(chon.total)}</b></div>
           <div><span>Đã cọc</span><b>−{so(chon.deposit)}</b></div>
-          {Number(chon.da_thu_quay) > 0 && <div><span>Đã thu tại quầy</span><b>−{so(chon.da_thu_quay)}</b></div>}
+          {Number(chon.da_thu_quay) + daThu > 0 && <div><span>Đã thu tại quầy</span><b>−{so(Number(chon.da_thu_quay) + daThu)}</b></div>}
           <div className="lon"><span>Còn phải thu</span><b className="xanh">{so(con)}</b></div>
         </div>
-        {con > 0 && <div className="bhq-goi">{['tien_mat', 'chuyen_khoan', 'the'].map((k) => <button key={k} type="button" className={pt === k ? 'on' : ''} onClick={() => setPt(k)}>{PT[k]}</button>)}</div>}
-        <p className="bhq-ghi">Trạng thái đơn (đã giao / hoàn thành) vẫn cập nhật ở mục Đơn hàng như cũ.</p>
+        {con > 0 && !daGiao && <div className="bhq-goi">{['tien_mat', 'chuyen_khoan', 'the'].map((k) => <button key={k} type="button" className={pt === k ? 'on' : ''} onClick={() => setPt(k)}>{PT[k]}</button>)}</div>}
+        <p className="bhq-ghi">{daGiao ? 'Đơn này đã giao xong rồi — không thu, không giao lại.'
+          : 'Bấm nút xanh: thu tiền (nếu còn) rồi đưa bánh — đơn bên mục Đơn hàng tự chuyển "Hoàn thành". Bếp phải báo xong đơn trước.'}</p>
       </>}
       <Loi chu={loi} />
     </HopT>

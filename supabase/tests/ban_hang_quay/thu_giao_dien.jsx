@@ -35,6 +35,7 @@ export async function chay({ vaiTro = 'sale', ten = 'Thu ngân thử' } = {}) {
   await db.exec(await (await fetch('/.thu-that/stub.sql')).text());
   await db.exec(await (await fetch('/supabase/migrations/202611141000_ban_hang_quay_that.sql')).text());
   await db.exec(await (await fetch('/supabase/migrations/202611141010_ban_hang_quay_mat_mang_va_thu_don.sql')).text());
+  await db.exec(await (await fetch('/supabase/migrations/202611141020_ban_hang_quay_giao_don_dat.sql')).text());
   await db.exec(`update feature_flags set enabled = true, rollout_percentage = 100 where key = 'pos_ban_hang_that';
     insert into profiles(id, full_name, role) values (${lit(uid)}, ${lit(ten)}, ${lit(vaiTro)}), ('00000000-0000-0000-0000-0000000000a2', 'Quản lý thử', 'admin');
     select set_config('test.uid', ${lit(uid)}, false);`);
