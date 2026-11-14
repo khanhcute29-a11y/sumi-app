@@ -1,0 +1,13 @@
+create role anon; create role authenticated;
+create schema auth;
+create or replace function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('test.uid', true), '')::uuid $$;
+create table public.profiles(id uuid primary key, full_name text, role text, extra_roles text[] default '{}', approved boolean default true, active boolean default true);
+create table public.customers(id uuid primary key default gen_random_uuid(), name text, phone text, is_school boolean default false);
+create table public.products(id uuid primary key default gen_random_uuid(), name text, category text, price numeric, active boolean default true, created_at timestamptz default now());
+create table public.product_variants(id uuid primary key default gen_random_uuid(), product_id uuid references products(id), label text, price numeric);
+create table public.orders(id uuid primary key default gen_random_uuid(), order_code text);
+create table public.finished_goods_stock(id uuid primary key default gen_random_uuid(), product_id uuid, size text, branch text, qty numeric, updated_at timestamptz default now(), store_location text, is_semi_finished boolean not null default false, expiry_date timestamptz);
+create unique index on public.finished_goods_stock(product_id,size,branch,store_location) nulls not distinct;
+create table public.feature_flags(key text primary key, enabled boolean not null default false, description text not null);
+create table public.notifications(id uuid primary key default gen_random_uuid(), event_key text unique not null, recipient_profile_id uuid, notification_type text, severity text, sound_key text, title text, body text, entity_type text, entity_id uuid not null, deep_link text, created_at timestamptz default now());
+create table public.migration_runs(migration_key text primary key, status text, finished_at timestamptz, notes text);
