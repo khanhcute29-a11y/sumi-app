@@ -1074,3 +1074,6 @@ button.kv-xo-them:hover{background:var(--xanh-nhat)}
 .kvm-ct-tt.cho{background:#FFF4E0;color:#B25E00}
 .kvm-ct-the.tien>div.ck-cho{min-height:0;border-bottom:0;padding:4px 0 8px;font-size:14px;color:#B25E00;justify-content:flex-end;text-align:right}
 .kvm-tt-man .kvm-chan .kv-nut-tt{min-height:56px;font-size:20px;font-weight:500;border-radius:12px}
+.bct-khoang{flex:1 1 100%;display:flex;flex-wrap:wrap;gap:10px;margin:0}
+.bct-khoang label{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--chu-phu);flex:1 1 150px}
+.bct-khoang input{min-height:44px;padding:0 12px;border:1px solid var(--vien);border-radius:10px;background:#fff;font:inherit;font-size:16px;color:var(--chu)}

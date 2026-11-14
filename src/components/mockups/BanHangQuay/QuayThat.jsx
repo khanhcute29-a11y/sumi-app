@@ -483,7 +483,10 @@ export function NhatKy({ chiNhanh, onDong }) {
 }
 
 // ── Báo cáo (Quản lý / Giám đốc) — số liệu tính trên database ──
-const KY = [['hom_nay', 'Hôm nay'], ['hom_qua', 'Hôm qua'], ['7_ngay', '7 ngày'], ['thang_nay', 'Tháng này']];
+const KY = [['hom_nay', 'Hôm nay'], ['hom_qua', 'Hôm qua'], ['7_ngay', '7 ngày'], ['thang_nay', 'Tháng này'], ['tuy_chinh', 'Tùy chỉnh']];
+// Ngày theo giờ máy (yyyy-mm-dd) cho ô chọn ngày.
+const ngayO = (t) => { const d = new Date(t); const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
+const dauNgay = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d).getTime(); };
 function khoangKy(k) {
   const d = new Date(); d.setHours(0, 0, 0, 0); const homNay = d.getTime();
   if (k === 'hom_qua') return [homNay - 86400000, homNay];
@@ -493,21 +496,36 @@ function khoangKy(k) {
 }
 export function BaoCaoThat({ chiNhanh, laGD, dienThoai }) {
   const [ky, setKy] = useState('hom_nay');
+  const [tu, setTu] = useState(() => ngayO(Date.now()));
+  const [den, setDen] = useState(() => ngayO(Date.now()));
   const [tatCa, setTatCa] = useState(false);
   const [bc, setBc] = useState(null);
   const [loi, setLoi] = useState('');
   useEffect(() => {
-    const [a, b] = khoangKy(ky); setBc(null); setLoi('');
+    setBc(null); setLoi('');
+    let a; let b;
+    if (ky === 'tuy_chinh') {
+      if (!tu || !den) { setLoi('Chọn đủ từ ngày và đến ngày'); return; }
+      if (tu > den) { setLoi('"Từ ngày" phải trước hoặc bằng "Đến ngày"'); return; }
+      a = dauNgay(tu); b = dauNgay(den) + 86400000; // tính trọn ngày cuối
+    } else [a, b] = khoangKy(ky);
     goi('pos_bao_cao', { p_store: tatCa ? null : chiNhanh, p_from: new Date(a).toISOString(), p_to: new Date(b).toISOString() }).then(setBc).catch((e) => setLoi(chuLoi(e)));
-  }, [ky, chiNhanh, tatCa]);
+  }, [ky, tu, den, chiNhanh, tatCa]);
   const doiTruoc = bc ? bc.doanh_thu - bc.ky_truoc.doanh_thu : 0;
   const maxGio = useMemo(() => Math.max(1, ...(bc?.theo_gio || []).map((g) => Number(g.tien))), [bc]);
+  const tru = (x) => (Number(x) ? `−${so(x)}` : '0');
   const R = ({ t, v, lon, am }) => <div className={lon ? 'lon' : ''}><span>{t}</span><b className={am ? 'do' : ''}>{v}</b></div>;
   return (
     <main className={`bhq-ds bct ${dienThoai ? 'dt' : ''}`}>
       <div className="bct-dau">
         <h2>Báo cáo · {tatCa ? 'Cả 2 cửa hàng' : chiNhanh}</h2>
         <nav className="bhq-tab">{KY.map(([k, l]) => <button key={k} type="button" className={ky === k ? 'on' : ''} onClick={() => setKy(k)}>{l}</button>)}</nav>
+        {ky === 'tuy_chinh' && (
+          <div className="bct-khoang">
+            <label>Từ ngày<input type="date" value={tu} max={den || undefined} onChange={(e) => setTu(e.target.value)} /></label>
+            <label>Đến ngày<input type="date" value={den} min={tu || undefined} max={ngayO(Date.now())} onChange={(e) => setDen(e.target.value)} /></label>
+          </div>
+        )}
         <label className="kv-cong-tac nho"><span>Gộp 2 cửa hàng</span><input type="checkbox" checked={tatCa} onChange={(e) => setTatCa(e.target.checked)} /><i /></label>
       </div>
       <Loi chu={loi} />
@@ -526,9 +544,9 @@ export function BaoCaoThat({ chiNhanh, laGD, dienThoai }) {
             {bc.ck_cho > 0 && <R t="  ↳ chưa xác nhận tiền về" v={so(bc.ck_cho)} am />}
             {bc.ck_khong_thay > 0 && <R t="  ↳ KHÔNG thấy tiền về" v={so(bc.ck_khong_thay)} am />}
             <R t="Thẻ" v={so(bc.the)} /><R t="Ghi nợ mới" v={so(bc.ghi_no)} /><R t="Thu nợ cũ" v={so(bc.thu_no)} /><R t="Thu đơn đặt (cọc + lấy bánh)" v={so(bc.thu_don)} />
-            <R t="Giảm giá" v={`−${so(bc.giam)}`} /><R t="Giảm giá cuối ngày" v={`−${so(bc.giam_cuoi_ngay)}`} />{bc.diem > 0 && <R t="Khách dùng điểm" v={`−${so(bc.diem)}`} />}
+            <R t="Giảm giá" v={tru(bc.giam)} /><R t="Giảm giá cuối ngày" v={tru(bc.giam_cuoi_ngay)} />{bc.diem > 0 && <R t="Khách dùng điểm" v={tru(bc.diem)} />}
             <R t="VAT thu hộ" v={so(bc.vat)} /><R t="Thu khác" v={so(bc.thu_khac)} />
-            {laGD && <><R t="Giá vốn hàng bán" v={`−${so(bc.gia_von)}`} /><R t="Hàng huỷ (giá vốn)" v={`−${so(bc.huy_gia_von)}`} am={bc.huy_gia_von > 0} />
+            {laGD && <><R t="Giá vốn hàng bán" v={tru(bc.gia_von)} /><R t="Hàng huỷ (giá vốn)" v={tru(bc.huy_gia_von)} am={bc.huy_gia_von > 0} />
               <R t="Lãi gộp sau huỷ" v={so(bc.doanh_thu - bc.gia_von - bc.huy_gia_von)} lon /></>}
           </section>
           <section className="bhq-bang">
