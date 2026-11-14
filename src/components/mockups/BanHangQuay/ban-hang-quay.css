@@ -976,11 +976,11 @@ button.kv-xo-them{display:block;width:100%;text-align:left;background:#fff;borde
 button.kv-xo-them:hover{background:var(--xanh-nhat)}
 
 /* Danh sách hoá đơn đang mở trên điện thoại (bấm "n hóa đơn" để mở lại hoá đơn đã Lưu tạm) */
-.kvm-ds-hd{background:#fff;border-radius:12px;margin:8px 0;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)}
-.kvm-ds-hd button{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;min-height:48px;padding:10px 14px;border:0;border-bottom:1px solid #eee;background:none;font-size:14.5px;text-align:left}
-.kvm-ds-hd button:last-child{border-bottom:0}
-.kvm-ds-hd button.on{color:var(--xanh);font-weight:600}
-.kvm-ds-hd button span:last-child{color:#777;font-size:13px;white-space:nowrap}
+.kvm-hd-mo{background:#fff;border-radius:12px;margin:8px 0;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.kvm-hd-mo button{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;min-height:48px;padding:10px 14px;border:0;border-bottom:1px solid #eee;background:none;font-size:14.5px;text-align:left}
+.kvm-hd-mo button:last-child{border-bottom:0}
+.kvm-hd-mo button.on{color:var(--xanh);font-weight:600}
+.kvm-hd-mo button span:last-child{color:#777;font-size:13px;white-space:nowrap}
 
 /* ===== CHẠY THẬT (QuayThat.jsx) ===== */
 .bhq-hop.rong{max-width:720px}

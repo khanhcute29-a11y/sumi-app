@@ -1406,7 +1406,7 @@ function DienThoai({
           <button type="button" className={`kvm-loc-phai ${locMo ? 'on' : ''}`} aria-label="Lọc theo nhóm hàng" onClick={() => setLocMo((v) => !v)}><ListFilter size={22} /></button>
         </div>
         {dsHdMo && soHd > 1 && (
-          <div className="kvm-ds-hd" role="list" aria-label="Hóa đơn đang mở">
+          <div className="kvm-hd-mo" role="list" aria-label="Hóa đơn đang mở">
             {hds.map((h) => (
               <button key={h.id} type="button" role="listitem" className={h.id === hd.id ? 'on' : ''} onClick={() => { setDsHdMo(false); onChonHd(h.id); }}>
                 <span>Hóa đơn {h.so}{h.khach.id ? ` · ${h.khach.name}` : ''}</span>
