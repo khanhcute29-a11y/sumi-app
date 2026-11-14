@@ -1041,3 +1041,36 @@ button.kv-xo-them:hover{background:var(--xanh-nhat)}
 .bct-gio i{display:block;height:10px;border-radius:5px;background:#0070F4;min-width:2px}
 .bct-gio b{text-align:right}
 .bct-gio small{color:#67707a}
+
+/* ── Điện thoại · màn Thanh toán theo app KiotViet (thẻ bo tròn, thanh phương thức xám, thẻ VietQR) ── */
+.kvm-tt-man .kvm-dau.trang h1{font-size:22px;font-weight:500}
+.kvm-tt-man .kvm-dau>button{color:var(--chu)!important}
+.kvm-tt-man .kvm-than{padding:0 0 12px}
+.kvm-tt-man .kvm-the{border-radius:16px;margin-top:12px;padding:0 18px}
+.kvm-tt-man .kvm-tt-xem:first-child{margin-top:0;border-radius:0 0 16px 16px}
+.kvm-tt-man .kvm-tt-xem .kvm-dong-mo{min-height:64px;font-size:17px;border-bottom:0}
+.kvm-tt-man .kvm-tt{padding-top:6px;padding-bottom:8px}
+.kvm-tt-man .kvm-tt .r{min-height:64px;border-bottom:0;font-size:17px}
+.kvm-tt-man .kvm-tt .r b.xanh{font-size:20px;font-weight:500}
+.kvm-tt-man .kvm-tt .kv-gach{width:130px;font-size:17px;text-align:right;border:0;border-bottom:1.5px solid #dfe3e8;border-radius:0;background:none;padding:8px 0}
+.kvm-tt-man .kvm-tt .r.nho{min-height:40px;font-size:15px;color:var(--chu-phu)}
+.kvm-don-vi{border:0;background:none;padding:0 2px;font:inherit;color:var(--chu)!important;min-height:44px;text-decoration:underline dotted;text-underline-offset:4px}
+.kvm-pt2{display:flex;gap:2px;margin:12px 0 18px;padding:5px;background:#F0F1F3;border-radius:14px}
+.kvm-pt2 button{flex:1;min-height:52px;border:0;border-radius:11px;background:none;color:#6b7684!important;font-size:16px;line-height:1.25;position:relative}
+.kvm-pt2 button.on{background:#fff;color:var(--xanh)!important;box-shadow:0 1px 4px rgba(16,24,40,.12)}
+.kvm-pt2 button.on::after{content:'';position:absolute;left:50%;bottom:-13px;width:30px;height:4px;margin-left:-15px;border-radius:2px;background:var(--xanh)}
+.kvm-ck{display:flex;flex-direction:column;align-items:stretch;gap:12px;padding:4px 0 10px}
+.kvm-ck-tk{display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px}
+.kvm-ck-tk b{font-size:17px;font-weight:500}
+.kvm-ck-tk span{font-size:16px;color:var(--chu-phu);text-transform:uppercase}
+.kvm-ck-the{background:#F5F6F8;border-radius:16px;padding:18px 12px;display:flex;flex-direction:column;align-items:center;gap:8px}
+.kvm-ck-the img{width:min(240px,70vw);height:auto;background:#fff;padding:8px;border-radius:8px}
+.kvm-ck-the small{color:var(--chu-phu);font-size:14px}
+.kvm-ck-tien{font-size:20px;font-weight:600;color:var(--xanh)}
+.kvm-vietqr{font-size:26px;font-weight:800;letter-spacing:-.5px;color:#1a4fa3;line-height:1}
+.kvm-vietqr i{font-style:normal;color:#e0262b;font-size:32px}
+.kvm-vietqr b{font-weight:800}
+.kvm-ck-ghi{color:var(--chu-phu);font-size:13px;text-align:center}
+.kvm-ct-tt.cho{background:#FFF4E0;color:#B25E00}
+.kvm-ct-the.tien>div.ck-cho{min-height:0;border-bottom:0;padding:4px 0 8px;font-size:14px;color:#B25E00;justify-content:flex-end;text-align:right}
+.kvm-tt-man .kvm-chan .kv-nut-tt{min-height:56px;font-size:20px;font-weight:500;border-radius:12px}

@@ -131,7 +131,7 @@ export function ViecCho({ viec, cap, laKT, onTaiLai, onDong }) {
 }
 
 // ── Mã VietQR có sẵn số tiền + nội dung ──
-export function QrChuyenKhoan({ caiDat, tien, hdId }) {
+export function QrChuyenKhoan({ caiDat, tien, hdId, dt = false }) {
   const [anh, setAnh] = useState(null);
   const nd = noiDungCk(hdId);
   useEffect(() => {
@@ -145,6 +145,21 @@ export function QrChuyenKhoan({ caiDat, tien, hdId }) {
     return <div className="kv-qr">Chưa cài tài khoản nhận tiền<small>Giám đốc vào ☰ → Thiết lập quầy để nhập ngân hàng + số tài khoản. Tiền chuyển khoản sẽ chờ Quản lý / Kế toán xác nhận đã về.</small></div>;
   }
   const nh = NGAN_HANG.find(([b]) => b === caiDat.bank_bin)?.[1] || caiDat.bank_bin;
+  // Điện thoại — như app KiotViet: dòng "Ngân hàng - số TK / tên chủ TK", dưới là thẻ VietQR to.
+  if (dt) {
+    return (
+      <div className="kvm-ck">
+        <div className="kvm-ck-tk"><b>{nh} - {caiDat.bank_account}</b>{caiDat.bank_account_name ? <span>{caiDat.bank_account_name}</span> : null}</div>
+        <div className="kvm-ck-the">
+          <div className="kvm-vietqr" aria-hidden="true"><i>V</i>IET<b>QR</b></div>
+          {anh ? <img src={anh} alt={`Mã QR chuyển ${so(tien)}`} width={240} height={240} /> : <span className="kv-qr-cho">Đang tạo mã…</span>}
+          <span className="kvm-ck-tien">{so(tien)}</span>
+          <small>Nội dung: <b>{nd}</b></small>
+        </div>
+        <small className="kvm-ck-ghi">Khách quét mã là đúng số tiền. Quản lý / Kế toán xác nhận tiền về sau.</small>
+      </div>
+    );
+  }
   return (
     <div className="kv-qr co">
       {anh ? <img src={anh} alt={`Mã QR chuyển ${so(tien)}`} width={180} height={180} /> : <span className="kv-qr-cho">Đang tạo mã…</span>}
