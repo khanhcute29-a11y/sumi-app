@@ -1036,6 +1036,40 @@ begin
   return v;
 end $$;
 
+-- ───────────────────────── 11b. Đọc cho màn quầy ─────────────────────────
+-- Số liệu ca đang mở / vừa đóng (két tiền) — ai bán ở quầy cũng xem được ca của cửa hàng mình.
+create or replace function public.pos_xem_ca(p_shift uuid)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare v_s public.pos_shifts;
+begin
+  if public.pos_cap_do() is null then raise exception 'Tài khoản chưa được duyệt'; end if;
+  select * into v_s from public.pos_shifts where id = p_shift;
+  if v_s.id is null then raise exception 'Không tìm thấy ca'; end if;
+  return to_jsonb(v_s) || jsonb_build_object('so_lieu', public.pos__so_lieu_ca(p_shift));
+end $$;
+
+-- Tìm đơn đặt bánh khi khách tới lấy (mã đơn / SĐT / tên). Trả số tiền còn phải thu = tổng − cọc − đã thu tại quầy.
+create or replace function public.pos_tim_don(p_q text)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare v_q text := lower(trim(coalesce(p_q, ''))); v_so text := regexp_replace(coalesce(p_q, ''), '\D', '', 'g');
+begin
+  if public.pos_cap_do() is null then raise exception 'Tài khoản chưa được duyệt'; end if;
+  if length(v_q) < 3 then return '[]'::jsonb; end if;
+  return coalesce((select jsonb_agg(x order by x->>'required_at') from (
+    select jsonb_build_object('id', o.id, 'order_code', o.order_code, 'required_at', o.required_at, 'status_v2', o.status_v2,
+      'customer_name', c.name, 'customer_phone', c.phone, 'total', coalesce(o.total, 0), 'deposit', coalesce(o.deposit, 0),
+      'da_thu_quay', coalesce((select sum(amount) from public.pos_order_payments p where p.order_id = o.id and p.kind = 'thu_con_lai'), 0),
+      'items', (select coalesce(jsonb_agg(jsonb_build_object('name', i.name, 'qty', i.qty, 'size', i.size)), '[]') from public.order_items i where i.order_id = o.id)) x
+    from public.orders o left join public.customers c on c.id = o.customer_id
+    where coalesce(o.confidentiality, 'normal') <> 'school_restricted'
+      and coalesce(o.status_v2, '') <> 'cancelled'
+      and o.created_at > now() - interval '60 days'
+      and (lower(o.order_code) like '%' || v_q || '%'
+        or (length(v_so) >= 4 and regexp_replace(coalesce(c.phone, ''), '\D', '', 'g') like '%' || v_so || '%')
+        or lower(coalesce(c.name, '')) like '%' || v_q || '%')
+    order by o.required_at nulls last limit 20) t), '[]'::jsonb);
+end $$;
+
 -- ───────────────────────── 12. Quyền gọi hàm ─────────────────────────
 do $$
 declare f text;
@@ -1051,7 +1085,8 @@ begin
     'pos_ban(jsonb)','pos_huy_hd(uuid,text,uuid)','pos_xac_nhan_ck(uuid,boolean)','pos_thu_no(uuid,uuid,numeric,text,text,text)',
     'pos_tao_khach(text,text)','pos_luu_phieu(jsonb)','pos_nhan_hang(uuid,jsonb,text)','pos_huy_phieu(uuid,text)',
     'pos_thu_don(uuid,uuid,text,numeric,text,text)','pos_luu_thiet_lap(text,jsonb)','pos_luu_gia_von(uuid,uuid,numeric)',
-    'pos_luu_bang_gia(uuid,text,jsonb,boolean)','pos_bao_cao(text,timestamptz,timestamptz)'] loop
+    'pos_luu_bang_gia(uuid,text,jsonb,boolean)','pos_bao_cao(text,timestamptz,timestamptz)',
+    'pos_xem_ca(uuid)','pos_tim_don(text)'] loop
     execute 'revoke all on function public.' || f || ' from public, anon';
     execute 'grant execute on function public.' || f || ' to authenticated';
   end loop;

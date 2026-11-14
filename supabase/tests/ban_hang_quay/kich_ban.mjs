@@ -84,6 +84,10 @@ await as(GD);
 await ok('GĐ huỷ HĐ tiền mặt ca cũ khi ca mới đang mở → két ca mới trừ tiền trả khách', async()=>{const h=await v(`select id from pos_invoices where status='xong' and pay_method='tien_mat' and total=81000`); await q(`select public.pos_huy_hd('${h}','khách trả lại')`); const sl=await v(`select public.pos__so_lieu_ca((select id from pos_shifts where status='open'))`); return [Number(sl.hoan_tien_huy), Number(sl.tien_mat_trong_ca)];},[81000,-81000]);
 await as(NV);
 await ok('Bán bánh kem 14cm (giá biến thể) + tích điểm', async()=>{const r=await ban({customer_id:kh,lines:[{product_id:P2,variant_id:V14,size:'14cm',name:'Bánh kem',qty:1,list_price:200000}]}); return [r.total,r.points_earned, await v(`select public.pos__ton('Vĩnh Phú 42','${P2}','14cm')::int`)];},[200000,20,-1]);
+await ok('Xem số liệu ca đang mở', async()=>{const c=await v(`select public.pos_xem_ca((select id from pos_shifts where status='open'))`); return typeof c.so_lieu.tien_mat_trong_ca;},'number');
+await db.exec(`insert into orders(id,order_code,customer_id,required_at,status_v2,total,deposit) values ('00000000-0000-0000-0000-0000000000d1','SUMI-20261114-1','${kh}',now()+interval '1 day','in_production',500000,200000)`);
+await ok('Thu tiền còn lại khi khách lấy bánh', async()=>{await q(`select public.pos_thu_don('${id()}','00000000-0000-0000-0000-0000000000d1','thu_con_lai',300000,'tien_mat','Vĩnh Phú 42')`); const r=await v(`select public.pos_tim_don('0901234')`); return [r.length, Number(r[0].da_thu_quay)];},[1,300000]);
+await ok('Tìm đơn theo mã', async()=>(await v(`select public.pos_tim_don('sumi-2026')`)).length,1);
 // Phân quyền đọc thật (RLS)
 await db.exec(`grant usage on schema public to authenticated; grant select on profiles to authenticated; grant execute on function auth.uid() to authenticated; grant usage on schema auth to authenticated;`);
 await db.exec(`set role authenticated`);
