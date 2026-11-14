@@ -11,6 +11,7 @@
 --  * Bật/tắt chạy thật bằng feature_flags.key = 'pos_ban_hang_that' (mặc định TẮT).
 --
 -- Chạy thử trước:  thay "commit;" cuối file bằng "rollback;" rồi chạy, không lỗi mới chạy thật.
+-- Tổng kết cuối ngày: pg_cron 'sumi-pos-tong-ket-cuoi-ngay' 22:30 giờ VN. Gỡ: select cron.unschedule('sumi-pos-tong-ket-cuoi-ngay');
 
 begin;
 set local lock_timeout = '10s';
@@ -1070,6 +1071,62 @@ begin
     order by o.required_at nulls last limit 20) t), '[]'::jsonb);
 end $$;
 
+-- ───────────────────────── 11b. Tổng kết cuối ngày gửi Giám đốc (22:30 giờ VN) ─────────────────────────
+create or replace function public.pos_bao_cuoi_ngay()
+returns int language plpgsql security definer set search_path = public as $$
+declare
+  r record; v_ngay date := (now() at time zone 'Asia/Ho_Chi_Minh')::date;
+  v_tu timestamptz := ((now() at time zone 'Asia/Ho_Chi_Minh')::date)::timestamp at time zone 'Asia/Ho_Chi_Minh';
+  v_dt numeric; v_hd int; v_tm numeric; v_ck_ban numeric; v_huy int; v_tien_huy numeric; v_ck int; v_ck_tien numeric;
+  v_khong int; v_lech numeric; v_mo int; v_xh numeric; v_no numeric; v_giam numeric; v_body text; v_canh boolean; v_dem int := 0;
+  f text := 'FM999G999G999';
+begin
+  for r in select store_location from public.pos_settings order by store_location loop
+    select coalesce(sum(total), 0), count(*), coalesce(sum(paid_amount) filter (where pay_method = 'tien_mat'), 0),
+           coalesce(sum(paid_amount) filter (where pay_method = 'chuyen_khoan'), 0), coalesce(sum(debt_amount), 0),
+           coalesce(sum(line_discount + invoice_discount), 0)
+      into v_dt, v_hd, v_tm, v_ck_ban, v_no, v_giam
+      from public.pos_invoices where store_location = r.store_location and status = 'xong' and created_at >= v_tu;
+    select count(*), coalesce(sum(total), 0) into v_huy, v_tien_huy
+      from public.pos_invoices where store_location = r.store_location and status = 'huy' and cancelled_at >= v_tu;
+    select count(*), coalesce(sum(paid_amount), 0) into v_ck, v_ck_tien
+      from public.pos_invoices where store_location = r.store_location and status = 'xong' and transfer_status = 'cho_xac_nhan';
+    select count(*) into v_khong from public.pos_invoices
+      where store_location = r.store_location and transfer_status = 'khong_thay' and created_at >= v_tu - interval '7 days';
+    select coalesce(sum(diff), 0) into v_lech from public.pos_shifts where store_location = r.store_location and closed_at >= v_tu;
+    select count(*) into v_mo from public.pos_shifts where store_location = r.store_location and status = 'open';
+    select coalesce(sum((l->>'qty')::numeric), 0) into v_xh
+      from public.pos_stock_docs d, jsonb_array_elements(d.lines) l
+      where d.store_location = r.store_location and d.doc_type = 'xuat_huy' and d.status = 'xong' and d.done_at >= v_tu;
+    if v_hd = 0 and v_huy = 0 and v_mo = 0 and v_xh = 0 then continue; end if;
+    v_canh := v_lech <> 0 or v_ck > 0 or v_khong > 0 or v_mo > 0 or v_huy > 0;
+    v_body := v_hd || ' hoá đơn · doanh thu ' || to_char(v_dt, f) || 'đ (tiền mặt ' || to_char(v_tm, f) || 'đ, CK ' || to_char(v_ck_ban, f) || 'đ'
+      || case when v_no > 0 then ', ghi nợ ' || to_char(v_no, f) || 'đ' else '' end || ').'
+      || case when v_giam > 0 then ' Giảm giá ' || to_char(v_giam, f) || 'đ.' else '' end
+      || case when v_huy > 0 then ' ⚠️ Huỷ ' || v_huy || ' hoá đơn (' || to_char(v_tien_huy, f) || 'đ).' else '' end
+      || case when v_lech < 0 then ' ⚠️ Két thiếu ' || to_char(-v_lech, f) || 'đ.' when v_lech > 0 then ' Két dư ' || to_char(v_lech, f) || 'đ.' else '' end
+      || case when v_ck > 0 then ' ⚠️ ' || v_ck || ' chuyển khoản (' || to_char(v_ck_tien, f) || 'đ) chưa ai xác nhận tiền về.' else '' end
+      || case when v_khong > 0 then ' ⚠️ ' || v_khong || ' chuyển khoản KHÔNG thấy tiền (7 ngày).' else '' end
+      || case when v_xh > 0 then ' Xuất huỷ ' || to_char(v_xh, f) || ' bánh.' else '' end
+      || case when v_mo > 0 then ' ⚠️ Chưa đóng ca.' else '' end;
+    perform public.pos__bao_sep('pos-cuoi-ngay:' || r.store_location || ':' || to_char(v_ngay, 'YYYYMMDD'),
+      '📊 ' || r.store_location || ' hôm nay: ' || to_char(v_dt, f) || 'đ', v_body,
+      md5('pos-cuoi-ngay:' || r.store_location || ':' || v_ngay)::uuid, case when v_canh then 'warning' else 'info' end);
+    v_dem := v_dem + 1;
+  end loop;
+  return v_dem;
+end $$;
+
+do $$
+begin
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    if exists (select 1 from cron.job where jobname = 'sumi-pos-tong-ket-cuoi-ngay') then
+      perform cron.unschedule('sumi-pos-tong-ket-cuoi-ngay');
+    end if;
+    perform cron.schedule('sumi-pos-tong-ket-cuoi-ngay', '30 15 * * *', 'select public.pos_bao_cuoi_ngay()');  -- 15:30 UTC = 22:30 VN
+  end if;
+end $$;
+
 -- ───────────────────────── 12. Quyền gọi hàm ─────────────────────────
 do $$
 declare f text;
@@ -1077,7 +1134,7 @@ begin
   foreach f in array array['pos__ghi_nhat_ky(text,text,text,jsonb)','pos__bao_sep(text,text,text,uuid,text)',
     'pos__bao_quan_ly(text,text,text,uuid)','pos__ton_cong(text,uuid,text,text,numeric,text,text)',
     'pos__ton(text,uuid,text)','pos__ca_mo(text)','pos__no_cua(uuid)','pos__diem_cua(uuid)','pos__gia(uuid,uuid,uuid)',
-    'pos__kho_cua(uuid)','pos__so_lieu_ca(uuid)'] loop
+    'pos__kho_cua(uuid)','pos__so_lieu_ca(uuid)','pos_bao_cuoi_ngay()'] loop
     execute 'revoke all on function public.' || f || ' from public, anon, authenticated';
   end loop;
   foreach f in array array['pos_cap_do()','pos_la_ke_toan()','pos_ten_toi()','pos_mo_ca(text,numeric)',

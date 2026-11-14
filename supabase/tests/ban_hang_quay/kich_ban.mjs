@@ -98,4 +98,8 @@ await chan('NV ghi thẳng bảng hoá đơn', ()=>q(`update pos_invoices set to
 await chan('NV xoá sạch bảng (truncate)', ()=>q(`truncate pos_invoices cascade`),'permission');
 await chan('NV gọi hàm nội bộ cộng tồn', ()=>q(`select public.pos__ton_cong('Vĩnh Phú 42','${P1}',null,'x',100,'ban','x')`),'permission');
 await db.exec(`reset role`);
+await chan('NV gọi tổng kết cuối ngày', async()=>{await db.exec(`set role authenticated`); try{await q(`select public.pos_bao_cuoi_ngay()`);}finally{await db.exec(`reset role`);}},'permission');
+await ok('Tổng kết cuối ngày: báo sếp 1 cửa hàng', ()=>v(`select public.pos_bao_cuoi_ngay()`),1);
+await ok('Tin tổng kết tới đúng sếp, có cảnh báo', ()=>v(`select severity||'|'||(title like '📊 Vĩnh Phú 42 hôm nay:%')::text from notifications where event_key like 'pos-cuoi-ngay:%' and recipient_profile_id='${GD}'`),'warning|true');
+await ok('Chạy lại không gửi trùng', async()=>{await q(`select public.pos_bao_cuoi_ngay()`); return v(`select count(*)::int from notifications where event_key like 'pos-cuoi-ngay:%'`);},1);
 console.log(`\n${dem-loi}/${dem} đạt`); process.exit(loi?1:0);

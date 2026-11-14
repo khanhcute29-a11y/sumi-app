@@ -10,3 +10,19 @@ node <repo>/supabase/tests/ban_hang_quay/kich_ban.mjs <repo>/supabase/tests/ban_
 ```
 
 `khung_gia_lap.sql` chỉ dựng các bảng tối thiểu (profiles, products, finished_goods_stock…) để chạy thử — KHÔNG chạy trên database thật.
+
+## Thử GIAO DIỆN chạy thật mà không đụng database thật
+
+`thu_giao_dien.jsx` chạy màn Bán tại quầy ở chế độ thật trên PGlite (Postgres chạy ngay trong trình duyệt).
+Mọi `supabase.rpc` / `supabase.from` bị chuyển vào PGlite; ghi thẳng bảng bị chặn; ảnh không tải lên thật.
+Chỉ ĐỌC sản phẩm + khách thật (60 món, 50 khách) để có dữ liệu giống thật.
+
+1. Tạo thư mục `.thu-that/` ở gốc repo (đừng commit), chép vào:
+   - `node_modules/@electric-sql/pglite/dist` → `.thu-that/pglite`
+   - `khung_gia_lap.sql` + `them_cho_giao_dien.sql` (nối lại) → `.thu-that/stub.sql`
+   - `thu_giao_dien.jsx` → `.thu-that/harness.jsx`
+2. `npm run dev`, đăng nhập, mở `/?mockup=ban-hang`.
+3. Console trình duyệt:
+   `const m = await import('/.thu-that/harness.jsx'); await m.chay({ vaiTro: 'sale' }); m.troGiup();`
+   (`vaiTro`: `sale` = nhân viên, `admin` = quản lý, `owner` = giám đốc). `window.__q(sql)` đọc PGlite;
+   `window.__la(uid, sql)` chạy 1 câu dưới tên người khác (VD quản lý `…0a2` bấm duyệt).

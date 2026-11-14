@@ -651,16 +651,18 @@ export async function fetchWarehouseStockInLog(limit = 100) {
 // Cộng/trừ tồn kho thành phẩm cho đúng 1 dòng (product_id, size, branch).
 // delta dương = nhập, âm = xuất (được phép âm nếu bán trước khi kịp ghi
 // sản xuất). Trả về số dư mới để caller ghi log đúng số.
+// Chỉ dòng tồn BẾP (store_location null, không phải bán thành phẩm) — dòng tồn từng cửa hàng
+// cùng product/branch/size do Bán tại quầy quản lý, gộp vào là maybeSingle lỗi "nhiều dòng".
 async function upsertFinishedGoodsStock({ productId, size, branch }, delta) {
   const normalizedSize = size || null;
   let row, findError;
   if (normalizedSize === null) {
     const res = await supabase.from('finished_goods_stock').select('*')
-      .eq('product_id', productId).eq('branch', branch).is('size', null).maybeSingle();
+      .eq('product_id', productId).eq('branch', branch).is('size', null).is('store_location', null).eq('is_semi_finished', false).maybeSingle();
     row = res.data; findError = res.error;
   } else {
     const res = await supabase.from('finished_goods_stock').select('*')
-      .eq('product_id', productId).eq('branch', branch).eq('size', normalizedSize).maybeSingle();
+      .eq('product_id', productId).eq('branch', branch).eq('size', normalizedSize).is('store_location', null).eq('is_semi_finished', false).maybeSingle();
     row = res.data; findError = res.error;
   }
   if (findError) throw findError;
@@ -778,12 +780,12 @@ export async function adjustFinishedGoodsStock({ productId, productName, size, b
   let current;
   if (normalizedSize === null) {
     const { data, error } = await supabase.from('finished_goods_stock').select('*')
-      .eq('product_id', productId).eq('branch', branch).is('size', null).maybeSingle();
+      .eq('product_id', productId).eq('branch', branch).is('size', null).is('store_location', null).eq('is_semi_finished', false).maybeSingle();
     if (error) throw error;
     current = data;
   } else {
     const { data, error } = await supabase.from('finished_goods_stock').select('*')
-      .eq('product_id', productId).eq('branch', branch).eq('size', normalizedSize).maybeSingle();
+      .eq('product_id', productId).eq('branch', branch).eq('size', normalizedSize).is('store_location', null).eq('is_semi_finished', false).maybeSingle();
     if (error) throw error;
     current = data;
   }
