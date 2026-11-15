@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { X, RefreshCw, Camera, Search } from 'lucide-react';
 import { supabase } from '../../../lib/supabaseClient';
-import { goi, chuLoi, anhVietQr, noiDungCk, NGAN_HANG, maMoi, tachId, linkAnh, guiHangDoi } from './posThat';
+import { goi, chuLoi, anhVietQr, noiDungCk, NGAN_HANG, maMoi, tachId, linkAnh, guiHangDoi, taiAnh, lapBanDoHang } from './posThat';
 import { locXep } from './banHangQuayLogic';
 
 // Các hộp thoại chỉ có ở chế độ CHẠY THẬT (ca, duyệt, chuyển khoản, thiết lập, đặt cọc, nhận hàng, báo cáo, nhật ký).
@@ -24,20 +24,34 @@ export function HopT({ tieuDe, onDong, children, chan, rong }) {
 
 const Loi = ({ chu }) => (chu ? <p className="kv-loi">{chu}</p> : null);
 
-// ── Mở ca: đếm tiền lẻ trong két trước khi bán ──
-export function MoCa({ chiNhanh, nguoi, onMo, onVeApp, onDong }) {
+// ── Vào ca: mỗi nhân viên vào ca bằng tài khoản của mình — đếm tiền két + chụp ảnh két ──
+// Database chặn: ca người khác đang mở, chưa chấm công (nếu Giám đốc bật), thiếu ảnh.
+export function MoCa({ chiNhanh, nguoi, onMo, onVeApp, onDong, onTaiLai }) {
   const [tien, setTien] = useState('');
+  const [anh, setAnh] = useState(null);
+  const [dangAnh, setDangAnh] = useState(false);
   const [dang, setDang] = useState(false);
   const [loi, setLoi] = useState('');
+  const chonAnh = async (f) => {
+    setDangAnh(true); setLoi('');
+    try { setAnh(await taiAnh(f, 'ket')); } catch (e) { setLoi(`Không tải được ảnh: ${chuLoi(e)}`); }
+    setDangAnh(false);
+  };
   const mo = async () => {
+    if (tien === '') { setLoi('Nhập số tiền mặt đang có trong két'); return; }
+    if (!anh) { setLoi('Chụp ảnh két tiền trước khi vào ca'); return; }
     setDang(true); setLoi('');
-    try { onMo(await goi('pos_mo_ca', { p_store: chiNhanh, p_opening_cash: Number(tien) || 0 })); } catch (e) { setLoi(chuLoi(e)); setDang(false); }
+    try { onMo(await goi('pos_vao_ca', { p_store: chiNhanh, p_opening_cash: Number(tien) || 0, p_photo_url: anh })); } catch (e) {
+      const m = chuLoi(e); setLoi(m); setDang(false);
+      if (/đang mở/.test(m)) onTaiLai?.(); // người khác vừa vào ca ở máy khác → tải lại để hiện ca của họ
+    }
   };
   return (
-    <HopT tieuDe={`Mở ca · ${chiNhanh}`} onDong={onDong}
-      chan={<><button type="button" className="bhq-nut phu" onClick={onVeApp}>Về app Sumi</button><button type="button" className="bhq-nut chinh" disabled={dang} onClick={mo}>{dang ? 'Đang mở…' : 'Bắt đầu bán'}</button></>}>
-      <p className="bhq-ghi">Chào {nguoi}. Đếm tiền lẻ đang có trong két rồi nhập vào — cuối ca máy so với số này để biết thiếu hay dư.</p>
-      <label className="bhq-nhan">Tiền mặt đầu ca<input className="bhq-o lon" autoFocus inputMode="numeric" value={tien ? so(tien) : ''} placeholder="0" onChange={(e) => setTien(soTien(e.target.value))} onKeyDown={(e) => { if (e.key === 'Enter') mo(); }} /></label>
+    <HopT tieuDe={`Vào ca · ${chiNhanh}`} onDong={onDong}
+      chan={<><button type="button" className="bhq-nut phu" onClick={onVeApp}>Về app Sumi</button><button type="button" className="bhq-nut chinh" disabled={dang || dangAnh} onClick={mo}>{dang ? 'Đang vào ca…' : 'Vào ca · bắt đầu bán'}</button></>}>
+      <p className="bhq-ghi">Chào {nguoi}. Đếm tiền lẻ đang có trong két rồi nhập vào, chụp 1 ảnh két tiền. Mọi hoá đơn trong ca tính doanh số cho bạn.</p>
+      <label className="bhq-nhan">Tiền mặt đầu ca<input className="bhq-o lon" autoFocus inputMode="numeric" value={tien ? so(tien) : tien} placeholder="0" onChange={(e) => setTien(soTien(e.target.value))} /></label>
+      <ChupAnh path={anh} dang={dangAnh} onChon={chonAnh} chu="Chụp ảnh két tiền (bắt buộc)" />
       <Loi chu={loi} />
     </HopT>
   );
@@ -183,6 +197,13 @@ export function ThietLapQuay({ chiNhanh, caiDat, matHang, bangGia, hanDung = {},
   const [loi, setLoi] = useState('');
   const [ok, setOk] = useState('');
   const dat = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
+  const [chamCong, setChamCong] = useState(!!c.bat_cham_cong);
+  const [dangCc, setDangCc] = useState(false);
+  const doiChamCong = async (bat) => {
+    setDangCc(true); setLoi(''); setOk('');
+    try { await goi('pos_bat_cham_cong', { p_store: chiNhanh, p_bat: bat }); setChamCong(bat); setOk(bat ? 'Đã bật: phải chấm công mới vào ca' : 'Đã tắt yêu cầu chấm công'); await onLuu(); } catch (e) { setLoi(chuLoi(e)); }
+    setDangCc(false);
+  };
   const luuChung = async () => {
     setDang(true); setLoi(''); setOk('');
     try {
@@ -198,6 +219,9 @@ export function ThietLapQuay({ chiNhanh, caiDat, matHang, bangGia, hanDung = {},
       <nav className="bhq-tab">{[['chung', 'Chung'], ['han_dung', 'Hạn dùng'], ['gia_von', 'Giá vốn'], ['bang_gia', 'Bảng giá theo kênh']].map(([k, l]) => <button key={k} type="button" className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</nav>
       {tab === 'chung' && (
         <div className="tlq">
+          <h4>Vào ca</h4>
+          <label className="kv-cong-tac"><span>Phải chấm công ở {chiNhanh} mới được vào ca</span><input type="checkbox" checked={chamCong} disabled={dangCc} onChange={(e) => doiChamCong(e.target.checked)} /><i /></label>
+          <p className="bhq-ghi">Bật lên: nhân viên chưa chấm công vào (hoặc chấm ở cửa hàng khác) sẽ không vào ca bán được. Giám đốc / Quản lý không bị chặn. Bật / tắt có hiệu lực ngay.</p>
           <h4>Giảm giá</h4>
           <label className="bhq-nhan">Nhân viên được tự giảm tối đa (%)<input className="bhq-o" inputMode="decimal" value={f.staff_discount_pct} onChange={dat('staff_discount_pct')} /></label>
           <p className="bhq-ghi">Giảm quá mức này thì máy bắt "Xin duyệt" — Quản lý / Giám đốc bấm Đồng ý trên điện thoại.</p>
@@ -391,6 +415,8 @@ export function DatCoc({ hd, tong, chiNhanh, onXong, onDong }) {
         p_ship_fee: 0, p_deposit: Number(coc) || 0, p_payment_method: pt === 'tien_mat' ? 'cash' : 'bank_transfer', p_total: tong.canTra,
         p_discount_amount: tong.giamHd || 0, p_promotion_note: null, p_tax_code: null, p_vat_amount: tong.vat || 0,
       });
+      // Ghi "đơn đặt nhận tại quầy" để tính doanh số cho người nhận đơn khi đơn hoàn thành. Lỗi không chặn đơn.
+      try { await goi('pos_ghi_don_quay', { p_order: orderId, p_store: chiNhanh }); } catch { /* đơn vẫn tạo được */ }
       if (Number(coc) > 0) await goi('pos_thu_don', { p_id: maMoi(), p_order: orderId, p_kind: 'coc', p_amount: Number(coc), p_method: pt, p_store: chiNhanh });
       onXong({ ma, coc: Number(coc) || 0, conLai: tong.canTra - (Number(coc) || 0) });
     } catch (e) { setLoi(chuLoi(e)); setDang(false); }
@@ -505,15 +531,19 @@ export function NhanHang({ phieu, matHang, onNhan, onDong }) {
   );
 }
 
-// ── Chụp ảnh bánh huỷ ──
-export function ChupAnh({ path, onChon, dang }) {
+// ── Chụp ảnh (bánh huỷ, két tiền, ảnh bán hàng) ──
+// thuVien: cho chọn ảnh có sẵn trong máy (không ép mở camera). xem: link ảnh trên máy (chưa tải lên).
+export function ChupAnh({ path, xem, onChon, dang, chu = 'Chụp ảnh bánh huỷ (bắt buộc)', thuVien = false }) {
   const [url, setUrl] = useState(null);
-  useEffect(() => { let h = false; linkAnh(path).then((u) => { if (!h) setUrl(u); }); return () => { h = true; }; }, [path]);
+  useEffect(() => { if (xem) return undefined; let h = false; linkAnh(path).then((u) => { if (!h) setUrl(u); }); return () => { h = true; }; }, [path, xem]);
+  const co = !!(xem || path);
+  const hien = xem || url;
   return (
-    <label className={`kf-anh ${path ? 'co' : ''}`}>
-      {url ? <img src={url} alt="Ảnh bánh huỷ" /> : <Camera size={22} />}
-      <span>{dang ? 'Đang tải ảnh…' : path ? 'Chụp lại' : 'Chụp ảnh bánh huỷ (bắt buộc)'}</span>
-      <input type="file" accept="image/*" capture="environment" onChange={(e) => e.target.files?.[0] && onChon(e.target.files[0])} hidden />
+    <label className={`kf-anh ${co ? 'co' : ''}`}>
+      {hien ? <img src={hien} alt="Ảnh đã chọn" /> : <Camera size={22} />}
+      <span>{dang ? 'Đang tải ảnh…' : co ? (thuVien ? 'Đổi ảnh khác' : 'Chụp lại') : chu}</span>
+      <input type="file" accept="image/*" {...(thuVien ? {} : { capture: 'environment' })}
+        onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) onChon(f); }} hidden />
     </label>
   );
 }
@@ -640,23 +670,56 @@ export function BaoCaoThat({ chiNhanh, laGD, dienThoai }) {
   );
 }
 
-// ── Kết ca thật: đếm tiền "mù" (không thấy số máy tính trước) → database tự so, báo GĐ nếu lệch ──
-export function KetCaThat({ caMo, chiNhanh, onDong, onKet }) {
+// ── Kết ca thật: đếm tiền "mù" + đếm nhanh bánh trên kệ + ảnh két → database tự so, báo GĐ nếu lệch ──
+export function KetCaThat({ caMo, chiNhanh, matHang = [], onDong, onKet }) {
   const [dem, setDem] = useState('');
   const [ghi, setGhi] = useState('');
+  const [anh, setAnh] = useState(null);
+  const [dangAnh, setDangAnh] = useState(false);
+  const [banh, setBanh] = useState(null); // [{ khoa, product_id, size, name }] — bánh máy đang ghi còn trên kệ
+  const [demBanh, setDemBanh] = useState({});
   const [dang, setDang] = useState(false);
   const [loi, setLoi] = useState('');
   const [xong, setXong] = useState(null);
+  useEffect(() => {
+    let h = false;
+    (async () => {
+      const { data, error } = await supabase.from('finished_goods_stock').select('product_id, size, qty')
+        .eq('store_location', chiNhanh).eq('is_semi_finished', false).gt('qty', 0);
+      if (h) return;
+      if (error) { setLoi(`Không tải được danh sách bánh trên kệ: ${chuLoi(error)}`); setBanh([]); return; }
+      const bd = lapBanDoHang(matHang);
+      const gom = new Map();
+      for (const r of data || []) {
+        const khoa = `${r.product_id}|${r.size || ''}`;
+        if (gom.has(khoa)) continue;
+        const m = bd.theoSize(r.product_id, r.size);
+        gom.set(khoa, { khoa, product_id: r.product_id, size: r.size || null, name: m ? `${m.ten}${r.size && !String(m.ten).includes(r.size) ? ` ${r.size}` : ''}` : `Bánh khác${r.size ? ` ${r.size}` : ''}` });
+      }
+      setBanh([...gom.values()].sort((a, b) => a.name.localeCompare(b.name, 'vi')));
+    })();
+    return () => { h = true; };
+  }, [chiNhanh, matHang]);
+  const chonAnh = async (f) => {
+    setDangAnh(true); setLoi('');
+    try { setAnh(await taiAnh(f, 'ket')); } catch (e) { setLoi(`Không tải được ảnh: ${chuLoi(e)}`); }
+    setDangAnh(false);
+  };
+  const thieuBanh = (banh || []).filter((b) => demBanh[b.khoa] == null || demBanh[b.khoa] === '');
   const dong = async () => {
+    if (dem === '') { setLoi('Nhập số tiền mặt đếm được trong két'); return; }
+    if (thieuBanh.length) { setLoi(`Còn ${thieuBanh.length} loại bánh chưa nhập số đếm (không còn cái nào thì nhập 0).`); return; }
+    if (!anh) { setLoi('Chụp ảnh két tiền trước khi kết ca'); return; }
     setDang(true); setLoi('');
     try {
       // Việc làm lúc mất mạng phải lên database TRƯỚC khi chốt két — không thì tiền của chúng rơi sang ca sau.
       const { conLai } = await guiHangDoi();
       if (conLai > 0) {
-        setLoi(`Còn ${conLai} việc làm lúc mất mạng chưa gửi lên được. Đợi có mạng (thanh đỏ trên cùng biến mất) rồi bấm Đóng ca lại.`);
+        setLoi(`Còn ${conLai} việc làm lúc mất mạng chưa gửi lên được. Đợi có mạng (thanh đỏ trên cùng biến mất) rồi bấm Kết ca lại.`);
         setDang(false); return;
       }
-      const s = await goi('pos_dong_ca', { p_shift: caMo.id, p_counted: Number(dem) || 0, p_note: ghi.trim() || null });
+      const stock = (banh || []).map((b) => ({ product_id: b.product_id, size: b.size, name: b.name, dem: Number(demBanh[b.khoa]) || 0 }));
+      const s = await goi('pos_ket_ca', { p_shift: caMo.id, p_counted: Number(dem) || 0, p_note: ghi.trim() || null, p_photo_url: anh, p_stock: stock });
       const sl = s.summary || {};
       setXong({
         ma: s.code, nguoi: s.closed_by_name, chiNhanh, moLuc: new Date(s.opened_at).getTime(), dongLuc: new Date(s.closed_at).getTime(),
@@ -664,39 +727,291 @@ export function KetCaThat({ caMo, chiNhanh, onDong, onKet }) {
         ban: sl.ban || {}, thu: sl.thu_no || {}, donDat: sl.don_dat || {}, ghiNo: Number(sl.ban?.ghi_no || 0), soHoaDon: sl.so_hoa_don,
         hoanTien: Number(sl.hoan_tien_huy || 0), tienMatTrongCa: Number(sl.tien_mat_trong_ca || 0), cuoiCa: Number(s.expected_cash), chenh: Number(s.diff),
         ckCho: Number(sl.ck_chua_xac_nhan || 0),
+        doanhSo: Number(sl.doanh_so_tinh || 0), dsCkCho: Number(sl.ck_cho || 0), dsNo: Number(sl.no_chua_tra || 0),
+        banhLech: (s.stock_check || []).filter((k) => Number(k.lech) !== 0),
       });
     } catch (e) { setLoi(chuLoi(e)); }
     setDang(false);
   };
   if (xong) {
     return (
-      <HopT tieuDe={`Đã đóng ca ${xong.ma}`}
+      <HopT tieuDe={`Đã kết ca ${xong.ma}`}
         chan={<button type="button" className="bhq-nut chinh" onClick={() => onKet(xong)}>In phiếu bàn giao</button>}>
         <div className="bhq-bang">
+          <div className="lon"><span>Doanh số ca của {caMo.opened_by_name || 'bạn'}</span><b className="xanh-la">{so(xong.doanhSo)}</b></div>
+          {xong.dsCkCho > 0 && <div><span>CK chờ xác nhận (tính khi tiền về)</span><b>{so(xong.dsCkCho)}</b></div>}
+          {xong.dsNo > 0 && <div><span>Khách còn nợ (tính khi trả)</span><b>{so(xong.dsNo)}</b></div>}
           <div><span>Số hoá đơn</span><b>{xong.soHoaDon}</b></div>
           <div><span>Tiền mặt đầu ca</span><b>{so(xong.dauCa)}</b></div>
           <div><span>Tiền mặt trong ca</span><b>{so(xong.tienMatTrongCa)}</b></div>
           <div><span>Tiền mặt cuối ca (hệ thống)</span><b>{so(xong.cuoiCa)}</b></div>
           <div><span>Đếm được</span><b>{so(xong.banGiao)}</b></div>
-          <div className="lon"><span>Chênh lệch</span><b className={xong.chenh < 0 ? 'do' : xong.chenh > 0 ? 'cam' : 'xanh-la'}>{xong.chenh > 0 ? '+' : ''}{so(xong.chenh)}</b></div>
+          <div className="lon"><span>Chênh lệch két</span><b className={xong.chenh < 0 ? 'do' : xong.chenh > 0 ? 'cam' : 'xanh-la'}>{xong.chenh > 0 ? '+' : ''}{so(xong.chenh)}</b></div>
         </div>
-        {xong.chenh !== 0 && <p className={`bhq-chenh ${xong.chenh < 0 ? 'thieu' : ''}`}>Giám đốc đã được báo. Quản lý sẽ kiểm và duyệt ca này.</p>}
+        {xong.banhLech.length > 0 && (
+          <div className="kc-lech">
+            <b>Bánh đếm lệch với máy ({xong.banhLech.length})</b>
+            {xong.banhLech.map((k) => <div key={`${k.product_id}|${k.size || ''}`}><span>{k.name}</span><span>máy {so(k.he_thong)} · đếm {so(k.dem)} · <b className={Number(k.lech) < 0 ? 'do' : 'cam'}>{Number(k.lech) > 0 ? '+' : ''}{so(k.lech)}</b></span></div>)}
+          </div>
+        )}
+        {(xong.chenh !== 0 || xong.banhLech.length > 0) && <p className={`bhq-chenh ${xong.chenh < 0 || xong.banhLech.length ? 'thieu' : ''}`}>Giám đốc đã được báo. Quản lý sẽ kiểm và duyệt ca này.</p>}
         {xong.ckCho > 0 && <p className="bhq-ghi">Còn {xong.ckCho} chuyển khoản chưa ai xác nhận tiền về.</p>}
       </HopT>
     );
   }
   return (
-    <HopT tieuDe="Đóng ca làm việc" onDong={onDong}
-      chan={<><button type="button" className="bhq-nut phu" onClick={onDong}>Bỏ qua</button><button type="button" className="bhq-nut chinh" disabled={dem === '' || dang} onClick={dong}>{dang ? 'Đang đóng…' : 'Đóng ca'}</button></>}>
+    <HopT tieuDe="Kết ca" onDong={onDong}
+      chan={<><button type="button" className="bhq-nut phu" onClick={onDong}>Bỏ qua</button><button type="button" className="bhq-nut chinh" disabled={dang || dangAnh || banh == null} onClick={dong}>{dang ? 'Đang kết ca…' : 'Kết ca'}</button></>}>
       <div className="bhq-bang">
         <div><span>Ca</span><b>{caMo.code}</b></div>
-        <div><span>Mở lúc</span><b>{ngayGio(caMo.opened_at)} · {caMo.opened_by_name}</b></div>
+        <div><span>Vào ca lúc</span><b>{ngayGio(caMo.opened_at)} · {caMo.opened_by_name}</b></div>
         <div><span>Tiền đầu ca</span><b>{so(caMo.opening_cash)}</b></div>
       </div>
-      <label className="bhq-nhan">Tiền mặt đếm được trong két<input className="bhq-o lon" autoFocus inputMode="numeric" value={dem ? so(dem) : dem} onChange={(e) => setDem(soTien(e.target.value))} placeholder="Đếm hết tiền trong két rồi nhập" /></label>
+      <label className="bhq-nhan">Tiền mặt đếm được trong két<input className="bhq-o lon" autoFocus inputMode="numeric" value={dem ? so(dem) : dem} onChange={(e) => setDem(soTien(e.target.value))} placeholder="Đếm hết rồi nhập" /></label>
+      <ChupAnh path={anh} dang={dangAnh} onChon={chonAnh} chu="Chụp ảnh két tiền (bắt buộc)" />
+      <h4 className="kc-tieu">Đếm nhanh bánh trên kệ</h4>
+      {banh == null ? <p className="bhq-ghi">Đang tải danh sách bánh…</p>
+        : banh.length === 0 ? <p className="bhq-ghi">Máy ghi kệ đã hết bánh — không cần đếm.</p>
+          : (
+            <div className="kc-banh">
+              {banh.map((b) => (
+                <label key={b.khoa} className={demBanh[b.khoa] == null || demBanh[b.khoa] === '' ? '' : 'xong'}>
+                  <span>{b.name}</span>
+                  <input className="bhq-o" inputMode="numeric" placeholder="Đếm" aria-label={`Số đếm được: ${b.name}`} value={demBanh[b.khoa] ?? ''}
+                    onChange={(e) => { const v = soTien(e.target.value); setDemBanh((x) => ({ ...x, [b.khoa]: v })); }} />
+                </label>
+              ))}
+            </div>
+          )}
       <label className="bhq-nhan">Ghi chú (nếu có chi tiền lẻ, đổi tiền…)<input className="bhq-o" value={ghi} onChange={(e) => setGhi(e.target.value)} /></label>
-      <p className="bhq-ghi">Đếm thật rồi nhập — máy chỉ hiện số hệ thống SAU khi đóng ca. Đóng rồi không mở lại được.</p>
+      <p className="bhq-ghi">Đếm thật rồi nhập — máy chỉ hiện số hệ thống SAU khi kết ca. Kết rồi không mở lại được.</p>
       <Loi chu={loi} />
+    </HopT>
+  );
+}
+
+// ── Doanh số nhân viên (Giám đốc / Quản lý / Kế toán) — tổng theo ca, tuần, tháng. Tiền hoa hồng anh tự tính. ──
+const KY_DS = [['tuan_nay', 'Tuần này'], ['tuan_truoc', 'Tuần trước'], ['thang_nay', 'Tháng này'], ['thang_truoc', 'Tháng trước'], ['tuy_chinh', 'Tùy chỉnh']];
+export function khoangDs(k, tu, den) {
+  const n = new Date(); const d0 = new Date(n.getFullYear(), n.getMonth(), n.getDate());
+  const thu = (d0.getDay() + 6) % 7; // thứ Hai = 0
+  const dauTuan = new Date(d0); dauTuan.setDate(d0.getDate() - thu);
+  const cong = (d, so) => { const x = new Date(d); x.setDate(x.getDate() + so); return x; };
+  if (k === 'tuan_nay') return [dauTuan, cong(dauTuan, 7)];
+  if (k === 'tuan_truoc') return [cong(dauTuan, -7), dauTuan];
+  if (k === 'thang_nay') return [new Date(n.getFullYear(), n.getMonth(), 1), new Date(n.getFullYear(), n.getMonth() + 1, 1)];
+  if (k === 'thang_truoc') return [new Date(n.getFullYear(), n.getMonth() - 1, 1), new Date(n.getFullYear(), n.getMonth(), 1)];
+  const a = tu ? new Date(`${tu}T00:00`) : d0; const b = den ? new Date(`${den}T00:00`) : d0;
+  return [a, cong(b, 1)];
+}
+const chuNgay = (d) => d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+const gioPhut = (t) => (t ? new Date(t).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '…');
+const TEN_CANH = { anh_trung: 'ảnh dùng lại', khong_phai_ca_minh: 'bán trong ca người khác', khac_ca: 'khác ca', gia_lech: 'giá lệch',
+  giam_qua_muc: 'giảm quá mức', vuot_han_muc_no: 'nợ quá hạn mức', ban_qua_han: 'bán bánh quá hạn', bang_gia_tat: 'bảng giá đã tắt',
+  giam_cuoi_ngay_som: 'giảm cuối ngày sớm', giam_cuoi_ngay_qua_muc: 'giảm cuối ngày quá mức', diem_tat: 'điểm đã tắt', diem_khong_du: 'không đủ điểm' };
+
+function MoAnh({ path, chu }) {
+  const [dang, setDang] = useState(false);
+  if (!path) return <span className="ds-mo">—</span>;
+  const mo = async () => { setDang(true); const u = await linkAnh(path); setDang(false); if (u) window.open(u, '_blank', 'noopener'); };
+  return <button type="button" className="ds-link" onClick={mo}>{dang ? '…' : chu}</button>;
+}
+function AnhNho({ path }) {
+  const [url, setUrl] = useState(null);
+  useEffect(() => { let h = false; linkAnh(path).then((u) => { if (!h) setUrl(u); }); return () => { h = true; }; }, [path]);
+  if (!path) return <span className="ds-anh trong">Không ảnh</span>;
+  return url ? <a href={url} target="_blank" rel="noopener noreferrer" className="ds-anh"><img src={url} alt="Ảnh bán hàng" loading="lazy" /></a> : <span className="ds-anh trong">…</span>;
+}
+
+function HoaDonCa({ ca, duocLoai, onDoi }) {
+  const [ds, setDs] = useState(null);
+  const [loi, setLoi] = useState('');
+  const [loai, setLoai] = useState(null); // { id, lyDo }
+  const [dang, setDang] = useState(false);
+  const tai = async () => { try { setDs(await goi('pos_hd_ca', { p_shift: ca.id })); } catch (e) { setLoi(chuLoi(e)); } };
+  useEffect(() => { tai(); }, [ca.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const doi = async (id, la, lyDo) => {
+    setDang(true); setLoi('');
+    try { await goi('pos_loai_doanh_so', { p_invoice: id, p_loai: la, p_ly_do: lyDo || null }); setLoai(null); await tai(); onDoi(); } catch (e) { setLoi(chuLoi(e)); }
+    setDang(false);
+  };
+  if (!ds) return loi ? <Loi chu={loi} /> : <p className="bhq-ghi">Đang tải hoá đơn…</p>;
+  if (!ds.length) return <p className="bhq-ghi">Ca này chưa có hoá đơn nào.</p>;
+  return (
+    <div className="ds-hd">
+      {ds.map((h) => {
+        const canh = Array.isArray(h.canh_bao) ? h.canh_bao : [];
+        return (
+          <div key={h.invoice_id} className={`ds-hd-dong ${h.loai || h.mua_nv ? 'loai' : ''}`}>
+            <AnhNho path={h.photo_url} />
+            <div className="ds-hd-than">
+              <div><b>{h.code}</b> · {gioPhut(h.created_at)} · {PT[h.pay_method] || h.pay_method}{h.offline ? ' · lúc mất mạng' : ''}</div>
+              <div className="ds-hd-so">Hoá đơn {so(h.total)} · <b>tính {so(h.tinh)}</b>{Number(h.ck_cho) > 0 ? ` · CK chờ ${so(h.ck_cho)}` : ''}{Number(h.no_chua_tra) > 0 ? ` · nợ ${so(h.no_chua_tra)}` : ''}</div>
+              <div className="ds-hd-phu">{h.cashier_name}{h.customer_name && h.customer_name !== 'Khách lẻ' ? ` · khách ${h.customer_name}` : ''}</div>
+              {h.mua_nv && <div className="ds-nhan cam">Nhân viên mua — không tính</div>}
+              {h.loai && <div className="ds-nhan do">Đã loại: {h.ly_do_loai || '—'}</div>}
+              {canh.length > 0 && <div className="ds-nhan cam">Cảnh báo: {canh.map((c) => TEN_CANH[c.loai] || c.loai).join(', ')}</div>}
+              {duocLoai && (loai?.id === h.invoice_id ? (
+                <div className="ds-loai">
+                  <input className="bhq-o" autoFocus placeholder="Lý do loại (bắt buộc)" value={loai.lyDo} onChange={(e) => setLoai({ ...loai, lyDo: e.target.value })} />
+                  <button type="button" className="bhq-nut chinh nho" disabled={dang || !loai.lyDo.trim()} onClick={() => doi(h.invoice_id, true, loai.lyDo.trim())}>Loại</button>
+                  <button type="button" className="bhq-nut phu nho" onClick={() => setLoai(null)}>Thôi</button>
+                </div>
+              ) : h.loai
+                ? <button type="button" className="bhq-nut phu nho" disabled={dang} onClick={() => doi(h.invoice_id, false)}>Bỏ loại</button>
+                : <button type="button" className="bhq-nut phu nho" onClick={() => setLoai({ id: h.invoice_id, lyDo: '' })}>Loại khỏi doanh số</button>)}
+            </div>
+          </div>
+        );
+      })}
+      <Loi chu={loi} />
+    </div>
+  );
+}
+
+export function DoanhSoNv({ dsCuaHang = [], duocLoai, onDong }) {
+  const [ky, setKy] = useState('tuan_nay');
+  const [tu, setTu] = useState(() => ngayO(new Date()));
+  const [den, setDen] = useState(() => ngayO(new Date()));
+  const [cn, setCn] = useState('');
+  const [dl, setDl] = useState(null);
+  const [dang, setDang] = useState(false);
+  const [loi, setLoi] = useState('');
+  const [moNv, setMoNv] = useState(null);
+  const [moCa, setMoCa] = useState(null);
+  const [a, b] = useMemo(() => khoangDs(ky, tu, den), [ky, tu, den]);
+  const tai = async () => {
+    setDang(true); setLoi('');
+    try { setDl(await goi('pos_doanh_so_nv', { p_from: a.toISOString(), p_to: b.toISOString(), p_store: cn || null })); } catch (e) { setLoi(chuLoi(e)); }
+    setDang(false);
+  };
+  useEffect(() => { if (b > a) tai(); else setLoi('Ngày "đến" phải sau ngày "từ"'); }, [a.getTime(), b.getTime(), cn]); // eslint-disable-line react-hooks/exhaustive-deps
+  const nv = dl?.nhan_vien || [];
+  const ca = dl?.ca || [];
+  const xuat = () => {
+    const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const dong = [['Doanh số nhân viên', `${chuNgay(a)} - ${chuNgay(new Date(b.getTime() - 1))}`, cn || 'Tất cả cửa hàng'], [],
+      ['Nhân viên', 'Số ca', 'Số hoá đơn', 'Doanh số bán (tính)', 'CK chờ xác nhận', 'Nợ chưa trả', 'Đơn đặt tại quầy (hoàn thành)', 'Số đơn đặt', 'TỔNG TÍNH', 'Bị loại / NV mua', 'Số HĐ có cảnh báo'],
+      ...nv.map((r) => [r.ten, r.so_ca, r.so_hd, r.ban_tinh, r.ck_cho, r.no_chua_tra, r.dat_quay, r.so_don_dat, r.tong, r.bi_loai, r.so_hd_canh_bao]),
+      [], ['Chi tiết ca'],
+      ['Mã ca', 'Cửa hàng', 'Nhân viên', 'Vào ca', 'Kết ca', 'Số HĐ', 'Doanh số (tính)', 'CK chờ', 'Người khác bán trong ca', 'Tiền đầu ca', 'Đếm cuối ca', 'Lệch két', 'Số món bánh lệch'],
+      ...ca.map((c) => [c.code, c.store, c.ten, new Date(c.opened_at).toLocaleString('vi-VN'), c.closed_at ? new Date(c.closed_at).toLocaleString('vi-VN') : 'đang mở',
+        c.so_hd, c.ban_tinh, c.ck_cho, c.nguoi_khac, c.tien_dau, c.dem ?? '', c.lech ?? '', c.so_banh_lech])];
+    const csv = `﻿${dong.map((r) => r.map(q).join(',')).join('\r\n')}`;
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const el = document.createElement('a'); el.href = url; el.download = `doanh-so-nhan-vien_${ngayO(a)}_${ngayO(new Date(b.getTime() - 1))}.csv`;
+    document.body.appendChild(el); el.click(); el.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
+  };
+  const tongAll = nv.reduce((s, r) => s + Number(r.tong || 0), 0);
+  return (
+    <HopT tieuDe="Doanh số nhân viên" onDong={onDong} rong
+      chan={<><button type="button" className="bhq-nut phu" disabled={!nv.length} onClick={xuat}>Xuất Excel (CSV)</button><button type="button" className="bhq-nut chinh" onClick={onDong}>Xong</button></>}>
+      <nav className="bhq-tab">{KY_DS.map(([k, l]) => <button key={k} type="button" className={ky === k ? 'on' : ''} onClick={() => setKy(k)}>{l}</button>)}</nav>
+      {ky === 'tuy_chinh' && (
+        <div className="tlq-2">
+          <label className="bhq-nhan">Từ ngày<input className="bhq-o" type="date" value={tu} onChange={(e) => setTu(e.target.value)} /></label>
+          <label className="bhq-nhan">Đến ngày<input className="bhq-o" type="date" value={den} onChange={(e) => setDen(e.target.value)} /></label>
+        </div>
+      )}
+      <div className="ds-loc">
+        <span>{chuNgay(a)} – {chuNgay(new Date(b.getTime() - 1))}</span>
+        <select className="bhq-o" value={cn} onChange={(e) => setCn(e.target.value)} aria-label="Cửa hàng">
+          <option value="">Tất cả cửa hàng</option>{dsCuaHang.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <button type="button" className="bhq-nut phu nho" onClick={tai} disabled={dang} aria-label="Tải lại"><RefreshCw size={16} /></button>
+      </div>
+      <p className="bhq-ghi">Doanh số tính = tiền đã thu (CK tính khi đã xác nhận tiền về, nợ tính khi khách trả), không gồm VAT/phí, bỏ hoá đơn nhân viên tự mua và hoá đơn bị loại. Bánh đặt tại quầy tính toàn bộ giá trị đơn khi đơn hoàn thành.</p>
+      <Loi chu={loi} />
+      {dang && !dl && <p className="bhq-ghi">Đang tải…</p>}
+      {dl && !nv.length && <p className="bhq-ghi">Chưa có doanh số trong khoảng này.</p>}
+      {nv.length > 0 && <div className="ds-tong"><span>Tổng {nv.length} nhân viên</span><b>{so(tongAll)}</b></div>}
+      <div className="ds-nv">
+        {nv.map((r, i) => {
+          const caCua = ca.filter((c) => c.staff_id === r.staff_id);
+          const mo = moNv === r.staff_id;
+          return (
+            <div key={r.staff_id} className={`ds-the ${mo ? 'mo' : ''}`}>
+              <button type="button" className="ds-dau" onClick={() => { setMoNv(mo ? null : r.staff_id); setMoCa(null); }} aria-expanded={mo}>
+                <span className="ds-hang">{i + 1}</span>
+                <span className="ds-ten"><b>{r.ten}</b><small>{r.so_ca} ca · {r.so_hd} hoá đơn{r.so_don_dat ? ` · ${r.so_don_dat} đơn đặt` : ''}</small></span>
+                <b className="ds-so">{so(r.tong)}</b>
+              </button>
+              <div className="ds-luoi">
+                <div><span>Bán tại quầy</span><b>{so(r.ban_tinh)}</b></div>
+                <div><span>Đặt tại quầy</span><b>{so(r.dat_quay)}</b></div>
+                {Number(r.ck_cho) > 0 && <div><span>CK chờ xác nhận</span><b className="cam">{so(r.ck_cho)}</b></div>}
+                {Number(r.no_chua_tra) > 0 && <div><span>Nợ chưa trả</span><b className="cam">{so(r.no_chua_tra)}</b></div>}
+                {Number(r.so_hd_loai) > 0 && <div><span>Loại / NV mua ({r.so_hd_loai})</span><b className="do">{so(r.bi_loai)}</b></div>}
+                {Number(r.so_hd_canh_bao) > 0 && <div><span>HĐ có cảnh báo</span><b className="cam">{r.so_hd_canh_bao}</b></div>}
+              </div>
+              {mo && (
+                <div className="ds-ca">
+                  {!caCua.length && <p className="bhq-ghi">Không có ca nào trong khoảng này (doanh số từ đơn đặt hoặc bán trong ca người khác).</p>}
+                  {caCua.map((c) => (
+                    <div key={c.id} className="ds-ca-dong">
+                      <button type="button" className="ds-ca-dau" onClick={() => setMoCa(moCa === c.id ? null : c.id)} aria-expanded={moCa === c.id}>
+                        <span><b>{c.code} · {c.store}</b><small>{new Date(c.opened_at).toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' })} · {gioPhut(c.opened_at)}–{c.status === 'open' ? 'đang mở' : gioPhut(c.closed_at)} · {c.so_hd} HĐ</small></span>
+                        <b>{so(c.ban_tinh)}</b>
+                      </button>
+                      <div className="ds-ca-phu">
+                        {Number(c.ck_cho) > 0 && <span>CK chờ {so(c.ck_cho)}</span>}
+                        {Number(c.nguoi_khac) > 0 && <span className="cam">Người khác bán {so(c.nguoi_khac)}</span>}
+                        {c.lech != null && <span className={Number(c.lech) < 0 ? 'do' : Number(c.lech) > 0 ? 'cam' : ''}>Lệch két {Number(c.lech) > 0 ? '+' : ''}{so(c.lech)}</span>}
+                        {Number(c.so_banh_lech) > 0 && <span className="do">{c.so_banh_lech} món bánh lệch</span>}
+                        <MoAnh path={c.anh_vao} chu="Ảnh két vào" /><MoAnh path={c.anh_ket} chu="Ảnh két ra" />
+                      </div>
+                      {Number(c.so_banh_lech) > 0 && (
+                        <div className="ds-ca-phu">{(c.kiem_banh || []).filter((k) => Number(k.lech) !== 0).map((k) => <span key={`${k.product_id}|${k.size || ''}`}>{k.name}: máy {so(k.he_thong)}, đếm {so(k.dem)}</span>)}</div>
+                      )}
+                      {moCa === c.id && <HoaDonCa ca={c} duocLoai={duocLoai} onDoi={tai} />}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </HopT>
+  );
+}
+
+// ── Xếp hạng tháng: ai cũng xem — chỉ thấy tên + hạng, không thấy tiền của người khác ──
+export function XepHang({ onDong }) {
+  const [thang, setThang] = useState(0); // 0 = tháng này, -1 = tháng trước
+  const [dl, setDl] = useState(null);
+  const [loi, setLoi] = useState('');
+  useEffect(() => {
+    let h = false;
+    const n = new Date(); const d = new Date(n.getFullYear(), n.getMonth() + thang, 1);
+    setDl(null); setLoi('');
+    goi('pos_xep_hang_thang', { p_thang: ngayO(d) }).then((v) => { if (!h) setDl(v); }).catch((e) => { if (!h) setLoi(chuLoi(e)); });
+    return () => { h = true; };
+  }, [thang]);
+  return (
+    <HopT tieuDe={`Xếp hạng bán hàng${dl ? ` · tháng ${dl.thang}` : ''}`} onDong={onDong}
+      chan={<button type="button" className="bhq-nut chinh" onClick={onDong}>Xong</button>}>
+      <nav className="bhq-tab">{[[0, 'Tháng này'], [-1, 'Tháng trước']].map(([k, l]) => <button key={k} type="button" className={thang === k ? 'on' : ''} onClick={() => setThang(k)}>{l}</button>)}</nav>
+      <Loi chu={loi} />
+      {!dl && !loi && <p className="bhq-ghi">Đang tải…</p>}
+      {dl && (
+        <>
+          <div className="xh-toi">
+            {dl.cua_toi ? <>Bạn đang <b>hạng {dl.cua_toi.hang}</b> · doanh số của bạn <b>{so(dl.cua_toi.tong)}</b></>
+              : <>Bạn chưa có doanh số tháng này{Number(dl.tong_cua_toi) > 0 ? ` (${so(dl.tong_cua_toi)})` : ''}.</>}
+          </div>
+          {!dl.bang.length ? <p className="bhq-ghi">Chưa có ai bán trong tháng này.</p> : (
+            <ol className="xh-ds">
+              {dl.bang.map((r, i) => (
+                <li key={`${r.hang}-${i}`} className={r.la_toi ? 'toi' : ''}>
+                  <span className={`xh-hang h${r.hang <= 3 ? r.hang : ''}`}>{r.hang}</span><span>{r.ten}{r.la_toi ? ' (bạn)' : ''}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+          <p className="bhq-ghi">Chỉ hiện thứ hạng — mỗi người chỉ xem được doanh số của chính mình.</p>
+        </>
+      )}
     </HopT>
   );
 }

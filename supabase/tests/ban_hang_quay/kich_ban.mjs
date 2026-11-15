@@ -17,11 +17,11 @@ const ok=async(ten,fn,mong)=>{dem++;try{const r=await fn(); if(mong!==undefined&
 const chan=async(ten,fn,chua)=>{dem++;try{await fn();loi++;console.log('✗',ten,'KHÔNG bị chặn');}catch(e){if(chua&&!e.message.includes(chua)){loi++;console.log('✗',ten,'chặn sai lý do:',e.message);}else console.log('✓',ten,'→',e.message.slice(0,80));}};
 const ton=(store='Vĩnh Phú 42')=>v(`select public.pos__ton(${store?`'${store}'`:'null'},'${P1}',null)`);
 const id=()=>crypto.randomUUID();
-const ban=(o)=>v(`select public.pos_ban('${JSON.stringify({id:o.id||id(),store:'Vĩnh Phú 42',pay_method:'tien_mat',lines:[{product_id:P1,name:'Bánh bò',qty:2,list_price:90000,unit_price:90000}],...o}).replace(/'/g,"''")}'::jsonb)`);
+const ban=(o)=>v(`select public.pos_ban('${JSON.stringify({id:o.id||id(),store:'Vĩnh Phú 42',pay_method:'tien_mat',photo_url:'ban.jpg',lines:[{product_id:P1,name:'Bánh bò',qty:2,list_price:90000,unit_price:90000}],...o}).replace(/'/g,"''")}'::jsonb)`);
 
 await as(NV);
-await ok('NV mở ca 100k', ()=>v(`select (public.pos_mo_ca('Vĩnh Phú 42',100000))->>'code'`),'PGC000001');
-await ok('Mở ca lần 2 trả về ca cũ', ()=>v(`select (public.pos_mo_ca('Vĩnh Phú 42',0))->>'code'`),'PGC000001');
+await ok('NV vào ca 100k (có ảnh két)', ()=>v(`select (public.pos_vao_ca('Vĩnh Phú 42',100000,'ket.jpg'))->>'code'`),'PGC000001');
+await ok('Vào ca lần 2 trả về ca cũ của mình', ()=>v(`select (public.pos_vao_ca('Vĩnh Phú 42',0,'ket.jpg'))->>'code'`),'PGC000001');
 const id1=id();
 await ok('Bán 2 bánh tiền mặt', async()=>{const r=await ban({id:id1,received:200000}); return [r.code,r.total,r.change];},['HD000001',180000,20000]);
 await ok('Tồn 20 → 18', ton, 18);
@@ -65,7 +65,7 @@ const bg=id();
 await ok('Bếp giao 5 (chưa cộng tồn quầy)', async()=>{await q(`select public.pos_luu_phieu('{"id":"${bg}","type":"bep_giao","store":"Vĩnh Phú 42","lines":[{"product_id":"${P1}","name":"Bánh bò","qty":5}]}')`); return ton();}, 12);
 await ok('Quầy nhận thực tế 4', async()=>{await q(`select public.pos_nhan_hang('${bg}','{"${P1}:":4}')`); return [await ton(), await ton(null)];}, [16,45]);
 await ok('Lệch giao/nhận báo sếp', ()=>v(`select count(*)::int from notifications where event_key like 'pos-lech-giao%'`),1);
-await ok('Đóng ca: đếm 450k', async()=>{const s=await v(`select public.pos_dong_ca((select id from pos_shifts where status='open'),450000)`); return [Number(s.expected_cash),Number(s.diff)];},[463000, -13000]);
+await ok('Đóng ca: đếm 450k', async()=>{const s=await v(`select public.pos_ket_ca((select id from pos_shifts where status='open'),450000,null,'ket.jpg','[{"product_id":"${P1}","name":"Bánh bò","dem":16}]')`); return [Number(s.expected_cash),Number(s.diff)];},[463000, -13000]);
 await ok('Đóng ca báo sếp', ()=>v(`select title from notifications where event_key like 'pos-dong-ca%'`));
 await chan('NV huỷ HĐ ca đã đóng', ()=>q(`select public.pos_huy_hd('${id1}','khách đổi ý')`),'ca đã đóng');
 await as(GD);
@@ -79,7 +79,7 @@ await chan('NV xem báo cáo', ()=>q(`select public.pos_bao_cao('Vĩnh Phú 42',
 await chan('NV đổi thiết lập', ()=>q(`select public.pos_luu_thiet_lap('Vĩnh Phú 42','{"staff_discount_pct":90}')`),'Chỉ Giám đốc');
 // Biến thể size + điểm
 await as(GD); await q(`select public.pos_luu_thiet_lap('Vĩnh Phú 42','{"points_enabled":true}')`);
-await as(NV); await q(`select public.pos_mo_ca('Vĩnh Phú 42',0)`);
+await as(NV); await q(`select public.pos_vao_ca('Vĩnh Phú 42',0,'ket.jpg')`);
 await as(GD);
 await ok('GĐ huỷ HĐ tiền mặt ca cũ khi ca mới đang mở → két ca mới trừ tiền trả khách', async()=>{const h=await v(`select id from pos_invoices where status='xong' and pay_method='tien_mat' and total=81000`); await q(`select public.pos_huy_hd('${h}','khách trả lại')`); const sl=await v(`select public.pos__so_lieu_ca((select id from pos_shifts where status='open'))`); return [Number(sl.hoan_tien_huy), Number(sl.tien_mat_trong_ca)];},[81000,-81000]);
 await as(NV);
@@ -106,7 +106,7 @@ await ok('Chạy lại không gửi trùng', async()=>{await q(`select public.po
 // ── Vá 202611141010: bán lúc mất mạng luôn được ghi + chặn thu trùng đơn đặt ──
 if (process.argv.length > 4) {
   await as(NV);
-  const caMo = await v(`select (public.pos_mo_ca('Vĩnh Phú 42',0))->>'id'`);
+  const caMo = await v(`select (public.pos_vao_ca('Vĩnh Phú 42',0,'ket.jpg'))->>'id'`);
   const soTb = () => v(`select count(*)::int from notifications where event_key like 'pos-mat-mang:%'`);
   const tb0 = await soTb();
   const o1 = id();
@@ -161,7 +161,7 @@ if (process.argv.length > 6) {
   await chan('NV tự cài hạn dùng', ()=>q(`select public.pos_luu_han_dung('${P3}',2)`),'Chỉ Quản lý');
   await as(QL);
   await ok('QL cài Bông lan bán được 2 ngày', async()=>{await q(`select public.pos_luu_han_dung('${P3}',2)`); return v(`select days from pos_shelf_life where product_id='${P3}'`);},2);
-  await as(NV); await q(`select public.pos_mo_ca('${S}',0)`);
+  await as(NV); await q(`select public.pos_vao_ca('${S}',0,'ket.jpg')`);
   await ok('Nhận 10 → 1 lô, HSD = 0h ngày nhận + 2', async()=>{await nhanP3(10); return [await lo(), await v(`select ((expiry_at at time zone 'Asia/Ho_Chi_Minh')::date - (now() at time zone 'Asia/Ho_Chi_Minh')::date) from pos_stock_lots where product_id='${P3}'`)];},[[10],2]);
   await db.exec(`update pos_stock_lots set expiry_at=now()-interval '1 hour' where product_id='${P3}'`);
   await nhanP3(5);
@@ -184,5 +184,86 @@ if (process.argv.length > 6) {
   await ok('Tồn bị sửa ở màn khác (còn 2) → lô cắt cho khớp', async()=>{await db.exec(`update finished_goods_stock set qty=2 where product_id='${P3}' and store_location='${S}'`); await nhanP3(1); return [await tonP3(), (await lo()).reduce((a,b)=>a+b,0)];},[3,3]);
   await ok('Món chưa cài hạn dùng → lô không có HSD', async()=>{const d=id(); await q(`select public.pos_luu_phieu('{"id":"${d}","type":"bep_giao","store":"${S}","lines":[{"product_id":"${P1}","name":"Bánh bò","qty":2}]}')`); await q(`select public.pos_nhan_hang('${d}','{"${P1}:":2}')`); return v(`select bool_or(expiry_at is not null) from pos_stock_lots where product_id='${P1}'`);},false);
   await ok('Huỷ phiếu nhận hàng → bớt đúng lô phiếu đó', async()=>{await as(GD); const d=await nhanP3(6); const truoc=await lo(); await q(`select public.pos_huy_phieu('${d}','nhận nhầm')`); await as(NV); return [truoc.at(-1), (await lo()).length===truoc.length-1];},[6,true]);
+}
+// ── 202611151010: doanh số theo nhân viên · ảnh bắt buộc · vào/kết ca có ảnh két + đếm bánh ──
+if (process.argv.length > 7) {
+  const NV2='00000000-0000-0000-0000-0000000000a5', S='Vĩnh Phú 42', Q='Quốc Lộ 13';
+  await db.exec(`insert into profiles(id,full_name,role,extra_roles,approved,active,phone) values ('${NV2}','Thu ngân B','cashier','{}',true,true,'0912 345 678');
+    update profiles set phone='+84901000111' where id='${NV}';`);
+  const caDangMo=(st=S)=>v(`select coalesce((select id::text from pos_shifts where status='open' and store_location='${st}'),'')`);
+  const demBanh=(lech=0)=>v(`select coalesce(jsonb_agg(jsonb_build_object('product_id',product_id,'size',size,'name','Món','dem',qty + case when rn=1 then ${lech} else 0 end)),'[]')::text from (select *, row_number() over (order by product_id, size) rn from finished_goods_stock where store_location='${S}' and is_semi_finished=false and qty>0) x`);
+  const ketCa=async(ca,anh='ket.jpg',banh=null)=>v(`select public.pos_ket_ca('${ca}',0,null,${anh?`'${anh}'`:'null'},'${banh ?? await demBanh()}'::jsonb)`);
+  const banB=(o={})=>ban({lines:[{product_id:P1,name:'Bánh bò',qty:2,list_price:90000,unit_price:90000}],...o});
+  await chan('Hàm mở ca cũ ngừng dùng', ()=>q(`select public.pos_mo_ca('${S}',0)`),'bản mới');
+  const ca1=await caDangMo();
+  await as(NV);
+  await chan('Kết ca thiếu ảnh két', ()=>ketCa(ca1,null),'ảnh két');
+  await chan('Kết ca chưa đếm bánh', ()=>ketCa(ca1,'ket.jpg','[]'),'Đếm nhanh');
+  await as(NV2);
+  await chan('Người khác kết ca của mình', ()=>ketCa(ca1),'chỉ người đó');
+  await chan('Vào ca khi ca người khác đang mở', ()=>q(`select public.pos_vao_ca('${S}',0,'ket.jpg')`),'phải kết ca');
+  await chan('Bán trong ca của người khác', ()=>banB(),'Ca đang mở là của');
+  await as(NV);
+  await ok('Kết ca: lệch 1 món bánh → báo GĐ', async()=>{const r=await ketCa(ca1,'ket.jpg',await demBanh(-1)); return [r.closing_photo, r.summary.so_banh_lech, await v(`select (body like '%Bánh lệch: Món (máy%')::text from notifications where event_key like 'pos-dong-ca:${ca1}%' limit 1`)];},['ket.jpg',1,'true']);
+  await as(NV2);
+  await chan('Bán khi chưa vào ca', ()=>banB(),'chưa vào ca');
+  await chan('Vào ca thiếu ảnh két', ()=>q(`select public.pos_vao_ca('${S}',200000,'')`),'ảnh két');
+  await ok('NV B vào ca 200k', ()=>v(`select (public.pos_vao_ca('${S}',200000,'ket2.jpg'))->>'opening_photo'`),'ket2.jpg');
+  const ca2=await caDangMo();
+  // Chấm công (cửa hàng Quốc Lộ 13)
+  await as(NV); await chan('NV tự bật chấm công', ()=>q(`select public.pos_bat_cham_cong('${Q}',true)`),'Chỉ Giám đốc');
+  await as(GD); await q(`select public.pos_bat_cham_cong('${Q}',true)`);
+  await as(NV);
+  await chan('Bật chấm công: chưa chấm công → không vào ca', ()=>q(`select public.pos_vao_ca('${Q}',0,'k.jpg')`),'chưa chấm công');
+  await db.exec(`insert into shift_logs(staff_id,work_date,branch,type,checkin_time) values ('${NV}',(now() at time zone 'Asia/Ho_Chi_Minh')::date,'Vĩnh Phú 42','checkin',now()-interval '2 hours')`);
+  await chan('Chấm công ở cửa hàng khác → không vào ca', ()=>q(`select public.pos_vao_ca('${Q}',0,'k.jpg')`),'chấm công ở Vĩnh Phú 42');
+  await db.exec(`insert into shift_logs(staff_id,work_date,branch,type,checkin_time) values ('${NV}',(now() at time zone 'Asia/Ho_Chi_Minh')::date,'Vĩnh Phú 42','checkout',now()-interval '1 hour'),('${NV}',(now() at time zone 'Asia/Ho_Chi_Minh')::date,'Quốc lộ 13','checkin',now()-interval '10 minutes')`);
+  await ok('Chấm công đúng "Quốc lộ 13" (chữ thường) → vào ca được', ()=>v(`select (public.pos_vao_ca('${Q}',0,'k.jpg'))->>'store_location'`),Q);
+  await ok('Kết ca cửa hàng không có bánh: không cần đếm', async()=>(await v(`select public.pos_ket_ca('${await caDangMo(Q)}',0,null,'k.jpg','[]'::jsonb)`)).status,'closed');
+  // Bán của NV B
+  await as(NV2);
+  await chan('Bán không có ảnh', ()=>banB({photo_url:''}),'ảnh bán hàng');
+  const h1=id(), h2=id(), h3=id(), h4=id(), h5=id(), h6=id();
+  await ok('Bán tiền mặt 180k (ảnh A)', async()=>(await banB({id:h1,photo_hash:'anhA'})).total,180000);
+  await chan('Dùng lại ảnh A cho hoá đơn khác', ()=>banB({photo_hash:'anhA'}),'đã dùng cho hoá đơn');
+  await ok('Mất mạng dùng lại ảnh A → vẫn ghi, gắn cờ anh_trung', async()=>(await banB({id:h2,photo_hash:'anhA',offline:true})).canh_bao.map((x)=>x.loai),['anh_trung']);
+  await ok('Chuyển khoản 90k (chờ xác nhận)', async()=>(await banB({id:h3,pay_method:'chuyen_khoan',lines:[{product_id:P1,name:'Bánh bò',qty:1,list_price:90000,unit_price:90000}]})).transfer_status,'cho_xac_nhan');
+  const khNo=await v(`select (public.pos_tao_khach('Anh Nợ','0933 000 111'))->>'id'`);
+  await ok('Ghi nợ 150k (trả 30k)', async()=>(await banB({id:h4,customer_id:khNo,received:30000})).debt,150000);
+  const khNv=await v(`select (public.pos_tao_khach('Người nhà','0901 000 111'))->>'id'`);
+  await ok('Bán cho khách trùng SĐT nhân viên', async()=>(await banB({id:h5,customer_id:khNv})).total,180000);
+  await ok('Hoá đơn có VAT 8%: 97.200', async()=>(await banB({id:h6,vat:true,lines:[{product_id:P1,name:'Bánh bò',qty:1,list_price:90000,unit_price:90000}]})).total,97200);
+  const tu=new Date(Date.now()-86400e3).toISOString(), den=new Date(Date.now()+86400e3).toISOString();
+  const dsB=async()=>{await as(GD); const r=await v(`select public.pos_doanh_so_nv('${tu}','${den}','${S}')`); await as(NV2); return r.nhan_vien.find((x)=>x.staff_id===NV2);};
+  await ok('Doanh số B: tiền mặt + mất mạng + nợ đã trả + VAT bỏ ra; CK chờ, nợ chưa trả, mua NV tách riêng', async()=>{const b=await dsB(); return [b.so_hd,b.ban_tinh,b.ck_cho,b.no_chua_tra,b.bi_loai,b.so_hd_canh_bao];},[6,180000+180000+30000+90000,90000,150000,180000,1]);
+  await as(KT); await q(`select public.pos_xac_nhan_ck('${h3}',true)`); await as(NV2);
+  await q(`select public.pos_thu_no('${id()}','${khNo}',100000,'tien_mat','${S}')`);
+  await ok('CK đã về + khách trả nợ 100k → tính thêm 190k', async()=>{const b=await dsB(); return [b.ban_tinh,b.ck_cho,b.no_chua_tra];},[670000,0,50000]);
+  await as(NV2); await chan('NV tự loại doanh số', ()=>q(`select public.pos_loai_doanh_so('${h1}',true,'x')`),'Chỉ Quản lý');
+  await as(GD); await chan('Loại không ghi lý do', ()=>q(`select public.pos_loai_doanh_so('${h1}',true,'')`),'lý do');
+  await q(`select public.pos_loai_doanh_so('${h1}',true,'Ảnh không phải bánh bán')`);
+  await ok('GĐ loại 1 hoá đơn → trừ khỏi doanh số', async()=>{const b=await dsB(); return [b.ban_tinh,b.bi_loai,b.so_hd_loai];},[490000,360000,2]);
+  await as(GD); await q(`select public.pos_loai_doanh_so('${h1}',false)`);
+  await ok('Bỏ loại → tính lại', async()=>(await dsB()).ban_tinh,670000);
+  // Bánh đặt nhận tại quầy
+  const D9='00000000-0000-0000-0000-0000000000d9';
+  await db.exec(`insert into orders(id,order_code,status_v2,total,deposit,created_by) values ('${D9}','SUMI-QUAY-9','in_production',300000,100000,'${NV2}')`);
+  await as(NV); await chan('Ghi đơn quầy của người khác', ()=>q(`select public.pos_ghi_don_quay('${D9}','${S}')`),'chính bạn');
+  await as(NV2); await ok('NV B ghi đơn đặt tại quầy', async()=>(await v(`select public.pos_ghi_don_quay('${D9}','${S}')`)).order_code,'SUMI-QUAY-9');
+  await ok('Đơn chưa hoàn thành → chưa tính', async()=>(await dsB()).dat_quay,0);
+  await db.exec(`update orders set status_v2='completed', completed_at=now() where id='${D9}'`);
+  await ok('Đơn hoàn thành → tính toàn bộ 300k', async()=>{const b=await dsB(); return [b.dat_quay,b.so_don_dat,b.tong];},[300000,1,970000]);
+  // Theo ca + hoá đơn kèm ảnh
+  await ok('Theo ca: ca của B có 6 hoá đơn, doanh số 670k', async()=>{await as(GD); const r=await v(`select public.pos_doanh_so_nv('${tu}','${den}','${S}')`); await as(NV2); const c=r.ca.find((x)=>x.id===ca2); return [c.ten,c.so_hd,c.ban_tinh,c.anh_vao];},['Thu ngân B',6,670000,'ket2.jpg']);
+  await ok('Hoá đơn của ca kèm ảnh + phần tính', async()=>{await as(GD); const r=await v(`select public.pos_hd_ca('${ca2}')`); await as(NV2); return [r.length, r.every((x)=>x.photo_url), r.find((x)=>x.invoice_id===h5).mua_nv];},[6,true,true]);
+  await as(NV2); await chan('NV xem doanh số nhân viên', ()=>q(`select public.pos_doanh_so_nv('${tu}','${den}',null)`),'Chỉ Giám đốc');
+  await as(KT); await ok('Kế toán xem được', async()=>Array.isArray((await v(`select public.pos_doanh_so_nv('${tu}','${den}',null)`)).nhan_vien),true);
+  // Xếp hạng
+  await as(NV);
+  await ok('Xếp hạng: NV thấy hạng + tên, KHÔNG thấy tiền người khác', async()=>{const r=await v(`select public.pos_xep_hang_thang()`); const b=r.bang.find((x)=>x.ten==='Thu ngân B'); return [b.hang, 'tong' in b, r.bang.some((x)=>x.ten==='Sếp'), r.bang.find((x)=>x.la_toi)?.ten];},[2,false,false,'Thu ngân A']);
+  await as(NV2); await ok('B thấy hạng + tiền của mình', async()=>{const r=await v(`select public.pos_xep_hang_thang()`); return [r.cua_toi.hang, Number(r.cua_toi.tong)];},[2,970000]);
+  // Kết ca B: tổng doanh số ca nằm trong tin báo GĐ
+  await ok('Kết ca B: tin báo GĐ có doanh số ca', async()=>{const r=await ketCa(ca2); return [Number(r.summary.doanh_so_tinh), await v(`select (body like '%doanh số tính 670.000đ%' or body like '%doanh số tính 670,000đ%')::text from notifications where event_key like 'pos-dong-ca:${ca2}%' limit 1`)];},[670000,'true']);
+  await chan('NV gọi hàm nội bộ doanh số', async()=>{await db.exec(`set role authenticated`); try{await q(`select * from public.pos__ds_hd(now()-interval '1 day',now())`);}finally{await db.exec(`reset role`);}},'permission');
 }
 console.log(`\n${dem-loi}/${dem} đạt`); process.exit(loi?1:0);

@@ -1087,3 +1087,60 @@ button.kv-xo-them:hover{background:var(--xanh-nhat)}
 .kv-noi-day .kv-can-huy{background:#8C5A3C}
 .bhq-nhan-tt.do{background:#FDECEC;color:#b42318}
 .kv-noi-day.tren{top:calc(60px + env(safe-area-inset-top));bottom:auto}
+
+/* ── Doanh số nhân viên: ảnh bán hàng, kết ca đếm bánh, bảng doanh số, xếp hạng ── */
+.kv-anh-ban{margin:6px 0 2px}
+.kv-anh-ban .kf-anh{margin:0;min-height:52px;font-size:13px;background:#fff}
+.kc-tieu{margin:10px 0 4px;font-size:14px;color:#2b3138}
+.kc-banh{display:grid;gap:6px;border:1px solid #e3e6ea;border-radius:8px;padding:6px}
+.kc-banh label{display:grid;grid-template-columns:minmax(0,1fr) 92px;gap:8px;align-items:center;font-size:14px;color:#2b3138}
+.kc-banh label span{overflow:hidden;text-overflow:ellipsis}
+.kc-banh label .bhq-o{min-height:44px;text-align:right}
+.kc-banh label.xong span{color:#09663d}
+.kc-lech{border:1px solid #f3c2bd;background:#fff5f4;border-radius:8px;padding:8px 10px;margin:8px 0;font-size:13px}
+.kc-lech>div{display:flex;justify-content:space-between;gap:8px;padding:2px 0}
+.kc-lech .do,.ds-the .do,.ds-ca-phu .do{color:#b42318}
+.kc-lech .cam,.ds-the .cam,.ds-ca-phu .cam{color:#8b5900}
+.ds-loc{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0;font-size:14px;color:#2b3138}
+.ds-loc span{font-weight:600;flex:1 1 auto}
+.ds-loc select{flex:0 1 220px;min-height:44px}
+.ds-tong{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-radius:10px;background:#e8f1fe;margin:6px 0;font-size:15px}
+.ds-tong b{font-size:20px;color:#0070F4}
+.ds-nv{display:grid;gap:8px}
+.ds-the{border:1px solid #e3e6ea;border-radius:10px;background:#fff;overflow:hidden}
+.ds-the.mo{border-color:#0070F4}
+.ds-dau{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;padding:8px 12px;background:none;border:0;font:inherit;text-align:left;cursor:pointer;color:#1f2329}
+.ds-hang{flex:0 0 30px;height:30px;border-radius:50%;background:#f0f2f5;display:grid;place-items:center;font-weight:700;font-size:14px}
+.ds-ten{flex:1 1 auto;min-width:0;display:flex;flex-direction:column}
+.ds-ten small{color:#677484;font-size:12px}
+.ds-so{font-size:17px;color:#09663d;white-space:nowrap}
+.ds-luoi{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:2px 12px;padding:0 12px 8px 52px;font-size:13px}
+.ds-luoi>div{display:flex;justify-content:space-between;gap:6px}
+.ds-luoi span{color:#677484}
+.ds-ca{border-top:1px solid #eef0f2;padding:6px 10px 10px;background:#fafbfc;display:grid;gap:6px}
+.ds-ca-dong{border:1px solid #e3e6ea;border-radius:8px;background:#fff;padding:4px 8px}
+.ds-ca-dau{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;min-height:48px;background:none;border:0;font:inherit;text-align:left;cursor:pointer;color:#1f2329}
+.ds-ca-dau span{display:flex;flex-direction:column;min-width:0}
+.ds-ca-dau small{color:#677484;font-size:12px}
+.ds-ca-phu{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:#4a5562;padding:0 0 6px}
+.ds-link{border:0;background:none;color:#0070F4;font:inherit;font-size:12px;padding:0;min-height:28px;cursor:pointer;text-decoration:underline}
+.ds-mo{color:#98a2b3}
+.ds-hd{display:grid;gap:6px;padding:4px 0 6px}
+.ds-hd-dong{display:flex;gap:10px;align-items:flex-start;border-top:1px dashed #e3e6ea;padding-top:6px;font-size:13px}
+.ds-hd-dong.loai{opacity:.75}
+.ds-hd-than{flex:1 1 auto;min-width:0;display:grid;gap:2px}
+.ds-hd-so b{color:#09663d}
+.ds-hd-phu{color:#677484;font-size:12px}
+.ds-anh{flex:0 0 64px;width:64px;height:64px;border-radius:8px;overflow:hidden;background:#f0f2f5;display:grid;place-items:center;font-size:11px;color:#98a2b3;text-align:center}
+.ds-anh img{width:100%;height:100%;object-fit:cover}
+.ds-nhan{font-size:12px;font-weight:600}
+.ds-nhan.do{color:#b42318}.ds-nhan.cam{color:#8b5900}
+.ds-loai{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.ds-loai .bhq-o{flex:1 1 180px;min-height:44px}
+.ds-hd .bhq-nut.nho,.ds-loc .bhq-nut.nho{min-height:44px;justify-self:start}
+.xh-toi{padding:10px 12px;border-radius:10px;background:#e8f1fe;font-size:15px;margin:6px 0}
+.xh-ds{list-style:none;margin:6px 0;padding:0;display:grid;gap:4px}
+.xh-ds li{display:flex;align-items:center;gap:10px;min-height:44px;padding:4px 10px;border:1px solid #e3e6ea;border-radius:8px;font-size:15px}
+.xh-ds li.toi{border-color:#0070F4;background:#f3f8ff;font-weight:600}
+.xh-hang{flex:0 0 32px;height:32px;border-radius:50%;display:grid;place-items:center;background:#f0f2f5;font-weight:700}
+.xh-hang.h1{background:#fde68a}.xh-hang.h2{background:#e5e7eb}.xh-hang.h3{background:#fcd9b6}

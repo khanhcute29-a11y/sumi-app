@@ -17,10 +17,10 @@ import {
 } from './banHangQuayLogic';
 import {
   kiemTraThat, taiDuLieu, taiLo, taiViecCho, laKeToan, goi, goiHoacXep, xepHang, dsCho, guiHangDoi, demCho, boViecLoi, guiLaiViecLoi, laLoiMang, chuLoi, maMoi, tachId,
-  LOAI_LEN_DB, phieuTuDb, lapBanDoHang, congNoTuDb, taiAnh,
+  LOAI_LEN_DB, phieuTuDb, lapBanDoHang, congNoTuDb, taiAnh, docAnhBan, taiAnhDaNen,
 } from './posThat';
 import {
-  HopT, MoCa, XinDuyet, ViecCho, QrChuyenKhoan, ThietLapQuay, DatCoc, LayBanhDat, NhanHang, ChupAnh, NhatKy, BaoCaoThat, KetCaThat,
+  HopT, MoCa, XinDuyet, ViecCho, QrChuyenKhoan, ThietLapQuay, DatCoc, LayBanhDat, NhanHang, ChupAnh, NhatKy, BaoCaoThat, KetCaThat, DoanhSoNv, XepHang,
 } from './QuayThat';
 import './ban-hang-quay.css';
 
@@ -143,6 +143,9 @@ export default function BanHangQuay() {
   const [mang, setMang] = useState(() => typeof navigator === 'undefined' || navigator.onLine !== false);
   const [diemKhach, setDiemKhach] = useState({});
   const [dangBan, setDangBan] = useState(false);
+  // Ảnh bán hàng theo từng hoá đơn đang mở: { [hd.id]: { blob, ma, url } } — chỉ nằm trên máy tới lúc thanh toán.
+  const [anhBan, setAnhBan] = useState({});
+  const [dangAnhBan, setDangAnhBan] = useState(false);
   const daBan = useMemo(() => (hdCho.length ? [...hdCho.filter((c) => !daBanDb.some((x) => x.id === c.id)), ...daBanDb] : daBanDb), [hdCho, daBanDb]);
   const caMo = caMoDs[chiNhanh] || null;
   const cd = caiDat[chiNhanh] || null;
@@ -430,21 +433,26 @@ export default function BanHangQuay() {
     const pct = goc ? (giam * 100) / goc : 0;
     const xinGiam = () => setHop({ loai: 'xin_duyet', kind: 'giam_gia', payload: { tien: Math.round(giam), mo_ta: `${nguoi} xin giảm ${so(giam)} (${pct.toFixed(1)}%) cho hoá đơn ${so(goc)}${hd.khach.id ? ` · ${hd.khach.name}` : ''}` } });
     if (that.cap === 'nv' && pct > Number(cd?.staff_discount_pct ?? 0) && !duyetId) { xinGiam(); return; }
+    const anh = anhBan[hd.id];
+    if (!anh) { nhan('Chọn 1 ảnh bán hàng (ảnh bánh, tiền mặt hoặc màn hình chuyển khoản) rồi mới thanh toán'); return; }
     const p = {
       id: hd.id, store: chiNhanh, customer_id: hd.khach.id || null, price_list_id: hd.bangGia || null,
       lines: hd.dong.map((d) => { const t = tachId(d.id ? d : matHang.find((m) => m.ma === d.ma)); return { product_id: t.product_id, variant_id: t.variant_id, size: d.size || null, name: d.ten, qty: d.sl, list_price: d.gia, unit_price: donGia(d), eod: !!d.eod, note: d.ghiChu || null }; }),
       invoice_discount: tong.giamHd, other_fees: hd.thuKhac, vat: !!hd.vat, points_used: diemDung, pay_method: hd.pt,
       received: Number(dua) || 0, note: hd.ghiChu || null, seller_name: hd.nguoiBan || nguoi, approval_id: duyetId || null,
-      client_created_at: new Date().toISOString(), shift_id: caMo?.id || null,
+      client_created_at: new Date().toISOString(), shift_id: caMo?.id || null, photo_url: null, photo_hash: anh.ma || null,
     };
     const banGhi = {
       id: hd.id, luc: Date.now(), chiNhanh, thuNgan: nguoi, nguoiBan: hd.nguoiBan || nguoi, khach: hd.khach, dong: hd.dong,
       thuKhacDong: hd.thuKhac, ghiChu: hd.ghiChu, ...tong, phuongThuc: hd.pt, khachDua: Number(dua) || 0, ...tt, daHuy: false, that: true, caId: caMo.id,
       bangGia: bgHd?.ten || null, ckTrangThai: hd.pt === 'chuyen_khoan' && tt.thucThu > 0 ? 'cho_xac_nhan' : 'khong',
     };
+    const boAnh = () => { try { URL.revokeObjectURL(anh.url); } catch { /* bỏ qua */ } setAnhBan((x) => { const y = { ...x }; delete y[hd.id]; return y; }); };
     setDangBan(true);
     try {
+      p.photo_url = await taiAnhDaNen(anh.blob, 'ban');
       const kq = await goi('pos_ban', { p });
+      boAnh();
       const ghi = { ...banGhi, ma: kq.code, canTra: Number(kq.total), diemCong: kq.points_earned || 0 };
       setDaBan((ds) => [ghi, ...ds.filter((x) => x.id !== ghi.id)]);
       ghiKho(chiNhanh, hd.dong.map((d) => ({ ma: d.ma, sl: -d.sl })), kq.code, 'Bán hàng');
@@ -455,7 +463,9 @@ export default function BanHangQuay() {
     } catch (e) {
       if (laLoiMang(e)) {
         const ghi = { ...banGhi, ma: `TẠM-${hd.id.slice(0, 4).toUpperCase()}`, choGui: true };
-        await xepHang({ ham: 'pos_ban', thamSo: { p: { ...p, offline: true } }, khoa: hd.id, banGhi: ghi });
+        // Ảnh chưa lên được thì giữ ảnh trên máy, có mạng tải ảnh trước rồi mới gửi hoá đơn.
+        await xepHang({ ham: 'pos_ban', thamSo: { p: { ...p, offline: true } }, khoa: hd.id, banGhi: ghi, ...(p.photo_url ? {} : { anh: anh.blob }) });
+        boAnh();
         setHdCho((x) => [ghi, ...x]); setSoCho((n) => n + 1);
         ghiKho(chiNhanh, hd.dong.map((d) => ({ ma: d.ma, sl: -d.sl })), ghi.ma, 'Bán hàng (chờ gửi)');
         baoXong(ghi, tt, `Mất mạng — đã giữ hoá đơn ${so(tong.canTra)} trên máy, có mạng sẽ tự gửi. Cứ bán tiếp.`);
@@ -651,6 +661,15 @@ export default function BanHangQuay() {
   const moHop = (h) => { setHop(h); setMenuMo(false); };
   const chonKhach = (k) => sua({ khach: k, dua: null });
 
+  const chonAnhBan = async (f) => {
+    const id = hd.id;
+    setDangAnhBan(true);
+    try {
+      const a = await docAnhBan(f);
+      setAnhBan((x) => { if (x[id]?.url) { try { URL.revokeObjectURL(x[id].url); } catch { /* bỏ qua */ } } return { ...x, [id]: a }; });
+    } catch (e) { nhan(chuLoi(e)); }
+    setDangAnhBan(false);
+  };
   const ext = that ? {
     qr: <QrChuyenKhoan caiDat={cd} tien={tong.canTra} hdId={hd.id} />,
     qrDt: <QrChuyenKhoan dt caiDat={cd} tien={tong.canTra} hdId={hd.id} />,
@@ -670,7 +689,15 @@ export default function BanHangQuay() {
     ) : null,
     hsd: nhanHsd,
     dangBan,
+    anh: (
+      <div className="kv-anh-ban">
+        <ChupAnh xem={anhBan[hd.id]?.url} dang={dangAnhBan} thuVien onChon={chonAnhBan} chu="Ảnh bán hàng (bắt buộc): bánh, tiền mặt hoặc màn hình CK" />
+      </div>
+    ),
   } : null;
+  // Ca đang mở ở quầy này là của người khác → nhân viên không bán chen vào (database cũng chặn).
+  const caNguoiKhac = !!(that && caMo && that.cap === 'nv' && caMo.opened_by && caMo.opened_by !== that.uid);
+  const daBanCa = caMo ? daBan.filter((h) => h.that && h.caId === caMo.id && !h.daHuy && (!h.thuNganId || h.thuNganId === caMo.opened_by)).reduce((a, h) => a + Number(h.canTra || 0), 0) : 0;
   // Mục chỉ có khi chạy thật — dùng chung cho menu ☰ và màn "Nhiều hơn" của điện thoại.
   const mucThat = that ? [
     (quanLy || laKT) && ['viec_cho', `Việc chờ${soViec ? ` (${soViec})` : ''}`, Bell],
@@ -678,6 +705,8 @@ export default function BanHangQuay() {
     ['lay_banh', 'Khách lấy bánh đặt', Package],
     xemQl && !laGD && ['bao_cao', 'Báo cáo', ChartColumn],
     xemQl && ['nhat_ky', 'Nhật ký thao tác', FileClock],
+    ((quanLy && !xemNV) || laKT) && ['doanh_so_nv', 'Doanh số nhân viên', ChartColumn],
+    ['xep_hang', 'Xếp hạng tháng', ChartColumn],
     that.cap === 'gd' && !xemNV && ['thiet_lap_quay', 'Thiết lập quầy', Settings],
   ].filter(Boolean) : [];
   const moMucThat = (k) => {
@@ -829,7 +858,7 @@ export default function BanHangQuay() {
             {that
               ? <span className={`kv-nguon ${mang ? '' : 'mat'}`}>{mang ? '● Đang chạy thật' : '● Mất mạng — vẫn bán được, có mạng tự gửi'}{soCho ? ` · ${soCho} việc chờ gửi` : ''}</span>
               : <span className="kv-nguon">Bản xem trước · không lưu · {nguonDl}{lyDoXemTruoc ? ` · ${lyDoXemTruoc}` : ''}</span>}
-            <button type="button" className="kv-ca" onClick={() => setHop({ loai: 'ket_ca' })}>Ca {nguoi} · từ {gio(ca.moLuc)} · <b>Kết ca</b></button>
+            <button type="button" className="kv-ca" onClick={() => setHop({ loai: 'ket_ca' })}>Ca {that && caMo ? caMo.opened_by_name || nguoi : nguoi} · từ {gio(ca.moLuc)}{that && caMo ? ` · đã bán ${so(daBanCa)}` : ''} · <b>Kết ca</b></button>
           </footer>
         </>
       )}
@@ -932,7 +961,7 @@ export default function BanHangQuay() {
       )}
 
       {hop?.loai === 'ket_ca' && that && (caMo
-        ? <KetCaThat caMo={caMo} chiNhanh={chiNhanh} onDong={() => setHop(null)}
+        ? <KetCaThat caMo={caMo} chiNhanh={chiNhanh} matHang={matHang} onDong={() => setHop(null)}
           onKet={(phieu) => { setCaMoDs((x) => ({ ...x, [chiNhanh]: null })); setHop(null); setBanIn({ banGiao: phieu }); nhan(`Đã đóng ca ${phieu.ma} — đã in phiếu bàn giao`); napThat(); }} />
         : <HopT tieuDe="Kết ca" onDong={() => setHop(null)}><p className="bhq-ghi">{chiNhanh} chưa mở ca nào.</p></HopT>)}
       {hop?.loai === 'ket_ca' && !that && (
@@ -1000,9 +1029,18 @@ export default function BanHangQuay() {
         </Hop>
       )}
 
+      {caNguoiKhac && manHinh === 'ban' && !hop && !form && (
+        <HopT tieuDe={`Ca của ${caMo.opened_by_name || 'người khác'} đang mở`} onDong={() => moManHinh('ls')}
+          chan={<><button type="button" className="bhq-nut phu" onClick={veApp}>Về app Sumi</button><button type="button" className="bhq-nut chinh" onClick={() => napThat()}>Tải lại</button></>}>
+          <p className="bhq-ghi">{chiNhanh} đang có ca {caMo.code} của <b>{caMo.opened_by_name}</b> (vào lúc {gio(new Date(caMo.opened_at).getTime())}).
+            Mỗi người bán bằng ca của chính mình để doanh số tính đúng người — nhờ {caMo.opened_by_name} kết ca trước, rồi bấm Tải lại để vào ca của bạn.</p>
+        </HopT>
+      )}
+      {hop?.loai === 'doanh_so_nv' && that && <DoanhSoNv dsCuaHang={CHI_NHANH} duocLoai={quanLy} onDong={() => setHop(null)} />}
+      {hop?.loai === 'xep_hang' && that && <XepHang onDong={() => setHop(null)} />}
       {that && !caMo && manHinh === 'ban' && !hop && !form && (
-        <MoCa chiNhanh={chiNhanh} nguoi={nguoi} onVeApp={veApp} onDong={() => moManHinh('ls')}
-          onMo={(row) => { setCaMoDs((x) => ({ ...x, [chiNhanh]: row })); nhan(`Đã mở ca ${row.code} · đầu ca ${so(row.opening_cash)}`); }} />
+        <MoCa chiNhanh={chiNhanh} nguoi={nguoi} onVeApp={veApp} onDong={() => moManHinh('ls')} onTaiLai={() => napThat()}
+          onMo={(row) => { setCaMoDs((x) => ({ ...x, [chiNhanh]: row })); nhan(`Đã vào ca ${row.code} · đầu ca ${so(row.opening_cash)}`); }} />
       )}
       {hop?.loai === 'xin_duyet' && (
         <XinDuyet loai={hop.kind} chiNhanh={chiNhanh} payload={hop.payload} onDong={() => setHop(null)}
@@ -1326,6 +1364,7 @@ function KhungThanhToan({ hd, tong, bayGio, nguoiBanDs, khachNo, duaRef, onSua, 
           ? <div className="r no"><span>Tính vào công nợ</span><b>{so(tt.no)}</b></div>
           : <div className="r"><span>Tiền thừa trả khách</span><span>{so(tt.thua)}</span></div>}
         {khachNo > 0 && <div className="r nho"><span>Nợ cũ của khách</span><span>{so(khachNo)}</span></div>}
+        {ext?.anh}
         {tt.loi && <p className="kv-loi">{tt.loi}</p>}
       </div>
       <div className="kv-tt-chan">
@@ -1409,6 +1448,7 @@ function DienThoai({
             {tt.no > 0 ? <div className="r no"><span>Tính vào công nợ</span><b>{so(tt.no)}</b></div>
               : tt.thua > 0 ? <div className="r"><span>Tiền thừa trả khách</span><b>{so(tt.thua)}</b></div> : null}
             {khachNo > 0 && <div className="r nho"><span>Nợ cũ của khách</span><span>{so(khachNo)}</span></div>}
+            {ext?.anh}
             {tt.loi && <p className="kv-loi">{tt.loi}</p>}
           </div>
           <label className="kvm-the kv-ghi-chu"><Pencil size={16} /><input value={hd.ghiChu} onChange={(e) => sua({ ghiChu: e.target.value })} placeholder="Ghi chú đơn hàng" /></label>
@@ -2661,13 +2701,13 @@ function QlHoaDon({ ds, traHangs, dienThoai, huyDuoc, onIn, onHuy, onChiaSe, onS
 function NhieuHon({ congNo, chiNhanh, setChiNhanh, onMo, onHop, laGD, laChu, xemNV, setXemNV, onDatHang, mucThat = [], onMucThat, anChuyen = false }) {
   const nhom = laGD ? [
     ['Giao dịch', [['ban', 'Bán hàng', ShoppingBag, 'xanh'], ['ls', 'Hóa đơn', FileText, 'xanh'], ['dat', 'Đặt hàng', ShoppingCart, 'xanh'],
-      ['no', 'Công nợ', ReceiptText, 'cam'], ['ket_ca', 'Đóng ca', Clock, 'xanh'], ['ngay', 'Báo cáo cuối ngày', ChartArea, 'la']]],
+      ['no', 'Công nợ', ReceiptText, 'cam'], ['ket_ca', 'Kết ca', Clock, 'xanh'], ['ngay', 'Báo cáo cuối ngày', ChartArea, 'la']]],
     ['Hàng hoá', [['hh', 'Hàng hoá', Box, 'xanh'], ['kk', 'Kiểm kho', ClipboardCheck, 'la'], ['pn', 'Nhập hàng', Download, 'xanh'], ['ch', 'Chuyển hàng', Truck, 'xanh'],
       ['xh', 'Xuất hủy', PackageMinus, 'xanh'], ['xd', 'Xuất dùng nội bộ', Package, 'xanh']]],
     ['Đối tác', [['kh', 'Khách hàng', Users, 'la']]],
   ] : [
     ['Giao dịch', [['ban', 'Bán hàng', ShoppingBag, 'xanh'], ['ls', 'Hóa đơn', FileText, 'xanh'], ['dat', 'Đặt hàng', ShoppingCart, 'xanh'],
-      ['ket_ca', 'Đóng ca', Clock, 'xanh']]],
+      ['ket_ca', 'Kết ca', Clock, 'xanh']]],
     ['Hàng hoá', [['hh', 'Hàng hoá', Box, 'xanh'], ['pn', 'Nhập hàng', Download, 'xanh'], ['ch', 'Chuyển hàng', Truck, 'xanh'], ['xh', 'Xuất hủy', PackageMinus, 'xanh'],
       ['kk', 'Kiểm kho', ClipboardCheck, 'la']]],
     ['Đối tác', [['kh', 'Khách hàng', Users, 'la']]],

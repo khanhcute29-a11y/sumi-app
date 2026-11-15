@@ -7,7 +7,7 @@ create or replace function public.create_order_v2(p_idempotency_key text, p_orde
 returns uuid language plpgsql as $$
 declare v uuid; i jsonb;
 begin
-  insert into public.orders(order_code, customer_id, required_at, status_v2, total, deposit) values (p_order_code, p_customer_id, p_required_at, 'new', p_total, p_deposit) returning id into v;
+  insert into public.orders(order_code, customer_id, required_at, status_v2, total, deposit, created_by) values (p_order_code, p_customer_id, p_required_at, 'new', p_total, p_deposit, auth.uid()) returning id into v;
   for i in select value from jsonb_array_elements(p_items) loop
     insert into public.order_items(order_id, name, qty, size) values (v, i->>'name', (i->>'quantity')::int, i->'specification'->>'size');
   end loop;

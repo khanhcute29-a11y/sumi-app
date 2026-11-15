@@ -86,7 +86,7 @@ export function hoaDonTuDb(r, lines, bd) {
     daHuy: r.status === 'huy', lyDoHuy: r.cancel_reason, nguoiHuy: r.cancelled_by_name, lucHuy: r.cancelled_at ? new Date(r.cancelled_at).getTime() : null,
     ckTrangThai: r.transfer_status, ckNguoi: r.transfer_checked_by_name, bangGia: r.price_list_name,
     diemDung: r.points_used, diemTien: Number(r.points_value), diemCong: r.points_earned, giamCuoiNgay: Number(r.eod_discount),
-    offline: r.offline, that: true,
+    offline: r.offline, that: true, thuNganId: r.cashier_id, anhBan: r.photo_url || null,
   };
 }
 
@@ -249,6 +249,13 @@ export async function guiHangDoi(onXong) {
     for (const v of await dsCho()) {
       if (v.loi) continue;
       try {
+        // Hoá đơn bán lúc mất mạng: ảnh còn nằm trên máy → tải ảnh lên trước, ghi lại đường dẫn rồi mới gửi.
+        if (v.anh && v.ham === 'pos_ban' && !v.thamSo?.p?.photo_url) {
+          const path = await taiAnhDaNen(v.anh, 'ban');
+          v.thamSo = { ...v.thamSo, p: { ...v.thamSo.p, photo_url: path } };
+          delete v.anh;
+          await db.put('cho', v);
+        }
         const kq = await goi(v.ham, v.thamSo);
         await db.delete('cho', v.khoa);
         onXong?.({ viec: v, kq });
@@ -286,7 +293,28 @@ export async function goiHoacXep(ham, thamSo, khoa) {
   }
 }
 
-// ── Ảnh (xuất huỷ) ──
+// ── Ảnh ──
+// Ảnh bán hàng: đọc + nén ngay khi chọn (chụp hoặc lấy từ thư viện), tính mã ảnh từ file GỐC để
+// database chặn dùng lại 1 ảnh cho 2 hoá đơn. Chưa tải lên — tải lúc bấm thanh toán (mất mạng thì giữ trên máy).
+export async function docAnhBan(file) {
+  if (!file || !String(file.type || '').startsWith('image/')) throw new Error('Chọn một file ảnh');
+  const goc = await file.arrayBuffer();
+  let ma = null;
+  try {
+    const bam = await crypto.subtle.digest('SHA-256', goc);
+    ma = [...new Uint8Array(bam)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  } catch { ma = null; } // trình duyệt cũ / không phải HTTPS: vẫn bán được, chỉ không chặn ảnh trùng
+  const { nenAnh } = await import('../../../lib/nenAnh');
+  const nho = await nenAnh(file);
+  return { blob: nho, ma, url: URL.createObjectURL(nho) };
+}
+export async function taiAnhDaNen(blob, thuMuc) {
+  const duoi = (((blob && blob.name) || 'anh.jpg').split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+  const path = `pos/${thuMuc}/${maMoi()}.${duoi}`;
+  const up = await supabase.storage.from('uploads').upload(path, blob, { contentType: (blob && blob.type) || 'image/jpeg' });
+  if (up.error) throw new Error(up.error.message);
+  return path;
+}
 export async function taiAnh(file, thuMuc) {
   const { nenAnh } = await import('../../../lib/nenAnh');
   const nho = await nenAnh(file);
