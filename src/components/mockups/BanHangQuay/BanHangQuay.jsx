@@ -16,7 +16,7 @@ import {
   taoMatHang, tonGia, tienDong, tinhHoaDon, tinhThanhToan, tinhKetCa, apPhieuKho, tinhCongNo, baoCaoNgay, khop, locXep, docSoTien,
 } from './banHangQuayLogic';
 import {
-  kiemTraThat, taiDuLieu, taiViecCho, laKeToan, goi, goiHoacXep, xepHang, dsCho, guiHangDoi, demCho, boViecLoi, guiLaiViecLoi, laLoiMang, chuLoi, maMoi, tachId,
+  kiemTraThat, taiDuLieu, taiLo, taiViecCho, laKeToan, goi, goiHoacXep, xepHang, dsCho, guiHangDoi, demCho, boViecLoi, guiLaiViecLoi, laLoiMang, chuLoi, maMoi, tachId,
   LOAI_LEN_DB, phieuTuDb, lapBanDoHang, congNoTuDb, taiAnh,
 } from './posThat';
 import {
@@ -132,6 +132,8 @@ export default function BanHangQuay() {
   const [caiDat, setCaiDat] = useState({});
   const [caMoDs, setCaMoDs] = useState({});
   const [hsd, setHsd] = useState({});
+  const [loCN, setLoCN] = useState({}); // lô có HSD theo cửa hàng: { [ma]: { quaHan, homNay } }
+  const [hanDung, setHanDung] = useState({}); // số ngày bán được theo product_id
   const [bangGia, setBangGia] = useState([]);
   const [noDb, setNoDb] = useState({ ds: [], du: [] });
   const [viec, setViec] = useState({ duyet: [], ck: [], ca: [] });
@@ -151,7 +153,7 @@ export default function BanHangQuay() {
     try {
       const d = await taiDuLieu(mh);
       setCaiDat(d.caiDat); setCaMoDs(d.caMo); setDaBan(d.daBan); setPhieuKho(d.phieuKho); setNoDb(d.congNo);
-      setTonCN(d.tonCN); setHsd(d.hsd); setBangGia(d.bangGia); setNguonDl('dữ liệu thật');
+      setTonCN(d.tonCN); setHsd(d.hsd); setLoCN(d.loCN || {}); setHanDung(d.hanDung || {}); setBangGia(d.bangGia); setNguonDl('dữ liệu thật');
     } catch (e) { nhan(`Không tải được dữ liệu quầy: ${chuLoi(e)}`); }
   };
   const napNo = async () => {
@@ -295,6 +297,8 @@ export default function BanHangQuay() {
     return Math.round((t - d.getTime()) / NGAY);
   };
   const nhanHsd = (ma) => {
+    const q = loCN[chiNhanh]?.[ma]?.quaHan;
+    if (q > 0) return <i className="kv-hsd het">Quá hạn {q}</i>;
     const con = ngayConHsd(ma);
     if (con == null || con > 1) return null;
     return <i className={`kv-hsd ${con <= 0 ? 'het' : ''}`}>{con < 0 ? 'Quá hạn' : con === 0 ? 'HSD hôm nay' : 'HSD mai'}</i>;
@@ -302,6 +306,16 @@ export default function BanHangQuay() {
   const gioVN = new Date(bayGio).toTimeString().slice(0, 5);
   const eodDuoc = !!(that && cd && gioVN >= String(cd.eod_from || '20:00').slice(0, 5));
   const coEod = hd.dong.some((d) => d.eod);
+  // Cần xuất hủy: bánh quá hạn (luôn hiện) + bánh hết hạn hôm nay (chỉ hiện từ giờ giảm giá cuối ngày).
+  const canHuy = that ? matHang.map((m) => ({ m, ...(loCN[chiNhanh]?.[m.ma] || {}) }))
+    .filter((x) => x.quaHan > 0 || x.homNay > 0) : [];
+  const soQuaHan = canHuy.reduce((a, x) => a + (x.quaHan || 0), 0);
+  const soHomNay = canHuy.reduce((a, x) => a + (x.homNay || 0), 0);
+  const hienCanHuy = soQuaHan > 0 || (eodDuoc && soHomNay > 0);
+  const lamPhieuHuy = (caHomNay) => {
+    const dong = canHuy.map((x) => ({ ma: x.m.ma, sl: (x.quaHan || 0) + (caHomNay ? x.homNay || 0 : 0) })).filter((d) => d.sl > 0);
+    setHop(null); moForm('huy', { dong, ghiChu: 'Hết hạn sử dụng' });
+  };
   const batEod = () => suaHd((h) => ({
     ...h, dua: null,
     dong: h.dong.map((d) => (coEod ? { ...d, eod: false, giam: 0, giamKieu: 'vnd' } : { ...d, eod: true, giamKieu: '%', giam: Number(cd.eod_discount_pct) })),
@@ -347,7 +361,13 @@ export default function BanHangQuay() {
   const trangHien = Math.min(trang, soTrang - 1);
   const slTrongGio = useMemo(() => Object.fromEntries(hd.dong.map((d) => [d.ma, d.sl])), [hd]);
 
+  const loQuay = loCN[chiNhanh] || {};
   const themMon = (m) => {
+    const lo = loQuay[m.ma];
+    if (that && lo?.quaHan > 0 && (ton[m.ma] ?? 0) - lo.quaHan - (slTrongGio[m.ma] || 0) <= 0) {
+      nhan(`⛔ ${m.ten}: còn ${lo.quaHan} cái QUÁ HẠN, hết bánh còn hạn — không bán cho khách. Xuất hủy bánh quá hạn.`);
+      return;
+    }
     suaHd((h) => {
       const co = h.dong.find((d) => d.ma === m.ma);
       const dong = co ? h.dong.map((d) => (d.ma === m.ma ? { ...d, sl: d.sl + 1 } : d))
@@ -355,7 +375,8 @@ export default function BanHangQuay() {
       return { ...h, dong, dua: null };
     });
     const hsdCon = ngayConHsd(m.ma);
-    if (hsdCon != null && hsdCon < 0) nhan(`⚠️ ${m.ten} trong kho đã QUÁ HẠN — kiểm lại bánh trước khi bán`);
+    if (lo?.quaHan > 0) nhan(`⚠️ Kệ còn ${lo.quaHan} cái ${m.ten} QUÁ HẠN — lấy bánh mới cho khách, bánh cũ để xuất hủy`);
+    else if (!lo && hsdCon != null && hsdCon < 0) nhan(`⚠️ ${m.ten} trong kho đã QUÁ HẠN — kiểm lại bánh trước khi bán`);
     else if ((ton[m.ma] ?? 0) - (slTrongGio[m.ma] || 0) <= 0) nhan(`${m.ten} đã hết tồn trên máy — vẫn bán được, cuối ngày nhớ kiểm kho`);
   };
   const datSl = (ma, sl) => suaHd((h) => ({ ...h, dua: null, dong: h.dong.map((d) => (d.ma === ma ? { ...d, sl: Math.max(sl, 0) } : d)) }));
@@ -427,6 +448,7 @@ export default function BanHangQuay() {
       const ghi = { ...banGhi, ma: kq.code, canTra: Number(kq.total), diemCong: kq.points_earned || 0 };
       setDaBan((ds) => [ghi, ...ds.filter((x) => x.id !== ghi.id)]);
       ghiKho(chiNhanh, hd.dong.map((d) => ({ ma: d.ma, sl: -d.sl })), kq.code, 'Bán hàng');
+      taiLo(matHang).then((l) => { if (l) setLoCN(l); }).catch(() => {});
       if (tt.no > 0) napNo();
       if (hd.khach.id) setDiemKhach((x) => { const y = { ...x }; delete y[hd.khach.id]; return y; });
       baoXong(ghi, tt, kq.points_earned ? `Thanh toán thành công ${kq.code} · ${so(kq.total)} · khách +${kq.points_earned} điểm` : null);
@@ -994,7 +1016,7 @@ export default function BanHangQuay() {
         <ViecCho viec={viec} cap={that.cap} laKT={laKT} onDong={() => setHop(null)}
           onTaiLai={async () => { const v = await taiViecCho(that.cap, laKT).catch(() => null); if (v) setViec(v); napThat(); }} />
       )}
-      {hop?.loai === 'thiet_lap_quay' && that && <ThietLapQuay chiNhanh={chiNhanh} caiDat={cd} matHang={matHang} bangGia={bangGia} onLuu={() => napThat()} onDong={() => setHop(null)} />}
+      {hop?.loai === 'thiet_lap_quay' && that && <ThietLapQuay chiNhanh={chiNhanh} caiDat={cd} matHang={matHang} bangGia={bangGia} hanDung={hanDung} onLuu={() => napThat()} onDong={() => setHop(null)} />}
       {hop?.loai === 'dat_coc' && that && (
         <DatCoc hd={hd} tong={tong} chiNhanh={chiNhanh} onDong={() => setHop(null)}
           onXong={({ ma, coc, conLai }) => { setHop(null); baoXong(null, null, `Đã tạo đơn ${ma} ở mục Đơn hàng · cọc ${so(coc)} · còn ${so(conLai)} thu khi lấy bánh`); }} />
@@ -1008,9 +1030,30 @@ export default function BanHangQuay() {
           onNhan={async (nh) => { await goi('pos_nhan_hang', { p_id: hop.phieu.id, p_received: nh, p_note: null }); setHop(null); napThat(); nhan(`Đã nhận hàng ${hop.phieu.ma} — tồn quầy đã cộng`); }} />
       )}
       {hop?.loai === 'nhat_ky' && that && <NhatKy chiNhanh={chiNhanh} onDong={() => setHop(null)} />}
-      {that && viecLoi.length > 0 && (
-        <button type="button" className="kv-viec-loi" onClick={() => setHop({ loai: 'viec_loi' })}>
-          ⚠ {viecLoi.length} việc làm lúc mất mạng gửi không được — bấm để xem, báo Quản lý</button>
+      {that && !form && !hop && (viecLoi.length > 0 || hienCanHuy) && (
+        <div className={`kv-noi-day ${dienThoai ? '' : 'tren'}`}>
+          {hienCanHuy && (
+            <button type="button" className="kv-viec-loi kv-can-huy" onClick={() => setHop({ loai: 'can_huy' })}>
+              🗑️ {soQuaHan > 0 ? `${soQuaHan} bánh QUÁ HẠN` : `${soHomNay} bánh hết hạn hôm nay`} — bấm để làm phiếu xuất hủy</button>
+          )}
+          {viecLoi.length > 0 && (
+            <button type="button" className="kv-viec-loi" onClick={() => setHop({ loai: 'viec_loi' })}>
+              ⚠ {viecLoi.length} việc làm lúc mất mạng gửi không được — bấm để xem, báo Quản lý</button>
+          )}
+        </div>
+      )}
+      {hop?.loai === 'can_huy' && that && (
+        <HopT tieuDe="Cần xuất hủy" onDong={() => setHop(null)}
+          chan={<>
+            {soQuaHan > 0 && <button type="button" className="bhq-nut chinh" onClick={() => lamPhieuHuy(false)}>Làm phiếu hủy {soQuaHan} bánh quá hạn</button>}
+            {soHomNay > 0 && <button type="button" className={`bhq-nut ${soQuaHan > 0 ? 'phu' : 'chinh'}`} onClick={() => lamPhieuHuy(true)}>Hủy cả {soHomNay} bánh hết hạn hôm nay</button>}
+          </>}>
+          <p className="bhq-ghi">Bánh <b>quá hạn</b> máy không cho bán. Đếm lại trên kệ, chụp ảnh rồi hoàn thành phiếu — số trên phiếu sửa được nếu thực tế khác.</p>
+          {canHuy.map((x) => (
+            <div key={x.m.ma} className="tlq-dong"><span>{x.m.ten}{x.m.size ? ` - ${x.m.size}` : ''}</span>
+              <span>{x.quaHan > 0 && <i className="bhq-nhan-tt do">Quá hạn {x.quaHan}</i>}{x.homNay > 0 && <i className="bhq-nhan-tt">Hết hạn hôm nay {x.homNay}</i>}</span></div>
+          ))}
+        </HopT>
       )}
       {hop?.loai === 'viec_loi' && that && (
         <HopT tieuDe="Việc gửi không được" onDong={() => setHop(null)}>

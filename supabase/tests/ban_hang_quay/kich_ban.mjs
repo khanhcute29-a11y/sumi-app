@@ -149,4 +149,40 @@ if (process.argv.length > 5) {
   await chan('Chi nhánh lạ', ()=>q(`select public.pos_giao_don('${D3}','Kho X')`),'Chi nhánh');
   await chan('Người chưa duyệt', async()=>{await as('00000000-0000-0000-0000-0000000000ff'); try { await q(`select public.pos_giao_don('${D3}','Vĩnh Phú 42')`); } finally { await as(NV); }},'chưa được duyệt');
 }
+// ── 202611151000: HSD theo lô · chặn bán bánh quá hạn · xuất huỷ trừ lô hết hạn trước ──
+if (process.argv.length > 6) {
+  const P3='00000000-0000-0000-0000-0000000000b3', S='Vĩnh Phú 42';
+  await db.exec(`insert into products(id,name,category,price) values ('${P3}','Bông lan','khac',50000)`);
+  const tonP3=()=>v(`select public.pos__ton('${S}','${P3}',null)::int`);
+  const lo=async()=>(await q(`select qty::int q from pos_stock_lots where product_id='${P3}' and qty>0 order by id`)).map((r)=>r.q);
+  const banP3=(sl,o={})=>ban({lines:[{product_id:P3,name:'Bông lan',qty:sl,list_price:50000,unit_price:50000}],...o});
+  const nhanP3=async(sl)=>{const d=id(); await q(`select public.pos_luu_phieu('{"id":"${d}","type":"bep_giao","store":"${S}","lines":[{"product_id":"${P3}","name":"Bông lan","qty":${sl}}]}')`); await q(`select public.pos_nhan_hang('${d}','{"${P3}:":${sl}}')`); return d;};
+  await as(NV);
+  await chan('NV tự cài hạn dùng', ()=>q(`select public.pos_luu_han_dung('${P3}',2)`),'Chỉ Quản lý');
+  await as(QL);
+  await ok('QL cài Bông lan bán được 2 ngày', async()=>{await q(`select public.pos_luu_han_dung('${P3}',2)`); return v(`select days from pos_shelf_life where product_id='${P3}'`);},2);
+  await as(NV); await q(`select public.pos_mo_ca('${S}',0)`);
+  await ok('Nhận 10 → 1 lô, HSD = 0h ngày nhận + 2', async()=>{await nhanP3(10); return [await lo(), await v(`select ((expiry_at at time zone 'Asia/Ho_Chi_Minh')::date - (now() at time zone 'Asia/Ho_Chi_Minh')::date) from pos_stock_lots where product_id='${P3}'`)];},[[10],2]);
+  await db.exec(`update pos_stock_lots set expiry_at=now()-interval '1 hour' where product_id='${P3}'`);
+  await nhanP3(5);
+  await ok('Lô 10 quá hạn + lô 5 mới', lo, [10,5]);
+  await ok('Bán 3 → trừ lô CÒN HẠN (5→2), lô quá hạn giữ nguyên', async()=>{await banP3(3); return lo();},[10,2]);
+  await chan('Bán 3 khi chỉ còn 2 cái còn hạn → chặn', ()=>banP3(3),'QUÁ HẠN');
+  await ok('Bán 2 (đủ bánh còn hạn)', async()=>{await banP3(2); return [await lo(), await tonP3()];},[[10],10]);
+  await chan('Chỉ còn bánh quá hạn → chặn bán', ()=>banP3(1),'QUÁ HẠN');
+  const idOff=id();
+  await ok('Mất mạng vẫn ghi HĐ, gắn cờ ban_qua_han + báo GĐ', async()=>{await banP3(1,{id:idOff,offline:true,client_created_at:new Date().toISOString()});
+    return [await v(`select canh_bao->0->>'loai' from pos_invoices where id='${idOff}'`), await v(`select count(*)::int from notifications where event_key like 'pos-ban-qua-han:${idOff}%'`), await lo()];},['ban_qua_han',1,[9]]);
+  await ok('Huỷ HĐ đó → bánh trả về đúng lô cũ', async()=>{await q(`select public.pos_huy_hd('${idOff}','test')`); return lo();},[10]);
+  await ok('23:00 báo GĐ còn 10 bánh hết hạn', async()=>[await v(`select public.pos_bao_qua_han()`), await v(`select title from notifications where event_key like 'pos-qua-han:%'`)],[1,'🗑️ Vĩnh Phú 42: 10 bánh hết hạn chưa xuất huỷ']);
+  const xh=id();
+  await ok('Xuất huỷ 10 → hết lô quá hạn', async()=>{await q(`select public.pos_luu_phieu('{"id":"${xh}","type":"xuat_huy","store":"${S}","reason":"hết date","photo_url":"x.jpg","lines":[{"product_id":"${P3}","name":"Bông lan","qty":10}]}')`); return [await lo(), await tonP3()];},[[],0]);
+  await ok('Hết bánh quá hạn → bán lại bình thường', async()=>{await nhanP3(4); await banP3(1); return lo();},[3]);
+  await as(GD);
+  await ok('Huỷ phiếu xuất huỷ → 10 bánh về đúng lô quá hạn', async()=>{await q(`select public.pos_huy_phieu('${xh}','huỷ nhầm')`); return [await lo(), await v(`select count(*)::int from pos_stock_lots where product_id='${P3}' and qty>0 and expiry_at<=now()`)];},[[10,3],1]);
+  await as(NV);
+  await ok('Tồn bị sửa ở màn khác (còn 2) → lô cắt cho khớp', async()=>{await db.exec(`update finished_goods_stock set qty=2 where product_id='${P3}' and store_location='${S}'`); await nhanP3(1); return [await tonP3(), (await lo()).reduce((a,b)=>a+b,0)];},[3,3]);
+  await ok('Món chưa cài hạn dùng → lô không có HSD', async()=>{const d=id(); await q(`select public.pos_luu_phieu('{"id":"${d}","type":"bep_giao","store":"${S}","lines":[{"product_id":"${P1}","name":"Bánh bò","qty":2}]}')`); await q(`select public.pos_nhan_hang('${d}','{"${P1}:":2}')`); return v(`select bool_or(expiry_at is not null) from pos_stock_lots where product_id='${P1}'`);},false);
+  await ok('Huỷ phiếu nhận hàng → bớt đúng lô phiếu đó', async()=>{await as(GD); const d=await nhanP3(6); const truoc=await lo(); await q(`select public.pos_huy_phieu('${d}','nhận nhầm')`); await as(NV); return [truoc.at(-1), (await lo()).length===truoc.length-1];},[6,true]);
+}
 console.log(`\n${dem-loi}/${dem} đạt`); process.exit(loi?1:0);

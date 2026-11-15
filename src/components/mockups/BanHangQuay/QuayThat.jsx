@@ -170,7 +170,7 @@ export function QrChuyenKhoan({ caiDat, tien, hdId, dt = false }) {
 }
 
 // ── Thiết lập quầy (Giám đốc) ──
-export function ThietLapQuay({ chiNhanh, caiDat, matHang, bangGia, onLuu, onDong }) {
+export function ThietLapQuay({ chiNhanh, caiDat, matHang, bangGia, hanDung = {}, onLuu, onDong }) {
   const [tab, setTab] = useState('chung');
   const c = caiDat || {};
   const [f, setF] = useState({
@@ -195,7 +195,7 @@ export function ThietLapQuay({ chiNhanh, caiDat, matHang, bangGia, onLuu, onDong
   return (
     <HopT tieuDe={`Thiết lập quầy · ${chiNhanh}`} onDong={onDong} rong
       chan={tab === 'chung' ? <button type="button" className="bhq-nut chinh" disabled={dang} onClick={luuChung}>{dang ? 'Đang lưu…' : 'Lưu thiết lập'}</button> : null}>
-      <nav className="bhq-tab">{[['chung', 'Chung'], ['gia_von', 'Giá vốn'], ['bang_gia', 'Bảng giá theo kênh']].map(([k, l]) => <button key={k} type="button" className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</nav>
+      <nav className="bhq-tab">{[['chung', 'Chung'], ['han_dung', 'Hạn dùng'], ['gia_von', 'Giá vốn'], ['bang_gia', 'Bảng giá theo kênh']].map(([k, l]) => <button key={k} type="button" className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</nav>
       {tab === 'chung' && (
         <div className="tlq">
           <h4>Giảm giá</h4>
@@ -227,9 +227,55 @@ export function ThietLapQuay({ chiNhanh, caiDat, matHang, bangGia, onLuu, onDong
           <Loi chu={loi} />{ok && <p className="bhq-ok">{ok}</p>}
         </div>
       )}
+      {tab === 'han_dung' && <HanDung matHang={matHang} hanDung={hanDung} onLuu={onLuu} />}
       {tab === 'gia_von' && <GiaVon matHang={matHang} />}
       {tab === 'bang_gia' && <BangGia matHang={matHang} bangGia={bangGia} onLuu={onLuu} />}
     </HopT>
+  );
+}
+
+// Số ngày bán được của từng loại bánh (tính cả ngày nhận). Quầy nhận hàng → máy tự ghi HSD cho lô đó.
+function HanDung({ matHang, hanDung, onLuu }) {
+  const [sua, setSua] = useState({});
+  const [q, setQ] = useState('');
+  const [loi, setLoi] = useState('');
+  const [ok, setOk] = useState('');
+  const [dang, setDang] = useState(false);
+  const mon = useMemo(() => {
+    const theoSp = new Map();
+    for (const m of matHang) {
+      const pid = tachId(m).product_id;
+      if (!theoSp.has(pid)) theoSp.set(pid, { pid, ma: m.ma, ten: m.ten, size: [] });
+      if (m.size) theoSp.get(pid).size.push(m.size);
+    }
+    return [...theoSp.values()];
+  }, [matHang]);
+  const ds = locXep(mon, (m) => `${m.ma} ${m.ten}`, q, 120);
+  const chuaCo = mon.filter((m) => !hanDung[m.pid]).length;
+  const luu = async () => {
+    setDang(true); setLoi(''); setOk('');
+    try {
+      for (const [pid, v] of Object.entries(sua)) await goi('pos_luu_han_dung', { p_product: pid, p_days: Number(v) || 0 });
+      setOk(`Đã lưu ${Object.keys(sua).length} món — áp dụng cho lần nhận hàng tới.`); setSua({}); onLuu?.();
+    } catch (e) { setLoi(chuLoi(e)); }
+    setDang(false);
+  };
+  return (
+    <div>
+      <p className="bhq-ghi">Bánh bán được trong bao nhiêu ngày, <b>tính cả ngày nhận</b> (1 = chỉ bán trong ngày). Quầy bấm Nhận hàng → máy tự ghi hạn cho mẻ đó;
+        hết hạn thì máy không cho bán và nhắc xuất hủy. Để trống = không theo dõi hạn. {chuaCo ? <b>{chuaCo} món chưa cài.</b> : 'Mọi món đã cài.'}</p>
+      <label className="bhq-tim"><Search size={16} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm món" /></label>
+      <div className="tlq-ds">
+        {ds.map((m) => (
+          <div key={m.pid} className="tlq-dong"><span>{m.ten}{m.size.length ? <small>{m.size.join(' · ')}</small> : null}</span>
+            <input className="bhq-o" inputMode="numeric" placeholder="Không theo dõi" aria-label={`Số ngày bán được của ${m.ten}`}
+              value={sua[m.pid] != null ? sua[m.pid] : hanDung[m.pid] ?? ''}
+              onChange={(e) => setSua((x) => ({ ...x, [m.pid]: e.target.value.replace(/\D/g, '').slice(0, 3) }))} /></div>
+        ))}
+      </div>
+      <Loi chu={loi} />{ok && <p className="bhq-ok">{ok}</p>}
+      <button type="button" className="bhq-nut chinh" disabled={dang || !Object.keys(sua).length} onClick={luu}>{dang ? 'Đang lưu…' : `Lưu ${Object.keys(sua).length || ''} món`}</button>
+    </div>
   );
 }
 

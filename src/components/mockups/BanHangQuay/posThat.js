@@ -134,11 +134,37 @@ export function congNoTuDb(entries, bayGio = Date.now()) {
   return { ds: ds.sort((a, b) => b.tuoiNo - a.tuoiNo || b.tong - a.tong), du };
 }
 
+// Lô có HSD (bảng có từ migration 202611151000; chưa chạy thì rỗng). expiry_at = 0h sau ngày bán cuối cùng.
+// quaHan: đã quá hạn (không bán được) · homNay: hết hạn cuối hôm nay. Ghi thêm hsd = ngày bán cuối của lô sớm nhất.
+function tinhLo(rows, bd, hsd = {}) {
+  const loCN = {};
+  const bayGio = Date.now(); const dem = new Date(); dem.setHours(24, 0, 0, 0);
+  for (const l of rows) {
+    const m = bd.theoSize(l.product_id, l.size);
+    if (!m) continue;
+    const het = new Date(l.expiry_at).getTime(); const sl = Number(l.qty || 0);
+    const cn = (loCN[l.store_location] = loCN[l.store_location] || {});
+    const x = (cn[m.ma] = cn[m.ma] || { quaHan: 0, homNay: 0 });
+    if (het <= bayGio) x.quaHan += sl; else if (het <= dem.getTime()) x.homNay += sl;
+    hsd[l.store_location] = hsd[l.store_location] || {};
+    const cuoi = het - 86400000;
+    if (!(hsd[l.store_location][m.ma] <= cuoi)) hsd[l.store_location][m.ma] = cuoi;
+  }
+  return loCN;
+}
+const chonLo = () => supabase.from('pos_stock_lots').select('store_location, product_id, size, qty, expiry_at').gt('qty', 0).not('expiry_at', 'is', null).limit(5000);
+
+// Nạp lại riêng lô (sau khi bán / làm phiếu) — nhẹ, không tải lại hoá đơn.
+export async function taiLo(matHang) {
+  const r = await chonLo();
+  return r.error ? null : tinhLo(r.data || [], lapBanDoHang(matHang));
+}
+
 // ── Nạp toàn bộ dữ liệu quầy ──
 export async function taiDuLieu(matHang, soNgay = 35) {
   const bd = lapBanDoHang(matHang);
   const tu = new Date(Date.now() - soNgay * 86400000).toISOString();
-  const [caiDat, caMo, hdR, phieuR, noR, tonR, bgR, bgItemR] = await Promise.all([
+  const [caiDat, caMo, hdR, phieuR, noR, tonR, bgR, bgItemR, loR, hanR] = await Promise.all([
     supabase.from('pos_settings').select('*'),
     supabase.from('pos_shifts').select('*').eq('status', 'open'),
     supabase.from('pos_invoices').select('*, pos_invoice_lines(*)').gte('created_at', tu).order('created_at', { ascending: false }).limit(3000),
@@ -147,6 +173,8 @@ export async function taiDuLieu(matHang, soNgay = 35) {
     supabase.from('finished_goods_stock').select('product_id, size, qty, expiry_date, store_location, is_semi_finished').not('store_location', 'is', null).eq('is_semi_finished', false),
     supabase.from('pos_price_lists').select('*').eq('active', true).order('name'),
     supabase.from('pos_price_list_items').select('*'),
+    chonLo(),
+    supabase.from('pos_shelf_life').select('product_id, days'),
   ]);
   for (const r of [caiDat, caMo, hdR, phieuR, noR, tonR]) if (r.error) throw new Error(r.error.message);
   const tonCN = {}; const hsd = {};
@@ -157,6 +185,8 @@ export async function taiDuLieu(matHang, soNgay = 35) {
     tonCN[t.store_location][m.ma] = (tonCN[t.store_location][m.ma] || 0) + Number(t.qty || 0);
     if (t.expiry_date) { hsd[t.store_location] = hsd[t.store_location] || {}; hsd[t.store_location][m.ma] = new Date(t.expiry_date).getTime(); }
   }
+  const loCN = tinhLo(loR.error ? [] : loR.data || [], bd, hsd);
+  const hanDung = Object.fromEntries((hanR.error ? [] : hanR.data || []).map((r) => [r.product_id, r.days]));
   const bangGia = (bgR.data || []).map((b) => ({
     id: b.id, ten: b.name,
     gia: Object.fromEntries((bgItemR.data || []).filter((i) => i.price_list_id === b.id).map((i) => {
@@ -169,7 +199,7 @@ export async function taiDuLieu(matHang, soNgay = 35) {
     daBan: (hdR.data || []).map((r) => hoaDonTuDb(r, r.pos_invoice_lines, bd)),
     phieuKho: (phieuR.data || []).map((r) => phieuTuDb(r, bd)),
     congNo: congNoTuDb(noR.data || []),
-    tonCN, hsd, bangGia,
+    tonCN, hsd, bangGia, loCN, hanDung,
   };
 }
 
