@@ -121,6 +121,7 @@ export default function BanHangQuay() {
   const [bayGio, setBayGio] = useState(() => Date.now());
   const timRef = useRef(null);
   const khachRef = useRef(null);
+  const daNhacHet = useRef(new Set()); // món đã nhắc "hết tồn trên máy" trong phiên
   const duaRef = useRef(null);
   const baoHen = useRef(null);
   const demHd = useRef(1);
@@ -387,7 +388,11 @@ export default function BanHangQuay() {
     const hsdCon = ngayConHsd(m.ma);
     if (lo?.quaHan > 0) nhan(`⚠️ Kệ còn ${lo.quaHan} cái ${m.ten} QUÁ HẠN — lấy bánh mới cho khách, bánh cũ để xuất hủy`);
     else if (!lo && hsdCon != null && hsdCon < 0) nhan(`⚠️ ${m.ten} trong kho đã QUÁ HẠN — kiểm lại bánh trước khi bán`);
-    else if ((ton[m.ma] ?? 0) - (slTrongGio[m.ma] || 0) <= 0) nhan(`${m.ten} đã hết tồn trên máy — vẫn bán được, cuối ngày nhớ kiểm kho`);
+    else if ((ton[m.ma] ?? 0) - (slTrongGio[m.ma] || 0) <= 0 && !daNhacHet.current.has(m.ma)) {
+      // Như KiotViet vẫn cho bán khi hết tồn; chỉ nhắc 1 lần mỗi món trong phiên cho đỡ phiền.
+      daNhacHet.current.add(m.ma);
+      nhan(`${m.ten} đã hết tồn trên máy — vẫn bán được, cuối ngày nhớ kiểm kho`);
+    }
   };
   const datSl = (ma, sl) => suaHd((h) => ({ ...h, dua: null, dong: h.dong.map((d) => (d.ma === ma ? { ...d, sl: Math.max(sl, 0) } : d)) }));
   const chotSl = (ma) => suaHd((h) => ({ ...h, dong: h.dong.map((d) => (d.ma === ma && d.sl < 1 ? { ...d, sl: 1 } : d)) }));
@@ -1410,6 +1415,12 @@ function DienThoai({
     const m = monLoc.find((x) => x.ma === q.trim().toUpperCase()) || (ds.length === 1 ? ds[0] : null);
     if (m) { themMon(m); setQ(''); }
   };
+  // Như app KiotViet: đang tìm mà chạm 1 món → thêm rồi vào thẳng giỏ hàng (xoá ô tìm).
+  // Không tìm thì chạm để chọn nhiều món, bấm "Xong" như cũ.
+  const chamMon = (m) => {
+    themMon(m);
+    if (t) { setQ(''); setDtMan('gio'); }
+  };
   const oTim = (
     <div className="kvm-tim">
       <label><Search size={17} /><input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onTimKey} placeholder="Tên, mã hàng, mã vạch, lô" aria-label="Tìm hàng hóa" /></label>
@@ -1552,7 +1563,7 @@ function DienThoai({
             const sl = slTrongGio[m.ma];
             return (
               <div key={m.ma} className={`kvm-mon ${sl ? 'chon' : ''}`}>
-                <button type="button" className="kvm-mon-cham" onClick={() => themMon(m)} aria-label={`Thêm ${m.ten}${m.size ? ` ${m.size}` : ''}`}>
+                <button type="button" className="kvm-mon-cham" onClick={() => chamMon(m)} aria-label={`Thêm ${m.ten}${m.size ? ` ${m.size}` : ''}`}>
                   <AnhNho m={m} />
                   <span className="t">
                     <span>{m.ten}{m.size ? <em className="cam"> {m.size}</em> : null}</span>
