@@ -121,7 +121,8 @@ export async function updateCustomerProfile(id, { name, phone, address, taxCode,
 
 export async function fetchProducts({ activeOnly } = {}) {
   let q = supabase.from('products').select('*, product_variants(*)').order('created_at', { ascending: true });
-  if (activeOnly) q = q.eq('active', true);
+  // activeOnly = danh mục cho đơn hàng / bếp: bỏ hàng nhập từ KiotViet (pos_code) — hàng đó chỉ bán tại quầy.
+  if (activeOnly) q = q.eq('active', true).is('pos_code', null);
   const { data, error } = await q;
   if (error) throw error;
   return data;

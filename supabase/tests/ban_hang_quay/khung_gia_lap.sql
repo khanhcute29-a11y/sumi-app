@@ -3,7 +3,7 @@ create schema auth;
 create or replace function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('test.uid', true), '')::uuid $$;
 create table public.profiles(id uuid primary key, full_name text, role text, extra_roles text[] default '{}', approved boolean default true, active boolean default true, phone text);
 create table public.customers(id uuid primary key default gen_random_uuid(), name text, phone text, is_school boolean default false);
-create table public.products(id uuid primary key default gen_random_uuid(), name text, category text, price numeric, active boolean default true, created_at timestamptz default now());
+create table public.products(id uuid primary key default gen_random_uuid(), name text, category text, unit text default 'cái', price numeric, active boolean default true, created_at timestamptz default now());
 create table public.product_variants(id uuid primary key default gen_random_uuid(), product_id uuid references products(id), label text, price numeric);
 create table public.orders(id uuid primary key default gen_random_uuid(), order_code text, customer_id uuid, required_at timestamptz, status_v2 text, total numeric, deposit numeric, confidentiality text default 'normal', created_at timestamptz default now(), status text, completed_at timestamptz, created_by uuid);
 create table public.order_items(id uuid primary key default gen_random_uuid(), order_id uuid, name text, qty int, size text);

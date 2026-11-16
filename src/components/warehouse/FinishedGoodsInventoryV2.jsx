@@ -29,7 +29,7 @@ const FLOWS = [
   { key: 'xuong41', label: '🌈 Macaron 41', hasBranchTabs: true },
   { key: 'xuong42', label: '🚚 Kho mù (Xưởng 42)', hasBranchTabs: false },
 ];
-const STORES = ['Vĩnh Phú 42', 'Quốc Lộ 13'];
+const STORES = ['Vĩnh Phú 42', 'Quốc Lộ 13', 'Vĩnh Phú 41'];
 // Bánh trang trí Macaron vừa ra khỏi Xưởng 41 chưa chắc đã gán ngay cho 1 cửa
 // hàng bán lẻ cụ thể — cần chỗ đứng riêng là "Kho Xưởng 41" trước khi chuyển
 // tiếp. Chỉ luồng xuong41 có thêm lựa chọn này, Bakery vẫn chỉ 2 cửa hàng cũ.

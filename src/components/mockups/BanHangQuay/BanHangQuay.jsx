@@ -13,7 +13,7 @@ const veApp = () => { window.location.href = '/'; };
 import { supabase } from '../../../lib/supabaseClient';
 import {
   CHI_NHANH, DANH_MUC, THU_KHAC_GOI_Y, LOAI_PHIEU, LY_DO_HUY, LY_DO_HUY_HD, LOAI_NOI_BO, LUAN_CHUYEN,
-  taoMatHang, tonGia, tienDong, tinhHoaDon, tinhThanhToan, tinhKetCa, apPhieuKho, tinhCongNo, baoCaoNgay, khop, locXep, docSoTien,
+  taoMatHang, nhomCo, tenNhomHang, tonGia, tienDong, tinhHoaDon, tinhThanhToan, tinhKetCa, apPhieuKho, tinhCongNo, baoCaoNgay, khop, locXep, docSoTien,
 } from './banHangQuayLogic';
 import {
   kiemTraThat, taiDuLieu, taiLo, taiViecCho, laKeToan, goi, goiHoacXep, xepHang, dsCho, guiHangDoi, demCho, boViecLoi, guiLaiViecLoi, laLoiMang, chuLoi, maMoi, tachId,
@@ -176,8 +176,15 @@ export default function BanHangQuay() {
       try {
         const { data: s } = await supabase.auth.getSession();
         if (s?.session) {
-          const { data, error } = await supabase.from('products').select('*, product_variants(*)').eq('active', true).order('created_at');
-          if (!error && data?.length) { sp = data; nguon = `${data.length} sản phẩm thật (chỉ đọc)`; }
+          // Hàng KiotViet ~800 món + hàng của app: tải từng trang 1000 (database giới hạn 1000 dòng/lần).
+          const data = []; let error = null;
+          for (let tu = 0; tu < 20000; tu += 1000) {
+            const r = await supabase.from('products').select('*, product_variants(*)').eq('active', true).order('created_at').order('id').range(tu, tu + 999);
+            if (r.error) { error = r.error; break; }
+            data.push(...(r.data || []));
+            if ((r.data || []).length < 1000) break;
+          }
+          if (!error && data.length) { sp = data; nguon = `${data.length} sản phẩm thật (chỉ đọc)`; }
           const r = await supabase.from('customers').select('id,name,phone').eq('is_school', false).order('name').limit(500);
           kh = r.data;
           const pr = await supabase.from('profiles').select('id,full_name,role').eq('id', s.session.user.id).maybeSingle();
@@ -359,7 +366,7 @@ export default function BanHangQuay() {
   };
 
   const monLoc = useMemo(() => matHang.filter((m) => dm === 'all' || m.danhMuc === dm), [matHang, dm]);
-  const dmCo = useMemo(() => DANH_MUC.filter((d) => matHang.some((m) => m.danhMuc === d.value)), [matHang]);
+  const dmCo = useMemo(() => nhomCo(matHang), [matHang]);
   const soTrang = Math.max(Math.ceil(monLoc.length / MOI_TRANG), 1);
   const trangHien = Math.min(trang, soTrang - 1);
   const slTrongGio = useMemo(() => Object.fromEntries(hd.dong.map((d) => [d.ma, d.sl])), [hd]);
@@ -1147,7 +1154,7 @@ function TimHang({ matHang, ton, inputRef, onChon, onThemMoi, goiY = 'Tìm hàng
   const loc = useMemo(() => {
     const t = q.trim().toLowerCase();
     if (!t) return [];
-    return locXep(matHang, (m) => `${m.ma} ${m.ten} ${m.size}`, t, 10);
+    return locXep(matHang, (m) => `${m.ma} ${m.ten} ${m.size} ${m.maVach || ''}`, t, 10);
   }, [matHang, q]);
   const lay = (m) => { onChon(m); setQ(''); setChon(0); };
   const onKey = (e) => {
@@ -1391,7 +1398,7 @@ function DienThoai({
   const laDat = cheDo === 'dat';
   const tieuDe = laDat ? 'Đặt hàng' : 'Bán hàng';
   const t = q.trim().toLowerCase();
-  const ds = t ? locXep(monLoc, (m) => `${m.ma} ${m.ten} ${m.size}`, t) : monLoc;
+  const ds = t ? locXep(monLoc, (m) => `${m.ma} ${m.ten} ${m.size} ${m.maVach || ''}`, t) : monLoc;
   const onTimKey = (e) => {
     if (e.key !== 'Enter') return;
     const m = monLoc.find((x) => x.ma === q.trim().toUpperCase()) || (ds.length === 1 ? ds[0] : null);
@@ -1840,14 +1847,14 @@ function QlHangHoa({ matHang, tonCN, chiNhanh, theKho, dienThoai, laGD, onThem, 
   const [mo, setMo] = useState(null);
   const [tab, setTab] = useState('tt');
   const [trang, setTrang] = useState(0);
-  const dmCo = DANH_MUC.filter((d) => matHang.some((m) => m.danhMuc === d.value));
+  const dmCo = nhomCo(matHang);
   const t = q.trim().toLowerCase();
-  const ds = matHang.filter((m) => khop(`${m.ma} ${m.ten} ${m.size}`, t)
+  const ds = matHang.filter((m) => khop(`${m.ma} ${m.ten} ${m.size} ${m.maVach || ''}`, t)
     && (nhom === 'all' || m.danhMuc === nhom)
     && (locTon === 'all' || (locTon === 'con' ? (ton[m.ma] ?? 0) > 0 : locTon === 'het' ? (ton[m.ma] ?? 0) === 0 : (ton[m.ma] ?? 0) < 0)));
   const tongTon = ds.reduce((s, m) => s + (ton[m.ma] ?? 0), 0);
   const tr = Math.min(trang, Math.max(Math.ceil(ds.length / MOI_TRANG_QL), 1) - 1);
-  const tenNhom = (v) => DANH_MUC.find((d) => d.value === v)?.label || 'Khác';
+  const tenNhom = tenNhomHang;
   if (dienThoai) return <HangHoaDt laGD={laGD} matHang={matHang} ds={ds} ton={ton} tonCN={tonCN} chiNhanh={chiNhanh} theKho={theKho} tenNhom={tenNhom} dmCo={dmCo} onThem={onThem} onMoMan={onMoMan}
     q={q} setQ={setQ} nhom={nhom} setNhom={setNhom} locTon={locTon} setLocTon={setLocTon} tongTon={tongTon} />;
   return (
@@ -2208,14 +2215,16 @@ function FormPhieu({ loai, phieuCu, matHang, ton, chiNhanh, nguoi, soPhieu, ganD
   const [anh, setAnh] = useState(phieuCu?.anh || null); // chạy thật: ảnh bánh huỷ (bắt buộc)
   const [dangAnh, setDangAnh] = useState(false);
   const timRef = useRef(null);
-  const dmCo = DANH_MUC.filter((d) => matHang.some((m) => m.danhMuc === d.value));
+  const dmCo = nhomCo(matHang);
   const chonAnh = async (f) => {
     setDangAnh(true); setLoi('');
     try { setAnh(await taiAnh(f, 'xuat-huy')); } catch (e) { setLoi(`Không tải được ảnh: ${chuLoi(e)}`); }
     setDangAnh(false);
   };
   const luanChuyen = loai === 'noibo' && loaiXuat === LUAN_CHUYEN;
-  const denCN = luanChuyen || loai === 'chuyen' ? CHI_NHANH.find((c) => c !== chiNhanh) : null;
+  const [denChon, setDenChon] = useState(phieuCu?.denCN || '');
+  const cnKhac = CHI_NHANH.filter((c) => c !== chiNhanh);
+  const denCN = luanChuyen || loai === 'chuyen' ? (cnKhac.includes(denChon) ? denChon : cnKhac[0]) : null;
   const ma = phieuCu?.ma || `${LOAI_PHIEU[loai].tienTo}${String(soPhieu).padStart(6, '0')}`;
   const phieu = {
     id: phieuCu?.id, anh, ma, loai, chiNhanh, nguoi: phieuCu?.nguoi || nguoi, nguoiThucHien: nguoi, luc: phieuCu?.luc || Date.now(),
@@ -2326,7 +2335,8 @@ function FormPhieu({ loai, phieuCu, matHang, ton, chiNhanh, nguoi, soPhieu, ganD
           {loai === 'giao' && <div className="kf-r"><span>Nguồn hàng</span><span>Bếp giao ra quầy</span></div>}
           {loai === 'chuyen' && <>
             <div className="kf-r"><span>Từ chi nhánh</span><span>{chiNhanh}</span></div>
-            <div className="kf-r"><span>Tới chi nhánh</span><b>{denCN}</b></div>
+            <label className="kf-r"><span>Tới chi nhánh</span>
+              <select className="kf-chon" value={denCN || ''} onChange={(e) => setDenChon(e.target.value)}>{cnKhac.map((c) => <option key={c}>{c}</option>)}</select></label>
             <div className="kf-chuyen">Hoàn thành sẽ <b>trừ tồn {chiNhanh}</b> và <b>cộng tồn {denCN}</b> cùng lúc — bên nhận không cần lập thêm phiếu.</div>
           </>}
           {loai === 'noibo' && <>

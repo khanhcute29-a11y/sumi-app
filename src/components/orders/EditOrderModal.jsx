@@ -115,7 +115,7 @@ export default function EditOrderModal({ orderId, onClose, onSaved }) {
     // để khi anh đổi size ở "Sửa chi tiết", giá tự nhảy đúng theo size đó
     // (giống hệt màn Tạo đơn), thay vì để anh gõ tay size rồi giá đứng yên.
     supabase.from('products').select('id,name,category,price,unit,product_variants(id,label,price)')
-      .eq('active', true).order('name')
+      .eq('active', true).is('pos_code', null).order('name') // hàng KiotViet chỉ bán tại quầy
       .then(({ data }) => setSanPham(data || []))
       .catch(() => setSanPham([]));
   }, [quyen?.duoc_sua]);

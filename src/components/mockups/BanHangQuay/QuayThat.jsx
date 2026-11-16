@@ -406,7 +406,8 @@ export function DatCoc({ hd, tong, chiNhanh, onXong, onDong }) {
     try {
       const n = new Date(); const p2 = (x) => String(x).padStart(2, '0');
       const ma = `SUMI-${n.getFullYear()}${p2(n.getMonth() + 1)}${p2(n.getDate())}-${String(n.getHours() * 3600 + n.getMinutes() * 60 + n.getSeconds()).padStart(5, '0')}`;
-      const coKem = hd.dong.some((d) => NHOM_KEM.includes(d.danhMuc));
+      // Nhóm hàng KiotViet (42Bánh kem, 13Bánh lạnh…) cũng đi luồng bếp bánh kem.
+      const coKem = hd.dong.some((d) => NHOM_KEM.includes(d.danhMuc) || /bánh kem|bánh lạnh/i.test(d.danhMuc || ''));
       const items = hd.dong.map((d, i) => { const t = tachId(d.mh || d); return { product_id: t.product_id, name: d.ten, quantity: d.sl, unit: 'cái', unit_price: Math.round(d.sl ? d.thanhTien / d.sl : d.gia), display_order: i, specification: { size: d.size || null, catalog_category: d.danhMuc || null, product_flow: coKem ? 'cake' : 'bakery' } }; });
       const orderId = await goi('create_order_v2', {
         p_idempotency_key: maMoi(), p_order_code: ma, p_order_type: coKem ? 'cake' : 'bakery', p_customer_id: hd.khach.id,

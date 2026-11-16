@@ -2,8 +2,8 @@
 // thiết kế giai đoạn 1 sau khi khảo sát KiotViet thật của tiệm). KHÔNG gọi
 // mạng, KHÔNG ghi database — bản thật chỉ thay chỗ lưu, giữ nguyên cách tính.
 
-// Chi nhánh thật — thay cho cách KiotViet đang giả chi nhánh bằng nhóm hàng 13/41/42.
-export const CHI_NHANH = ['Vĩnh Phú 42', 'Quốc Lộ 13'];
+// Chi nhánh thật — 3 quầy như KiotViet của tiệm (nhóm hàng 42 / 13 / 41).
+export const CHI_NHANH = ['Vĩnh Phú 42', 'Quốc Lộ 13', 'Vĩnh Phú 41'];
 
 // Danh mục bán tại quầy — bỏ "Trường học" (đơn đặt, chỉ Giám đốc) như ProductsScreen.
 export const DANH_MUC = [
@@ -21,6 +21,14 @@ export const DANH_MUC = [
   { value: 'phu_kien_trung_thu', label: 'Phụ kiện' },
   { value: 'khac', label: 'Khác' },
 ];
+// Nhóm hàng có trong danh sách: danh mục app + Nhóm hàng KiotViet (vd "42Bánh mì"), giữ đúng tên như KiotViet.
+export function nhomCo(matHang) {
+  const coDm = DANH_MUC.filter((d) => matHang.some((m) => m.danhMuc === d.value));
+  const kv = [...new Set(matHang.map((m) => m.danhMuc).filter((v) => v && !DANH_MUC.some((d) => d.value === v)))]
+    .sort((a, b) => a.localeCompare(b, 'vi')).map((v) => ({ value: v, label: v }));
+  return [...coDm, ...kv];
+}
+export const tenNhomHang = (v) => DANH_MUC.find((d) => d.value === v)?.label || v || 'Khác';
 
 // Phụ phí trên hoá đơn — KiotViet của tiệm đang tạo thành "món hàng" (SHIP18K, PHỤ THU 20K, VAT 8%).
 export const THU_KHAC_GOI_Y = [
@@ -67,7 +75,10 @@ export function taoMatHang(products) {
       : [{ id: String(p.id), ten: p.name, size: '', gia: Number(p.price) || 0 }];
     for (const d of dong) {
       stt += 1;
-      ds.push({ ...d, ma: `SP${String(stt).padStart(4, '0')}`, giaVon: Math.round((d.gia * 0.35) / 500) * 500, danhMuc: p.category || 'khac', anh: p.photo_url || null });
+      // Hàng nhập từ KiotViet giữ nguyên Mã hàng + Nhóm hàng; hàng của app tự đánh mã SP0001…
+      const ma = p.pos_code && dong.length === 1 ? p.pos_code : `SP${String(stt).padStart(4, '0')}`;
+      ds.push({ ...d, ma, giaVon: Math.round((d.gia * 0.35) / 500) * 500, danhMuc: p.pos_group || p.category || 'khac', anh: p.photo_url || null,
+        maVach: p.pos_barcode || '', dichVu: !!p.pos_dich_vu });
     }
   }
   return ds;

@@ -254,7 +254,7 @@ export default function CreateOrderV2Modal({onClose,onCreated,embedded=false,res
   setDiscountAmount('');setPromotionNote('');setTaxCode('');setVatEnabled(false);
  };
  useEffect(()=>{const onResize=()=>setIsMobile(window.innerWidth<860);window.addEventListener('resize',onResize);return()=>window.removeEventListener('resize',onResize)},[]);
- useEffect(()=>{let active=true;supabase.from('products').select('id,name,category,unit,price,product_variants(id,label,price)').eq('active',true).order('name').limit(500).then(({data,error})=>{if(active&&!error)setProductCatalog([...(data||[]),...MOONCAKE_CATALOG])});return()=>{active=false}},[]);
+ useEffect(()=>{let active=true;supabase.from('products').select('id,name,category,unit,price,product_variants(id,label,price)').eq('active',true).is('pos_code',null).order('name').limit(500).then(({data,error})=>{if(active&&!error)setProductCatalog([...(data||[]),...MOONCAKE_CATALOG])});return()=>{active=false}},[]);
  const change=(i,key,value)=>setItems(x=>x.map((it,n)=>n===i?{...it,[key]:value}:it));
  const changeMany=(i,fields)=>setItems(x=>x.map((it,n)=>n===i?{...it,...fields}:it));
  const spec=(i,key,value)=>setItems(x=>x.map((it,n)=>n===i?{...it,specification:{...it.specification,[key]:value}}:it));

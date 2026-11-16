@@ -38,6 +38,7 @@ export async function chay({ vaiTro = 'sale', ten = 'Thu ngân thử' } = {}) {
   await db.exec(await (await fetch('/supabase/migrations/202611141020_ban_hang_quay_giao_don_dat.sql')).text());
   await db.exec(await (await fetch('/supabase/migrations/202611151000_ban_hang_quay_lo_hsd.sql')).text());
   await db.exec(await (await fetch('/supabase/migrations/202611151010_ban_hang_quay_doanh_so_nhan_vien.sql')).text());
+  await db.exec(await (await fetch('/supabase/migrations/202611161000_ban_hang_quay_hang_kiotviet_va_quay_vp41.sql')).text());
   await db.exec(`update feature_flags set enabled = true, rollout_percentage = 100 where key = 'pos_ban_hang_that';
     insert into profiles(id, full_name, role) values (${lit(uid)}, ${lit(ten)}, ${lit(vaiTro)}), ('00000000-0000-0000-0000-0000000000a2', 'Quản lý thử', 'admin');
     select set_config('test.uid', ${lit(uid)}, false);`);
@@ -76,7 +77,7 @@ export async function chay({ vaiTro = 'sale', ten = 'Thu ngân thử' } = {}) {
       not(c, op, v) { st.dk.push(`not (${c} ${op === 'is' ? 'is' : op === 'eq' ? '=' : op} ${v === null ? 'null' : lit(v)})`); return b; },
       or(str) { st.dk.push(`(${str.split(',').map((x) => { const [c, op, ...r] = x.split('.'); const v = r.join('.'); return op === 'is' ? `${c} is ${v}` : `${c} = ${lit(v)}`; }).join(' or ')})`); return b; },
       order(c, o = {}) { st.xep.push(`${c} ${o.ascending === false ? 'desc' : 'asc'}`); return b; },
-      limit(n) { st.gh = n; return b; },
+      limit(n) { st.gh = n; return b; }, range(a, z) { st.bo = a; st.gh = z - a + 1; return b; },
       maybeSingle() { st.mot = true; return b; }, single() { st.mot = true; return b; },
       insert() { throw new Error(`BÀI THỬ: ghi thẳng bảng ${bang} bị chặn`); }, update() { throw new Error(`BÀI THỬ: ghi thẳng bảng ${bang} bị chặn`); },
       upsert() { throw new Error(`BÀI THỬ: ghi thẳng bảng ${bang} bị chặn`); }, delete() { throw new Error(`BÀI THỬ: ghi thẳng bảng ${bang} bị chặn`); },
@@ -88,7 +89,7 @@ export async function chay({ vaiTro = 'sale', ten = 'Thu ngân thử' } = {}) {
         for (const ch of st.cot) { if (ch === '(') d++; if (ch === ')') d--; if (ch === ',' && !d) { phan.push(cur.trim()); cur = ''; } else cur += ch; }
         if (cur.trim()) phan.push(cur.trim());
         const nhung = phan.filter((x) => x.includes('(')); const thuong = phan.filter((x) => !x.includes('('));
-        const sql = `select ${thuong.join(', ') || '*'} from public.${bang}${st.dk.length ? ` where ${st.dk.join(' and ')}` : ''}${st.xep.length ? ` order by ${st.xep.join(', ')}` : ''}${st.gh ? ` limit ${st.gh}` : ''}`;
+        const sql = `select ${thuong.join(', ') || '*'} from public.${bang}${st.dk.length ? ` where ${st.dk.join(' and ')}` : ''}${st.xep.length ? ` order by ${st.xep.join(', ')}` : ''}${st.gh ? ` limit ${st.gh}` : ''}${st.bo ? ` offset ${st.bo}` : ''}`;
         const rows = hangRa(await db.query(sql));
         for (const n of nhung) {
           const tenN = n.slice(0, n.indexOf('(')).trim(); const cotN = n.slice(n.indexOf('(') + 1, -1);
