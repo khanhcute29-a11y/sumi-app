@@ -1155,3 +1155,13 @@ button.kv-xo-them:hover{background:var(--xanh-nhat)}
 .kvm-bl-chon{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:46px;border:0;border-top:1px solid #f1f2f4;background:none;padding:0;color:var(--chu);font-size:15px;text-align:left}
 .kvm-bl-chon svg{color:var(--xanh);flex:0 0 auto}
 .kvm-tai-them{padding:16px;text-align:center;color:var(--chu-phu);font-size:14px}
+
+/* Danh sách phiếu kho (điện thoại) — chip thời gian + dòng tổng + thẻ như app KiotViet */
+.kvm-chip-tg{position:relative;display:inline-flex;align-items:center;gap:4px;flex:none;min-height:36px;padding:0 10px 0 12px;border:1px solid #dfe3e8;border-radius:18px;background:#fff;font-size:14px;color:var(--chu)}
+.kvm-chip-tg.on{border-color:var(--xanh,#0070f4);color:var(--xanh,#0070f4)}
+.kvm-chip-tg select{appearance:none;-webkit-appearance:none;border:0;background:none;font:inherit;color:inherit;padding:0;outline:0}
+.kvm-tong-phieu{padding:8px 16px;font-size:14px;color:var(--chu-phu);background:#f5f6f8;border-bottom:1px solid #eef0f2}
+.kvm-phieu-the .r1 b{font-size:15px;font-weight:600}
+.kvm-phieu-the .r3.xem{display:block;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kf-nut-nhom{display:inline-flex;align-items:center;gap:6px;flex:none;min-height:44px;padding:0 12px;border:1px solid #dfe3e8;border-radius:10px;background:#fff;font-size:14px;color:var(--chu);white-space:nowrap}
+.bhq-thong-bao{margin:4px 0;font-size:16px;line-height:1.5}
