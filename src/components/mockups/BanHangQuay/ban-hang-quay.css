@@ -57,7 +57,7 @@
 .kv-trai{min-height:0;display:flex;flex-direction:column;gap:8px}
 .kv-gio{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:6px;padding-bottom:4px}
 .kv-gio-rong{background:transparent}
-.kv-dong{position:relative;background:#fff;border-radius:8px;display:grid;grid-template-columns:24px 40px 84px minmax(0,1fr) 132px 112px 112px 40px;align-items:center;gap:6px;padding:6px 8px;min-height:56px;box-shadow:0 1px 2px rgba(21,23,26,.05)}
+.kv-dong{position:relative;background:#fff;border-radius:8px;display:grid;grid-template-columns:24px 40px 84px minmax(0,1fr) 132px 112px 112px 40px;align-items:center;gap:6px;padding:6px 8px;min-height:56px;flex:none;box-shadow:0 1px 2px rgba(21,23,26,.05)}
 .kv-dong .stt{color:var(--chu-phu);text-align:center}
 .kv-dong .xoa,.kv-dong .them{width:40px;height:44px;border:0;background:none;color:var(--chu-phu)!important;display:inline-flex;align-items:center;justify-content:center;border-radius:6px}
 .kv-dong .xoa:hover{color:var(--do)!important}

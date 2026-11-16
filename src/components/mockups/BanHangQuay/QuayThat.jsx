@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, RefreshCw, Camera, Search } from 'lucide-react';
 import { supabase } from '../../../lib/supabaseClient';
 import { goi, chuLoi, anhVietQr, noiDungCk, NGAN_HANG, maMoi, tachId, linkAnh, guiHangDoi, taiAnh, lapBanDoHang } from './posThat';
@@ -22,7 +22,12 @@ export function HopT({ tieuDe, onDong, children, chan, rong }) {
   );
 }
 
-const Loi = ({ chu }) => (chu ? <p className="kv-loi">{chu}</p> : null);
+// Lỗi thường nằm cuối hộp đang cuộn — tự cuộn tới để người bấm thấy ngay (không tưởng nút "chết").
+function Loi({ chu }) {
+  const ref = useRef(null);
+  useEffect(() => { if (chu) ref.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }); }, [chu]);
+  return chu ? <p ref={ref} className="kv-loi" role="alert">{chu}</p> : null;
+}
 
 // ── Vào ca: mỗi nhân viên vào ca bằng tài khoản của mình — đếm tiền két + chụp ảnh két ──
 // Database chặn: ca người khác đang mở, chưa chấm công (nếu Giám đốc bật), thiếu ảnh.
