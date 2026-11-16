@@ -654,19 +654,25 @@ export async function fetchWarehouseStockInLog(limit = 100) {
 // sản xuất). Trả về số dư mới để caller ghi log đúng số.
 // Chỉ dòng tồn BẾP (store_location null, không phải bán thành phẩm) — dòng tồn từng cửa hàng
 // cùng product/branch/size do Bán tại quầy quản lý, gộp vào là maybeSingle lỗi "nhiều dòng".
+// Tìm dòng tồn để cộng/trừ: ưu tiên dòng BẾP (store_location null). Chưa có dòng bếp riêng thì giữ
+// y cách cũ — chỉ có đúng 1 dòng (vd dòng "Vĩnh Phú 42" nhập ở Kho thành phẩm) thì dùng dòng đó,
+// để lúc triển khai không tách tồn đang có ra 2 dòng.
+async function timDongTon({ productId, size, branch }) {
+  const goc = () => {
+    const q = supabase.from('finished_goods_stock').select('*')
+      .eq('product_id', productId).eq('branch', branch).eq('is_semi_finished', false);
+    return size === null ? q.is('size', null) : q.eq('size', size);
+  };
+  const bep = await goc().is('store_location', null).maybeSingle();
+  if (bep.error) throw bep.error;
+  if (bep.data) return bep.data;
+  const tatCa = await goc().limit(2);
+  if (tatCa.error) throw tatCa.error;
+  return tatCa.data.length === 1 ? tatCa.data[0] : null;
+}
 async function upsertFinishedGoodsStock({ productId, size, branch }, delta) {
   const normalizedSize = size || null;
-  let row, findError;
-  if (normalizedSize === null) {
-    const res = await supabase.from('finished_goods_stock').select('*')
-      .eq('product_id', productId).eq('branch', branch).is('size', null).is('store_location', null).eq('is_semi_finished', false).maybeSingle();
-    row = res.data; findError = res.error;
-  } else {
-    const res = await supabase.from('finished_goods_stock').select('*')
-      .eq('product_id', productId).eq('branch', branch).eq('size', normalizedSize).is('store_location', null).eq('is_semi_finished', false).maybeSingle();
-    row = res.data; findError = res.error;
-  }
-  if (findError) throw findError;
+  const row = await timDongTon({ productId, size: normalizedSize, branch });
 
   if (row) {
     const newQty = Number(row.qty || 0) + delta;
@@ -778,18 +784,7 @@ export async function fetchFinishedGoodsStockOutLog(limit = 100) {
 
 export async function adjustFinishedGoodsStock({ productId, productName, size, branch, newQty, note, staffName }) {
   const normalizedSize = size || null;
-  let current;
-  if (normalizedSize === null) {
-    const { data, error } = await supabase.from('finished_goods_stock').select('*')
-      .eq('product_id', productId).eq('branch', branch).is('size', null).is('store_location', null).eq('is_semi_finished', false).maybeSingle();
-    if (error) throw error;
-    current = data;
-  } else {
-    const { data, error } = await supabase.from('finished_goods_stock').select('*')
-      .eq('product_id', productId).eq('branch', branch).eq('size', normalizedSize).is('store_location', null).eq('is_semi_finished', false).maybeSingle();
-    if (error) throw error;
-    current = data;
-  }
+  const current = await timDongTon({ productId, size: normalizedSize, branch });
   const currentQty = Number(current?.qty || 0);
   const delta = Number(newQty) - currentQty;
   if (delta === 0) return;
