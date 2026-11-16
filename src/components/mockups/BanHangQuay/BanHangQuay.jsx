@@ -1880,7 +1880,9 @@ function QlHangHoa({ matHang, tonCN, chiNhanh, theKho, dienThoai, laGD, that = f
   const ton = tonCN[chiNhanh] || {};
   const [q, setQ] = useState('');
   const [nhom, setNhom] = useState('all');
-  const [locTon, setLocTon] = useState('all');
+  // Như KiotViet: nhớ bộ lọc tồn lần trước (nhân viên hay để sẵn "Còn hàng").
+  const [locTon, datLocTon] = useState(() => docLuu('bhq-loc-ton', 'all'));
+  const setLocTon = (v) => { datLocTon(v); ghiLuu('bhq-loc-ton', v); };
   const [mo, setMo] = useState(null);
   const [tab, setTab] = useState('tt');
   const [trang, setTrang] = useState(0);
@@ -1889,7 +1891,7 @@ function QlHangHoa({ matHang, tonCN, chiNhanh, theKho, dienThoai, laGD, that = f
   const t = q.trim().toLowerCase();
   const ds = matHang.filter((m) => khop(`${m.ma} ${m.ten} ${m.size} ${m.maVach || ''}`, t)
     && (nhom === 'all' || m.danhMuc === nhom)
-    && (locTon === 'all' || (locTon === 'con' ? (ton[m.ma] ?? 0) > 0 : locTon === 'het' ? (ton[m.ma] ?? 0) === 0 : (ton[m.ma] ?? 0) < 0)));
+    && (locTon === 'all' || (locTon === 'con' ? (ton[m.ma] ?? 0) > 0 : locTon === 'het' ? (ton[m.ma] ?? 0) <= 0 : (ton[m.ma] ?? 0) < 0)));
   const tongTon = ds.reduce((s, m) => s + (ton[m.ma] ?? 0), 0);
   const tr = Math.min(trang, Math.max(Math.ceil(ds.length / MOI_TRANG_QL), 1) - 1);
   const tenNhom = tenNhomHang;
@@ -1987,6 +1989,37 @@ function QlHangHoa({ matHang, tonCN, chiNhanh, theKho, dienThoai, laGD, that = f
 
 // Hàng hoá trên điện thoại — như app KiotViet: tiêu đề + 🔍 + ⇅ · [lọc] [Tất cả loại hàng ▾] [Giá bán ▾]
 // · Tổng tồn / N hàng hoá · mỗi dòng: ảnh, tên, mã | giá, "Tồn: x". Bấm vào → chi tiết.
+// Màn "Bộ lọc" hàng hoá trên điện thoại — như app KiotViet: chọn rồi bấm Áp dụng, Đặt lại về tất cả.
+const LOC_TON = [['all', 'Tất cả hàng hoá'], ['con', 'Còn hàng'], ['het', 'Hết hàng'], ['am', 'Tồn âm (bán quá số trong máy)']];
+function BoLocHang({ locTon, nhom, dmCo, onApDung, onDong }) {
+  const [t, setT] = useState(locTon);
+  const [n, setN] = useState(nhom);
+  const [moTon, setMoTon] = useState(true);
+  const [moNhom, setMoNhom] = useState(nhom !== 'all');
+  const chon = (dang, k, l, bam) => (
+    <button key={k} type="button" className="kvm-bl-chon" onClick={bam}><span>{l}</span>{dang && <Check size={20} />}</button>
+  );
+  return (
+    <div className="kvm kvm-phu kvm-bo-loc">
+      <header className="kvm-dau trang"><button type="button" aria-label="Quay lại" onClick={onDong}><ChevronLeft size={22} /></button><h1>Bộ lọc</h1></header>
+      <div className="kvm-than">
+        <section className="kvm-the">
+          <button type="button" className="kvm-bl-dau" onClick={() => setMoTon((v) => !v)}><b>Tồn kho</b>{moTon ? <ChevronUp size={20} /> : <ChevronDown size={20} />}</button>
+          {moTon && LOC_TON.map(([k, l]) => chon(t === k, k, l, () => setT(k)))}
+        </section>
+        <section className="kvm-the">
+          <button type="button" className="kvm-bl-dau" onClick={() => setMoNhom((v) => !v)}><b>Nhóm hàng{n !== 'all' && <i className="kvm-bl-cham" />}</b>{moNhom ? <ChevronUp size={20} /> : <ChevronDown size={20} />}</button>
+          {moNhom && [['all', 'Tất cả loại hàng'], ...dmCo.map((d) => [d.value, d.label])].map(([k, l]) => chon(n === k, k, l, () => setN(k)))}
+        </section>
+      </div>
+      <div className="kvm-chan kvm-hai">
+        <button type="button" className="kvm-nut-vien" onClick={() => { setT('all'); setN('all'); }}>Đặt lại</button>
+        <button type="button" className="kv-nut-tt" onClick={() => onApDung(t, n)}>Áp dụng</button>
+      </div>
+    </div>
+  );
+}
+
 function HangHoaDt({ laGD, that = false, matHang, ds, ton, tonCN, chiNhanh, theKho, tenNhom, dmCo, onThem, onMoMan, q, setQ, nhom, setNhom, locTon, setLocTon, tongTon }) {
   const [timMo, setTimMo] = useState(false);
   const [locMo, setLocMo] = useState(false);
@@ -1994,6 +2027,17 @@ function HangHoaDt({ laGD, that = false, matHang, ds, ton, tonCN, chiNhanh, theK
   const [loaiGia, setLoaiGia] = useState('ban');
   const [mo, setMo] = useState(null);
   const [baCham, setBaCham] = useState(false);
+  // Như app KiotViet: vẽ 60 món đầu, kéo gần cuối mới vẽ thêm — 900+ món vẽ 1 lần thì máy yếu giật.
+  const [soHien, setSoHien] = useState(60);
+  const cuoiRef = useRef(null);
+  useEffect(() => { setSoHien(60); }, [q, nhom, locTon, xepTen]);
+  useEffect(() => {
+    const el = cuoiRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return undefined;
+    const ob = new IntersectionObserver((ds2) => { if (ds2[0]?.isIntersecting) setSoHien((n) => n + 60); }, { rootMargin: '400px' });
+    ob.observe(el);
+    return () => ob.disconnect();
+  });
   const m = matHang.find((x) => x.ma === mo);
   const theDb = useTheKhoDb(m, chiNhanh, that);
   if (m) {
@@ -2026,6 +2070,10 @@ function HangHoaDt({ laGD, that = false, matHang, ds, ton, tonCN, chiNhanh, theK
       </div>
     );
   }
+  if (locMo) {
+    return <BoLocHang locTon={locTon} nhom={nhom} dmCo={dmCo} onDong={() => setLocMo(false)}
+      onApDung={(t, n) => { setLocTon(t); setNhom(n); setLocMo(false); }} />;
+  }
   const hien = xepTen ? [...ds].sort((a, b) => tenHang(a).localeCompare(tenHang(b), 'vi')) : ds;
   return (
     <main className="kvm-ds-hd kvm-trang-ql kvm-hh-trang">
@@ -2046,25 +2094,21 @@ function HangHoaDt({ laGD, that = false, matHang, ds, ton, tonCN, chiNhanh, theK
       )}
       {timMo && <div className="kvm-tim"><label><Search size={17} /><input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tên, mã hàng" /></label></div>}
       <div className="kvm-loc-hd">
-        <button type="button" className={`kvm-loc-ic ${locMo ? 'on' : ''}`} aria-label="Lọc tồn kho" onClick={() => setLocMo((v) => !v)}><ListFilter size={22} /></button>
+        <button type="button" className={`kvm-loc-ic ${locTon !== 'all' || nhom !== 'all' ? 'on' : ''}`} aria-label="Bộ lọc" onClick={() => setLocMo(true)}><ListFilter size={22} /></button>
         <label className="kvm-ky xam"><select value={nhom} onChange={(e) => setNhom(e.target.value)} aria-label="Loại hàng"><option value="all">Tất cả loại hàng</option>{dmCo.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}</select><ChevronDown size={16} /></label>
         {laGD && <label className="kvm-ky xam"><select value={loaiGia} onChange={(e) => setLoaiGia(e.target.value)} aria-label="Hiện giá"><option value="ban">Giá bán</option><option value="von">Giá vốn</option></select><ChevronDown size={16} /></label>}
       </div>
-      {locMo && (
-        <div className="kvm-loc">
-          {[['all', 'Tất cả'], ['con', 'Còn hàng'], ['het', 'Hết hàng'], ['am', 'Tồn âm']].map(([k, l]) => <button key={k} type="button" className={locTon === k ? 'on' : ''} onClick={() => setLocTon(k)}>{l}</button>)}
-        </div>
-      )}
       {laGD ? <div className="kvm-tong-ql"><div><b>Tổng tồn</b><small>{so(ds.length)} hàng hoá</small></div><b>{so(tongTon)}</b></div> : <div className="kvm-khe" />}
       </div>
       <section className="kvm-hh-ds">
-        {hien.map((x) => (
+        {hien.slice(0, soHien).map((x) => (
           <button key={x.ma} type="button" className="kvm-hh-dong" onClick={() => setMo(x.ma)}>
             <AnhNho m={x} />
             <span className="t"><span>{tenHang(x)}</span><small>{x.ma}</small></span>
             <span className="p"><span>{so(laGD && loaiGia === 'von' ? x.giaVon : x.gia)}</span><small className={(ton[x.ma] ?? 0) < 0 ? 'do' : ''}>Tồn: {so(ton[x.ma] ?? 0)}</small></span>
           </button>
         ))}
+        {hien.length > soHien && <div ref={cuoiRef} className="kvm-tai-them">Đang tải thêm…</div>}
         {!ds.length && <KhongCo chu="Không tìm thấy hàng hóa nào phù hợp." />}
       </section>
       <button type="button" className="kvm-fab" aria-label="Thêm hàng hoá mới" onClick={onThem}><Plus size={28} /></button>
