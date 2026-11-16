@@ -21,7 +21,7 @@ const doiGiaTri = (v, oid) => {
 const hangRa = (res) => res.rows.map((r) => Object.fromEntries(res.fields.map((f) => [f.name, doiGiaTri(r[f.name], f.dataTypeID)])));
 const lit = (v) => (v === null ? 'null' : typeof v === 'number' ? String(v) : typeof v === 'boolean' ? String(v) : `'${String(v).replace(/'/g, "''")}'`);
 
-export async function chay({ vaiTro = 'sale', ten = 'Thu ngân thử' } = {}) {
+export async function chay({ vaiTro = 'sale', ten = 'Thu ngân thử', gdQuay = false } = {}) {
   window.__ghiLog = [];
   doiKhoThu('bhq-thu-gia-lap'); // hàng đợi mất mạng riêng — không bao giờ để máy thật gửi lên database thật
   try { localStorage.setItem('bhq-in-tu-dong', '0'); } catch { /* */ }
@@ -41,9 +41,11 @@ export async function chay({ vaiTro = 'sale', ten = 'Thu ngân thử' } = {}) {
   await db.exec(await (await fetch('/supabase/migrations/202611161000_ban_hang_quay_hang_kiotviet_va_quay_vp41.sql')).text());
   await db.exec(await (await fetch('/supabase/migrations/202611161010_ban_hang_quay_vi_va_ma_pn.sql')).text());
   await db.exec(await (await fetch('/supabase/migrations/202611161020_ban_hang_quay_tong_quan_nv_va_dau_ca.sql')).text());
+  await db.exec(await (await fetch('/supabase/migrations/202611161030_ban_hang_quay_danh_sach_giam_doc.sql')).text());
   await db.exec(`update feature_flags set enabled = true, rollout_percentage = 100 where key = 'pos_ban_hang_that';
     insert into profiles(id, full_name, role) values (${lit(uid)}, ${lit(ten)}, ${lit(vaiTro)}), ('00000000-0000-0000-0000-0000000000a2', 'Quản lý thử', 'admin');
     select set_config('test.uid', ${lit(uid)}, false);`);
+  if (gdQuay) await db.exec(`insert into pos_giam_doc(profile_id) values (${lit(uid)})`); // GĐ của quầy dù vai trò app khác
   for (const p of sp) {
     await db.query('insert into products(id,name,category,price,active,created_at,photo_url) values ($1,$2,$3,$4,true,$5,$6)', [p.id, p.name, p.category, p.price || 0, p.created_at, p.photo_url]);
     for (const v of p.product_variants || []) await db.query('insert into product_variants(id,product_id,label,price) values ($1,$2,$3,$4)', [v.id, p.id, v.label, v.price || 0]);

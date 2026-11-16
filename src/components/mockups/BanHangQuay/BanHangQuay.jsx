@@ -112,8 +112,6 @@ export default function BanHangQuay() {
   // mọi vai trò khác dùng màn nhân viên bán hàng. Chủ tiệm bật "Xem màn nhân viên" để duyệt màn đó.
   const [vaiTro, setVaiTro] = useState(null);
   const [xemNV, setXemNV] = useState(false);
-  const laChu = vaiTro === 'owner';
-  const laGD = laChu && !xemNV;
   const [daDoc, setDaDoc] = useState(() => new Set());
   const [trang, setTrang] = useState(0);
   const [bao, setBao] = useState(null); // { msg, hoaDon? }
@@ -128,6 +126,9 @@ export default function BanHangQuay() {
   const ton = tonCN[chiNhanh] || {};
   // ── CHẠY THẬT: bật khi cờ pos_ban_hang_that mở cho tài khoản này (xem posThat.js). Tắt → vẫn là bản xem trước như cũ.
   const [that, setThat] = useState(null); // { cap: 'gd' | 'ql' | 'nv', uid }
+  // Giám đốc: chạy thật thì do database quyết (pos_cap_do — gồm cả danh sách GĐ của quầy); bản xem trước thì theo vai trò owner.
+  const laChu = that ? that.cap === 'gd' : vaiTro === 'owner';
+  const laGD = laChu && !xemNV;
   const [lyDoXemTruoc, setLyDoXemTruoc] = useState('');
   const [laKT, setLaKT] = useState(false);
   const [caiDat, setCaiDat] = useState({});
@@ -881,7 +882,7 @@ export default function BanHangQuay() {
               ? <span className={`kv-nguon ${mang ? '' : 'mat'}`}>{mang ? '● Đang chạy thật' : '● Mất mạng — vẫn bán được, có mạng tự gửi'}{soCho ? ` · ${soCho} việc chờ gửi` : ''}</span>
               : <span className="kv-nguon">Bản xem trước · không lưu · {nguonDl}{lyDoXemTruoc ? ` · ${lyDoXemTruoc}` : ''}</span>}
             {that && !caMo
-              ? <span className="kv-ca">{banKhongCa ? 'Giám đốc · bán không cần vào ca' : 'Chưa vào ca'}</span>
+              ? (banKhongCa ? null : <span className="kv-ca">Chưa vào ca</span>) // Giám đốc như KiotViet: không có dòng ca
               : <button type="button" className="kv-ca" onClick={() => setHop({ loai: 'ket_ca' })}>Ca {that && caMo ? caMo.opened_by_name || nguoi : nguoi} · từ {gio(ca.moLuc)}{that && caMo ? ` · đã bán ${so(daBanCa)}` : ''} · <b>Kết ca</b></button>}
           </footer>
         </>

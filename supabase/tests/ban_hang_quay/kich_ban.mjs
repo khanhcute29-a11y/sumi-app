@@ -302,4 +302,23 @@ if (process.argv.some((x)=>x.includes('tong_quan_nv_va_dau_ca'))) {
   await chan('Khoảng ngày quá dài bị chặn', ()=>q(`select public.pos_tong_quan_cua_toi(now()-interval '200 days', now())`),'3 tháng');
   await ket(0);
 }
+// ── 202611161030: danh sách Giám đốc riêng của quầy ──
+if (process.argv.some((x)=>x.includes('danh_sach_giam_doc'))) {
+  const S='Vĩnh Phú 42';
+  await as(KT);
+  await ok('Kế toán chưa trong danh sách GĐ → cấp nv', ()=>v(`select public.pos_cap_do()`),'nv');
+  await q(`insert into pos_giam_doc(profile_id) values ('${KT}') on conflict do nothing`);
+  await ok('Thêm vào danh sách GĐ quầy → cấp gd', ()=>v(`select public.pos_cap_do()`),'gd');
+  await ok('Không có ca mở', ()=>v(`select count(*) from pos_shifts where status='open' and store_location='${S}'`),0);
+  await ok('GĐ quầy bán luôn không cần vào ca', async()=>{const i=id(); await ban({id:i,photo_url:'gd-'+id()+'.jpg'}); return q(`select status, shift_id from pos_invoices where id='${i}'`);},[{status:'xong',shift_id:null}]);
+  await ok('GĐ quầy nhận cảnh báo của Giám đốc', async()=>{await q(`select public.pos__bao_sep('thu-gd-quay','t','b','${id()}','info')`); return v(`select count(*) from notifications where event_key='thu-gd-quay:${KT}'`);},1);
+  await ok('GĐ quầy nhận việc chờ duyệt', async()=>{await q(`select public.pos__bao_quan_ly('thu-ql-quay','t','b','${id()}')`); return v(`select count(*) from notifications where event_key='thu-ql-quay:${KT}'`);},1);
+  await as(NV);
+  await ok('Nhân viên vẫn là nv', ()=>v(`select public.pos_cap_do()`),'nv');
+  await chan('Nhân viên vẫn phải vào ca mới bán được', ()=>ban({photo_url:'nv-'+id()+'.jpg'}));
+  await ok('Tài khoản đăng nhập không đọc/sửa thẳng được danh sách GĐ', ()=>v(`select has_table_privilege('authenticated','public.pos_giam_doc','select') or has_table_privilege('authenticated','public.pos_giam_doc','insert')`),false);
+  await as(GD);
+  await ok('Chủ tiệm (owner) vẫn là gd', ()=>v(`select public.pos_cap_do()`),'gd');
+  await q(`delete from pos_giam_doc where profile_id='${KT}'`);
+}
 console.log(`\n${dem-loi}/${dem} đạt`); process.exit(loi?1:0);
