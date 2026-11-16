@@ -153,7 +153,7 @@ export function tinhKetCa({ dauCa, hoaDons, thuNos = [], traHangs = [] }) {
   return {
     soHoaDon: hopLe.length,
     doanhThu: hopLe.reduce((s, h) => s + h.canTra, 0),
-    tienMat, chuyenKhoan: theo('chuyen_khoan'), the: theo('the'),
+    tienMat, chuyenKhoan: theo('chuyen_khoan'), the: theo('the'), vi: theo('vi'),
     ghiNo: hopLe.reduce((s, h) => s + h.no, 0),
     thuNo: thuNos.reduce((s, t) => s + t.tien, 0),
     traHang: traHangs.reduce((s, t) => s + t.tienTra, 0),
@@ -228,7 +228,7 @@ export function baoCaoNgay({ hoaDons, phieuKho, thuNos = [], traHangs = [], matH
     tongHang: hd.reduce((s, h) => s + h.tongHang, 0), giamGia: hd.reduce((s, h) => s + h.giamHd, 0),
     thuKhac: hd.reduce((s, h) => s + h.thuKhac, 0), vat: hd.reduce((s, h) => s + h.vat, 0),
     traHang, soTra: traHangs.length, doanhThuThuan, giaVon, laiGop: doanhThuThuan - giaVon,
-    tienMat: ketCa.tienMat, chuyenKhoan: ketCa.chuyenKhoan, the: ketCa.the, ghiNo: ketCa.ghiNo, thuNo: ketCa.thuNo,
+    tienMat: ketCa.tienMat, chuyenKhoan: ketCa.chuyenKhoan, the: ketCa.the, vi: ketCa.vi, ghiNo: ketCa.ghiNo, thuNo: ketCa.thuNo,
     giao: tongPhieu('giao'), huy: tongPhieu('huy'), noibo: tongPhieu('noibo'),
   };
 }

@@ -8,7 +8,7 @@ import { locXep } from './banHangQuayLogic';
 const so = (n) => Math.round(Number(n) || 0).toLocaleString('en-US');
 const soTien = (v) => String(v).replace(/\D/g, '');
 const ngayGio = (t) => new Date(t).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
-const PT = { tien_mat: 'Tiền mặt', chuyen_khoan: 'Chuyển khoản', the: 'Thẻ' };
+const PT = { tien_mat: 'Tiền mặt', chuyen_khoan: 'Chuyển khoản', the: 'Thẻ', vi: 'Ví' };
 
 export function HopT({ tieuDe, onDong, children, chan, rong }) {
   return (
@@ -643,7 +643,7 @@ export function BaoCaoThat({ chiNhanh, laGD, dienThoai }) {
             <R t="Tiền mặt" v={so(bc.tien_mat)} /><R t="Chuyển khoản" v={so(bc.chuyen_khoan)} />
             {bc.ck_cho > 0 && <R t="  ↳ chưa xác nhận tiền về" v={so(bc.ck_cho)} am />}
             {bc.ck_khong_thay > 0 && <R t="  ↳ KHÔNG thấy tiền về" v={so(bc.ck_khong_thay)} am />}
-            <R t="Thẻ" v={so(bc.the)} /><R t="Ghi nợ mới" v={so(bc.ghi_no)} /><R t="Thu nợ cũ" v={so(bc.thu_no)} /><R t="Thu đơn đặt (cọc + lấy bánh)" v={so(bc.thu_don)} />
+            <R t="Thẻ" v={so(bc.the)} /><R t="Ví" v={so(bc.vi)} /><R t="Ghi nợ mới" v={so(bc.ghi_no)} /><R t="Thu nợ cũ" v={so(bc.thu_no)} /><R t="Thu đơn đặt (cọc + lấy bánh)" v={so(bc.thu_don)} />
             <R t="Giảm giá" v={tru(bc.giam)} /><R t="Giảm giá cuối ngày" v={tru(bc.giam_cuoi_ngay)} />{bc.diem > 0 && <R t="Khách dùng điểm" v={tru(bc.diem)} />}
             <R t="VAT thu hộ" v={so(bc.vat)} /><R t="Thu khác" v={so(bc.thu_khac)} />
             {laGD && <><R t="Giá vốn hàng bán" v={tru(bc.gia_von)} /><R t="Hàng huỷ (giá vốn)" v={tru(bc.huy_gia_von)} am={bc.huy_gia_von > 0} />

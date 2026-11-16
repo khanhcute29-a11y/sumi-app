@@ -43,7 +43,7 @@ const SP_MAU = [
 ];
 const KHACH_MAU = [{ id: 'k1', name: 'Khách mẫu A', phone: '0900000001' }, { id: 'k2', name: 'Khách mẫu B', phone: '0900000002' }];
 const KHACH_LE = { id: null, name: 'Khách lẻ', phone: '' };
-const PT = { tien_mat: 'Tiền mặt', chuyen_khoan: 'Chuyển khoản', the: 'Thẻ' };
+const PT = { tien_mat: 'Tiền mặt', chuyen_khoan: 'Chuyển khoản', the: 'Thẻ', vi: 'Ví' }; // như KiotViet (Ví = MoMo/ZaloPay…)
 const NGAY = 86400000;
 const MOI_TRANG = 15; // KiotViet: 15 hàng / trang ở chế độ Bán thường
 const MAU_ANH = ['#F9C6D3', '#C9DCF7', '#F8D9B5', '#CDE8D2', '#E3D3F5', '#F7E3A8'];
@@ -1527,7 +1527,7 @@ function DienThoai({
             <button type="button" className="kvm-nut-vien" disabled={!hd.dong.length} onClick={luuTam}>Lưu tạm</button>
             {laDat
               ? <button type="button" className="kv-nut-tt" disabled={!hd.dong.length} onClick={onDatHang}>Đặt hàng</button>
-              : <button type="button" className="kv-nut-tt" disabled={!hd.dong.length} onClick={() => setDtMan('tt')}>Thanh toán</button>}
+              : <button type="button" className="kv-nut-tt" disabled={!hd.dong.length} onClick={() => { if (!Number(hd.giam) && hd.giamKieu !== '%') sua({ giamKieu: '%', giam: 0 }); setDtMan('tt'); }}>Thanh toán</button>}
           </div>
         </div>
       </div>
@@ -3179,7 +3179,7 @@ function KetCa({ ca, chiNhanh, hoaDons, thuNos, traHangs, soCa, onDong, onKet })
       </div>
       <div className="pgc-bang">
         <div className="pgc-3 dau"><span /><span>Bán hàng</span><span>Thu nợ</span></div>
-        <Dong3 t="Tiền mặt" k="tien_mat" /><Dong3 t="Chuyển khoản" k="chuyen_khoan" /><Dong3 t="Thẻ" k="the" />
+        <Dong3 t="Tiền mặt" k="tien_mat" /><Dong3 t="Chuyển khoản" k="chuyen_khoan" /><Dong3 t="Thẻ" k="the" /><Dong3 t="Ví" k="vi" />
         <div className="pgc-3"><span>Công nợ</span><b>{so(soLieu.ghiNo)}</b><b>—</b></div>
       </div>
       <div className="bhq-bang">
@@ -3205,7 +3205,7 @@ function NoiDungBanGiao({ p }) {
       <div>Ca: {ngayDayDu(p.moLuc)} → {gio(p.dongLuc)}</div>
       <div>Số hóa đơn: {p.soHoaDon}</div>
       <hr />
-      <b>Bán hàng</b>{r('Tiền mặt', p.ban.tien_mat)}{r('Chuyển khoản', p.ban.chuyen_khoan)}{r('Thẻ', p.ban.the)}{r('Công nợ', p.ghiNo)}
+      <b>Bán hàng</b>{r('Tiền mặt', p.ban.tien_mat)}{r('Chuyển khoản', p.ban.chuyen_khoan)}{r('Thẻ', p.ban.the)}{r('Ví', p.ban.vi)}{r('Công nợ', p.ghiNo)}
       <b>Thu nợ</b>{r('Tiền mặt', p.thu.tien_mat)}{r('Chuyển khoản', p.thu.chuyen_khoan)}
       {p.donDat && (Number(p.donDat.tien_mat) || Number(p.donDat.chuyen_khoan)) ? <><b>Đơn đặt (cọc + lấy bánh)</b>{r('Tiền mặt', p.donDat.tien_mat)}{r('Chuyển khoản', p.donDat.chuyen_khoan)}</> : null}
       {p.hoanTien ? r('Trả lại khách (huỷ HĐ ca trước)', -p.hoanTien) : null}
@@ -3367,6 +3367,7 @@ function CuoiNgay({ chiNhanh, bc, dienThoai, laGD, onMo, hoaDonsCN = [], traHang
           <Dong t="Tiền mặt" v={so(bc.tienMat)} />
           <Dong t="Chuyển khoản" v={so(bc.chuyenKhoan)} />
           <Dong t="Thẻ" v={so(bc.the)} />
+          <Dong t="Ví" v={so(bc.vi)} />
           <Dong t="Ghi nợ mới" v={so(bc.ghiNo)} />
           <Dong t="Thu nợ cũ" v={so(bc.thuNo)} />
         </div>

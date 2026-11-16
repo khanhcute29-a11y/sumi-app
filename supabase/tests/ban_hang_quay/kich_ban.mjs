@@ -266,4 +266,15 @@ if (process.argv.length > 7) {
   await ok('Kết ca B: tin báo GĐ có doanh số ca', async()=>{const r=await ketCa(ca2); return [Number(r.summary.doanh_so_tinh), await v(`select (body like '%doanh số tính 670.000đ%' or body like '%doanh số tính 670,000đ%')::text from notifications where event_key like 'pos-dong-ca:${ca2}%' limit 1`)];},[670000,'true']);
   await chan('NV gọi hàm nội bộ doanh số', async()=>{await db.exec(`set role authenticated`); try{await q(`select * from public.pos__ds_hd(now()-interval '1 day',now())`);}finally{await db.exec(`reset role`);}},'permission');
 }
+// ── 202611161010: thanh toán Ví + phiếu nhập hàng mã PN (giống KiotViet) ──
+if (process.argv.some((x)=>x.includes('vi_va_ma_pn'))) {
+  await as(NV);
+  const S='Vĩnh Phú 42';
+  const ca=await v(`select (public.pos_vao_ca('${S}',0,'ket.jpg'))->>'id'`);
+  const tmTruoc=Number((await v(`select public.pos__so_lieu_ca('${ca}')`)).tien_mat_trong_ca);
+  await ok('Bán bằng Ví: lưu pay_method vi, không chờ xác nhận', async()=>{const r=await ban({pay_method:'vi',photo_url:'vi-'+id()+'.jpg'}); return [await v(`select pay_method from pos_invoices where code='${r.code}'`), r.transfer_status];},['vi','khong']);
+  await ok('Ví: kết ca tách riêng, tiền mặt trong két không đổi', async()=>{const sl=await v(`select public.pos__so_lieu_ca('${ca}')`); return [Number(sl.ban.vi)>0, Number(sl.tien_mat_trong_ca)===tmTruoc];},[true,true]);
+  await chan('Phương thức lạ vẫn bị chặn', ()=>ban({pay_method:'momo',photo_url:'x-'+id()+'.jpg'}),'không hợp lệ');
+  await ok('Phiếu nhập hàng (bếp giao) mã PN…', ()=>v(`select left((public.pos_luu_phieu('{"id":"${id()}","type":"bep_giao","store":"${S}","lines":[{"product_id":"${P1}","name":"Bánh bò","qty":1}]}'))->>'code',2)`),'PN');
+}
 console.log(`\n${dem-loi}/${dem} đạt`); process.exit(loi?1:0);
