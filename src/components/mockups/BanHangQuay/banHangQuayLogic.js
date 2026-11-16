@@ -52,7 +52,7 @@ export const LOAI_PHIEU = {
 export const LY_DO_HUY = ['Hết date', 'Hỏng / móp', 'Rơi vỡ', 'Khác'];
 export const LY_DO_HUY_HD = ['Bấm nhầm món', 'Sai số lượng', 'Khách đổi ý', 'Khác'];
 // Loại xuất nội bộ: đúng danh sách tiệm đã tạo trên KiotViet (05/11/2026).
-export const LUAN_CHUYEN = 'Luân chuyển bánh giữa 2 cửa hàng';
+export const LUAN_CHUYEN = 'Luân chuyển bánh giữa các cửa hàng';
 export const LOAI_NOI_BO = [
   LUAN_CHUYEN, 'Làm bánh kem', 'Xuất HD', 'Xuất quà tặng khách hàng, đối tác', 'Xuất mẫu trưng bày, demo sản phẩm',
   'Xuất bồi thường, đền bù', 'Xuất phục vụ sự kiện, hội nghị nội bộ', 'Xuất vật tư tiêu hao, công cụ dụng cụ',

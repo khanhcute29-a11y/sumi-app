@@ -391,7 +391,7 @@ function BangGia({ matHang, bangGia, onLuu }) {
 
 // ── Đặt bánh lấy cọc: tạo đơn ở mục Đơn hàng (create_order_v2) + ghi tiền cọc vào két ca ──
 const NHOM_KEM = ['banh_kem', 'banh_kem_bap_choco', 'mousse_tiramisu', 'banh_su', 'cupcake'];
-export function DatCoc({ hd, tong, chiNhanh, onXong, onDong }) {
+export function DatCoc({ hd, tong, chiNhanh, oKhach = null, onXong, onDong }) {
   const [ngay, setNgay] = useState(() => { const d = new Date(Date.now() + 86400000); d.setHours(9, 0, 0, 0); const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T09:00`; });
   const [coc, setCoc] = useState(String(Math.round(tong.canTra / 2 / 1000) * 1000));
   const [pt, setPt] = useState('tien_mat');
@@ -400,7 +400,7 @@ export function DatCoc({ hd, tong, chiNhanh, onXong, onDong }) {
   const [loi, setLoi] = useState('');
   const coKhach = !!hd.khach?.id;
   const tao = async () => {
-    if (!coKhach) { setLoi('Đặt bánh phải có khách (tên + SĐT) — chọn khách trước.'); return; }
+    if (!coKhach) { setLoi('Đặt bánh phải có khách (tên + SĐT) — tìm khách ở ô trên, chưa có thì bấm + để thêm.'); return; }
     if (!ngay) { setLoi('Chọn ngày giờ khách lấy bánh.'); return; }
     setDang(true); setLoi('');
     try {
@@ -427,6 +427,7 @@ export function DatCoc({ hd, tong, chiNhanh, onXong, onDong }) {
       chan={<button type="button" className="bhq-nut chinh" disabled={dang || !hd.dong.length} onClick={tao}>{dang ? 'Đang tạo đơn…' : `Tạo đơn · thu cọc ${so(coc)}`}</button>}>
       <div className="bhq-bang">
         <div><span>Khách</span><b>{coKhach ? `${hd.khach.name} · ${hd.khach.phone}` : 'Chưa chọn khách'}</b></div>
+        {!coKhach && oKhach && <div className="bhq-dc-khach">{oKhach}</div>}
         <div><span>{tong.soMon} món · tổng đơn</span><b>{so(tong.canTra)}</b></div>
       </div>
       <label className="bhq-nhan">Ngày giờ khách lấy<input className="bhq-o" type="datetime-local" value={ngay} onChange={(e) => setNgay(e.target.value)} /></label>
@@ -612,7 +613,7 @@ export function BaoCaoThat({ chiNhanh, laGD, dienThoai }) {
   return (
     <main className={`bhq-ds bct ${dienThoai ? 'dt' : ''}`}>
       <div className="bct-dau">
-        <h2>Báo cáo · {tatCa ? 'Cả 2 cửa hàng' : chiNhanh}</h2>
+        <h2>Báo cáo · {tatCa ? 'Tất cả cửa hàng' : chiNhanh}</h2>
         <nav className="bhq-tab">{KY.map(([k, l]) => <button key={k} type="button" className={ky === k ? 'on' : ''} onClick={() => setKy(k)}>{l}</button>)}</nav>
         {ky === 'tuy_chinh' && (
           <div className="bct-khoang">
@@ -620,7 +621,7 @@ export function BaoCaoThat({ chiNhanh, laGD, dienThoai }) {
             <label>Đến ngày<input type="date" value={den} min={tu || undefined} max={ngayO(Date.now())} onChange={(e) => setDen(e.target.value)} /></label>
           </div>
         )}
-        <label className="kv-cong-tac nho"><span>Gộp 2 cửa hàng</span><input type="checkbox" checked={tatCa} onChange={(e) => setTatCa(e.target.checked)} /><i /></label>
+        <label className="kv-cong-tac nho"><span>Gộp tất cả cửa hàng</span><input type="checkbox" checked={tatCa} onChange={(e) => setTatCa(e.target.checked)} /><i /></label>
       </div>
       <Loi chu={loi} />
       {!bc && !loi && <p className="bhq-ghi">Đang tính…</p>}

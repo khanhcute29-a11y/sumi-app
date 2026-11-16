@@ -1144,3 +1144,6 @@ button.kv-xo-them:hover{background:var(--xanh-nhat)}
 .xh-ds li.toi{border-color:#0070F4;background:#f3f8ff;font-weight:600}
 .xh-hang{flex:0 0 32px;height:32px;border-radius:50%;display:grid;place-items:center;background:#f0f2f5;font-weight:700}
 .xh-hang.h1{background:#fde68a}.xh-hang.h2{background:#e5e7eb}.xh-hang.h3{background:#fcd9b6}
+/* Đặt bánh: chọn khách ngay trong hộp (như màn đặt hàng KiotViet) */
+.bhq-bang>.bhq-dc-khach{display:block;padding:4px 0 8px}
+.bhq-dc-khach .kv-khach{position:relative;width:100%;max-width:none}
