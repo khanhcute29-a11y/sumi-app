@@ -277,4 +277,29 @@ if (process.argv.some((x)=>x.includes('vi_va_ma_pn'))) {
   await chan('Phương thức lạ vẫn bị chặn', ()=>ban({pay_method:'momo',photo_url:'x-'+id()+'.jpg'}),'không hợp lệ');
   await ok('Phiếu nhập hàng (bếp giao) mã PN…', ()=>v(`select left((public.pos_luu_phieu('{"id":"${id()}","type":"bep_giao","store":"${S}","lines":[{"product_id":"${P1}","name":"Bánh bò","qty":1}]}'))->>'code',2)`),'PN');
 }
+// ── 202611161020: tiền đầu ca theo ca trước + Tổng quan của tôi ──
+if (process.argv.some((x)=>x.includes('tong_quan_nv_va_dau_ca'))) {
+  const S='Vĩnh Phú 42', NV2='00000000-0000-0000-0000-0000000000a5';
+  const caDangMo=()=>v(`select coalesce((select id::text from pos_shifts where status='open' and store_location='${S}'),'')`);
+  const demBanh=()=>v(`select coalesce(jsonb_agg(jsonb_build_object('product_id',product_id,'size',size,'name','Món','dem',qty)),'[]')::text from finished_goods_stock where store_location='${S}' and is_semi_finished=false and qty>0`);
+  const ket=async(dem)=>{await as(GD); const c=await caDangMo(); if(c) await q(`select public.pos_ket_ca('${c}',${dem},null,'k.jpg','${await demBanh()}'::jsonb)`);};
+  await ket(300000);   // đóng ca còn mở (nếu có), két đếm 300k
+  await as(NV);
+  await ok('Màn vào ca thấy số két ca trước', async()=>{const r=await v(`select public.pos_tien_dau_ca('${S}')`); return [r.co, Number(r.so)];},[true,300000]);
+  await ok('Nhập khống 900k: máy vẫn tính két 300k (ca trước), lưu số gõ', async()=>{const r=await v(`select public.pos_vao_ca('${S}',900000,'k1.jpg')`); return [Number(r.opening_cash), Number(r.opening_cash_entered)];},[300000,900000]);
+  await ok('Giám đốc nhận cảnh báo đầu ca nhập DƯ 600k', ()=>v(`select count(*) from notifications where event_key like 'pos-dau-ca:%' and title like '%nhập DƯ 600%'`),1);
+  const soBao=await v(`select count(*) from notifications where event_key like 'pos-dau-ca:%'`);
+  const caA=await caDangMo();
+  await ok('Bán 2 hoá đơn trong ca', async()=>{await ban({photo_url:'a1-'+id()+'.jpg'}); await ban({photo_url:'a2-'+id()+'.jpg'}); return true;},true);
+  await ok('Kết ca: két máy = 300k + 360k (KHÔNG cộng 900k gõ khống)', async()=>{await as(NV); const r=await v(`select public.pos_ket_ca('${caA}',660000,null,'k.jpg','${await demBanh()}'::jsonb)`); return [Number(r.expected_cash), Number(r.diff)];},[660000,0]);
+  await as(NV2);
+  await ok('Vào ca đúng số ca trước → không báo GĐ', async()=>{await q(`select public.pos_vao_ca('${S}',660000,'k2.jpg')`); return v(`select count(*) from notifications where event_key like 'pos-dau-ca:%'`);},soBao);
+  await ok('Người B bán 1 hoá đơn', async()=>{await ban({photo_url:'b1-'+id()+'.jpg'}); return true;},true);
+  const tu=new Date(Date.now()-86400000).toISOString(), den=new Date(Date.now()+86400000).toISOString();
+  await ok('Tổng quan của B: đúng số HĐ của B, ca mới nhất đang mở có 1 HĐ 180k', async()=>{const r=await v(`select public.pos_tong_quan_cua_toi('${tu}','${den}')`); const that=await v(`select count(*) from pos_invoices where status='xong' and cashier_id='${NV2}' and created_at>='${tu}'`); return [r.so_hd===that, r.ca[0].status, r.ca[0].so_hd, Number(r.ca[0].ban_tinh)];},[true,'open',1,180000]);
+  await as(NV);
+  await ok('Tổng quan của A: không lẫn HĐ của B, ca đã kết lưu doanh số', async()=>{const r=await v(`select public.pos_tong_quan_cua_toi('${tu}','${den}')`); const c=r.ca.find((x)=>x.id===caA); const that=await v(`select count(*) from pos_invoices where status='xong' and cashier_id='${NV}' and created_at>='${tu}'`); return [r.so_hd===that, r.hd.length===that, c.status, c.so_hd, Number(c.ban_tinh)];},[true,true,'closed',2,360000]);
+  await chan('Khoảng ngày quá dài bị chặn', ()=>q(`select public.pos_tong_quan_cua_toi(now()-interval '200 days', now())`),'3 tháng');
+  await ket(0);
+}
 console.log(`\n${dem-loi}/${dem} đạt`); process.exit(loi?1:0);

@@ -5,7 +5,7 @@ import {
   List, Menu, Minus, Pencil, PersonStanding, Plus, Printer, ReceiptText, Repeat, ScanBarcode, Search, ShoppingBag, Tag,
   Trash2, User, X, Zap, Copy, LayoutGrid, Save, SquarePen, CircleUser, Warehouse, Share2, ClipboardCheck, Package, House,
   Eye, EyeOff, Mail, ChartArea, FileText, FileClock, ArrowDownUp, Box, Ellipsis, PackageMinus, Bell, Truck, Users, ShoppingCart, Download,
-  ListFilter, ChartColumn, Maximize2, Minimize2, Settings, Info, ChevronUp, CircleCheck, ListChecks,
+  ListFilter, ChartColumn, Maximize2, Minimize2, Settings, Info, ChevronUp, CircleCheck, ListChecks, RefreshCw,
 } from 'lucide-react';
 
 // Rời máy bán hàng, quay về trang chủ app Sumi (nút "Bán tại quầy" ở màn Hôm nay mở vào đây).
@@ -772,7 +772,7 @@ export default function BanHangQuay() {
 
   return (
     <div className={`bhq kv ${dienThoai ? 'dt' : ''} ${laGD ? '' : 'nv'}`}>
-      {manHinh !== 'ban' && dienThoai && !['ls', 'hh', 'them', 'ngay', 'tb'].includes(manHinh) && (
+      {manHinh !== 'ban' && dienThoai && !['ls', 'hh', 'them', 'ngay', 'tb', 'toi'].includes(manHinh) && (
         <header className="kvm-dau kvm-dau-ql">
           {MAN_CON.includes(manHinh) && <button type="button" aria-label="Quay lại" onClick={() => moManHinh('them')}><ChevronLeft size={22} /></button>}
           <h1>{TEN_DT[manHinh]}</h1>{nutMenu}
@@ -787,6 +787,7 @@ export default function BanHangQuay() {
             <button type="button" className={manHinh === 'kh' ? 'on' : ''} onClick={() => moManHinh('kh')}>Khách hàng</button>
             {xemQl && <button type="button" className={manHinh === 'no' ? 'on' : ''} onClick={() => moManHinh('no')}>Công nợ{congNo.length ? <i>{congNo.length}</i> : null}</button>}
             {xemQl && <button type="button" className={manHinh === 'ngay' ? 'on' : ''} onClick={() => moManHinh('ngay')}>{that ? 'Báo cáo' : 'Báo cáo cuối ngày'}</button>}
+            {that && !laGD && <button type="button" className={manHinh === 'toi' ? 'on' : ''} onClick={() => moManHinh('toi')}>Doanh số của tôi</button>}
           </nav>
           <div className="kv-top-r">
             <button type="button" className="kv-ve-ban" onClick={() => setManHinh('ban')}><ShoppingBag size={17} /> Bán hàng</button>
@@ -900,7 +901,9 @@ export default function BanHangQuay() {
         <nav className="kvm-nav" aria-label="Điều hướng">
           {(laGD
             ? [['ngay', 'Tổng quan', ChartArea], ['hh', 'Hàng hoá', Box], ['ban', 'Bán hàng', ShoppingBag], ['ls', 'Hoá đơn', FileText], ['them', 'Khác', Menu]]
-            : [['hh', 'Hàng hoá', Box], ['ban', 'Bán hàng', ShoppingBag], ['ls', 'Hoá đơn', FileText], ['tb', 'Thông báo', Bell], ['them', 'Nhiều hơn', Menu]]
+            : that // chạy thật: y app KiotViet của nhân viên (Tổng quan = doanh số của mình, 🔔 nằm trong Tổng quan)
+              ? [['toi', 'Tổng quan', ChartArea], ['hh', 'Hàng hoá', Box], ['ban', 'Bán hàng', ShoppingBag], ['ls', 'Hoá đơn', FileText], ['them', 'Khác', Menu]]
+              : [['hh', 'Hàng hoá', Box], ['ban', 'Bán hàng', ShoppingBag], ['ls', 'Hoá đơn', FileText], ['tb', 'Thông báo', Bell], ['them', 'Nhiều hơn', Menu]]
           ).map(([k, l, Ic]) => (
             <button key={k} type="button" className={manHinh === k || (k === 'them' && MAN_CON.includes(manHinh)) ? 'on' : ''}
               onClick={() => { moManHinh(k); if (k === 'ban') setDtMan('chon'); }}>
@@ -923,6 +926,7 @@ export default function BanHangQuay() {
             <button type="button" onClick={() => moManHinh('hh')}><Tag size={18} /> Hàng hóa &amp; kho</button>
             <button type="button" onClick={() => moManHinh('pn')}><Warehouse size={18} /> Nhập hàng (bếp giao)</button>
             <button type="button" onClick={() => moHop({ loai: 'ket_ca' })}><Clock size={18} /> Kết ca</button>
+            {that && !laGD && <button type="button" onClick={() => moManHinh('toi')}><ChartArea size={18} /> Doanh số của tôi</button>}
             {mucThat.map(([k, l, Ic]) => <button key={k} type="button" onClick={() => moMucThat(k)}><Ic size={18} /> {l}</button>)}
             <hr />
             <label className="kv-menu-cn">Chi nhánh
@@ -965,6 +969,7 @@ export default function BanHangQuay() {
 
       {manHinh === 'no' && <CongNo ds={congNo} du={that ? noDb.du : null} onThu={(k) => setHop({ loai: 'thu_no', no: k })} />}
 
+      {manHinh === 'toi' && that && <TongQuanCuaToi dienThoai={dienThoai} soTb={tbChuaDoc} onMo={(k) => { moManHinh(k); if (k === 'ban') setDtMan('chon'); }} />}
       {manHinh === 'ngay' && that && <BaoCaoThat chiNhanh={chiNhanh} laGD={that.cap === 'gd' && !xemNV} dienThoai={dienThoai} />}
       {manHinh === 'ngay' && !that && (
         <CuoiNgay chiNhanh={chiNhanh} dienThoai={dienThoai} laGD={laGD} onMo={(k) => { moManHinh(k); if (k === 'ban') setDtMan('chon'); }}
@@ -3342,6 +3347,108 @@ function TongQuanDt({ hoaDons, traHangs, onMo, soTb }) {
       </section>
       <h3 className="kvm-tq2-bc">Báo cáo cuối ngày (hôm nay)</h3>
     </div>
+  );
+}
+
+// Tổng quan của NHÂN VIÊN (chạy thật) — y màn "Tổng quan" app KiotViet bản nhân viên: [Hôm nay ▾] ·
+// "N hoá đơn / X nghìn" · biểu đồ Doanh thu · thêm "Ca của tôi": mỗi ca lưu ngày, giờ vào–ra, số HĐ, tiền bán.
+// Chỉ số liệu của CHÍNH MÌNH — database lọc theo tài khoản (pos_tong_quan_cua_toi), không tin trình duyệt.
+const KY_TOI = { hom_nay: 'Hôm nay', hom_qua: 'Hôm qua', '7_ngay': '7 ngày qua', thang: 'Tháng này', thang_truoc: 'Tháng trước' };
+function khoangToi(k) {
+  const d = new Date(); d.setHours(0, 0, 0, 0); const h = d.getTime();
+  if (k === 'hom_qua') return [h - NGAY, h];
+  if (k === '7_ngay') return [h - 6 * NGAY, h + NGAY];
+  if (k === 'thang') return [new Date(d.getFullYear(), d.getMonth(), 1).getTime(), h + NGAY];
+  if (k === 'thang_truoc') return [new Date(d.getFullYear(), d.getMonth() - 1, 1).getTime(), new Date(d.getFullYear(), d.getMonth(), 1).getTime()];
+  return [h, h + NGAY];
+}
+// KiotViet: "512 nghìn", "1.25 triệu".
+const nghin = (n) => (n >= 1e6 ? [(n / 1e6).toFixed(2).replace(/\.?0+$/, ''), 'triệu'] : n >= 1e3 ? [String(Math.floor(n / 1e3)), 'nghìn'] : [so(n), '']);
+function TongQuanCuaToi({ onMo, soTb, dienThoai }) {
+  const [ky, setKy] = useState('hom_nay');
+  const [d, setD] = useState(null);
+  const [loi, setLoi] = useState('');
+  const [toBd, setToBd] = useState(false);
+  const [lan, setLan] = useState(0);
+  useEffect(() => {
+    let huy = false; setD(null); setLoi('');
+    const [a, b] = khoangToi(ky);
+    goi('pos_tong_quan_cua_toi', { p_from: new Date(a).toISOString(), p_to: new Date(b).toISOString() })
+      .then((r) => { if (!huy) setD(r); }).catch((e) => { if (!huy) setLoi(chuLoi(e)); });
+    return () => { huy = true; };
+  }, [ky, lan]);
+  const p2 = (n) => String(n).padStart(2, '0');
+  const homNay = new Date();
+  const nhan = { ...KY_TOI, hom_nay: `Hôm nay, ${p2(homNay.getDate())}/${p2(homNay.getMonth() + 1)}/${homNay.getFullYear()}` };
+  const motNgay = ky === 'hom_nay' || ky === 'hom_qua';
+  const cot = new Map();
+  (d?.hd || []).forEach((h) => { const t = new Date(h.luc); const k = motNgay ? `${t.getHours()}h` : `${p2(t.getDate())}/${p2(t.getMonth() + 1)}`; cot.set(k, (cot.get(k) || 0) + Number(h.tien || 0)); });
+  const cots = [...cot.entries()];
+  const dinh = Math.max(...cots.map(([, v]) => v), 1);
+  const buoc = [1e4, 2e4, 5e4, 1e5, 2e5, 5e5, 1e6, 2e6, 5e6, 1e7, 2e7, 5e7, 1e8].find((b) => dinh / b <= 6) || 1e8;
+  const lon = (Math.floor(dinh / buoc) + 1) * buoc;
+  const vach = Array.from({ length: Math.round(lon / buoc) + 1 }, (_, i) => i * buoc).reverse();
+  const nhanTruc = (n) => (n >= 1e6 ? `${+(n / 1e6).toFixed(1)}Tr` : n >= 1e3 ? `${n / 1e3}K` : '0');
+  const ban = Number(d?.ban_tinh || 0) + Number(d?.ck_cho || 0);
+  const [bSo, bDv] = nghin(ban);
+  // Ca gom theo ngày vào ca (mới nhất trước).
+  const theoNgay = new Map();
+  (d?.ca || []).forEach((c) => { const k = new Date(c.opened_at).toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }); theoNgay.set(k, [...(theoNgay.get(k) || []), c]); });
+  return (
+    <main className={`bhq-ds kvm-tq ${dienThoai ? '' : 'kvm-tq-pc'}`}>
+      <div className="kvm-tq2">
+        <header className="kvm-tq2-dau">
+          <div className="logo"><span>S</span>Sumi Bakery</div>
+          <button type="button" aria-label="Tải lại" onClick={() => setLan((x) => x + 1)}><RefreshCw size={24} /></button>
+          <button type="button" aria-label="Thông báo" onClick={() => onMo('tb')}><Bell size={26} />{soTb > 0 && <i className="kvm-nav-dem">{soTb > 99 ? '99+' : soTb}</i>}</button>
+        </header>
+        <label className="kvm-ky xam kvm-tq2-ky"><select value={ky} onChange={(e) => setKy(e.target.value)} aria-label="Thời gian">{Object.entries(nhan).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select><ChevronDown size={16} /></label>
+        {loi && <p className="kv-loi" role="alert">{loi}</p>}
+        <div className="kvm-tq2-the">
+          <div className="hai">
+            <div><small>{d ? d.so_hd : '…'} hoá đơn</small><p className="so-lon"><b>{d ? bSo : '…'}</b> {d ? bDv : ''}</p></div>
+            <div><small>Ca làm</small><p className="so-lon"><b className="cam">{d ? d.ca.length : '…'}</b></p></div>
+          </div>
+          {d && Number(d.ck_cho) > 0 && <div className="tra">Chuyển khoản chờ xác nhận tiền về <b>{so(d.ck_cho)}</b></div>}
+          {d && Number(d.no_chua_tra) > 0 && <div className="tra">Khách còn nợ (chưa tính) <b>{so(d.no_chua_tra)}</b></div>}
+          {d && Number(d.bi_loai) > 0 && <div className="tra">Quản lý loại khỏi doanh số <b>{so(d.bi_loai)}</b></div>}
+          {d && Number(d.so_don_dat) > 0 && <div className="tra">Bánh đặt tại quầy · {d.so_don_dat} đơn <b>{so(d.dat_quay)}</b></div>}
+        </div>
+        <section className="kvm-tq2-bd">
+          <div className="tieu-de"><h2>Doanh thu</h2></div>
+          <div className="kvm-bd-cu">
+            <span className="on" aria-label="Biểu đồ cột"><ChartColumn size={22} /></span>
+            <button type="button" aria-label={toBd ? 'Thu nhỏ biểu đồ' : 'Phóng to biểu đồ'} onClick={() => setToBd((v) => !v)}>{toBd ? <Minimize2 size={22} /> : <Maximize2 size={22} />}</button>
+          </div>
+          {cots.length ? (
+            <div className={`kvm-bd ${toBd ? 'to' : ''}`}>
+              <div className="truc">{vach.map((v) => <span key={v}>{nhanTruc(v)}</span>)}</div>
+              <div className="vung">
+                {vach.map((v) => <i key={v} className="luoi" style={{ bottom: `${(v / lon) * 100}%` }} />)}
+                <div className="cot-ds">
+                  {cots.map(([k, v]) => <div key={k} className="cot" title={`${k}: ${so(v)}`}><i style={{ height: `${Math.max((v / lon) * 100, 1)}%` }} /><small>{k}</small></div>)}
+                </div>
+              </div>
+            </div>
+          ) : <p className="mo">{d ? `Chưa bán hoá đơn nào trong ${nhan[ky].toLowerCase()}.` : 'Đang tải…'}</p>}
+        </section>
+        <section className="kvm-tq2-bd">
+          <h2>Ca của tôi</h2>
+          {[...theoNgay.entries()].map(([ngay, cas]) => (
+            <div key={ngay} className="kvm-ca-ngay">
+              <div className="dau"><span>{ngay}</span><b>{so(cas.reduce((s2, c) => s2 + Number(c.ban_tinh) + Number(c.ck_cho), 0))}</b></div>
+              {cas.map((c) => (
+                <div key={c.id} className="kvm-ca-toi">
+                  <div><b>{c.code}</b><small>{c.store} · {gio(c.opened_at)} – {c.closed_at ? gio(c.closed_at) : <em>đang mở</em>}</small></div>
+                  <div className="ph"><b>{so(Number(c.ban_tinh) + Number(c.ck_cho))}</b><small>{c.so_hd} hoá đơn</small></div>
+                </div>
+              ))}
+            </div>
+          ))}
+          {d && !d.ca.length && <p className="mo">Chưa có ca nào trong {nhan[ky].toLowerCase()}.</p>}
+        </section>
+      </div>
+    </main>
   );
 }
 

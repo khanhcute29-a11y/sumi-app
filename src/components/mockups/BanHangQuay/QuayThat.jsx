@@ -37,6 +37,17 @@ export function MoCa({ chiNhanh, nguoi, onMo, onVeApp, onDong, onTaiLai }) {
   const [dangAnh, setDangAnh] = useState(false);
   const [dang, setDang] = useState(false);
   const [loi, setLoi] = useState('');
+  // Két ca trước đã đếm — máy tính két theo số này (chống gõ khống tiền đầu ca để rút két).
+  const [truoc, setTruoc] = useState(null);
+  useEffect(() => {
+    let huy = false;
+    goi('pos_tien_dau_ca', { p_store: chiNhanh }).then((r) => {
+      if (huy || !r?.co) return;
+      setTruoc(r); setTien((t) => (t === '' ? String(Math.round(Number(r.so) || 0)) : t));
+    }).catch(() => {});
+    return () => { huy = true; };
+  }, [chiNhanh]);
+  const lech = truoc && tien !== '' ? Number(tien) - Number(truoc.so) : 0;
   const chonAnh = async (f) => {
     setDangAnh(true); setLoi('');
     try { setAnh(await taiAnh(f, 'ket')); } catch (e) { setLoi(`Không tải được ảnh: ${chuLoi(e)}`); }
@@ -54,7 +65,9 @@ export function MoCa({ chiNhanh, nguoi, onMo, onVeApp, onDong, onTaiLai }) {
   return (
     <HopT tieuDe={`Vào ca · ${chiNhanh}`} onDong={onDong}
       chan={<><button type="button" className="bhq-nut phu" onClick={onVeApp}>Về app Sumi</button><button type="button" className="bhq-nut chinh" disabled={dang || dangAnh} onClick={mo}>{dang ? 'Đang vào ca…' : 'Vào ca · bắt đầu bán'}</button></>}>
-      <p className="bhq-ghi">Chào {nguoi}. Đếm tiền lẻ đang có trong két rồi nhập vào, chụp 1 ảnh két tiền. Mọi hoá đơn trong ca tính doanh số cho bạn.</p>
+      <p className="bhq-ghi">Chào {nguoi}. Đếm lại tiền trong két, chụp 1 ảnh két tiền. Mọi hoá đơn trong ca tính doanh số cho bạn.</p>
+      {truoc && <p className="bhq-ghi">Ca trước <b>{truoc.ca}</b>{truoc.ten ? ` (${truoc.ten})` : ''} kết ca lúc {ngayGio(truoc.luc)}, két còn <b>{so(truoc.so)}</b>. Máy tính két ca này theo số đó.</p>}
+      {lech !== 0 && <p className="kv-loi" role="alert">Bạn nhập {lech > 0 ? 'nhiều' : 'ít'} hơn ca trước {so(Math.abs(lech))}. Vẫn vào ca được, nhưng máy giữ số ca trước và báo Giám đốc kiểm ảnh két.</p>}
       <label className="bhq-nhan">Tiền mặt đầu ca<input className="bhq-o lon" autoFocus inputMode="numeric" value={tien ? so(tien) : tien} placeholder="0" onChange={(e) => setTien(soTien(e.target.value))} /></label>
       <ChupAnh path={anh} dang={dangAnh} onChon={chonAnh} chu="Chụp ảnh két tiền (bắt buộc)" />
       <Loi chu={loi} />
