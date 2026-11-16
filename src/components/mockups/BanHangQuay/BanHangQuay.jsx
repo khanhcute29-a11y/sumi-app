@@ -151,6 +151,9 @@ export default function BanHangQuay() {
   const caMo = caMoDs[chiNhanh] || null;
   const cd = caiDat[chiNhanh] || null;
   const quanLy = !!that && (that.cap === 'gd' || that.cap === 'ql');
+  // Giám đốc bán luôn, không bắt vào ca (database cũng chỉ bắt nhân viên). Đang có ca người khác mở thì
+  // hoá đơn vẫn vào ca đó (tiền vào két) nhưng không tính doanh số cho người đó; không có ca thì tiền Giám đốc tự giữ.
+  const banKhongCa = !!that && that.cap === 'gd';
   const xemQl = that ? quanLy && !xemNV : laGD; // được xem báo cáo / công nợ / nhật ký
   const soViec = viec.duyet.length + viec.ck.length + viec.ca.length;
   const napThat = async (mh = matHang) => {
@@ -435,7 +438,7 @@ export default function BanHangQuay() {
   // CHẠY THẬT: database tính lại giá, giảm giá, nợ, điểm; mất mạng thì giữ trên máy rồi tự gửi.
   const hoanTatThat = async (duyetId = hd.duyetId) => {
     if (!hd.dong.length || dangBan) return;
-    if (!caMo) { nhan('Chưa mở ca — nhập tiền đầu ca trước khi bán'); setManHinh('ban'); return; }
+    if (!caMo && !banKhongCa) { nhan('Chưa mở ca — nhập tiền đầu ca trước khi bán'); setManHinh('ban'); return; }
     const dua = hd.dua == null ? tong.canTra : hd.dua;
     const tt = tinhThanhToan({ canTra: tong.canTra, khachDua: dua, phuongThuc: hd.pt, laKhachLe: !hd.khach.id });
     if (tt.loi) { nhan(tt.loi); return; }
@@ -456,7 +459,7 @@ export default function BanHangQuay() {
     };
     const banGhi = {
       id: hd.id, luc: Date.now(), chiNhanh, thuNgan: nguoi, nguoiBan: hd.nguoiBan || nguoi, khach: hd.khach, dong: hd.dong,
-      thuKhacDong: hd.thuKhac, ghiChu: hd.ghiChu, ...tong, phuongThuc: hd.pt, khachDua: Number(dua) || 0, ...tt, daHuy: false, that: true, caId: caMo.id,
+      thuKhacDong: hd.thuKhac, ghiChu: hd.ghiChu, ...tong, phuongThuc: hd.pt, khachDua: Number(dua) || 0, ...tt, daHuy: false, that: true, caId: caMo?.id || null,
       bangGia: bgHd?.ten || null, ckTrangThai: hd.pt === 'chuyen_khoan' && tt.thucThu > 0 ? 'cho_xac_nhan' : 'khong',
     };
     const boAnh = () => { try { URL.revokeObjectURL(anh.url); } catch { /* bỏ qua */ } setAnhBan((x) => { const y = { ...x }; delete y[hd.id]; return y; }); };
@@ -635,7 +638,7 @@ export default function BanHangQuay() {
   const datHang = () => {
     if (!that) { nhan('Bản xem trước: đơn đặt bánh thật vẫn tạo ở app Sumi → mục Đơn hàng (có cọc, ngày giao).'); return; }
     if (!hd.dong.length) { nhan('Chọn bánh khách đặt vào giỏ, chọn khách, rồi bấm Đặt hàng'); return; }
-    if (!caMo) { nhan('Chưa mở ca — mở ca trước để tiền cọc vào két'); return; }
+    if (!caMo && !banKhongCa) { nhan('Chưa mở ca — mở ca trước để tiền cọc vào két'); return; }
     setHop({ loai: 'dat_coc' }); setMenuMo(false);
   };
   // Thông báo như app KiotViet: gom hoạt động theo người + giờ ("X đã bán N đơn hàng với tổng trị giá Y tại …"),
@@ -877,7 +880,9 @@ export default function BanHangQuay() {
             {that
               ? <span className={`kv-nguon ${mang ? '' : 'mat'}`}>{mang ? '● Đang chạy thật' : '● Mất mạng — vẫn bán được, có mạng tự gửi'}{soCho ? ` · ${soCho} việc chờ gửi` : ''}</span>
               : <span className="kv-nguon">Bản xem trước · không lưu · {nguonDl}{lyDoXemTruoc ? ` · ${lyDoXemTruoc}` : ''}</span>}
-            <button type="button" className="kv-ca" onClick={() => setHop({ loai: 'ket_ca' })}>Ca {that && caMo ? caMo.opened_by_name || nguoi : nguoi} · từ {gio(ca.moLuc)}{that && caMo ? ` · đã bán ${so(daBanCa)}` : ''} · <b>Kết ca</b></button>
+            {that && !caMo
+              ? <span className="kv-ca">{banKhongCa ? 'Giám đốc · bán không cần vào ca' : 'Chưa vào ca'}</span>
+              : <button type="button" className="kv-ca" onClick={() => setHop({ loai: 'ket_ca' })}>Ca {that && caMo ? caMo.opened_by_name || nguoi : nguoi} · từ {gio(ca.moLuc)}{that && caMo ? ` · đã bán ${so(daBanCa)}` : ''} · <b>Kết ca</b></button>}
           </footer>
         </>
       )}
@@ -1061,7 +1066,7 @@ export default function BanHangQuay() {
       )}
       {hop?.loai === 'doanh_so_nv' && that && <DoanhSoNv dsCuaHang={CHI_NHANH} duocLoai={quanLy} onDong={() => setHop(null)} />}
       {hop?.loai === 'xep_hang' && that && <XepHang onDong={() => setHop(null)} />}
-      {that && !caMo && manHinh === 'ban' && !hop && !form && (
+      {that && !caMo && manHinh === 'ban' && !hop && !form && !banKhongCa && (
         <MoCa chiNhanh={chiNhanh} nguoi={nguoi} onVeApp={veApp} onDong={() => moManHinh('ls')} onTaiLai={() => napThat()}
           onMo={(row) => { setCaMoDs((x) => ({ ...x, [chiNhanh]: row })); nhan(`Đã vào ca ${row.code} · đầu ca ${so(row.opening_cash)}`); }} />
       )}
