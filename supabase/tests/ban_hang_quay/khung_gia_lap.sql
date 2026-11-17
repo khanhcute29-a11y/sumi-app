@@ -14,3 +14,12 @@ create table public.notifications(id uuid primary key default gen_random_uuid(),
 create table public.migration_runs(migration_key text primary key, status text, finished_at timestamptz, notes text);
 
 create table public.shift_logs(id uuid primary key default gen_random_uuid(), staff_id uuid, staff_name text, work_date date, shift_label text, branch text, type text, checkin_time timestamptz default now(), reason text);
+
+-- Web Push nền (giả): ghi lại thay vì gửi thật. Bật test.push_loi = '1' để giả lỗi gửi.
+create table public.thu_push(staff_id uuid, title text, body text, url text, luc timestamptz default now());
+create or replace function public.notify_push(p_title text, p_body text, p_url text default '/', p_staff_id uuid default null)
+returns void language plpgsql as $$
+begin
+  if current_setting('test.push_loi', true) = '1' then raise exception 'push hỏng'; end if;
+  insert into public.thu_push(staff_id, title, body, url) values (p_staff_id, p_title, p_body, p_url);
+end $$;

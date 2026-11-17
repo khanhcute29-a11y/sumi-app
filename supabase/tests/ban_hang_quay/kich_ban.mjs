@@ -346,4 +346,21 @@ if (process.argv.some((x)=>x.includes('bao_cao_cuoi_ngay'))) {
   await ok('Tổng kết bán hàng: số lượng hàng bán của C', async()=>{const r=await bc({nguoi_tao:[NV2]}); return [Number(r.hang.so_luong), r.hang.so_mat_hang];},[4,1]);
   await chan('Khoảng quá 3 tháng bị chặn', ()=>q(`select public.pos_bao_cao_cuoi_ngay('${S}',now()-interval '200 days',now(),'{}')`),'3 tháng');
 }
+// ── 202611171010: báo điện thoại Giám đốc mỗi hoá đơn ──
+if (process.argv.some((x)=>x.includes('bao_moi_hoa_don'))) {
+  await q(`delete from thu_push`);
+  await q(`insert into pos_giam_doc(profile_id) values ('${KT}') on conflict do nothing`);
+  await as(GD);
+  await ban({photo_url:'p1-'+id()+'.jpg'});
+  await ok('GĐ tự bán: báo GĐ khác (kế toán GĐ quầy), không báo chính mình', ()=>q(`select staff_id::text s from thu_push order by s`).then(r=>r.map(x=>x.s)),[KT]);
+  await ok('Nội dung như KiotViet', ()=>v(`select body from thu_push limit 1`),'Sếp bán đơn hàng với giá trị 180,000 tại Vĩnh Phú 42');
+  await ok('Bấm vào mở màn Bán hàng', ()=>v(`select url from thu_push limit 1`),'/?mockup=ban-hang');
+  await q(`delete from thu_push`);
+  await db.exec(`select set_config('test.push_loi','1',false)`);
+  const truoc=await v(`select count(*) from pos_invoices`);
+  await ok('Gửi thông báo hỏng → hoá đơn VẪN lưu', async()=>{await ban({photo_url:'p2-'+id()+'.jpg'}); return (await v(`select count(*) from pos_invoices`))-truoc;},1);
+  await db.exec(`select set_config('test.push_loi','',false)`);
+  await ok('Quản lý / nhân viên thường không nhận', ()=>v(`select count(*) from thu_push where staff_id in ('${QL}','${NV}')`),0);
+  await q(`delete from pos_giam_doc where profile_id='${KT}'`);
+}
 console.log(`\n${dem-loi}/${dem} đạt`); process.exit(loi?1:0);
