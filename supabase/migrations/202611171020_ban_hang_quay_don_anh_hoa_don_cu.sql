@@ -15,7 +15,7 @@ create or replace function public.pos_goi_don_anh_cu()
 returns void language plpgsql security definer set search_path = public as $$
 begin
   perform net.http_post(
-    url := 'https://sumibakery.shop/api/don-anh-quay',
+    url := 'https://www.sumibakery.shop/api/don-anh-quay',
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-push-secret', private.get_push_secret()),
     body := '{}'::jsonb,
     timeout_milliseconds := 30000
