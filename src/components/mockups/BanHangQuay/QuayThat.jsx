@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, RefreshCw, Camera, Search, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, ListFilter, Check } from 'lucide-react';
 import { supabase } from '../../../lib/supabaseClient';
-import { goi, chuLoi, anhVietQr, noiDungCk, NGAN_HANG, maMoi, tachId, linkAnh, guiHangDoi, taiAnh, lapBanDoHang } from './posThat';
+import { goi, chuLoi, anhVietQr, noiDungCk, NGAN_HANG, maMoi, tachId, linkAnh, linkAnhHoaDon, guiHangDoi, taiAnh, lapBanDoHang } from './posThat';
 import { locXep } from './banHangQuayLogic';
 
 // Các hộp thoại chỉ có ở chế độ CHẠY THẬT (ca, duyệt, chuyển khoản, thiết lập, đặt cọc, nhận hàng, báo cáo, nhật ký).
@@ -837,9 +837,11 @@ function MoAnh({ path, chu }) {
   return <button type="button" className="ds-link" onClick={mo}>{dang ? '…' : chu}</button>;
 }
 function AnhNho({ path }) {
-  const [url, setUrl] = useState(null);
-  useEffect(() => { let h = false; linkAnh(path).then((u) => { if (!h) setUrl(u); }); return () => { h = true; }; }, [path]);
+  const [url, setUrl] = useState(null); // null = đang tải · 'mat' = ảnh quá 90 ngày đã dọn · '' = lỗi mạng
+  useEffect(() => { let h = false; setUrl(null); linkAnhHoaDon(path).then((u) => { if (!h) setUrl(u); }); return () => { h = true; }; }, [path]);
   if (!path) return <span className="ds-anh trong">Không ảnh</span>;
+  if (url === 'mat') return <span className="ds-anh trong">Ảnh đã xoá</span>;
+  if (url === '') return <span className="ds-anh trong">Chưa tải được</span>;
   return url ? <a href={url} target="_blank" rel="noopener noreferrer" className="ds-anh"><img src={url} alt="Ảnh bán hàng" loading="lazy" /></a> : <span className="ds-anh trong">…</span>;
 }
 

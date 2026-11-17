@@ -24,17 +24,19 @@ function docAnh(file) {
   });
 }
 
-export async function nenAnh(file) {
+// Tuỳ chọn (không truyền = y như cũ): { canhDai, chatLuong, boQuaDuoi } — Bán tại quầy dùng
+// bản nhỏ hơn cho ảnh hoá đơn vì mỗi ngày cả trăm tấm (xem docAnhBan trong posThat.js).
+export async function nenAnh(file, { canhDai = CANH_DAI_TOI_DA, chatLuong = CHAT_LUONG, boQuaDuoi = BO_QUA_DUOI_BYTE } = {}) {
   try {
     if (!file || !String(file.type || '').startsWith('image/')) return file;
-    if (file.size <= BO_QUA_DUOI_BYTE) return file;
+    if (file.size <= boQuaDuoi) return file;
 
     const img = await docAnh(file);
     const rong = img.naturalWidth || img.width;
     const cao = img.naturalHeight || img.height;
     if (!rong || !cao) return file;
 
-    const tiLe = Math.min(1, CANH_DAI_TOI_DA / Math.max(rong, cao));
+    const tiLe = Math.min(1, canhDai / Math.max(rong, cao));
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(rong * tiLe);
     canvas.height = Math.round(cao * tiLe);
@@ -42,7 +44,7 @@ export async function nenAnh(file) {
     if (!ctx) return file;
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', CHAT_LUONG));
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', chatLuong));
     if (!blob || blob.size >= file.size) return file;
 
     const ten = (file.name || 'anh').replace(/\.[^.]+$/, '') + '.jpg';

@@ -296,6 +296,7 @@ export async function goiHoacXep(ham, thamSo, khoa) {
 // ── Ảnh ──
 // Ảnh bán hàng: đọc + nén ngay khi chọn (chụp hoặc lấy từ thư viện), tính mã ảnh từ file GỐC để
 // database chặn dùng lại 1 ảnh cho 2 hoá đơn. Chưa tải lên — tải lúc bấm thanh toán (mất mạng thì giữ trên máy).
+export const ANH_BAN = { canhDai: 1280, chatLuong: 0.72, boQuaDuoi: 200 * 1024 };
 export async function docAnhBan(file) {
   if (!file || !String(file.type || '').startsWith('image/')) throw new Error('Chọn một file ảnh');
   const goc = await file.arrayBuffer();
@@ -305,7 +306,9 @@ export async function docAnhBan(file) {
     ma = [...new Uint8Array(bam)].map((b) => b.toString(16).padStart(2, '0')).join('');
   } catch { ma = null; } // trình duyệt cũ / không phải HTTPS: vẫn bán được, chỉ không chặn ảnh trùng
   const { nenAnh } = await import('../../../lib/nenAnh');
-  const nho = await nenAnh(file);
+  // Ảnh hoá đơn (bánh / tiền / màn hình CK): 1280px · JPEG 72% ≈ 150–250KB/tấm, chữ CK vẫn đọc rõ
+  // (bản chung 1600px · 80% ≈ 500KB). Ảnh hoá đơn quá 90 ngày được dọn tự động (api/don-anh-quay.js).
+  const nho = await nenAnh(file, ANH_BAN);
   return { blob: nho, ma, url: URL.createObjectURL(nho) };
 }
 export async function taiAnhDaNen(blob, thuMuc) {
@@ -328,6 +331,15 @@ export async function linkAnh(path) {
   if (!path) return null;
   const { data } = await supabase.storage.from('uploads').createSignedUrl(path, 3600);
   return data?.signedUrl || null;
+}
+// Ảnh hoá đơn: phân biệt "ảnh đã được dọn sau 90 ngày" ('mat') với lỗi mạng ('') để không báo nhầm.
+export async function linkAnhHoaDon(path) {
+  if (!path) return '';
+  try {
+    const { data, error } = await supabase.storage.from('uploads').createSignedUrl(path, 3600);
+    if (data?.signedUrl) return data.signedUrl;
+    return /not.?found/i.test(error?.message || '') ? 'mat' : '';
+  } catch { return ''; }
 }
 
 // ── VietQR (chuẩn EMVCo/NAPAS) — tạo ngay trên máy, không gửi số tài khoản ra dịch vụ ngoài ──
