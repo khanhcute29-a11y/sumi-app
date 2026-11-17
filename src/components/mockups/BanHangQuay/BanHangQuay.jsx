@@ -776,7 +776,7 @@ export default function BanHangQuay() {
 
   return (
     <div className={`bhq kv ${dienThoai ? 'dt' : ''} ${laGD ? '' : 'nv'}`}>
-      {manHinh !== 'ban' && dienThoai && !['ls', 'hh', 'them', 'ngay', 'tb', 'toi'].includes(manHinh) && (
+      {manHinh !== 'ban' && dienThoai && !['ls', 'hh', 'them', 'ngay', 'tb', 'toi', 'xh'].includes(manHinh) && (
         <header className="kvm-dau kvm-dau-ql">
           {MAN_CON.includes(manHinh) && <button type="button" aria-label="Quay lại" onClick={() => moManHinh('them')}><ChevronLeft size={22} /></button>}
           <h1>{TEN_DT[manHinh]}</h1>{nutMenu}
@@ -903,7 +903,7 @@ export default function BanHangQuay() {
           hds={hds} onChonHd={(id) => { setHdId(id); const h = hds.find((x) => x.id === id); setDtMan(h && h.dong.length ? 'gio' : 'chon'); }} />
       )}
 
-      {dienThoai && !form && !(manHinh === 'ban' && dtMan !== 'chon') && (
+      {dienThoai && !form && manHinh !== 'xh' && !(manHinh === 'ban' && dtMan !== 'chon') && (
         <nav className="kvm-nav" aria-label="Điều hướng">
           {(laGD
             ? [['ngay', 'Tổng quan', ChartArea], ['hh', 'Hàng hoá', Box], ['ban', 'Bán hàng', ShoppingBag], ['ls', 'Hoá đơn', FileText], ['them', 'Khác', Menu]]
@@ -955,9 +955,15 @@ export default function BanHangQuay() {
           matHang={matHang} ton={ton} onTao={() => moForm(MAN_LOAI[manHinh])} onMo={(p) => moForm(p.loai, p)}
           onSaoChep={(p) => moForm(p.loai, { dong: p.dong.map((d) => ({ ...d })), ghiChu: p.ghiChu, loaiXuat: p.loaiXuat, nguoiNhan: p.nguoiNhan })}
           onHuy={(p) => setHop({ loai: 'huy_phieu', phieu: p })} onIn={(p) => setBanIn({ phieu: p })}
-          onNhan={that ? (p) => setHop({ loai: 'nhan_hang', phieu: p }) : null} />
+          onNhan={that ? (p) => setHop({ loai: 'nhan_hang', phieu: p }) : null} onVe={() => moManHinh('them')} />
       )}
-      {form && (
+      {form && dienThoai && form.loai === 'huy' && (
+        <XuatHuyDt key={form.phieu?.ma || 'moi'} phieuCu={form.phieu} matHang={matHang} ton={ton} chiNhanh={chiNhanh} nguoi={nguoi} that={!!that}
+          soPhieu={phieuKho.filter((p) => p.loai === 'huy').length + 1}
+          onDong={() => setForm(null)}
+          onLuu={(p, xong) => { luuPhieu(p, xong); setForm(null); setManHinh('xh'); }} />
+      )}
+      {form && !(dienThoai && form.loai === 'huy') && (
         <FormPhieu key={form.phieu?.ma || form.loai} dienThoai={dienThoai} loai={form.loai} phieuCu={form.phieu} matHang={matHang} ton={ton} chiNhanh={chiNhanh} nguoi={nguoi} that={!!that}
           soPhieu={phieuKho.filter((p) => p.loai === form.loai).length + 1}
           ganDay={phieuKho.filter((p) => p.loai === 'kiem' && p.chiNhanh === chiNhanh && p.trangThai !== 'tam')}
@@ -2151,17 +2157,21 @@ function khoangTg(k) {
   return [-Infinity, Infinity];
 }
 
-function QlPhieu({ loai, ds, matHang, ton, onTao, onMo, onSaoChep, onHuy, onIn, dienThoai, onNhan = null }) {
+function QlPhieu({ loai, ds, matHang, ton, onTao, onMo, onSaoChep, onHuy, onIn, dienThoai, onNhan = null, onVe = null }) {
   const K = KIEU_PHIEU[loai];
   const [q, setQ] = useState('');
   const [loc, setLoc] = useState({ tam: true, cho: true, xong: true, huy: false });
   const [loaiXuat, setLoaiXuat] = useState('');
   const [mo, setMo] = useState(null);
   const [trang, setTrang] = useState(0);
-  const [tg, setTg] = useState('thang'); // KiotViet mặc định "Tháng này" // điện thoại: chip thời gian như app KiotViet
+  const xhDt = dienThoai && loai === 'huy'; // Xuất huỷ điện thoại: đầu trang riêng y app KiotViet
+  const [tg, setTg] = useState(xhDt ? 'nay' : 'thang'); // KiotViet: Xuất huỷ mặc định "Hôm nay", phiếu khác "Tháng này"
+  const [moTim, setMoTim] = useState(false);
+  const [moLoc, setMoLoc] = useState(false);
+  const [cuTruoc, setCuTruoc] = useState(false); // nút ⇅: cũ trước / mới trước
   const t = q.trim().toLowerCase();
   const [tu, den] = khoangTg(tg);
-  const loc2 = ds.filter((p) => loc[p.trangThai] && khop(p.ma, t) && (!loaiXuat || p.loaiXuat === loaiXuat) && (!dienThoai || (p.luc >= tu && p.luc < den))).sort((a, b) => b.luc - a.luc);
+  const loc2 = ds.filter((p) => loc[p.trangThai] && khop(p.ma, t) && (!loaiXuat || p.loaiXuat === loaiXuat) && (!dienThoai || (p.luc >= tu && p.luc < den))).sort((a, b) => (cuTruoc ? a.luc - b.luc : b.luc - a.luc));
   const tr = Math.min(trang, Math.max(Math.ceil(loc2.length / MOI_TRANG_QL), 1) - 1);
   const soCot = { giao: 6, huy: 6, noibo: 7, kiem: 8, chuyen: 7 }[loai];
   const tenTao = loai === 'kiem' ? 'Kiểm kho' : LOAI_PHIEU[loai].ten;
@@ -2170,15 +2180,24 @@ function QlPhieu({ loai, ds, matHang, ton, onTao, onMo, onSaoChep, onHuy, onIn, 
   if (dienThoai) {
     return (
       <main className="kvm-ds-hd kvm-trang-ql">
-        <div className="kvm-tim"><label><Search size={17} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder={K.tim} /></label></div>
+        {xhDt && (
+          <header className="kvm-dau kvm-dau-ql">
+            <button type="button" aria-label="Quay lại" onClick={onVe}><ChevronLeft size={22} /></button>
+            <h1>Xuất huỷ</h1>
+            <button type="button" className="kv-ic-tr" aria-label="Tìm phiếu" onClick={() => setMoTim((v) => !v)}><Search size={21} /></button>
+            <button type="button" className="kv-ic-tr" aria-label={cuTruoc ? 'Đang xếp cũ trước — bấm để mới trước' : 'Đang xếp mới trước — bấm để cũ trước'} onClick={() => setCuTruoc((v) => !v)}><ArrowDownUp size={20} /></button>
+          </header>
+        )}
+        {(!xhDt || moTim) && <div className="kvm-tim"><label><Search size={17} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder={K.tim} autoFocus={xhDt} /></label></div>}
         <div className="kvm-loc">
+          {xhDt && <button type="button" className={`kvm-loc-ic ${moLoc ? 'on' : ''}`} aria-label="Lọc trạng thái phiếu" onClick={() => setMoLoc((v) => !v)}><ListFilter size={19} /></button>}
           <label className={`kvm-chip-tg ${tg !== 'all' ? 'on' : ''}`}>
             <select value={tg} onChange={(e) => setTg(e.target.value)} aria-label="Thời gian">{KHOANG_TG.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
             <ChevronDown size={15} />
           </label>
-          {[['tam', 'Phiếu tạm'], ['xong', TEN_XONG[loai]], ['huy', 'Đã hủy']].map(([k, l]) => <button key={k} type="button" className={loc[k] ? 'on' : ''} onClick={() => setLoc((x) => ({ ...x, [k]: !x[k] }))}>{l}</button>)}
+          {(!xhDt || moLoc) && [['tam', 'Phiếu tạm'], ['xong', TEN_XONG[loai]], ['huy', 'Đã hủy']].map(([k, l]) => <button key={k} type="button" className={loc[k] ? 'on' : ''} onClick={() => setLoc((x) => ({ ...x, [k]: !x[k] }))}>{l}</button>)}
         </div>
-        <div className="kvm-tong-phieu">{loc2.length} phiếu{kiem ? '' : <> - SL: {so(loc2.reduce((s2, p) => s2 + soLieuPhieu(p, matHang, ton).tongSl, 0))}</>}</div>
+        {(!xhDt || loc2.length > 0) && <div className="kvm-tong-phieu">{loc2.length} phiếu{kiem ? '' : <> - SL: {so(loc2.reduce((s2, p) => s2 + soLieuPhieu(p, matHang, ton).tongSl, 0))}</>}</div>}
         <section className="kvm-hd-ds">
           {loc2.map((p, i) => {
             const sl = soLieuPhieu(p, matHang, ton);
@@ -2208,9 +2227,11 @@ function QlPhieu({ loai, ds, matHang, ton, onTao, onMo, onSaoChep, onHuy, onIn, 
               </React.Fragment>
             );
           })}
-          {!loc2.length && <KhongCo chu={ds.length ? 'Không có phiếu nào khớp bộ lọc.' : `Chưa có ${/^phiếu /i.test(K.tieuDe) ? '' : 'phiếu '}${K.tieuDe.toLowerCase()} nào. Bấm + để tạo.`} />}
+          {!loc2.length && (xhDt
+            ? <div className="xhd-trong"><span className="hinh"><ReceiptText size={44} /></span><span>{q.trim() ? 'Không tìm thấy phiếu xuất huỷ' : 'Chưa có phiếu xuất huỷ'}</span></div>
+            : <KhongCo chu={ds.length ? 'Không có phiếu nào khớp bộ lọc.' : `Chưa có ${/^phiếu /i.test(K.tieuDe) ? '' : 'phiếu '}${K.tieuDe.toLowerCase()} nào. Bấm + để tạo.`} />)}
         </section>
-        <button type="button" className="kvm-fab" aria-label={`Tạo ${tenTao}`} onClick={onTao}><Plus size={28} /></button>
+        <button type="button" className={`kvm-fab ${xhDt ? 'thap' : ''}`} aria-label={`Tạo ${tenTao}`} onClick={onTao}><Plus size={28} /></button>
       </main>
     );
   }
@@ -2628,6 +2649,212 @@ function FormPhieu({ loai, phieuCu, matHang, ton, chiNhanh, nguoi, soPhieu, ganD
   );
 }
 
+// ----- Xuất huỷ trên điện thoại: y app KiotViet -----
+// + → ô tìm "Tên, mã hàng, mã vạch" (Huỷ) → chạm 1 hàng → màn hàng (Số lượng huỷ · Giá vốn · Giá trị huỷ · Xong)
+// → "Phiếu xuất huỷ mới" (Lưu tạm · Tiếp tục) → màn xác nhận MẶT HÀNG / SL HỦY (Lưu tạm · Hoàn thành).
+// Giá vốn / giá trị huỷ: chỉ Giám đốc thấy (lớp .gv — màn nhân viên ẩn như mọi chỗ khác).
+// Sumi bắt buộc thêm: lý do huỷ (Thêm ghi chú) + ảnh bánh huỷ khi chạy thật.
+function XuatHuyDt({ phieuCu, matHang, ton, chiNhanh, nguoi, soPhieu, onDong, onLuu, that = false }) {
+  const [dong, setDong] = useState(() => phieuCu?.dong?.map((d) => ({ ...d })) || []);
+  const [ghiChu, setGhiChu] = useState(phieuCu?.ghiChu || '');
+  const [anh, setAnh] = useState(phieuCu?.anh || null);
+  const [dangAnh, setDangAnh] = useState(false);
+  const [buoc, setBuoc] = useState('phieu'); // phieu | xac_nhan
+  const [tim, setTim] = useState(!phieuCu?.dong?.length); // phiếu mới: mở ô tìm ngay như KiotViet
+  const [q, setQ] = useState('');
+  const [hang, setHang] = useState(null); // { ma, sl: '' | số } — màn 1 hàng
+  const [moGhi, setMoGhi] = useState(!!phieuCu?.ghiChu);
+  const [loi, setLoi] = useState('');
+  const timRef = useRef(null);
+  const slRef = useRef(null);
+  const ma = phieuCu?.ma || `${LOAI_PHIEU.huy.tienTo}${String(soPhieu).padStart(6, '0')}`;
+  const tenPhieu = phieuCu?.ma ? `Phiếu xuất huỷ ${phieuCu.ma}` : 'Phiếu xuất huỷ mới';
+  const phieu = {
+    id: phieuCu?.id, anh, ma, loai: 'huy', chiNhanh, nguoi: phieuCu?.nguoi || nguoi, nguoiThucHien: nguoi, luc: phieuCu?.luc || Date.now(),
+    ghiChu: ghiChu.trim(), loaiXuat: '', nguoiNhan: '', denCN: null, nguon: '', dong: dong.filter((d) => Number(d.sl) > 0), trangThai: 'tam',
+  };
+  const sl = soLieuPhieu(phieu, matHang, ton);
+  const ketQua = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    return t ? locXep(matHang, (m) => `${m.ma} ${m.ten} ${m.size} ${m.maVach || ''}`, t, 40) : [];
+  }, [matHang, q]);
+  const mHang = hang ? matHang.find((m) => m.ma === hang.ma) : null;
+
+  useEffect(() => { if (tim) setTimeout(() => timRef.current?.focus(), 50); }, [tim]);
+  useEffect(() => { if (hang) setTimeout(() => slRef.current?.focus(), 50); }, [hang?.ma]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const moHang = (m) => {
+    const co = dong.find((d) => d.ma === m.ma);
+    setHang({ ma: m.ma, sl: co ? Number(co.sl) || '' : '' });
+    setTim(false); setQ('');
+  };
+  const xongHang = () => {
+    const n = Number(hang.sl) || 0;
+    if (n <= 0) { setLoi('Nhập số lượng huỷ.'); return; }
+    setDong((ds) => (ds.some((d) => d.ma === hang.ma) ? ds.map((d) => (d.ma === hang.ma ? { ...d, sl: n } : d)) : [...ds, { ma: hang.ma, sl: n }]));
+    setHang(null);
+  };
+  const doiSl = (maH, buocSl) => setDong((ds) => ds.flatMap((d) => {
+    if (d.ma !== maH) return [d];
+    const n = (Number(d.sl) || 0) + buocSl;
+    return n <= 0 ? [] : [{ ...d, sl: n }];
+  }));
+  const quetEnter = (e) => {
+    if (e.key !== 'Enter') return;
+    const t = q.trim().toUpperCase();
+    const m = matHang.find((x) => x.ma === t || (x.maVach && x.maVach === q.trim())) || (ketQua.length === 1 ? ketQua[0] : null);
+    if (m) moHang(m);
+  };
+  const chonAnh = async (f) => {
+    setDangAnh(true); setLoi('');
+    try { setAnh(await taiAnh(f, 'xuat-huy')); } catch (e) { setLoi(`Không tải được ảnh: ${chuLoi(e)}`); }
+    setDangAnh(false);
+  };
+  const tiepTuc = () => { if (!phieu.dong.length) { setLoi('Phiếu xuất huỷ đang trống.'); return; } setBuoc('xac_nhan'); };
+  const luu = (xong) => {
+    if (!phieu.dong.length) { setLoi('Phiếu xuất huỷ đang trống.'); return; }
+    if (xong && !ghiChu.trim()) { setMoGhi(true); setLoi('Bấm "Thêm ghi chú" ghi lý do huỷ (VD: Hết date) rồi mới hoàn thành.'); return; }
+    if (xong && that && !anh) { setLoi('Chụp ảnh bánh huỷ trước khi hoàn thành.'); return; }
+    onLuu(phieu, xong);
+  };
+  const ghiChuO = (coAnh = true) => (
+    <section className="xhd-the">
+      {!moGhi
+        ? <button type="button" className="xhd-lien" onClick={() => setMoGhi(true)}>Thêm ghi chú</button>
+        : <>
+          <div className="xhd-ly-do">{LY_DO_HUY.map((l) => <button key={l} type="button" className={ghiChu === l ? 'on' : ''} onClick={() => { setGhiChu(l); setLoi(''); }}>{l}</button>)}</div>
+          <textarea className="xhd-ghi" rows={2} value={ghiChu} placeholder="Ghi chú (lý do huỷ)" onChange={(e) => { setGhiChu(e.target.value); setLoi(''); }} />
+        </>}
+      {coAnh && that && <ChupAnh path={anh} dang={dangAnh} onChon={chonAnh} />}
+    </section>
+  );
+  const tongO = (
+    <section className="xhd-the xhd-tong">
+      <div><b>Tổng giá trị hủy</b><small>{sl.dong.length} mặt hàng • Số lượng: {so(sl.tongSl)}</small></div>
+      <b className="gv">{so(sl.tongGt)}</b>
+    </section>
+  );
+
+  let man;
+  if (tim) {
+    man = (
+      <div className="xhd xhd-tim">
+        <div className="xhd-tim-dau">
+          <label><Search size={18} /><input ref={timRef} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={quetEnter}
+            placeholder="Tên, mã hàng, mã vạch" autoComplete="off" enterKeyHint="search" aria-label="Tìm hàng" />
+            {q ? <button type="button" className="xoa" aria-label="Xoá chữ" onClick={() => { setQ(''); timRef.current?.focus(); }}><X size={14} /></button>
+              : <button type="button" className="quet" aria-label="Quét mã vạch" onClick={() => timRef.current?.focus()}><ScanBarcode size={18} /></button>}
+          </label>
+          <button type="button" className="huy" onClick={() => { setTim(false); setQ(''); }}>Huỷ</button>
+        </div>
+        <div className="xhd-kq">
+          {ketQua.map((m) => (
+            <button key={m.ma} type="button" onClick={() => moHang(m)}>
+              <AnhNho m={m} />
+              <span className="t"><b>{tenHang(m)}</b><small>{m.ma}</small></span>
+              <span className="p"><b>{so(m.gia)}</b><small>Tồn: {so(ton[m.ma] ?? 0)}</small></span>
+            </button>
+          ))}
+          {q.trim() && !ketQua.length && <p className="xhd-rong-chu">Không tìm thấy hàng hoá phù hợp</p>}
+        </div>
+      </div>
+    );
+  } else if (hang && mHang) {
+    const n = Number(hang.sl) || 0;
+    man = (
+      <div className="xhd">
+        <header className="xhd-dau"><button type="button" aria-label="Quay lại" onClick={() => setHang(null)}><ChevronLeft size={24} /></button><h1>{mHang.ma}</h1></header>
+        <div className="xhd-than">
+          <section className="xhd-the xhd-mon"><AnhNho m={mHang} /><div><b>{tenHang(mHang)}</b><small>Tồn: {so(ton[mHang.ma] ?? 0)}</small></div></section>
+          <section className="xhd-the xhd-o">
+            <div className="r"><span>Số lượng huỷ</span>
+              <div className="kf-buoc xhd-buoc">
+                <button type="button" aria-label="Bớt 1" onClick={() => setHang((h) => ({ ...h, sl: Math.max(0, (Number(h.sl) || 0) - 1) || '' }))}><Minus size={18} /></button>
+                <input ref={slRef} inputMode="numeric" value={hang.sl} aria-label="Số lượng huỷ" onFocus={(e) => e.target.select()}
+                  onChange={(e) => { setLoi(''); setHang((h) => ({ ...h, sl: soTien(e.target.value) || '' })); }} onKeyDown={(e) => { if (e.key === 'Enter') xongHang(); }} />
+                <button type="button" aria-label="Thêm 1" onClick={() => { setLoi(''); setHang((h) => ({ ...h, sl: (Number(h.sl) || 0) + 1 })); }}><Plus size={18} /></button>
+              </div>
+            </div>
+            <div className="r gv"><span>Giá vốn</span><span className="khoa">{so(mHang.giaVon || 0)}</span></div>
+            <div className="r gv"><span>Giá trị huỷ</span><span className="khoa">{so(n * (mHang.giaVon || 0))}</span></div>
+          </section>
+          {ghiChuO(false)}
+        </div>
+        <footer className="xhd-chan"><button type="button" className="chinh" onClick={xongHang}>Xong</button></footer>
+      </div>
+    );
+  } else if (buoc === 'xac_nhan') {
+    man = (
+      <div className="xhd">
+        <header className="xhd-dau"><button type="button" aria-label="Quay lại" onClick={() => setBuoc('phieu')}><ChevronLeft size={24} /></button><h1 /></header>
+        <div className="xhd-than">
+          <section className="xhd-the xhd-bang">
+            <div className="dau"><span>MẶT HÀNG</span><span>SL HỦY</span></div>
+            {sl.dong.map((d) => (
+              <div key={d.ma} className="dong"><div><b>{tenHang(d.m) || d.ma}</b><small>{d.ma}</small><small className="gv">Giá vốn {so(d.giaVon)}</small></div><span>{so(d.sl)}</span></div>
+            ))}
+          </section>
+          {tongO}
+          {ghiChuO()}
+        </div>
+        <footer className="xhd-chan hai">
+          <button type="button" className="phu" onClick={() => luu(false)}>Lưu tạm</button>
+          <button type="button" className="chinh" disabled={dangAnh} onClick={() => luu(true)}>Hoàn thành</button>
+        </footer>
+      </div>
+    );
+  } else {
+    man = (
+      <div className="xhd">
+        <header className="xhd-dau"><button type="button" aria-label="Đóng" onClick={onDong}><X size={22} /></button><h1>{tenPhieu}</h1>
+          <button type="button" className="ph" aria-label="Thông tin phiếu" onClick={() => setLoi(`${ma} · ${chiNhanh} · Người tạo: ${phieu.nguoi}`)}><Info size={20} /></button></header>
+        <div className="xhd-tim-mo">
+          <button type="button" className="o" onClick={() => setTim(true)}><Search size={17} /><span>Tên, mã hàng, mã vạch</span></button>
+          <button type="button" className="quet" onClick={() => setTim(true)}><ScanBarcode size={20} /><small>Quét</small></button>
+        </div>
+        <div className="xhd-than">
+          {sl.dong.length ? <>
+            <section className="xhd-the xhd-ds">
+              {sl.dong.map((d) => (
+                <div key={d.ma} className="xhd-dong">
+                  <button type="button" className="mo" onClick={() => d.m && moHang(d.m)}>
+                    <AnhNho m={d.m || { ten: d.ma }} />
+                    <span className="t"><b>{tenHang(d.m) || d.ma}</b><small>{d.ma}</small><small>Tồn: {so(ton[d.ma] ?? 0)}<span className="gv"> • Giá vốn: {so(d.giaVon)}</span></small></span>
+                  </button>
+                  <div className="kf-buoc xhd-buoc nho">
+                    <button type="button" aria-label="Bớt 1" onClick={() => doiSl(d.ma, -1)}>{Number(d.sl) <= 1 ? <Trash2 size={16} /> : <Minus size={18} />}</button>
+                    <input inputMode="numeric" value={d.sl} aria-label={`Số lượng huỷ ${tenHang(d.m)}`} onFocus={(e) => e.target.select()}
+                      onChange={(e) => setDong((ds) => ds.map((x) => (x.ma === d.ma ? { ...x, sl: soTien(e.target.value) } : x)))} />
+                    <button type="button" aria-label="Thêm 1" onClick={() => doiSl(d.ma, 1)}><Plus size={18} /></button>
+                  </div>
+                </div>
+              ))}
+            </section>
+            {tongO}
+            {ghiChuO()}
+          </> : (
+            <div className="xhd-trong"><span className="hinh"><ReceiptText size={44} /></span><span>Chưa có hàng trong phiếu</span></div>
+          )}
+        </div>
+        <footer className="xhd-chan hai">
+          <button type="button" className="phu" onClick={() => luu(false)}>Lưu tạm</button>
+          <button type="button" className="chinh" onClick={tiepTuc}>Tiếp tục</button>
+        </footer>
+      </div>
+    );
+  }
+  return (
+    <>
+      {man}
+      {loi && (
+        <Hop tieuDe="Thông báo" onDong={() => setLoi('')} chan={<button type="button" className="bhq-nut chinh" onClick={() => setLoi('')}>OK</button>}>
+          <p className="bhq-thong-bao">{loi}</p>
+        </Hop>
+      )}
+    </>
+  );
+}
+
 // Phiếu kho in ra máy in 80mm.
 function NoiDungPhieu({ p, matHang }) {
   const sl = soLieuPhieu(p, matHang, {});
@@ -2961,8 +3188,8 @@ function NhieuHon({ congNo, chiNhanh, setChiNhanh, onMo, onHop, laGD, laChu, xem
   ] : [
     ['Giao dịch', [['ban', 'Bán hàng', ShoppingBag, 'xanh'], ['ls', 'Hóa đơn', FileText, 'xanh'], ['dat', 'Đặt hàng', ShoppingCart, 'xanh'],
       ['ket_ca', 'Kết ca', Clock, 'xanh']]],
-    ['Hàng hoá', [['hh', 'Hàng hoá', Box, 'xanh'], ['pn', 'Nhập hàng', Download, 'xanh'], ['ch', 'Chuyển hàng', Truck, 'xanh'], ['xh', 'Xuất hủy', PackageMinus, 'xanh'],
-      ['kk', 'Kiểm kho', ClipboardCheck, 'la']]],
+    ['Hàng hoá', [['hh', 'Hàng hoá', Box, 'xanh'], ['kk', 'Kiểm kho', ClipboardCheck, 'la'], ['pn', 'Nhập hàng', Download, 'xanh'], ['ch', 'Chuyển hàng', Truck, 'xanh'],
+      ['xh', 'Xuất hủy', PackageMinus, 'xanh']]],
     ['Đối tác', [['kh', 'Khách hàng', Users, 'la']]],
   ];
   const bam = (k) => (k === 'ket_ca' ? onHop({ loai: 'ket_ca' }) : k === 'dat' ? onDatHang() : onMo(k));
