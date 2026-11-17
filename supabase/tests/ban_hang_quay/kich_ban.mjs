@@ -345,6 +345,19 @@ if (process.argv.some((x)=>x.includes('bao_cao_cuoi_ngay'))) {
   await ok('Lọc chỉ "Giao hàng" → không có HĐ bán tại quầy', async()=>(await bc({ban:['giao']})).hd.so,0);
   await ok('Tổng kết bán hàng: số lượng hàng bán của C', async()=>{const r=await bc({nguoi_tao:[NV2]}); return [Number(r.hang.so_luong), r.hang.so_mat_hang];},[4,1]);
   await chan('Khoảng quá 3 tháng bị chặn', ()=>q(`select public.pos_bao_cao_cuoi_ngay('${S}',now()-interval '200 days',now(),'{}')`),'3 tháng');
+  if (process.argv.some((x)=>x.includes('bao_cao_loc_nhan_vien'))) {
+    // 202611171030: lọc liệt kê ĐỦ người được bán hàng, kể cả người chưa bán đơn nào
+    const NV3='00000000-0000-0000-0000-0000000000a7', NGHI='00000000-0000-0000-0000-0000000000a8';
+    await q(`insert into profiles values ('${NV3}','Sale mới chưa bán','sale','{}',true,true),('${NGHI}','Đã nghỉ','sale','{}',true,false) on conflict do nothing`);
+    await q(`insert into feature_flags(key,enabled,description,allowed_profile_ids) values ('pos_ban_hang_that',true,'x','{${NV3},${NGHI},${NV2}}') on conflict (key) do update set allowed_profile_ids=excluded.allowed_profile_ids`);
+    const r=await bc();
+    await ok('Lọc Nhân viên có người chưa bán đơn nào', ()=>r.ds_nhan_vien.includes('Sale mới chưa bán'),true);
+    await ok('Lọc Nhân viên vẫn có người đã bán, không trùng tên', ()=>r.ds_nhan_vien.filter((n)=>n==='Thu ngân C').length,1);
+    await ok('Người đã nghỉ không hiện', ()=>r.ds_nhan_vien.includes('Đã nghỉ'),false);
+    await ok('Người tạo có người chưa bán, mỗi người 1 dòng', ()=>[r.ds_nguoi_tao.some((x)=>x.id===NV3), r.ds_nguoi_tao.filter((x)=>x.id===NV2).length],[true,1]);
+    await ok('Lọc theo người chưa bán → 0 HĐ', async()=>(await bc({nhan_vien:['Sale mới chưa bán']})).hd.so,0);
+    await as(NV2); await ok('Nhân viên vẫn không thấy danh sách', async()=>{const x=await bc(); return [x.ds_nhan_vien.length, x.ds_nguoi_tao.length];},[0,0]); await as(GD);
+  }
 }
 // ── 202611171010: báo điện thoại Giám đốc mỗi hoá đơn ──
 if (process.argv.some((x)=>x.includes('bao_moi_hoa_don'))) {

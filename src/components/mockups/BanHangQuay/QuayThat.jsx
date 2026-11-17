@@ -1048,6 +1048,7 @@ export function BaoCaoCuoiNgay({ chiNhanh, onVe, onMoHoaDon }) {
   const [loc, setLoc] = useState(LOC_DAU);
   const [nhap, setNhap] = useState(LOC_DAU); // bộ lọc đang chỉnh (chưa Áp dụng)
   const [man, setMan] = useState('bc'); // bc | loc | chon_nv | chon_tao | thu | hang
+  const [nhanh, setNhanh] = useState(false); // mở chọn nhân viên thẳng từ nút "Nhân viên" ở đầu báo cáo
   const [moPt, setMoPt] = useState(true);
   const [moBan, setMoBan] = useState(true);
   const [q, setQ] = useState('');
@@ -1077,12 +1078,17 @@ export function BaoCaoCuoiNgay({ chiNhanh, onVe, onMoHoaDon }) {
     const k = nv ? 'nhan_vien' : 'nguoi_tao';
     return (
       <div className="xhd bcn">
-        <header className="xhd-dau"><button type="button" aria-label="Quay lại" onClick={() => setMan('loc')}><ChevronLeft size={24} /></button><h1>{nv ? 'Nhân viên' : 'Người tạo'}</h1></header>
+        <header className="xhd-dau"><button type="button" aria-label="Quay lại" onClick={() => setMan(nhanh ? 'bc' : 'loc')}><ChevronLeft size={24} /></button><h1>{nv ? 'Nhân viên' : 'Người tạo'}</h1></header>
         <div className="xhd-than"><section className="xhd-the">
           {ds.map(([id, ten]) => <O key={id} chu={ten} on={nhap[k].includes(id)} onClick={() => doi(k, id)} />)}
-          {!ds.length && <p className="bhq-ghi">Chưa có ai bán trong khoảng này.</p>}
+          {!ds.length && <p className="bhq-ghi">Chưa có nhân viên nào được bán hàng.</p>}
         </section></div>
-        <footer className="xhd-chan"><button type="button" className="chinh" onClick={() => setMan('loc')}>Xong</button></footer>
+        {nhanh
+          ? <footer className="xhd-chan hai">
+            <button type="button" className="phu" onClick={() => setNhap((n) => ({ ...n, [k]: [] }))}>Tất cả</button>
+            <button type="button" className="chinh" onClick={() => { setLoc(nhap); setMan('bc'); }}>Áp dụng</button>
+          </footer>
+          : <footer className="xhd-chan"><button type="button" className="chinh" onClick={() => setMan('loc')}>Xong</button></footer>}
       </div>
     );
   }
@@ -1093,8 +1099,8 @@ export function BaoCaoCuoiNgay({ chiNhanh, onVe, onMoHoaDon }) {
         <header className="xhd-dau"><button type="button" aria-label="Quay lại" onClick={() => setMan('bc')}><ChevronLeft size={24} /></button><h1>Bộ lọc</h1></header>
         <div className="xhd-than bcn-loc">
           {!bc?.chi_cua_toi && <>
-            <button type="button" className="xhd-the bcn-dong" onClick={() => setMan('chon_nv')}><span>Nhân viên</span><small>{tenChon('nhan_vien', true)}</small><ChevronRight size={18} /></button>
-            <button type="button" className="xhd-the bcn-dong" onClick={() => setMan('chon_tao')}><span>Người tạo</span><small>{tenChon('nguoi_tao', true)}</small><ChevronRight size={18} /></button>
+            <button type="button" className="xhd-the bcn-dong" onClick={() => { setNhanh(false); setMan('chon_nv'); }}><span>Nhân viên</span><small>{tenChon('nhan_vien', true)}</small><ChevronRight size={18} /></button>
+            <button type="button" className="xhd-the bcn-dong" onClick={() => { setNhanh(false); setMan('chon_tao'); }}><span>Người tạo</span><small>{tenChon('nguoi_tao', true)}</small><ChevronRight size={18} /></button>
           </>}
           <section className="xhd-the">
             <button type="button" className="bcn-nhom" onClick={() => setMoPt((v) => !v)}><span>Phương thức thanh toán</span>{moPt ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</button>
@@ -1140,6 +1146,11 @@ export function BaoCaoCuoiNgay({ chiNhanh, onVe, onMoHoaDon }) {
       <div className="bcn-loc-dau">
         <button type="button" className={`bcn-ic ${coLoc ? 'on' : ''}`} aria-label="Bộ lọc" onClick={() => { setNhap(loc); setMan('loc'); }}><ListFilter size={19} /></button>
         <label className="bcn-chip"><select value={ky} onChange={(e) => setKy(e.target.value)} aria-label="Thời gian">{KY.filter(([k]) => k !== 'tuy_chinh').map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select><ChevronDown size={14} /></label>
+        {bc && !bc.chi_cua_toi && (
+          <button type="button" className={`bcn-chip ${loc.nhan_vien.length ? 'on' : ''}`} onClick={() => { setNhap(loc); setNhanh(true); setMan('chon_nv'); }}>
+            <span>{loc.nhan_vien.length === 1 ? loc.nhan_vien[0].trim() : loc.nhan_vien.length ? `${loc.nhan_vien.length} nhân viên` : 'Tất cả nhân viên'}</span><ChevronDown size={14} />
+          </button>
+        )}
       </div>
       <div className="xhd-than bcn-than">
         <Loi chu={loi} />
