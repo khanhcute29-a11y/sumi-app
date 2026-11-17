@@ -321,4 +321,29 @@ if (process.argv.some((x)=>x.includes('danh_sach_giam_doc'))) {
   await ok('Chủ tiệm (owner) vẫn là gd', ()=>v(`select public.pos_cap_do()`),'gd');
   await q(`delete from pos_giam_doc where profile_id='${KT}'`);
 }
+// ── 202611171000: Báo cáo cuối ngày ──
+if (process.argv.some((x)=>x.includes('bao_cao_cuoi_ngay'))) {
+  const S='Vĩnh Phú 42', NV2='00000000-0000-0000-0000-0000000000a6';
+  await q(`insert into profiles values ('${NV2}','Thu ngân C','sale','{}',true,true) on conflict do nothing`);
+  const tu=new Date(Date.now()-3600000).toISOString(), den=new Date(Date.now()+3600000).toISOString();
+  const bc=(loc={})=>v(`select public.pos_bao_cao_cuoi_ngay('${S}','${tu}','${den}','${JSON.stringify(loc)}'::jsonb)`);
+  // C vào ca, bán 1 HĐ tiền mặt 180k + 1 HĐ chuyển khoản 180k
+  await as(GD); const c0=await v(`select coalesce((select id::text from pos_shifts where status='open' and store_location='${S}'),'')`);
+  if (c0) await q(`select public.pos_ket_ca('${c0}',0,null,'k.jpg','[]'::jsonb)`).catch(()=>{});
+  await as(NV2);
+  await q(`select public.pos_vao_ca('${S}',0,'kc.jpg')`);
+  await ban({photo_url:'c1-'+id()+'.jpg'}); await ban({pay_method:'chuyen_khoan',photo_url:'c2-'+id()+'.jpg'});
+  await ok('Nhân viên C: chỉ thấy 2 HĐ của mình, tổng thu 360k', async()=>{const r=await bc(); return [r.chi_cua_toi, r.hd.so, Number(r.tong_thu), Number(r.pttt.tien_mat), Number(r.pttt.chuyen_khoan)];},[true,2,360000,180000,180000]);
+  await ok('Nhân viên gửi lọc người khác vẫn chỉ ra số của mình', async()=>{const r=await bc({nguoi_tao:[NV]}); return r.hd.so;},2);
+  await ok('Nhân viên không thấy danh sách người để lọc', async()=>{const r=await bc(); return [r.ds_nhan_vien.length, r.ds_nguoi_tao.length];},[0,0]);
+  await as(GD);
+  const tatCa=await bc();
+  const soThat=await v(`select count(*) from pos_invoices where status='xong' and store_location='${S}' and created_at>='${tu}'`);
+  await ok('Giám đốc: thấy cả cửa hàng (đúng số HĐ trong DB)', ()=>tatCa.hd.so===soThat && tatCa.chi_cua_toi===false,true);
+  await ok('Giám đốc lọc Người tạo = C → 2 HĐ', async()=>(await bc({nguoi_tao:[NV2]})).hd.so,2);
+  await ok('Lọc Chuyển khoản → chỉ tiền CK', async()=>{const r=await bc({nguoi_tao:[NV2],pttt:['chuyen_khoan']}); return [r.hd.so, Number(r.tong_thu), Number(r.pttt.tien_mat)];},[1,180000,0]);
+  await ok('Lọc chỉ "Giao hàng" → không có HĐ bán tại quầy', async()=>(await bc({ban:['giao']})).hd.so,0);
+  await ok('Tổng kết bán hàng: số lượng hàng bán của C', async()=>{const r=await bc({nguoi_tao:[NV2]}); return [Number(r.hang.so_luong), r.hang.so_mat_hang];},[4,1]);
+  await chan('Khoảng quá 3 tháng bị chặn', ()=>q(`select public.pos_bao_cao_cuoi_ngay('${S}',now()-interval '200 days',now(),'{}')`),'3 tháng');
+}
 console.log(`\n${dem-loi}/${dem} đạt`); process.exit(loi?1:0);

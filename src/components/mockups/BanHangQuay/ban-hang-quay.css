@@ -1272,3 +1272,35 @@ button.kv-xo-them:hover{background:var(--xanh-nhat)}
 .xhd-ly-do button.on{border-color:var(--xanh);background:var(--xanh-nhat);color:var(--xanh);font-weight:600}
 .xhd-ghi{width:100%;box-sizing:border-box;border:1px solid var(--vien);border-radius:8px;padding:10px 12px;font-size:16px;font-family:inherit;resize:vertical}
 .kvm-fab.thap{bottom:calc(24px + env(safe-area-inset-bottom))}
+
+/* ── Báo cáo cuối ngày (y app KiotViet) ── */
+.bcn-loc-dau{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:2px 16px 10px;background:#fff;border-bottom:1px solid var(--vien)}
+.bcn-ic{width:40px;height:40px;border:0;border-radius:50%;background:var(--xam);display:inline-flex;align-items:center;justify-content:center;color:var(--chu)!important}
+.bcn-ic.on{background:var(--xanh-nhat);color:var(--xanh)!important}
+.bcn-chip{position:relative;display:inline-flex;align-items:center;gap:4px;height:36px;padding:0 12px;border-radius:18px;background:var(--xam);font-size:14px}
+.bcn-chip select{appearance:none;-webkit-appearance:none;border:0;background:none;font-size:14px;color:var(--chu);padding-right:4px;outline:0}
+.bcn-than{gap:8px}
+.bcn .xhd-the h3{margin:4px 0 6px;font-size:17px;font-weight:500}
+.bcn .xhd-the h4{margin:12px 0 2px;font-size:12px;font-weight:600;color:var(--chu-phu);letter-spacing:.3px}
+.bcn-r{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;padding:0;border:0;border-bottom:1px solid var(--vien);background:none;font-size:15px;color:var(--chu);text-align:left}
+.bcn-r:last-child{border-bottom:0}
+.bcn-r b{display:inline-flex;align-items:center;gap:2px;font-weight:400}
+.bcn-r b svg{color:var(--chu-phu)}
+.bcn-ghi{margin:0;padding:0 16px;font-size:13px;color:var(--chu-phu)}
+.bcn-loc{gap:10px}
+.bcn-dong{width:100%;display:flex;align-items:center;gap:8px;min-height:52px;border:0;font-size:16px;color:var(--chu);text-align:left}
+.bcn-dong span{flex:1}
+.bcn-dong small{color:var(--chu-phu);font-size:13px}
+.bcn-nhom{width:100%;display:flex;align-items:center;justify-content:space-between;min-height:44px;padding:0;border:0;background:none;font-size:16px;font-weight:600;color:var(--chu)}
+.bcn-chk{width:100%;display:flex;align-items:center;justify-content:space-between;min-height:44px;padding:0;border:0;border-bottom:1px solid var(--vien);background:none;font-size:15px;color:var(--chu);text-align:left}
+.bcn-chk:last-child{border-bottom:0}
+.bcn-chk i{width:22px;height:22px;border:1.5px solid #aab2bd;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;color:#fff}
+.bcn-chk i.on{background:var(--xanh);border-color:var(--xanh)}
+.bcn-tim{cursor:text}
+.bcn-tim input{flex:1;min-width:0;border:0;outline:0;background:none;font-size:16px;color:var(--chu)}
+.bcn-phieu{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--vien)}
+.bcn-phieu:last-child{border-bottom:0}
+.bcn-phieu>div{display:flex;flex-direction:column;gap:3px;min-width:0}
+.bcn-phieu small{color:var(--chu-phu);font-size:13px}
+.bcn-phieu b.xanh{color:var(--xanh)}
+.bhq:not(.dt) .xhd.bcn{left:50%;right:auto;width:min(560px,100vw);transform:translateX(-50%);box-shadow:0 0 0 100vmax rgba(21,23,26,.35)}

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { X, RefreshCw, Camera, Search } from 'lucide-react';
+import { X, RefreshCw, Camera, Search, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, ListFilter, Check } from 'lucide-react';
 import { supabase } from '../../../lib/supabaseClient';
 import { goi, chuLoi, anhVietQr, noiDungCk, NGAN_HANG, maMoi, tachId, linkAnh, guiHangDoi, taiAnh, lapBanDoHang } from './posThat';
 import { locXep } from './banHangQuayLogic';
@@ -1033,5 +1033,144 @@ export function XepHang({ onDong }) {
         </>
       )}
     </HopT>
+  );
+}
+
+// ── Báo cáo cuối ngày (y app KiotViet: Khác → Báo cáo → Cuối ngày) ──
+// Nhân viên: database tự khoá chỉ số của chính mình (không có lọc Nhân viên / Người tạo).
+const PT_LOC = [['tien_mat', 'Tiền mặt'], ['chuyen_khoan', 'Chuyển khoản'], ['the', 'Thẻ'], ['vi', 'Ví điện tử'], ['diem', 'Điểm'], ['voucher', 'Voucher']];
+const LOAI_THU = { hd: 'Bán hàng', thu_no: 'Thu nợ', coc: 'Cọc đơn đặt', lay_banh: 'Thu lấy bánh đặt' };
+const LOC_DAU = { nhan_vien: [], nguoi_tao: [], pttt: [], ban: ['giao', 'khong_giao'] };
+export function BaoCaoCuoiNgay({ chiNhanh, onVe, onMoHoaDon }) {
+  const [ky, setKy] = useState('hom_nay');
+  const [loc, setLoc] = useState(LOC_DAU);
+  const [nhap, setNhap] = useState(LOC_DAU); // bộ lọc đang chỉnh (chưa Áp dụng)
+  const [man, setMan] = useState('bc'); // bc | loc | chon_nv | chon_tao | thu | hang
+  const [moPt, setMoPt] = useState(true);
+  const [moBan, setMoBan] = useState(true);
+  const [q, setQ] = useState('');
+  const [bc, setBc] = useState(null);
+  const [loi, setLoi] = useState('');
+  useEffect(() => {
+    let huy = false;
+    setLoi('');
+    const [a, b] = khoangKy(ky);
+    const gui = { ...loc, pttt: loc.pttt.filter((x) => !['diem', 'voucher'].includes(x)) };
+    goi('pos_bao_cao_cuoi_ngay', { p_store: chiNhanh, p_from: new Date(a).toISOString(), p_to: new Date(b).toISOString(), p_loc: gui })
+      .then((r) => { if (!huy) setBc(r); }).catch((e) => { if (!huy) setLoi(chuLoi(e)); });
+    return () => { huy = true; };
+  }, [ky, loc, chiNhanh]);
+  const R = ({ t, v, mo }) => (mo
+    ? <button type="button" className="bcn-r" onClick={mo}><span>{t}</span><b>{v}<ChevronRight size={16} /></b></button>
+    : <div className="bcn-r"><span>{t}</span><b>{v}</b></div>);
+  const doi = (k, x) => setNhap((n) => ({ ...n, [k]: n[k].includes(x) ? n[k].filter((y) => y !== x) : [...n[k], x] }));
+  const O = ({ on, onClick, chu }) => (
+    <button type="button" className="bcn-chk" onClick={onClick} aria-pressed={on}><span>{chu}</span><i className={on ? 'on' : ''}>{on && <Check size={14} strokeWidth={3} />}</i></button>
+  );
+  const coLoc = loc.nhan_vien.length + loc.nguoi_tao.length + loc.pttt.length > 0 || loc.ban.length < 2;
+
+  if (man === 'chon_nv' || man === 'chon_tao') {
+    const nv = man === 'chon_nv';
+    const ds = nv ? (bc?.ds_nhan_vien || []).map((t) => [t, t]) : (bc?.ds_nguoi_tao || []).map((x) => [x.id, x.ten]);
+    const k = nv ? 'nhan_vien' : 'nguoi_tao';
+    return (
+      <div className="xhd bcn">
+        <header className="xhd-dau"><button type="button" aria-label="Quay lại" onClick={() => setMan('loc')}><ChevronLeft size={24} /></button><h1>{nv ? 'Nhân viên' : 'Người tạo'}</h1></header>
+        <div className="xhd-than"><section className="xhd-the">
+          {ds.map(([id, ten]) => <O key={id} chu={ten} on={nhap[k].includes(id)} onClick={() => doi(k, id)} />)}
+          {!ds.length && <p className="bhq-ghi">Chưa có ai bán trong khoảng này.</p>}
+        </section></div>
+        <footer className="xhd-chan"><button type="button" className="chinh" onClick={() => setMan('loc')}>Xong</button></footer>
+      </div>
+    );
+  }
+  if (man === 'loc') {
+    const tenChon = (k, ds) => (nhap[k].length ? `${nhap[k].length} đã chọn` : (ds ? 'Tất cả' : ''));
+    return (
+      <div className="xhd bcn">
+        <header className="xhd-dau"><button type="button" aria-label="Quay lại" onClick={() => setMan('bc')}><ChevronLeft size={24} /></button><h1>Bộ lọc</h1></header>
+        <div className="xhd-than bcn-loc">
+          {!bc?.chi_cua_toi && <>
+            <button type="button" className="xhd-the bcn-dong" onClick={() => setMan('chon_nv')}><span>Nhân viên</span><small>{tenChon('nhan_vien', true)}</small><ChevronRight size={18} /></button>
+            <button type="button" className="xhd-the bcn-dong" onClick={() => setMan('chon_tao')}><span>Người tạo</span><small>{tenChon('nguoi_tao', true)}</small><ChevronRight size={18} /></button>
+          </>}
+          <section className="xhd-the">
+            <button type="button" className="bcn-nhom" onClick={() => setMoPt((v) => !v)}><span>Phương thức thanh toán</span>{moPt ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</button>
+            {moPt && PT_LOC.map(([k, l]) => <O key={k} chu={l} on={nhap.pttt.includes(k)} onClick={() => doi('pttt', k)} />)}
+          </section>
+          <section className="xhd-the">
+            <button type="button" className="bcn-nhom" onClick={() => setMoBan((v) => !v)}><span>Phương thức bán hàng</span>{moBan ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</button>
+            {moBan && [['giao', 'Giao hàng'], ['khong_giao', 'Không giao hàng']].map(([k, l]) => <O key={k} chu={l} on={nhap.ban.includes(k)} onClick={() => doi('ban', k)} />)}
+          </section>
+        </div>
+        <footer className="xhd-chan hai">
+          <button type="button" className="phu" onClick={() => setNhap(LOC_DAU)}>Đặt lại</button>
+          <button type="button" className="chinh" onClick={() => { setLoc(nhap); setMan('bc'); }}>Áp dụng</button>
+        </footer>
+      </div>
+    );
+  }
+  if (man === 'thu' || man === 'hang') {
+    const t = q.trim().toLowerCase();
+    const dsThu = (bc?.phieu || []).filter((p) => !t || `${p.ma} ${p.nguoi || ''} ${p.khach || ''}`.toLowerCase().includes(t));
+    return (
+      <div className="xhd bcn">
+        <header className="xhd-dau"><button type="button" aria-label="Quay lại" onClick={() => { setMan('bc'); setQ(''); }}><ChevronLeft size={24} /></button><h1>{man === 'thu' ? 'Thu - Chi' : 'Hàng bán'}</h1></header>
+        {man === 'thu' && <div className="xhd-tim-mo"><label className="o bcn-tim"><Search size={17} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Mã phiếu, người bán, khách" autoFocus /></label></div>}
+        <div className="xhd-than"><section className="xhd-the">
+          {man === 'thu' ? dsThu.map((p, i) => (
+            <div key={`${p.ma}-${i}`} className="bcn-phieu"><div><b>{LOAI_THU[p.loai] || p.loai}{p.ma ? ` · ${p.ma}` : ''}</b><small>{ngayGio(p.luc)} · {PT[p.pt] || p.pt}{p.nguoi ? ` · ${p.nguoi}` : ''}{p.khach ? ` · ${p.khach}` : ''}</small></div><b className="xanh">{so(p.tien)}</b></div>
+          )) : (bc?.hang?.ds || []).map((m, i) => (
+            <div key={i} className="bcn-phieu"><div><b>{m.ten}</b><small>{so(m.tien)}</small></div><b>{so(m.sl)}</b></div>
+          ))}
+          {man === 'thu' && !dsThu.length && <p className="bhq-ghi">Chưa có phiếu thu nào.</p>}
+          {man === 'hang' && !(bc?.hang?.ds || []).length && <p className="bhq-ghi">Chưa bán hàng nào.</p>}
+        </section></div>
+      </div>
+    );
+  }
+  const pt = bc?.pttt || {};
+  const h = bc?.hd || {};
+  return (
+    <div className="xhd bcn">
+      <header className="xhd-dau"><button type="button" aria-label="Quay lại" onClick={onVe}><ChevronLeft size={24} /></button><h1>Báo cáo cuối ngày</h1>
+        <button type="button" aria-label="Tìm phiếu thu" onClick={() => setMan('thu')}><Search size={21} /></button></header>
+      <div className="bcn-loc-dau">
+        <button type="button" className={`bcn-ic ${coLoc ? 'on' : ''}`} aria-label="Bộ lọc" onClick={() => { setNhap(loc); setMan('loc'); }}><ListFilter size={19} /></button>
+        <label className="bcn-chip"><select value={ky} onChange={(e) => setKy(e.target.value)} aria-label="Thời gian">{KY.filter(([k]) => k !== 'tuy_chinh').map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select><ChevronDown size={14} /></label>
+      </div>
+      <div className="xhd-than bcn-than">
+        <Loi chu={loi} />
+        {!bc && !loi && <p className="bhq-ghi">Đang tính…</p>}
+        {bc && <>
+          {bc.chi_cua_toi && <p className="bcn-ghi">Số liệu của riêng bạn tại {chiNhanh}</p>}
+          <section className="xhd-the">
+            <R t="Tổng thu" v={so(bc.tong_thu)} /><R t="Tổng chi" v={so(bc.tong_chi)} />
+            <R t="Thu - Chi" v={so(Number(bc.tong_thu) - Number(bc.tong_chi))} mo={() => setMan('thu')} />
+          </section>
+          <section className="xhd-the">
+            <h3>Phương thức thanh toán</h3>
+            <R t="Tiền mặt" v={so(pt.tien_mat)} /><R t="Chuyển khoản" v={so(pt.chuyen_khoan)} /><R t="Thẻ" v={so(pt.the)} />
+            <R t="Điểm" v={so(pt.diem)} /><R t="Voucher" v={so(pt.voucher)} /><R t="Ví điện tử" v={so(pt.vi)} />
+          </section>
+          <section className="xhd-the">
+            <h3>Tổng kết bán hàng</h3>
+            <h4>HÓA ĐƠN</h4>
+            <R t="Số lượng hóa đơn" v={so(h.so)} mo={onMoHoaDon} />
+            <R t="Tổng tiền hàng" v={so(h.tong_hang)} /><R t="Giảm giá" v={so(h.giam)} />
+            {Number(h.thu_khac) > 0 && <R t="Thu khác" v={so(h.thu_khac)} />}
+            <R t="Doanh thu" v={so(h.doanh_thu)} />
+            {Number(h.ghi_no) > 0 && <R t="Khách nợ" v={so(h.ghi_no)} />}
+            <R t="Hóa đơn hủy" v={Number(h.so_huy) ? `${so(h.so_huy)} · ${so(h.tien_huy)}` : '0'} />
+            <h4>HÀNG HÓA</h4>
+            <R t="Số lượng mặt hàng" v={so(bc.hang?.so_mat_hang)} />
+            <R t="Số lượng hàng bán" v={so(bc.hang?.so_luong)} mo={() => setMan('hang')} />
+            <h4>ĐẶT HÀNG · CÔNG NỢ</h4>
+            <R t={`Thu đơn đặt (${so(bc.dat?.so)} phiếu)`} v={so(bc.dat?.tien)} />
+            <R t="Thu nợ khách" v={so(bc.thu_no)} />
+          </section>
+        </>}
+      </div>
+    </div>
   );
 }
