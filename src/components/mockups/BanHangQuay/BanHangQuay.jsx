@@ -3064,8 +3064,18 @@ function QlHoaDon({ ds, traHangs, dienThoai, huyDuoc, onIn, onHuy, onChiaSe, onS
   const [mo, setMo] = useState(null);
   const [trang, setTrang] = useState(0);
   const t = q.trim().toLowerCase();
-  const loc2 = ds.filter((h) => loc[h.daHuy ? 'huy' : 'xong'] && trongKy(h.luc, ky) && (!pt || h.phuongThuc === pt)
+  // Tắt cả hai nút trạng thái = xem tất cả (không để màn trống vì lỡ bấm tắt hết).
+  const tatHet = !loc.xong && !loc.huy;
+  const hopKhac = ds.filter((h) => trongKy(h.luc, ky) && (!pt || h.phuongThuc === pt)
     && khop(`${h.ma} ${h.khach?.name || ''} ${h.khach?.phone || ''}`, t));
+  const loc2 = hopKhac.filter((h) => tatHet || loc[h.daHuy ? 'huy' : 'xong']);
+  // Đang ẩn hoá đơn Hoàn thành mà có hoá đơn để xem → nhắc + nút bật lại (nhân viên hay lỡ bấm tắt).
+  const anXong = !tatHet && !loc.xong ? hopKhac.filter((h) => !h.daHuy).length : 0;
+  const nhacAn = anXong > 0 && (
+    <button type="button" className="kq-nhac-an" onClick={() => { setLoc({ xong: true, huy: false }); setTrang(0); }}>
+      Đang ẩn {so(anXong)} hóa đơn Hoàn thành — bấm để xem
+    </button>
+  );
   const tr = Math.min(trang, Math.max(Math.ceil(loc2.length / MOI_TRANG_QL), 1) - 1);
   const traCua = (ma) => traHangs.filter((x) => x.hdGoc === ma);
   const chiTiet = (h) => (
@@ -3127,7 +3137,8 @@ function QlHoaDon({ ds, traHangs, dienThoai, huyDuoc, onIn, onHuy, onChiaSe, onS
               ))}
             </React.Fragment>
           ))}
-          {!loc2.length && <KhongCo chu="Chưa có hóa đơn nào." />}
+          {nhacAn}
+          {!loc2.length && <KhongCo chu={nhacAn ? 'Không có hóa đơn đã hủy.' : 'Chưa có hóa đơn nào.'} />}
         </section>
         {onBan && <button type="button" className="kvm-fab" aria-label="Bán hàng mới" onClick={onBan}><Plus size={28} /></button>}
       </main>
@@ -3168,7 +3179,8 @@ function QlHoaDon({ ds, traHangs, dienThoai, huyDuoc, onIn, onHuy, onChiaSe, onS
                 ))}
               </tbody>
             </table>
-            {!loc2.length && <KhongCo chu="Không tìm thấy hóa đơn nào phù hợp." />}
+            {nhacAn}
+            {!loc2.length && <KhongCo chu={nhacAn ? 'Không có hóa đơn đã hủy.' : 'Không tìm thấy hóa đơn nào phù hợp.'} />}
           </div>
           <PhanTrang trang={tr} soDong={loc2.length} setTrang={setTrang} donVi="hóa đơn" />
         </section>
