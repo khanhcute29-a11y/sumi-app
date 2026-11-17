@@ -363,4 +363,9 @@ if (process.argv.some((x)=>x.includes('bao_moi_hoa_don'))) {
   await ok('Quản lý / nhân viên thường không nhận', ()=>v(`select count(*) from thu_push where staff_id in ('${QL}','${NV}')`),0);
   await q(`delete from pos_giam_doc where profile_id='${KT}'`);
 }
+// ── 202611171020: dọn ảnh hoá đơn cũ ──
+if (await v(`select count(*)::int from pg_proc where proname='pos_goi_don_anh_cu'`)) {
+  await ok('Có cột photo_deleted_at, hoá đơn cũ = null', ()=>v(`select count(*)::int from pos_invoices where photo_deleted_at is not null`),0);
+  await ok('Nhân viên không tự gọi được hàm dọn ảnh', ()=>v(`select has_function_privilege('authenticated','public.pos_goi_don_anh_cu()','execute')`),false);
+}
 console.log(`\n${dem-loi}/${dem} đạt`); process.exit(loi?1:0);
