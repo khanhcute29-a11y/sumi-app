@@ -1308,3 +1308,7 @@ button.bcn-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bcn-phieu small{color:var(--chu-phu);font-size:13px}
 .bcn-phieu b.xanh{color:var(--xanh)}
 .bhq:not(.dt) .xhd.bcn{left:50%;right:auto;width:min(560px,100vw);transform:translateX(-50%);box-shadow:0 0 0 100vmax rgba(21,23,26,.35)}
+.bhq-hop-chan .bhq-nut.phu.do{color:var(--do);border-color:currentColor;margin-right:auto;padding:0 12px}
+@media (max-width:420px){.bhq-hop-chan:has(.bhq-nut.phu.do){flex-wrap:wrap}.bhq-hop-chan .bhq-nut.phu.do{flex:1 0 100%;margin-right:0}}
+.kvm-sua-hang{width:100%;margin-top:12px;display:flex;align-items:center;justify-content:center;gap:6px}
+.kq-ct-chan .bhq-nut{display:inline-flex;align-items:center;gap:6px;min-height:40px}

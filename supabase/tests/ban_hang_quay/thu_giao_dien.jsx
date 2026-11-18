@@ -21,7 +21,7 @@ const doiGiaTri = (v, oid) => {
 const hangRa = (res) => res.rows.map((r) => Object.fromEntries(res.fields.map((f) => [f.name, doiGiaTri(r[f.name], f.dataTypeID)])));
 const lit = (v) => (v === null ? 'null' : typeof v === 'number' ? String(v) : typeof v === 'boolean' ? String(v) : `'${String(v).replace(/'/g, "''")}'`);
 
-export async function chay({ vaiTro = 'sale', ten = 'Thu ngân thử', gdQuay = false } = {}) {
+export async function chay({ vaiTro = 'sale', ten = 'Thu ngân thử', gdQuay = false, sqlSau = '' } = {}) {
   window.__ghiLog = [];
   doiKhoThu('bhq-thu-gia-lap'); // hàng đợi mất mạng riêng — không bao giờ để máy thật gửi lên database thật
   try { localStorage.setItem('bhq-in-tu-dong', '0'); } catch { /* */ }
@@ -45,6 +45,7 @@ export async function chay({ vaiTro = 'sale', ten = 'Thu ngân thử', gdQuay = 
   await db.exec(await (await fetch('/supabase/migrations/202611171000_ban_hang_quay_bao_cao_cuoi_ngay.sql')).text());
   await db.exec(await (await fetch('/supabase/migrations/202611171010_ban_hang_quay_bao_moi_hoa_don.sql')).text());
   await db.exec(await (await fetch('/supabase/migrations/202611171030_ban_hang_quay_bao_cao_loc_nhan_vien.sql')).text());
+  await db.exec(await (await fetch('/supabase/migrations/202611181000_ban_hang_quay_them_sua_xoa_hang.sql')).text());
   await db.exec(`update feature_flags set enabled = true, rollout_percentage = 100 where key = 'pos_ban_hang_that';
     insert into profiles(id, full_name, role) values (${lit(uid)}, ${lit(ten)}, ${lit(vaiTro)}), ('00000000-0000-0000-0000-0000000000a2', 'Quản lý thử', 'admin');
     select set_config('test.uid', ${lit(uid)}, false);`);
@@ -63,6 +64,7 @@ export async function chay({ vaiTro = 'sale', ten = 'Thu ngân thử', gdQuay = 
       [p.id, size, i === 0 ? new Date(Date.now() - 86400000).toISOString() : i === 1 ? new Date().toISOString() : null]);
     if (++i >= 10) break;
   }
+  if (sqlSau) await db.exec(sqlSau); // vd chạy thử 1 migration dữ liệu trước khi mở màn hình
   window.__db = db;
 
   supabase.rpc = async (ten2, thamSo = {}) => {

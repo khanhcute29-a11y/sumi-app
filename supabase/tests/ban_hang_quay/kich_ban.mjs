@@ -381,4 +381,60 @@ if (await v(`select count(*)::int from pg_proc where proname='pos_goi_don_anh_cu
   await ok('Có cột photo_deleted_at, hoá đơn cũ = null', ()=>v(`select count(*)::int from pos_invoices where photo_deleted_at is not null`),0);
   await ok('Nhân viên không tự gọi được hàm dọn ảnh', ()=>v(`select has_function_privilege('authenticated','public.pos_goi_don_anh_cu()','execute')`),false);
 }
+// ── 202611181000/1010: thêm / sửa / xoá hàng ở quầy + ẩn hết hàng cũ ──
+if (await v(`select count(*)::int from pg_proc where proname='pos_them_hang'`)) {
+  const NV5='00000000-0000-0000-0000-0000000000a9';
+  await q(`insert into profiles values ('${NV5}','Thu ngân E','sale','{}',true,true) on conflict do nothing`);
+  const them=(o)=>q(`select public.pos_them_hang(${o.ten==null?'null':`'${o.ten}'`},${o.nhom?`'${o.nhom}'`:'null'},${o.gia},${o.ma?`'${o.ma}'`:'null'},null) r`).then((r)=>r[0].r);
+  const maKe='SP'+String((await v(`select coalesce(max(substring(pos_code from 3)::int),0) from products where pos_code ~ '^SP[0-9]{6}$'`))+1).padStart(6,'0');
+  const kvTruoc=await v(`select id::text from products where pos_code is not null limit 1`);
+  await as(NV);
+  const a=await them({ten:'Bánh mì que',nhom:'42Bánh mì',gia:15000});
+  await ok('Nhân viên thêm món, máy tự đặt mã tiếp theo sau mã KiotViet lớn nhất', ()=>[a.pos_code,Number(a.price),a.pos_group],[maKe,15000,'42Bánh mì']);
+  await ok('Món mới có pos_code → Tạo đơn (lọc pos_code is null) không thấy', ()=>v(`select count(*)::int from products where active and pos_code is null and id='${a.id}'`),0);
+  const b=await them({ten:'Bông lan',gia:30000,ma:'bl01'});
+  await ok('Tự gõ mã → viết hoa, nhóm trống thành Khác', ()=>[b.pos_code,b.pos_group],['BL01','Khác']);
+  await chan('Mã trùng bị chặn', ()=>them({ten:'X',gia:1,ma:'BL01'}),'đã có');
+  await chan('Mã có dấu cách bị chặn', ()=>them({ten:'X',gia:1,ma:'A B'}),'dấu cách');
+  await chan('Thiếu tên bị chặn', ()=>them({ten:'  ',gia:1}),'tên');
+  await chan('Giá âm bị chặn', ()=>them({ten:'X',gia:-5}),'Giá');
+  await ok('Ghi nhật ký them_hang', ()=>v(`select count(*)::int from pos_audit_log where action='them_hang' and actor='${NV}'`),2);
+  await ok('Nhân viên sửa món mình vừa tạo', async()=>{const r=(await q(`select public.pos_sua_hang('${a.id}','Bánh mì que bơ','42Bánh mì',16000,'893') r`))[0].r; return [r.name,Number(r.price),r.pos_barcode];},['Bánh mì que bơ',16000,'893']);
+  await as(NV5);
+  await chan('Nhân viên khác KHÔNG sửa được món người khác tạo', ()=>q(`select public.pos_sua_hang('${a.id}','Hack',null,1)`),'Chỉ quản lý');
+  await chan('Nhân viên khác KHÔNG xoá được', ()=>q(`select public.pos_an_hang('${a.id}')`),'Chỉ quản lý');
+  await chan('Nhân viên KHÔNG sửa được món app chính', ()=>q(`select public.pos_sua_hang('${P1}','Hack',null,1)`),'Không tìm thấy');
+  await chan('Nhân viên KHÔNG ẩn được món app chính', ()=>q(`select public.pos_an_hang('${P1}')`),'Giám đốc');
+  await as(QL);
+  await ok('Quản lý sửa giá món quầy', async()=>Number((await q(`select public.pos_sua_hang('${b.id}','Bông lan','42Bông Lan',32000) r`))[0].r.price),32000);
+  await q(`select public.pos__ton_cong('Vĩnh Phú 42','${b.id}',null,'Bông lan',3,'kiem_kho','KT')`);
+  await chan('Còn tồn thì không xoá được', ()=>q(`select public.pos_an_hang('${b.id}')`),'còn tồn 3');
+  await q(`select public.pos__ton_cong('Vĩnh Phú 42','${b.id}',null,'Bông lan',-3,'kiem_kho','KT')`);
+  await ok('Hết tồn → quản lý xoá khỏi quầy', async()=>{await q(`select public.pos_an_hang('${b.id}')`); return v(`select pos_an from products where id='${b.id}'`);},true);
+  await chan('Quản lý KHÔNG hiện lại được (chỉ GĐ)', ()=>q(`select public.pos_an_hang('${b.id}',false)`),'Giám đốc');
+  await chan('Món đã xoá không sửa được nữa', ()=>q(`select public.pos_sua_hang('${b.id}','x',null,1)`),'Không tìm thấy');
+  await as(GD);
+  await ok('GĐ hiện lại được', async()=>{await q(`select public.pos_an_hang('${b.id}',false)`); return v(`select pos_an from products where id='${b.id}'`);},false);
+  await ok('Không ai gọi thẳng được hàm kiểm quyền', ()=>v(`select has_function_privilege('authenticated','public.pos__duoc_sua_hang(uuid)','execute')`),false);
+  // 1010: ẩn hết hàng cũ, tồn món cũ về 0 bằng phiếu KK, món tạo ở quầy giữ nguyên
+  await q(`insert into pos_settings(store_location) values ('Vĩnh Phú 41') on conflict do nothing`);
+  await q(`select public.pos__ton_cong('Vĩnh Phú 41','${P1}',null,'Bánh bò',4,'kiem_kho','KT')`);
+  await q(`select public.pos__ton_cong('Vĩnh Phú 42','${a.id}',null,'Bánh mì que bơ',5,'kiem_kho','KT')`);
+  const bepTruoc=await ton(null), tonP1=await ton(), kkTruoc=await v(`select count(*)::int from pos_stock_docs where doc_type='kiem_kho'`);
+  const f1010=process.argv.find((x)=>x.includes('an_het_hang_cu'));
+  if (f1010) {
+    await db.exec(fs.readFileSync(f1010,'utf8').replace(/^begin;|^commit;/gm,'')); // file đã chạy 1 lần lúc đầu (chưa có dữ liệu) → chạy lại
+    await ok('Món app + món KiotViet cũ bị ẩn khỏi quầy', ()=>q(`select pos_an from products where id in ('${P1}','${kvTruoc}') order by id`).then((r)=>r.map((x)=>x.pos_an)),[true,true]);
+    await ok('Không còn món cũ nào hiện ở quầy', ()=>v(`select count(*)::int from products where not pos_an and id not in ('${a.id}','${b.id}')`),0);
+    await ok('Món tạo ở quầy KHÔNG bị ẩn', ()=>q(`select pos_an from products where id in ('${a.id}','${b.id}') order by pos_code`).then((r)=>r.map((x)=>x.pos_an)),[false,false]);
+    await ok('Món app vẫn active (Tạo đơn vẫn thấy)', ()=>v(`select active from products where id='${P1}'`),true);
+    await ok('Tồn món cũ ở 2 quầy về 0', async()=>[await ton(), await ton('Vĩnh Phú 41')],[0,0]);
+    await ok('Kho bếp không đụng', ()=>ton(null),bepTruoc);
+    await ok('Tồn món mới tạo ở quầy giữ nguyên', ()=>v(`select public.pos__ton('Vĩnh Phú 42','${a.id}',null)`),5);
+    await ok('Mỗi quầy có tồn 1 phiếu KK, thẻ kho ghi số cũ', async()=>[(await v(`select count(*)::int from pos_stock_docs where doc_type='kiem_kho'`))-kkTruoc, await v(`select -delta from pos_stock_ledger where product_id='${P1}' and store_location='Vĩnh Phú 42' order by id desc limit 1`)],[2,tonP1]);
+    const kk2=await v(`select count(*)::int from pos_stock_docs where doc_type='kiem_kho'`);
+    await db.exec(fs.readFileSync(f1010,'utf8').replace(/^begin;|^commit;/gm,''));
+    await ok('Chạy lại lần 2 không tạo phiếu mới', ()=>v(`select count(*)::int from pos_stock_docs where doc_type='kiem_kho'`),kk2);
+  }
+}
 console.log(`\n${dem-loi}/${dem} đạt`); process.exit(loi?1:0);

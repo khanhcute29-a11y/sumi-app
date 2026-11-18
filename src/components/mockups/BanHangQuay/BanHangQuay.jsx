@@ -20,7 +20,7 @@ import {
   LOAI_LEN_DB, phieuTuDb, lapBanDoHang, congNoTuDb, taiAnh, docAnhBan, taiAnhDaNen,
 } from './posThat';
 import {
-  HopT, MoCa, XinDuyet, ViecCho, QrChuyenKhoan, ThietLapQuay, DatCoc, LayBanhDat, NhanHang, ChupAnh, NhatKy, BaoCaoThat, KetCaThat, DoanhSoNv, XepHang, BaoCaoCuoiNgay,
+  HopT, MoCa, XinDuyet, ViecCho, QrChuyenKhoan, ThietLapQuay, DatCoc, LayBanhDat, NhanHang, ChupAnh, NhatKy, BaoCaoThat, KetCaThat, DoanhSoNv, XepHang, BaoCaoCuoiNgay, HangQuay,
 } from './QuayThat';
 import './ban-hang-quay.css';
 
@@ -359,6 +359,19 @@ export default function BanHangQuay() {
     setHop(null);
     nhan(`Đã thêm hàng hoá ${m.ma} — ${m.ten}`);
   };
+
+  // Chạy thật: thêm / sửa / xoá món của quầy xong (database đã lưu) → cập nhật danh sách trên máy này.
+  const xongHangQuay = (row, kieu) => {
+    const cu = hop?.cu;
+    setHop(null);
+    if (kieu === 'xoa') { setMatHang((ds) => ds.filter((x) => x.pid !== cu?.pid)); nhan(`Đã xoá ${cu?.ma || ''} khỏi quầy`); return; }
+    const moi = taoMatHang([{ ...row, active: true }])[0];
+    if (!moi) return;
+    if (kieu === 'sua') { setMatHang((ds) => ds.map((x) => (x.pid === moi.pid ? moi : x))); nhan(`Đã sửa ${moi.ma}`); return; }
+    setMatHang((ds) => [moi, ...ds]);
+    nhan(`Đã thêm ${moi.ma} — ${moi.ten}. Vào Kiểm kho để nhập số tồn.`);
+  };
+  const dsNhomQuay = useMemo(() => [...new Set(matHang.filter((x) => x.posCode).map((x) => x.danhMuc))].sort((a, b) => a.localeCompare(b, 'vi')), [matHang]);
 
   // Ghi tồn + thẻ kho cho 1 chi nhánh. thay = [{ ma, sl(±) }].
   const ghiKho = (cn, thay, chungTu, loai) => {
@@ -948,7 +961,7 @@ export default function BanHangQuay() {
         </div>
       )}
 
-      {manHinh === 'hh' && <QlHangHoa that={!!that} matHang={matHang} tonCN={tonCN} chiNhanh={chiNhanh} theKho={theKho.filter((t) => t.chiNhanh === chiNhanh)} dienThoai={dienThoai} laGD={laGD} onThem={() => setHop({ loai: 'them_hang' })} onMoMan={moManHinh} />}
+      {manHinh === 'hh' && <QlHangHoa that={!!that} matHang={matHang} tonCN={tonCN} chiNhanh={chiNhanh} theKho={theKho.filter((t) => t.chiNhanh === chiNhanh)} dienThoai={dienThoai} laGD={laGD} onThem={() => setHop({ loai: 'them_hang' })} onSua={that ? (m) => setHop({ loai: 'sua_hang', cu: m }) : null} onMoMan={moManHinh} />}
       {manHinh === 'kh' && <KhachHang ds={khachDs} hoaDons={daBan.filter((h) => !h.mau)} noCua={noCua} dienThoai={dienThoai} />}
       {manHinh === 'tb' && <ThongBao ds={thongBao} daDoc={daDoc} onDoc={(id) => setDaDoc((x) => new Set(x).add(id))} onDocHet={() => setDaDoc(new Set(thongBao.map((t) => t.id)))} />}
       {MAN_LOAI[manHinh] && (
@@ -1029,9 +1042,9 @@ export default function BanHangQuay() {
         return d ? <SuaDongDt d={d} onDong={() => setHop(null)} onLuu={(thay) => { suaDong(d.ma, thay); setHop(null); }} onBo={() => { boDong(d.ma); setHop(null); }} /> : null;
       })()}
       {hop?.loai === 'them_hang' && (that
-        ? <HopT tieuDe="Thêm hàng hoá" onDong={() => setHop(null)} chan={<button type="button" className="bhq-nut chinh" onClick={() => setHop(null)}>Đã hiểu</button>}>
-          <p className="bhq-ghi">Món mới thêm ở app Sumi → mục <b>Sản phẩm</b> (giá, size, ảnh dùng chung cho cả Đơn hàng và quầy). Thêm xong bấm nút Đồng bộ ở đây.</p></HopT>
+        ? <HangQuay cu={null} dsNhom={dsNhomQuay} onDong={() => setHop(null)} onXong={xongHangQuay} />
         : <ThemHangHoa matHang={matHang} laGD={laGD} onDong={() => setHop(null)} onLuu={themHangMoi} />)}
+      {hop?.loai === 'sua_hang' && that && hop.cu && <HangQuay cu={hop.cu} dsNhom={dsNhomQuay} onDong={() => setHop(null)} onXong={xongHangQuay} />}
       {hop?.loai === 'thong_tin_hd' && (
         <Hop tieuDe="Thông tin hóa đơn" onDong={() => setHop(null)} chan={<button type="button" className="bhq-nut chinh" onClick={() => setHop(null)}>Xong</button>}>
           <label className="bhq-nhan">Người bán<select className="bhq-o" value={hd.nguoiBan || nguoi} onChange={(e) => sua({ nguoiBan: e.target.value })}>{nguoiBanDs.map((n) => <option key={n}>{n}</option>)}</select></label>
@@ -1906,7 +1919,7 @@ function useTheKhoDb(m, chiNhanh, bat) {
   return ds;
 }
 
-function QlHangHoa({ matHang, tonCN, chiNhanh, theKho, dienThoai, laGD, that = false, onThem, onMoMan }) {
+function QlHangHoa({ matHang, tonCN, chiNhanh, theKho, dienThoai, laGD, that = false, onThem, onSua, onMoMan }) {
   const ton = tonCN[chiNhanh] || {};
   const [q, setQ] = useState('');
   const [nhom, setNhom] = useState('all');
@@ -1925,7 +1938,7 @@ function QlHangHoa({ matHang, tonCN, chiNhanh, theKho, dienThoai, laGD, that = f
   const tongTon = ds.reduce((s, m) => s + (ton[m.ma] ?? 0), 0);
   const tr = Math.min(trang, Math.max(Math.ceil(ds.length / MOI_TRANG_QL), 1) - 1);
   const tenNhom = tenNhomHang;
-  if (dienThoai) return <HangHoaDt laGD={laGD} that={that} matHang={matHang} ds={ds} ton={ton} tonCN={tonCN} chiNhanh={chiNhanh} theKho={theKho} tenNhom={tenNhom} dmCo={dmCo} onThem={onThem} onMoMan={onMoMan}
+  if (dienThoai) return <HangHoaDt laGD={laGD} that={that} matHang={matHang} ds={ds} ton={ton} tonCN={tonCN} chiNhanh={chiNhanh} theKho={theKho} tenNhom={tenNhom} dmCo={dmCo} onThem={onThem} onSua={onSua} onMoMan={onMoMan}
     q={q} setQ={setQ} nhom={nhom} setNhom={setNhom} locTon={locTon} setLocTon={setLocTon} tongTon={tongTon} />;
   return (
     <main className="kq">
@@ -2000,7 +2013,9 @@ function QlHangHoa({ matHang, tonCN, chiNhanh, theKho, dienThoai, laGD, that = f
                               <tbody>{CHI_NHANH.map((cn) => <tr key={cn} className={cn === chiNhanh ? 'dam' : ''}><td>{cn}</td><td className="so">{so(tonCN[cn]?.[m.ma] ?? 0)}</td><td className="so">0</td><td>Đang kinh doanh</td></tr>)}</tbody>
                             </table></div>
                           )}
-                          <div className="kq-ct-chan"><span className="mo">Thêm / sửa hàng hóa, giá bán: Giám đốc làm trong mục Sản phẩm của app.</span></div>
+                          <div className="kq-ct-chan">{onSua && m.posCode
+                            ? <button type="button" className="bhq-nut phu" onClick={() => onSua(m)}><Pencil size={15} /> Sửa / Xoá món</button>
+                            : <span className="mo">Món của app đặt đơn: sửa giá, tên trong mục Sản phẩm của app.</span>}</div>
                         </div>
                       </td></tr>
                     )}
@@ -2050,7 +2065,7 @@ function BoLocHang({ locTon, nhom, dmCo, onApDung, onDong }) {
   );
 }
 
-function HangHoaDt({ laGD, that = false, matHang, ds, ton, tonCN, chiNhanh, theKho, tenNhom, dmCo, onThem, onMoMan, q, setQ, nhom, setNhom, locTon, setLocTon, tongTon }) {
+function HangHoaDt({ laGD, that = false, matHang, ds, ton, tonCN, chiNhanh, theKho, tenNhom, dmCo, onThem, onSua, onMoMan, q, setQ, nhom, setNhom, locTon, setLocTon, tongTon }) {
   const [timMo, setTimMo] = useState(false);
   const [locMo, setLocMo] = useState(false);
   const [xepTen, setXepTen] = useState(false);
@@ -2084,6 +2099,7 @@ function HangHoaDt({ laGD, that = false, matHang, ds, ton, tonCN, chiNhanh, theK
             {laGD && <div className="r"><span>Giá vốn</span><span>{so(m.giaVon)}</span></div>}
             <div className="r"><span>Tồn kho</span><b className={(ton[m.ma] ?? 0) < 0 ? 'do' : ''}>{so(ton[m.ma] ?? 0)}</b></div>
             <div className="r"><span>Khách đặt</span><span>0</span></div>
+            {onSua && m.posCode && <button type="button" className="bhq-nut phu kvm-sua-hang" onClick={() => onSua(m)}><Pencil size={16} /> Sửa / Xoá món</button>}
           </div>
           <div className="kvm-the"><h2>Tồn theo chi nhánh</h2>
             {CHI_NHANH.map((cn) => <div key={cn} className="r"><span>{cn}{cn === chiNhanh ? ' (đang xem)' : ''}</span><b>{so(tonCN[cn]?.[m.ma] ?? 0)}</b></div>)}

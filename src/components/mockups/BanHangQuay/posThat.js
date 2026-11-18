@@ -36,6 +36,13 @@ export async function goi(ten, thamSo) {
   return data;
 }
 
+// Hàng hoá của quầy (migration 202611181000): thêm / sửa / xoá (ẩn khỏi quầy). Database kiểm quyền.
+export const themHangQuay = ({ ten, nhom, gia, ma, maVach }) => goi('pos_them_hang',
+  { p_ten: ten, p_nhom: nhom || null, p_gia: Number(gia) || 0, p_ma: ma || null, p_ma_vach: maVach || null });
+export const suaHangQuay = ({ pid, ten, nhom, gia, maVach }) => goi('pos_sua_hang',
+  { p_id: pid, p_ten: ten, p_nhom: nhom || null, p_gia: Number(gia) || 0, p_ma_vach: maVach || null });
+export const xoaHangQuay = (pid) => goi('pos_an_hang', { p_id: pid, p_an: true });
+
 // ── Bật chạy thật? Cờ pos_ban_hang_that bật (hoặc tài khoản nằm trong danh sách thử) + đã đăng nhập + tài khoản đã duyệt.
 export async function kiemTraThat() {
   const { data: s } = await supabase.auth.getSession();

@@ -68,7 +68,8 @@ export function taoMatHang(products) {
   const ds = [];
   let stt = 0;
   for (const p of products || []) {
-    if (p.active === false || p.category === 'school') continue;
+    // pos_an = đã xoá khỏi quầy (vẫn còn trong app chính / hoá đơn cũ).
+    if (p.active === false || p.pos_an || p.category === 'school') continue;
     const sizes = (p.product_variants || []).filter((v) => v && v.active !== false);
     const dong = sizes.length
       ? sizes.map((v) => ({ id: `${p.id}:${v.id}`, ten: p.name, size: v.label || v.size || '', gia: Number(v.price) || Number(p.price) || 0 }))
@@ -78,7 +79,7 @@ export function taoMatHang(products) {
       // Hàng nhập từ KiotViet giữ nguyên Mã hàng + Nhóm hàng; hàng của app tự đánh mã SP0001…
       const ma = p.pos_code && dong.length === 1 ? p.pos_code : `SP${String(stt).padStart(4, '0')}`;
       ds.push({ ...d, ma, giaVon: Math.round((d.gia * 0.35) / 500) * 500, danhMuc: p.pos_group || p.category || 'khac', anh: p.photo_url || null,
-        maVach: p.pos_barcode || '', dichVu: !!p.pos_dich_vu });
+        maVach: p.pos_barcode || '', dichVu: !!p.pos_dich_vu, pid: p.id, posCode: p.pos_code || null });
     }
   }
   return ds;

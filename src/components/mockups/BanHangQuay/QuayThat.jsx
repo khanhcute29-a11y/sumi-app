@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, RefreshCw, Camera, Search, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, ListFilter, Check } from 'lucide-react';
 import { supabase } from '../../../lib/supabaseClient';
-import { goi, chuLoi, anhVietQr, noiDungCk, NGAN_HANG, maMoi, tachId, linkAnh, linkAnhHoaDon, guiHangDoi, taiAnh, lapBanDoHang } from './posThat';
+import { goi, chuLoi, anhVietQr, noiDungCk, NGAN_HANG, maMoi, tachId, linkAnh, linkAnhHoaDon, guiHangDoi, taiAnh, lapBanDoHang, themHangQuay, suaHangQuay, xoaHangQuay } from './posThat';
 import { locXep } from './banHangQuayLogic';
 
 // Các hộp thoại chỉ có ở chế độ CHẠY THẬT (ca, duyệt, chuyển khoản, thiết lập, đặt cọc, nhận hàng, báo cáo, nhật ký).
@@ -27,6 +27,51 @@ function Loi({ chu }) {
   const ref = useRef(null);
   useEffect(() => { if (chu) ref.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }); }, [chu]);
   return chu ? <p ref={ref} className="kv-loi" role="alert">{chu}</p> : null;
+}
+
+// ── Thêm / sửa hàng hoá của quầy (như KiotViet). Món tạo ở đây chỉ có ở Bán tại quầy, không lẫn vào Tạo đơn.
+// cu = món đang sửa (null = thêm mới). Database kiểm quyền + mã trùng; trả về dòng sản phẩm để nạp lại danh sách.
+export function HangQuay({ cu, dsNhom, onDong, onXong }) {
+  const [ma, setMa] = useState('');
+  const [ten, setTen] = useState(cu?.ten || '');
+  const [nhom, setNhom] = useState(cu ? cu.danhMuc || '' : '');
+  const [gia, setGia] = useState(cu ? String(cu.gia ?? '') : '');
+  const [maVach, setMaVach] = useState(cu?.maVach || '');
+  const [dang, setDang] = useState(false);
+  const [loi, setLoi] = useState('');
+  const [hoiXoa, setHoiXoa] = useState(false);
+  const ok = ten.trim() && gia !== '' && !dang;
+  const luu = async () => {
+    setDang(true); setLoi('');
+    try {
+      const row = cu ? await suaHangQuay({ pid: cu.pid, ten, nhom, gia, maVach }) : await themHangQuay({ ten, nhom, gia, ma, maVach });
+      onXong(row, cu ? 'sua' : 'them');
+    } catch (e) { setLoi(chuLoi(e)); setDang(false); }
+  };
+  const xoa = async () => {
+    if (!hoiXoa) { setHoiXoa(true); return; }
+    setDang(true); setLoi('');
+    try { await xoaHangQuay(cu.pid); onXong(null, 'xoa'); } catch (e) { setLoi(chuLoi(e)); setDang(false); setHoiXoa(false); }
+  };
+  return (
+    <HopT tieuDe={cu ? `Sửa ${cu.ma}` : 'Thêm hàng hoá'} onDong={dang ? undefined : onDong}
+      chan={<>
+        {cu && <button type="button" className="bhq-nut phu do" disabled={dang} onClick={xoa}>{hoiXoa ? 'Bấm lần nữa để xoá' : 'Xoá khỏi quầy'}</button>}
+        <button type="button" className="bhq-nut phu" disabled={dang} onClick={onDong}>Bỏ qua</button>
+        <button type="button" className="bhq-nut chinh" disabled={!ok} onClick={luu}>{dang ? 'Đang lưu…' : 'Lưu'}</button>
+      </>}>
+      {!cu && <label className="bhq-nhan">Mã hàng<input className="bhq-o" value={ma} onChange={(e) => setMa(e.target.value.toUpperCase().replace(/\s/g, ''))} placeholder="Để trống: máy tự đặt (SP…)" autoCapitalize="characters" maxLength={40} /></label>}
+      <label className="bhq-nhan">Tên hàng<input className="bhq-o" autoFocus={!cu} value={ten} onChange={(e) => setTen(e.target.value)} placeholder="Bắt buộc" maxLength={150} /></label>
+      <label className="bhq-nhan">Nhóm hàng<input className="bhq-o" list="hq-ds-nhom" value={nhom} onChange={(e) => setNhom(e.target.value)} placeholder="VD: 42Bánh mì (chọn hoặc gõ nhóm mới)" maxLength={60} />
+        <datalist id="hq-ds-nhom">{dsNhom.map((n) => <option key={n} value={n} />)}</datalist></label>
+      <label className="bhq-nhan">Giá bán<input className="bhq-o" inputMode="numeric" value={gia ? so(gia) : gia} onChange={(e) => setGia(soTien(e.target.value).slice(0, 9))} placeholder="0" /></label>
+      <label className="bhq-nhan">Mã vạch<input className="bhq-o" value={maVach} onChange={(e) => setMaVach(e.target.value.trim())} placeholder="Không bắt buộc" maxLength={40} /></label>
+      <p className="bhq-ghi">{cu ? 'Sửa tên, nhóm, giá chỉ đổi ở Bán tại quầy, không đổi app đặt đơn. Hoá đơn đã bán giữ giá cũ.'
+        : 'Món mới chỉ có ở Bán tại quầy (cả 3 quầy), không hiện ở Tạo đơn. Số tồn: thêm xong vào Kiểm kho nhập số đếm thực tế.'}</p>
+      {hoiXoa && <p className="kv-loi" role="alert">Xoá {cu.ma} khỏi quầy? Hoá đơn cũ vẫn giữ. Món còn tồn thì máy không cho xoá.</p>}
+      <Loi chu={loi} />
+    </HopT>
+  );
 }
 
 // ── Vào ca: mỗi nhân viên vào ca bằng tài khoản của mình — đếm tiền két + chụp ảnh két ──
