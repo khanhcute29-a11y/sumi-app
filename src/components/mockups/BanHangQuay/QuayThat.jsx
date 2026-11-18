@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, RefreshCw, Camera, Search, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, ListFilter, Check } from 'lucide-react';
 import { supabase } from '../../../lib/supabaseClient';
-import { goi, chuLoi, anhVietQr, noiDungCk, NGAN_HANG, maMoi, tachId, linkAnh, linkAnhHoaDon, guiHangDoi, taiAnh, lapBanDoHang, themHangQuay, suaHangQuay, xoaHangQuay } from './posThat';
+import { goi, chuLoi, anhVietQr, noiDungCk, NGAN_HANG, maMoi, tachId, linkAnh, linkAnhHoaDon, guiHangDoi, taiAnh, lapBanDoHang, themHangQuay, suaHangQuay, xoaHangQuay, vaoCa, chiKet, huyChiKet } from './posThat';
 import { locXep } from './banHangQuayLogic';
 
 // Các hộp thoại chỉ có ở chế độ CHẠY THẬT (ca, duyệt, chuyển khoản, thiết lập, đặt cọc, nhận hàng, báo cáo, nhật ký).
@@ -92,6 +92,7 @@ export function ChonQuay({ chiNhanh, dsQuay, onDoi }) {
 
 export function MoCa({ chiNhanh, dsQuay, onDoiChiNhanh, nguoi, onMo, onVeApp, onDong, onTaiLai }) {
   const [tien, setTien] = useState('');
+  const [lyDoChi, setLyDoChi] = useState(''); // két ít hơn ca trước vì đã chi tiền ra — ghi rõ chi gì
   const [anh, setAnh] = useState(null);
   const [dangAnh, setDangAnh] = useState(false);
   const [dang, setDang] = useState(false);
@@ -100,7 +101,7 @@ export function MoCa({ chiNhanh, dsQuay, onDoiChiNhanh, nguoi, onMo, onVeApp, on
   const [truoc, setTruoc] = useState(null);
   useEffect(() => {
     let huy = false;
-    setTruoc(null); setTien(''); setLoi(''); // đổi quầy → két ca trước là của quầy khác
+    setTruoc(null); setTien(''); setLoi(''); setLyDoChi(''); // đổi quầy → két ca trước là của quầy khác
     goi('pos_tien_dau_ca', { p_store: chiNhanh }).then((r) => {
       if (huy || !r?.co) return;
       setTruoc(r); setTien((t) => (t === '' ? String(Math.round(Number(r.so) || 0)) : t));
@@ -116,8 +117,10 @@ export function MoCa({ chiNhanh, dsQuay, onDoiChiNhanh, nguoi, onMo, onVeApp, on
   const mo = async () => {
     if (tien === '') { setLoi('Nhập số tiền mặt đang có trong két'); return; }
     if (!anh) { setLoi('Chụp ảnh két tiền trước khi vào ca'); return; }
+    const ly = lech < 0 ? lyDoChi.trim() : '';
+    if (ly && ly.length < 3) { setLoi('Ghi rõ đã chi tiền làm gì (ít nhất vài chữ)'); return; }
     setDang(true); setLoi('');
-    try { onMo(await goi('pos_vao_ca', { p_store: chiNhanh, p_opening_cash: Number(tien) || 0, p_photo_url: anh })); } catch (e) {
+    try { onMo(await vaoCa({ store: chiNhanh, tien, anh, lyDoChi: ly })); } catch (e) {
       const m = chuLoi(e); setLoi(m); setDang(false);
       if (/đang mở/.test(m)) onTaiLai?.(); // người khác vừa vào ca ở máy khác → tải lại để hiện ca của họ
     }
@@ -128,7 +131,15 @@ export function MoCa({ chiNhanh, dsQuay, onDoiChiNhanh, nguoi, onMo, onVeApp, on
       <ChonQuay chiNhanh={chiNhanh} dsQuay={dsQuay} onDoi={dang ? null : onDoiChiNhanh} />
       <p className="bhq-ghi">Chào {nguoi}. Đếm lại tiền trong két, chụp 1 ảnh két tiền. Mọi hoá đơn trong ca tính doanh số cho bạn.</p>
       {truoc && <p className="bhq-ghi">Ca trước <b>{truoc.ca}</b>{truoc.ten ? ` (${truoc.ten})` : ''} kết ca lúc {ngayGio(truoc.luc)}, két còn <b>{so(truoc.so)}</b>. Máy tính két ca này theo số đó.</p>}
-      {lech !== 0 && <p className="kv-loi" role="alert">Bạn nhập {lech > 0 ? 'nhiều' : 'ít'} hơn ca trước {so(Math.abs(lech))}. Vẫn vào ca được, nhưng máy giữ số ca trước và báo Giám đốc kiểm ảnh két.</p>}
+      {lech > 0 && <p className="kv-loi" role="alert">Bạn nhập nhiều hơn ca trước {so(lech)}. Vẫn vào ca được, nhưng máy giữ số ca trước và báo Giám đốc kiểm ảnh két.</p>}
+      {lech < 0 && (
+        <div className="mc-chi">
+          <p><b>Két ít hơn ca trước {so(-lech)}.</b> Vẫn vào ca được. Nếu có người đã <b>chi tiền ra</b> lúc chưa ai vào ca (mua đồ, trả tiền ship…), ghi rõ ở đây — máy ghi thành phiếu chi {so(-lech)}, két ca bạn tính đúng {so(tien)}.</p>
+          <textarea className="bhq-o" rows={2} maxLength={300} value={lyDoChi} onChange={(e) => setLyDoChi(e.target.value)}
+            placeholder="VD: tối qua chi 364k mua bột, trả tiền ship" aria-label="Đã chi tiền làm gì" />
+          <small>{lyDoChi.trim() ? 'Giám đốc sẽ nhận báo phiếu chi này.' : 'Để trống: máy tính két theo ca trước, cuối ca sẽ thấy thiếu và báo Giám đốc.'}</small>
+        </div>
+      )}
       <label className="bhq-nhan">Tiền mặt đầu ca<input className="bhq-o lon" autoFocus inputMode="numeric" value={tien ? so(tien) : tien} placeholder="0" onChange={(e) => setTien(soTien(e.target.value))} /></label>
       <ChupAnh path={anh} dang={dangAnh} onChon={chonAnh} chu="Chụp ảnh két tiền (bắt buộc)" />
       <Loi chu={loi} />
@@ -633,7 +644,8 @@ export function ChupAnh({ path, xem, onChon, dang, chu = 'Chụp ảnh bánh hu�
 const TEN_VIEC = { ban: 'Bán (giảm/nợ)', huy_hd: 'Huỷ hoá đơn', mo_ca: 'Mở ca', dong_ca: 'Đóng ca', duyet_ca: 'Duyệt ca', thu_no: 'Thu nợ',
   ck_da_ve: 'CK đã về', ck_khong_thay: 'CK không thấy', xuat_huy: 'Xuất huỷ', kiem_kho: 'Kiểm kho', noi_bo: 'Xuất nội bộ', bep_giao: 'Bếp giao',
   nhan_hang: 'Nhận hàng', huy_phieu: 'Huỷ phiếu', thiet_lap: 'Đổi thiết lập', bang_gia: 'Bảng giá', dong_y_giam_gia: 'Duyệt giảm giá',
-  tu_choi_giam_gia: 'Từ chối giảm giá', dong_y_huy_hd: 'Duyệt huỷ HĐ', tu_choi_huy_hd: 'Từ chối huỷ HĐ', thu_don_coc: 'Thu cọc', thu_don_thu_con_lai: 'Thu tiền lấy bánh' };
+  tu_choi_giam_gia: 'Từ chối giảm giá', dong_y_huy_hd: 'Duyệt huỷ HĐ', tu_choi_huy_hd: 'Từ chối huỷ HĐ', thu_don_coc: 'Thu cọc', thu_don_thu_con_lai: 'Thu tiền lấy bánh', chi_ket: 'Chi từ két', huy_chi_ket: 'Huỷ phiếu chi',
+  them_hang: 'Thêm hàng', sua_hang: 'Sửa hàng', xoa_hang: 'Xoá hàng khỏi quầy', hien_hang: 'Hiện lại hàng' };
 export function NhatKy({ chiNhanh, onDong }) {
   const [ds, setDs] = useState(null);
   const [loc, setLoc] = useState('');
@@ -752,6 +764,78 @@ export function BaoCaoThat({ chiNhanh, laGD, dienThoai }) {
 }
 
 // ── Kết ca thật: đếm tiền "mù" + đếm nhanh bánh trên kệ + ảnh két → database tự so, báo GĐ nếu lệch ──
+// ── Phiếu chi tiền từ két (như KiotViet): lấy tiền mặt trong két ra trả/mua gì → ghi ở đây để máy trừ vào két phải có.
+// Người đang giữ ca hoặc Quản lý ghi; báo Giám đốc mỗi phiếu. Ghi nhầm thì huỷ (khi ca còn mở).
+export function ChiKet({ caMo, laQl = false, uid, onDong, onXong }) {
+  const [ds, setDs] = useState(null);
+  const [tien, setTien] = useState('');
+  const [lyDo, setLyDo] = useState('');
+  const [anh, setAnh] = useState(null);
+  const [dangAnh, setDangAnh] = useState(false);
+  const [dang, setDang] = useState(false);
+  const [loi, setLoi] = useState('');
+  const [huy, setHuy] = useState(null); // { id, lyDo }
+  const maPhieu = useRef(maMoi());
+  const tai = async () => {
+    const { data, error } = await supabase.from('pos_cash_outs').select('id, code, amount, reason, truoc_ca, status, created_by, created_by_name, created_at, cancel_reason')
+      .eq('shift_id', caMo.id).order('created_at', { ascending: false });
+    setDs(error ? [] : data || []);
+  };
+  useEffect(() => { tai(); }, [caMo.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const chonAnh = async (f) => {
+    setDangAnh(true); setLoi('');
+    try { setAnh(await taiAnh(f, 'chi')); } catch (e) { setLoi(`Không tải được ảnh: ${chuLoi(e)}`); }
+    setDangAnh(false);
+  };
+  const luu = async () => {
+    if (!(Number(tien) > 0)) { setLoi('Nhập số tiền đã chi'); return; }
+    if (lyDo.trim().length < 3) { setLoi('Ghi rõ chi tiền làm gì'); return; }
+    setDang(true); setLoi('');
+    try {
+      const p = await chiKet({ id: maPhieu.current, caId: caMo.id, tien, lyDo: lyDo.trim(), anh });
+      maPhieu.current = maMoi(); setTien(''); setLyDo(''); setAnh(null);
+      await tai(); onXong?.(`Đã ghi phiếu chi ${p.code}: ${so(p.amount)}`);
+    } catch (e) { setLoi(chuLoi(e)); }
+    setDang(false);
+  };
+  const xacNhanHuy = async () => {
+    if (!huy?.lyDo?.trim()) { setLoi('Ghi lý do huỷ phiếu'); return; }
+    setDang(true); setLoi('');
+    try { await huyChiKet(huy.id, huy.lyDo.trim()); setHuy(null); await tai(); } catch (e) { setLoi(chuLoi(e)); }
+    setDang(false);
+  };
+  const conHieuLuc = (ds || []).filter((p) => p.status === 'xong');
+  const tong = conHieuLuc.reduce((a, p) => a + Number(p.amount), 0);
+  return (
+    <HopT tieuDe={`Chi tiền từ két · ${caMo.code}`} onDong={dang ? undefined : onDong}
+      chan={<><button type="button" className="bhq-nut phu" disabled={dang} onClick={onDong}>Đóng</button>
+        <button type="button" className="bhq-nut chinh" disabled={dang || dangAnh} onClick={luu}>{dang ? 'Đang lưu…' : 'Ghi phiếu chi'}</button></>}>
+      <p className="bhq-ghi">Lấy tiền mặt trong két ra trả/mua gì thì ghi ở đây — máy trừ vào két phải có lúc kết ca. Giám đốc nhận báo từng phiếu.</p>
+      <label className="bhq-nhan">Số tiền chi<input className="bhq-o lon" inputMode="numeric" value={tien ? so(tien) : ''} onChange={(e) => setTien(soTien(e.target.value).slice(0, 9))} placeholder="0" /></label>
+      <label className="bhq-nhan">Chi làm gì<textarea className="bhq-o" rows={2} maxLength={300} value={lyDo} onChange={(e) => setLyDo(e.target.value)} placeholder="VD: mua đá viên, trả tiền ship, ứng lương…" /></label>
+      <ChupAnh path={anh} dang={dangAnh} onChon={chonAnh} chu="Chụp hoá đơn / biên nhận (nên có)" />
+      <Loi chu={loi} />
+      <h4 className="kc-tieu">Phiếu chi ca này{conHieuLuc.length ? ` · tổng ${so(tong)}` : ''}</h4>
+      {ds == null ? <p className="bhq-ghi">Đang tải…</p> : !ds.length ? <p className="bhq-ghi">Chưa có phiếu chi nào.</p> : (
+        <div className="pc-ds">
+          {ds.map((p) => (
+            <div key={p.id} className={`pc-dong ${p.status === 'huy' ? 'huy' : ''}`}>
+              <div className="r"><b>{p.code}{p.truoc_ca ? ' · trước khi vào ca' : ''}</b><b className={p.status === 'huy' ? '' : 'do'}>{p.status === 'huy' ? 'Đã huỷ' : `-${so(p.amount)}`}</b></div>
+              <div className="mo">{p.reason} · {p.created_by_name} · {ngayGio(p.created_at)}</div>
+              {p.status === 'huy' && p.cancel_reason && <div className="mo">Lý do huỷ: {p.cancel_reason}</div>}
+              {p.status === 'xong' && (laQl || p.created_by === uid) && (huy?.id === p.id
+                ? <div className="pc-huy"><input className="bhq-o" autoFocus value={huy.lyDo} onChange={(e) => setHuy({ id: p.id, lyDo: e.target.value })} placeholder="Lý do huỷ (vd: ghi nhầm số)" />
+                  <button type="button" className="bhq-nut phu" disabled={dang} onClick={() => setHuy(null)}>Thôi</button>
+                  <button type="button" className="bhq-nut phu do" disabled={dang} onClick={xacNhanHuy}>Huỷ phiếu</button></div>
+                : <button type="button" className="pc-nut-huy" onClick={() => setHuy({ id: p.id, lyDo: '' })}>Huỷ phiếu này</button>)}
+            </div>
+          ))}
+        </div>
+      )}
+    </HopT>
+  );
+}
+
 export function KetCaThat({ caMo, chiNhanh, matHang = [], onDong, onKet }) {
   const [dem, setDem] = useState('');
   const [ghi, setGhi] = useState('');
@@ -762,6 +846,13 @@ export function KetCaThat({ caMo, chiNhanh, matHang = [], onDong, onKet }) {
   const [dang, setDang] = useState(false);
   const [loi, setLoi] = useState('');
   const [xong, setXong] = useState(null);
+  const [phieuChi, setPhieuChi] = useState([]); // phiếu chi từ két của ca này (đã trừ vào két phải có)
+  useEffect(() => {
+    let h = false;
+    supabase.from('pos_cash_outs').select('code, amount, reason, truoc_ca, created_by_name').eq('shift_id', caMo.id).eq('status', 'xong').order('created_at')
+      .then(({ data, error }) => { if (!h && !error) setPhieuChi(data || []); });
+    return () => { h = true; };
+  }, [caMo.id]);
   useEffect(() => {
     let h = false;
     (async () => {
@@ -807,6 +898,7 @@ export function KetCaThat({ caMo, chiNhanh, matHang = [], onDong, onKet }) {
         dauCa: Number(s.opening_cash), banGiao: Number(s.counted_cash), ghiChu: s.note || '',
         ban: sl.ban || {}, thu: sl.thu_no || {}, donDat: sl.don_dat || {}, ghiNo: Number(sl.ban?.ghi_no || 0), soHoaDon: sl.so_hoa_don,
         hoanTien: Number(sl.hoan_tien_huy || 0), tienMatTrongCa: Number(sl.tien_mat_trong_ca || 0), cuoiCa: Number(s.expected_cash), chenh: Number(s.diff),
+        chiKet: Number(sl.chi_ket || 0), phieuChi: sl.phieu_chi || [],
         ckCho: Number(sl.ck_chua_xac_nhan || 0),
         doanhSo: Number(sl.doanh_so_tinh || 0), dsCkCho: Number(sl.ck_cho || 0), dsNo: Number(sl.no_chua_tra || 0),
         banhLech: (s.stock_check || []).filter((k) => Number(k.lech) !== 0),
@@ -824,7 +916,9 @@ export function KetCaThat({ caMo, chiNhanh, matHang = [], onDong, onKet }) {
           {xong.dsNo > 0 && <div><span>Khách còn nợ (tính khi trả)</span><b>{so(xong.dsNo)}</b></div>}
           <div><span>Số hoá đơn</span><b>{xong.soHoaDon}</b></div>
           <div><span>Tiền mặt đầu ca</span><b>{so(xong.dauCa)}</b></div>
-          <div><span>Tiền mặt trong ca</span><b>{so(xong.tienMatTrongCa)}</b></div>
+          {xong.chiKet > 0 && <div><span>Thu tiền mặt trong ca</span><b>{so(xong.tienMatTrongCa + xong.chiKet)}</b></div>}
+          {xong.chiKet > 0 && <div><span>Chi từ két ({xong.phieuChi.length} phiếu)</span><b className="do">-{so(xong.chiKet)}</b></div>}
+          <div><span>Tiền mặt trong ca{xong.chiKet > 0 ? ' (sau chi)' : ''}</span><b>{so(xong.tienMatTrongCa)}</b></div>
           <div><span>Tiền mặt cuối ca (hệ thống)</span><b>{so(xong.cuoiCa)}</b></div>
           <div><span>Đếm được</span><b>{so(xong.banGiao)}</b></div>
           <div className="lon"><span>Chênh lệch két</span><b className={xong.chenh < 0 ? 'do' : xong.chenh > 0 ? 'cam' : 'xanh-la'}>{xong.chenh > 0 ? '+' : ''}{so(xong.chenh)}</b></div>
@@ -847,7 +941,9 @@ export function KetCaThat({ caMo, chiNhanh, matHang = [], onDong, onKet }) {
         <div><span>Ca</span><b>{caMo.code}</b></div>
         <div><span>Vào ca lúc</span><b>{ngayGio(caMo.opened_at)} · {caMo.opened_by_name}</b></div>
         <div><span>Tiền đầu ca</span><b>{so(caMo.opening_cash)}</b></div>
+        {phieuChi.length > 0 && <div><span>Phiếu chi từ két ({phieuChi.length})</span><b className="do">-{so(phieuChi.reduce((a, p) => a + Number(p.amount), 0))}</b></div>}
       </div>
+      {phieuChi.length > 0 && <p className="bhq-ghi">{phieuChi.map((p) => `${p.code}${p.truoc_ca ? ' (trước khi vào ca)' : ''}: ${so(p.amount)} — ${p.reason}`).join(' · ')}</p>}
       <label className="bhq-nhan">Tiền mặt đếm được trong két<input className="bhq-o lon" autoFocus inputMode="numeric" value={dem ? so(dem) : dem} onChange={(e) => setDem(soTien(e.target.value))} placeholder="Đếm hết rồi nhập" /></label>
       <ChupAnh path={anh} dang={dangAnh} onChon={chonAnh} chu="Chụp ảnh két tiền (bắt buộc)" />
       <h4 className="kc-tieu">Đếm nhanh bánh trên kệ</h4>
@@ -864,7 +960,7 @@ export function KetCaThat({ caMo, chiNhanh, matHang = [], onDong, onKet }) {
               ))}
             </div>
           )}
-      <label className="bhq-nhan">Ghi chú (nếu có chi tiền lẻ, đổi tiền…)<input className="bhq-o" value={ghi} onChange={(e) => setGhi(e.target.value)} /></label>
+      <label className="bhq-nhan">Ghi chú (đổi tiền, giao ca…). Có chi tiền thì ghi ở mục "Chi tiền từ két" (menu Khác) để máy trừ.<input className="bhq-o" value={ghi} onChange={(e) => setGhi(e.target.value)} /></label>
       <p className="bhq-ghi">Đếm thật rồi nhập — máy chỉ hiện số hệ thống SAU khi kết ca. Kết rồi không mở lại được.</p>
       <Loi chu={loi} />
     </HopT>

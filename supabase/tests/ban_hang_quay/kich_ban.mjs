@@ -437,4 +437,57 @@ if (await v(`select count(*)::int from pg_proc where proname='pos_them_hang'`)) 
     await ok('Chạy lại lần 2 không tạo phiếu mới', ()=>v(`select count(*)::int from pos_stock_docs where doc_type='kiem_kho'`),kk2);
   }
 }
+// ── 202611181020: phiếu chi tiền từ két + khai đã chi lúc vào ca ──
+if (await v(`select count(*)::int from pg_proc where proname='pos_chi_ket'`)) {
+  const Q='Quầy thử chi', NV6='00000000-0000-0000-0000-0000000000aa', NV7='00000000-0000-0000-0000-0000000000ab';
+  await db.exec(`insert into pos_settings(store_location) values ('${Q}') on conflict do nothing; update pos_settings set bat_cham_cong=false where store_location='${Q}'`);
+  await q(`insert into profiles values ('${NV6}','Thu ngân F','sale','{}',true,true),('${NV7}','Thu ngân G','sale','{}',true,true) on conflict do nothing`);
+  const vao=(tien,ly)=>q(`select public.pos_vao_ca_v2('${Q}',${tien},'k.jpg',${ly?`'${ly}'`:'null'}) r`).then((r)=>r[0].r);
+  const sl=(ca)=>v(`select public.pos__so_lieu_ca('${ca}')`);
+  const ket=(ca,tien)=>q(`select public.pos_ket_ca('${ca}',${tien},null,'k.jpg','[]'::jsonb) r`).then((r)=>r[0].r);
+  const chi=(ca,tien,ly,pid=id())=>q(`select public.pos_chi_ket('${pid}','${ca}',${tien},${ly==null?'null':`'${ly}'`}) r`).then((r)=>r[0].r);
+  await as(NV6);
+  const c1=await vao(1000000);
+  await ok('Ca đầu tiên (chưa có ca trước): két = số nhập', ()=>Number(c1.opening_cash),1000000);
+  const pid=id();
+  const p1=await chi(c1.id,200000,'mua đá viên',pid);
+  await ok('Ghi phiếu chi trong ca → mã PC…', ()=>[/^PC\d{6}$/.test(p1.code), Number(p1.amount), p1.truoc_ca],[true,200000,false]);
+  await ok('Gửi lại cùng mã (mất mạng / bấm 2 lần) không ghi trùng', async()=>{await chi(c1.id,200000,'mua đá viên',pid); return v(`select count(*)::int from pos_cash_outs where shift_id='${c1.id}'`);},1);
+  await ok('Số liệu ca trừ tiền chi', async()=>{const x=await sl(c1.id); return [Number(x.chi_ket), Number(x.tien_mat_trong_ca), x.so_phieu_chi];},[200000,-200000,1]);
+  await ok('Báo Giám đốc khi chi', ()=>v(`select count(*)::int from notifications where event_key like 'pos-chi-ket:${p1.id}%'`),1);
+  await chan('Thiếu lý do bị chặn', ()=>chi(c1.id,1000,'  '),'Ghi rõ');
+  await chan('Số tiền 0 bị chặn', ()=>chi(c1.id,0,'abc'),'không hợp lệ');
+  await as(NV7);
+  await chan('Nhân viên khác KHÔNG ghi chi vào ca người khác', ()=>chi(c1.id,1000,'lấy tiền'),'chỉ người đang giữ ca');
+  await chan('Nhân viên khác KHÔNG huỷ phiếu chi người khác', ()=>q(`select public.pos_huy_chi_ket('${p1.id}','nhầm')`),'Chỉ người ghi');
+  await as(QL);
+  const pql=await chi(c1.id,50000,'Quản lý lấy tiền lẻ đổi');
+  await ok('Quản lý ghi chi vào ca nhân viên được', ()=>Number(pql.amount),50000);
+  await as(NV6);
+  await chan('Huỷ phải có lý do', ()=>q(`select public.pos_huy_chi_ket('${p1.id}','')`),'lý do');
+  await ok('Người ghi huỷ phiếu chi của mình', async()=>(await q(`select public.pos_huy_chi_ket('${p1.id}','ghi nhầm số') r`))[0].r.status,'huy');
+  await ok('Phiếu huỷ không còn trừ tiền', async()=>Number((await sl(c1.id)).chi_ket),50000);
+  await chi(c1.id,150000,'trả tiền ship bánh');
+  const k1=await ket(c1.id,800000);
+  await ok('Kết ca: két phải có = đầu ca − tiền chi, đếm đúng → lệch 0', ()=>[Number(k1.expected_cash), Number(k1.diff)],[800000,0]);
+  await chan('Ca kết rồi không ghi chi được', ()=>chi(c1.id,1000,'abc'),'đã kết');
+  await chan('Ca kết rồi không huỷ phiếu chi được', ()=>q(`select public.pos_huy_chi_ket('${pql.id}','x')`),'Ca đã kết');
+  // Vào ca két ít hơn ca trước + khai đã chi (đúng lỗi thật 18/11)
+  await as(NV7);
+  const c2=await vao(500000,'chi tiền mua bột lúc sáng');
+  await ok('Vào ca khai đã chi: két tính theo ca trước, tạo phiếu chi "trước ca" đúng phần thiếu', async()=>{const x=await sl(c2.id); return [Number(c2.opening_cash), Number(c2.opening_cash_entered), Number(x.chi_ket), x.phieu_chi[0].truoc_ca, c2.chi_truoc_ca?.reason];},[800000,500000,300000,true,'chi tiền mua bột lúc sáng']);
+  await ok('Không báo "nhập THIẾU" (đã có phiếu chi giải thích), chỉ báo chi', async()=>[await v(`select count(*)::int from notifications where event_key like 'pos-dau-ca:${c2.id}%'`), await v(`select count(*)::int from notifications where event_key like 'pos-chi-ket:%' and body like '%khai lúc vào ca%'`)>0],[0,true]);
+  const k2=await ket(c2.id,500000);
+  await ok('Kết ca đếm đúng số thật → lệch 0 (không đổ thiếu lên người vào ca)', ()=>[Number(k2.expected_cash), Number(k2.diff)],[500000,0]);
+  // Không khai lý do → như cũ
+  await as(NV6);
+  const c3=(await q(`select public.pos_vao_ca('${Q}',400000,'k.jpg') r`))[0].r;
+  await ok('Bản cũ pos_vao_ca vẫn chạy, không khai → két theo ca trước, không phiếu chi, có báo nhập THIẾU', async()=>[Number(c3.opening_cash), await v(`select count(*)::int from pos_cash_outs where shift_id='${c3.id}'`), await v(`select count(*)::int from notifications where event_key like 'pos-dau-ca:${c3.id}%'`)>0],[500000,0,true]);
+  await ket(c3.id,500000);
+  const c4=await vao(700000,'thêm tiền lẻ');
+  await ok('Két NHIỀU hơn ca trước: lý do không tạo phiếu chi, vẫn báo nhập DƯ', async()=>[Number(c4.opening_cash), await v(`select count(*)::int from pos_cash_outs where shift_id='${c4.id}'`), await v(`select title from notifications where event_key like 'pos-dau-ca:${c4.id}%' limit 1`)],[500000,0,'⚠️ Tiền đầu ca nhập DƯ 200,000đ — Quầy thử chi']);
+  await ket(c4.id,500000);
+  await chan('Khai lý do quá ngắn bị chặn', ()=>vao(100000,'x'),'Ghi rõ');
+  await ok('Không ai gọi thẳng hàm ghi phiếu nội bộ', ()=>v(`select has_function_privilege('authenticated','public.pos__ghi_chi_ket(uuid,public.pos_shifts,numeric,text,text,boolean)','execute')`),false);
+}
 console.log(`\n${dem-loi}/${dem} đạt`); process.exit(loi?1:0);

@@ -1318,3 +1318,18 @@ button.bcn-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chon-quay-o svg{position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none;color:#7A4A00}
 .bhq-nhan.chon-quay small{font-weight:400;font-size:12px}
 .chon-quay-o select.bhq-o.lon{font-size:20px}
+.mc-chi{background:#FFF4F4;border:1.5px solid #F3B4B6;border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;margin:4px 0}
+.mc-chi p{margin:0;font-size:14px;color:#7A1F22;line-height:1.4}
+.mc-chi textarea.bhq-o,.bhq-nhan textarea.bhq-o{min-height:64px;padding:10px 12px;font:inherit;font-size:15px;resize:vertical}
+.mc-chi small{font-size:12px;color:#677484}
+.pc-ds{display:flex;flex-direction:column;gap:8px}
+.pc-dong{border:1px solid #e3e6ea;border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:4px;font-size:14px}
+.pc-dong .r{display:flex;justify-content:space-between;gap:8px}
+.pc-dong .mo{color:#677484;font-size:13px}
+.pc-dong.huy{opacity:.6}
+.pc-dong.huy .r b:first-child{text-decoration:line-through}
+.pc-dong .do,.bhq-bang .do{color:var(--do)}
+.pc-nut-huy{align-self:flex-start;min-height:36px;border:0;background:none;color:var(--do);font:inherit;font-size:13px;font-weight:600;padding:0;cursor:pointer}
+.pc-huy{display:flex;gap:6px;flex-wrap:wrap}
+.pc-huy .bhq-o{flex:1 1 180px}
+.pc-huy .bhq-nut.phu.do{color:var(--do);border-color:currentColor}

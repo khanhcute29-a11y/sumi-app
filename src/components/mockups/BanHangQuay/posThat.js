@@ -43,6 +43,21 @@ export const suaHangQuay = ({ pid, ten, nhom, gia, maVach }) => goi('pos_sua_han
   { p_id: pid, p_ten: ten, p_nhom: nhom || null, p_gia: Number(gia) || 0, p_ma_vach: maVach || null });
 export const xoaHangQuay = (pid) => goi('pos_an_hang', { p_id: pid, p_an: true });
 
+// Vào ca (migration 202611181020): khai "đã chi trước khi vào ca" khi két ít hơn ca trước.
+// Database chưa chạy SQL mới → dùng hàm cũ (vẫn vào ca được, chỉ chưa ghi được lý do).
+export async function vaoCa({ store, tien, anh, lyDoChi }) {
+  try {
+    return await goi('pos_vao_ca_v2', { p_store: store, p_opening_cash: Number(tien) || 0, p_photo_url: anh, p_ly_do_chi: lyDoChi || null });
+  } catch (e) {
+    if (!/pos_vao_ca_v2|schema cache|Could not find the function/i.test(String(e?.message || ''))) throw e;
+    return goi('pos_vao_ca', { p_store: store, p_opening_cash: Number(tien) || 0, p_photo_url: anh });
+  }
+}
+// Phiếu chi tiền từ két — p_id tạo trước để bấm 2 lần không ghi trùng.
+export const chiKet = ({ id, caId, tien, lyDo, anh }) => goi('pos_chi_ket',
+  { p_id: id, p_shift: caId, p_amount: Number(tien) || 0, p_reason: lyDo, p_photo_url: anh || null });
+export const huyChiKet = (id, lyDo) => goi('pos_huy_chi_ket', { p_id: id, p_reason: lyDo });
+
 // ── Bật chạy thật? Cờ pos_ban_hang_that bật (hoặc tài khoản nằm trong danh sách thử) + đã đăng nhập + tài khoản đã duyệt.
 export async function kiemTraThat() {
   const { data: s } = await supabase.auth.getSession();

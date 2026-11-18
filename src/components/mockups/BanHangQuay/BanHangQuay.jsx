@@ -5,7 +5,7 @@ import {
   List, Menu, Minus, Pencil, PersonStanding, Plus, Printer, ReceiptText, Repeat, ScanBarcode, Search, ShoppingBag, Tag,
   Trash2, User, X, Zap, Copy, LayoutGrid, Save, SquarePen, CircleUser, Warehouse, Share2, ClipboardCheck, Package, House,
   Eye, EyeOff, Mail, ChartArea, FileText, FileClock, ArrowDownUp, Box, Ellipsis, PackageMinus, Bell, Truck, Users, ShoppingCart, Download,
-  ListFilter, ChartColumn, Maximize2, Minimize2, Settings, Info, ChevronUp, CircleCheck, ListChecks, RefreshCw,
+  ListFilter, ChartColumn, Maximize2, Minimize2, Settings, Info, ChevronUp, CircleCheck, ListChecks, RefreshCw, Banknote,
 } from 'lucide-react';
 
 // Rời máy bán hàng, quay về trang chủ app Sumi (nút "Bán tại quầy" ở màn Hôm nay mở vào đây).
@@ -20,7 +20,7 @@ import {
   LOAI_LEN_DB, phieuTuDb, lapBanDoHang, congNoTuDb, taiAnh, docAnhBan, taiAnhDaNen,
 } from './posThat';
 import {
-  HopT, MoCa, XinDuyet, ViecCho, QrChuyenKhoan, ThietLapQuay, DatCoc, LayBanhDat, NhanHang, ChupAnh, NhatKy, BaoCaoThat, KetCaThat, DoanhSoNv, XepHang, BaoCaoCuoiNgay, HangQuay, ChonQuay,
+  HopT, MoCa, XinDuyet, ViecCho, QrChuyenKhoan, ThietLapQuay, DatCoc, LayBanhDat, NhanHang, ChupAnh, NhatKy, BaoCaoThat, KetCaThat, DoanhSoNv, XepHang, BaoCaoCuoiNgay, HangQuay, ChonQuay, ChiKet,
 } from './QuayThat';
 import './ban-hang-quay.css';
 
@@ -740,6 +740,7 @@ export default function BanHangQuay() {
     (quanLy || laKT) && ['viec_cho', `Việc chờ${soViec ? ` (${soViec})` : ''}`, Bell],
     ['dat_coc', 'Đặt bánh · lấy cọc', ShoppingCart],
     ['lay_banh', 'Khách lấy bánh đặt', Package],
+    caMo && (quanLy || caMo.opened_by === that.uid) && ['chi_ket', 'Chi tiền từ két', Banknote],
     xemQl && !laGD && ['bao_cao', 'Báo cáo', ChartColumn],
     xemQl && ['nhat_ky', 'Nhật ký thao tác', FileClock],
     ((quanLy && !xemNV) || laKT) && ['doanh_so_nv', 'Doanh số nhân viên', ChartColumn],
@@ -1107,6 +1108,7 @@ export default function BanHangQuay() {
         <ViecCho viec={viec} cap={that.cap} laKT={laKT} onDong={() => setHop(null)}
           onTaiLai={async () => { const v = await taiViecCho(that.cap, laKT).catch(() => null); if (v) setViec(v); napThat(); }} />
       )}
+      {hop?.loai === 'chi_ket' && that && caMo && <ChiKet caMo={caMo} laQl={quanLy} uid={that.uid} onDong={() => setHop(null)} onXong={(m) => nhan(m)} />}
       {hop?.loai === 'thiet_lap_quay' && that && <ThietLapQuay chiNhanh={chiNhanh} caiDat={cd} matHang={matHang} bangGia={bangGia} hanDung={hanDung} onLuu={() => napThat()} onDong={() => setHop(null)} />}
       {hop?.loai === 'dat_coc' && that && (
         <DatCoc hd={hd} tong={tong} chiNhanh={chiNhanh} oKhach={oKhach} onDong={() => setHop(null)}
@@ -3483,6 +3485,7 @@ function NoiDungBanGiao({ p }) {
       <b>Thu nợ</b>{r('Tiền mặt', p.thu.tien_mat)}{r('Chuyển khoản', p.thu.chuyen_khoan)}
       {p.donDat && (Number(p.donDat.tien_mat) || Number(p.donDat.chuyen_khoan)) ? <><b>Đơn đặt (cọc + lấy bánh)</b>{r('Tiền mặt', p.donDat.tien_mat)}{r('Chuyển khoản', p.donDat.chuyen_khoan)}</> : null}
       {p.hoanTien ? r('Trả lại khách (huỷ HĐ ca trước)', -p.hoanTien) : null}
+      {p.chiKet ? <><b>Chi từ két</b>{(p.phieuChi || []).map((c) => <div key={c.code} className="bl-h"><span>{c.code} {c.ly_do}</span><span>{so(-c.so_tien)}</span></div>)}{r('Tổng chi', -p.chiKet)}</> : null}
       <hr />
       {r('Tiền mặt đầu ca', p.dauCa)}{r('Tiền mặt trong ca', p.tienMatTrongCa)}{r('Tiền mặt cuối ca', p.cuoiCa)}{r('Bàn giao thực tế', p.banGiao)}
       <div className="bl-h bl-to"><span>Chênh lệch</span><span>{p.chenh > 0 ? '+' : ''}{so(p.chenh)}</span></div>
