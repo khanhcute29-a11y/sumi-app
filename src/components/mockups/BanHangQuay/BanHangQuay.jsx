@@ -871,7 +871,7 @@ export default function BanHangQuay() {
                         </button>
                       </li>
                     ))}
-                    {!monLoc.length && <li className="kv-rong">Đang tải hàng hóa…</li>}
+                    {!monLoc.length && <li className="kv-rong">{nguonDl === '…' ? 'Đang tải hàng hóa…' : 'Quầy chưa có hàng hóa. Bấm + để thêm món mới.'}</li>}
                   </ul>
                   <div className="kv-phai-chan">
                     <span className="kv-trang">
@@ -907,7 +907,7 @@ export default function BanHangQuay() {
           onHuy={() => setHop({ loai: 'huy_hd', hoaDon: h })} onChiaSe={() => chiaSe(h)} onSaoChep={() => saoChepHd(h)} /> : null;
       })()}
       {manHinh === 'ban' && dienThoai && dtMan !== 'xong' && (
-        <DienThoai dtMan={dtMan} setDtMan={setDtMan} hd={hd} tong={tong} monLoc={monLoc} ton={ton} slTrongGio={slTrongGio}
+        <DienThoai dangTai={nguonDl === '…'} dtMan={dtMan} setDtMan={setDtMan} hd={hd} tong={tong} monLoc={monLoc} ton={ton} slTrongGio={slTrongGio}
           chips={chips} locMo={locMo} setLocMo={setLocMo} themMon={themMon} datSl={datSl} boDong={boDong} sua={sua}
           boChon={() => sua({ dong: [], dua: null })} luuTam={() => { themHd(); setDtMan('chon'); nhan(`Đã lưu tạm Hóa đơn ${hd.so}`); }}
           khachNo={khachNo} chonKhach={() => setHop({ loai: 'chon_khach_dt' })} onThuKhac={() => setHop({ loai: 'thu_khac' })}
@@ -1429,7 +1429,7 @@ function KhungThanhToan({ hd, tong, bayGio, nguoiBanDs, khachNo, duaRef, onSua, 
 // đáy "Bỏ chọn | Xong (n)" → (2) giỏ: "× Bán hàng", Khách lẻ ›, Bảng giá chung ›, đáy
 // "Tổng tiền hàng (n)" + "Lưu tạm | Thanh toán" → (3) "‹ Thanh toán" … "Hoàn thành".
 function DienThoai({
-  dtMan, setDtMan, hd, tong, monLoc, ton, slTrongGio, chips, locMo, setLocMo, themMon, datSl, boDong, sua, boChon, luuTam,
+  dangTai = false, dtMan, setDtMan, hd, tong, monLoc, ton, slTrongGio, chips, locMo, setLocMo, themMon, datSl, boDong, sua, boChon, luuTam,
   khachNo, chonKhach, onThuKhac, inTamTinh, chiaSeTamTinh, hoanTat, soHd, onSuaDong, onMoHd, onMenu, onDatHang, onThemHang, onThongTin, hds, onChonHd,
   ext = null, giaCua = (m) => m.gia,
 }) {
@@ -1613,7 +1613,7 @@ function DienThoai({
               </div>
             );
           })}
-          {!ds.length && <p className="kv-rong">{monLoc.length ? 'Không tìm thấy hàng hóa phù hợp' : 'Đang tải hàng hóa…'}</p>}
+          {!ds.length && <p className="kv-rong">{monLoc.length ? 'Không tìm thấy hàng hóa phù hợp' : dangTai ? 'Đang tải hàng hóa…' : 'Quầy chưa có hàng hóa. Bấm + ở trên để thêm món mới.'}</p>}
         </div>
       </div>
       {!hd.dong.length && (
@@ -1877,11 +1877,11 @@ function PhanTrang({ trang, soDong, setTrang, donVi }) {
   );
 }
 
-function KhongCo({ chu }) {
+function KhongCo({ chu, tieuDe = 'Không tìm thấy kết quả' }) {
   return (
     <div className="kq-rong">
       <span className="hop"><ReceiptText size={34} /></span>
-      <b>Không tìm thấy kết quả</b>
+      <b>{tieuDe}</b>
       <span>{chu}</span>
     </div>
   );
@@ -2023,7 +2023,7 @@ function QlHangHoa({ matHang, tonCN, chiNhanh, theKho, dienThoai, laGD, that = f
                 ))}
               </tbody>
             </table>
-            {!ds.length && <KhongCo chu="Không tìm thấy hàng hóa nào phù hợp." />}
+            {!ds.length && <KhongCo tieuDe={matHang.length ? undefined : 'Quầy chưa có hàng hóa'} chu={matHang.length ? 'Không tìm thấy hàng hóa nào phù hợp.' : 'Bấm + để thêm món mới.'} />}
           </div>
           <PhanTrang trang={tr} soDong={ds.length} setTrang={setTrang} donVi="hàng hóa" />
         </section>
@@ -2155,7 +2155,7 @@ function HangHoaDt({ laGD, that = false, matHang, ds, ton, tonCN, chiNhanh, theK
           </button>
         ))}
         {hien.length > soHien && <div ref={cuoiRef} className="kvm-tai-them">Đang tải thêm…</div>}
-        {!ds.length && <KhongCo chu="Không tìm thấy hàng hóa nào phù hợp." />}
+        {!ds.length && <KhongCo tieuDe={matHang.length ? undefined : 'Quầy chưa có hàng hóa'} chu={matHang.length ? 'Không tìm thấy hàng hóa nào phù hợp.' : 'Bấm + để thêm món mới.'} />}
       </section>
       <button type="button" className="kvm-fab" aria-label="Thêm hàng hoá mới" onClick={onThem}><Plus size={28} /></button>
     </main>
