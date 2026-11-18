@@ -76,7 +76,21 @@ export function HangQuay({ cu, dsNhom, onDong, onXong }) {
 
 // ── Vào ca: mỗi nhân viên vào ca bằng tài khoản của mình — đếm tiền két + chụp ảnh két ──
 // Database chặn: ca người khác đang mở, chưa chấm công (nếu Giám đốc bật), thiếu ảnh.
-export function MoCa({ chiNhanh, nguoi, onMo, onVeApp, onDong, onTaiLai }) {
+// Chọn quầy ngay trong hộp Vào ca: app nhớ quầy theo từng máy, nhưng vẫn cho đổi trước khi vào ca
+// (bán ở Quốc Lộ 13 mà quên đổi thì cả ca, két, tồn sẽ ghi nhầm sang quầy khác).
+export function ChonQuay({ chiNhanh, dsQuay, onDoi }) {
+  if (!onDoi || !dsQuay?.length) return null;
+  return (
+    <label className="bhq-nhan chon-quay">Quầy đang bán
+      <span className="chon-quay-o"><select className="bhq-o lon" value={chiNhanh} onChange={(e) => onDoi(e.target.value)} aria-label="Quầy đang bán">
+        {dsQuay.map((c) => <option key={c} value={c}>{c}</option>)}
+      </select><ChevronDown size={20} /></span>
+      <small>Đúng quầy mình đang đứng chưa? Sai thì chọn lại ở đây.</small>
+    </label>
+  );
+}
+
+export function MoCa({ chiNhanh, dsQuay, onDoiChiNhanh, nguoi, onMo, onVeApp, onDong, onTaiLai }) {
   const [tien, setTien] = useState('');
   const [anh, setAnh] = useState(null);
   const [dangAnh, setDangAnh] = useState(false);
@@ -86,6 +100,7 @@ export function MoCa({ chiNhanh, nguoi, onMo, onVeApp, onDong, onTaiLai }) {
   const [truoc, setTruoc] = useState(null);
   useEffect(() => {
     let huy = false;
+    setTruoc(null); setTien(''); setLoi(''); // đổi quầy → két ca trước là của quầy khác
     goi('pos_tien_dau_ca', { p_store: chiNhanh }).then((r) => {
       if (huy || !r?.co) return;
       setTruoc(r); setTien((t) => (t === '' ? String(Math.round(Number(r.so) || 0)) : t));
@@ -110,6 +125,7 @@ export function MoCa({ chiNhanh, nguoi, onMo, onVeApp, onDong, onTaiLai }) {
   return (
     <HopT tieuDe={`Vào ca · ${chiNhanh}`} onDong={onDong}
       chan={<><button type="button" className="bhq-nut phu" onClick={onVeApp}>Về app Sumi</button><button type="button" className="bhq-nut chinh" disabled={dang || dangAnh} onClick={mo}>{dang ? 'Đang vào ca…' : 'Vào ca · bắt đầu bán'}</button></>}>
+      <ChonQuay chiNhanh={chiNhanh} dsQuay={dsQuay} onDoi={dang ? null : onDoiChiNhanh} />
       <p className="bhq-ghi">Chào {nguoi}. Đếm lại tiền trong két, chụp 1 ảnh két tiền. Mọi hoá đơn trong ca tính doanh số cho bạn.</p>
       {truoc && <p className="bhq-ghi">Ca trước <b>{truoc.ca}</b>{truoc.ten ? ` (${truoc.ten})` : ''} kết ca lúc {ngayGio(truoc.luc)}, két còn <b>{so(truoc.so)}</b>. Máy tính két ca này theo số đó.</p>}
       {lech !== 0 && <p className="kv-loi" role="alert">Bạn nhập {lech > 0 ? 'nhiều' : 'ít'} hơn ca trước {so(Math.abs(lech))}. Vẫn vào ca được, nhưng máy giữ số ca trước và báo Giám đốc kiểm ảnh két.</p>}

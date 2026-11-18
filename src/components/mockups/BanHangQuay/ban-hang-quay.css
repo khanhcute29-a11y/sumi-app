@@ -1312,3 +1312,9 @@ button.bcn-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (max-width:420px){.bhq-hop-chan:has(.bhq-nut.phu.do){flex-wrap:wrap}.bhq-hop-chan .bhq-nut.phu.do{flex:1 0 100%;margin-right:0}}
 .kvm-sua-hang{width:100%;margin-top:12px;display:flex;align-items:center;justify-content:center;gap:6px}
 .kq-ct-chan .bhq-nut{display:inline-flex;align-items:center;gap:6px;min-height:40px}
+.bhq-nhan.chon-quay{background:#FFF6E5;border:1.5px solid #F2C46D;border-radius:10px;padding:10px 12px;color:#7A4A00;font-weight:700}
+.chon-quay-o{position:relative;display:block}
+.chon-quay-o select.bhq-o{appearance:none;-webkit-appearance:none;width:100%;min-height:48px;padding-right:44px;background:#fff;font-weight:700;color:#15171A}
+.chon-quay-o svg{position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none;color:#7A4A00}
+.bhq-nhan.chon-quay small{font-weight:400;font-size:12px}
+.chon-quay-o select.bhq-o.lon{font-size:20px}

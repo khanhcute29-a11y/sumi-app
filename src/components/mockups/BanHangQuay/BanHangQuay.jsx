@@ -20,7 +20,7 @@ import {
   LOAI_LEN_DB, phieuTuDb, lapBanDoHang, congNoTuDb, taiAnh, docAnhBan, taiAnhDaNen,
 } from './posThat';
 import {
-  HopT, MoCa, XinDuyet, ViecCho, QrChuyenKhoan, ThietLapQuay, DatCoc, LayBanhDat, NhanHang, ChupAnh, NhatKy, BaoCaoThat, KetCaThat, DoanhSoNv, XepHang, BaoCaoCuoiNgay, HangQuay,
+  HopT, MoCa, XinDuyet, ViecCho, QrChuyenKhoan, ThietLapQuay, DatCoc, LayBanhDat, NhanHang, ChupAnh, NhatKy, BaoCaoThat, KetCaThat, DoanhSoNv, XepHang, BaoCaoCuoiNgay, HangQuay, ChonQuay,
 } from './QuayThat';
 import './ban-hang-quay.css';
 
@@ -83,7 +83,9 @@ export default function BanHangQuay() {
   const [matHang, setMatHang] = useState([]);
   const [khachDs, setKhachDs] = useState(KHACH_MAU);
   const [nguonDl, setNguonDl] = useState('…');
-  const [chiNhanh, setChiNhanh] = useState(CHI_NHANH[0]);
+  // Nhớ quầy theo từng máy (mỗi quầy thường dùng máy riêng) — mở app lần sau vẫn đúng quầy, không nhảy về Vĩnh Phú 42.
+  const [chiNhanh, setChiNhanh] = useState(() => { const c = docLuu('bhq-chi-nhanh', ''); return CHI_NHANH.includes(c) ? c : CHI_NHANH[0]; });
+  useEffect(() => { ghiLuu('bhq-chi-nhanh', chiNhanh); }, [chiNhanh]);
   const [manHinh, setManHinh] = useState('ban');
   const [cheDo, setCheDo] = useState(() => docLuu('bhq-che-do', 'thuong'));
   const [inTuDong, setInTuDong] = useState(() => docLuu('bhq-in-tu-dong', '1') === '1');
@@ -1082,6 +1084,7 @@ export default function BanHangQuay() {
       {caNguoiKhac && manHinh === 'ban' && !hop && !form && (
         <HopT tieuDe={`Ca của ${caMo.opened_by_name || 'người khác'} đang mở`} onDong={() => moManHinh('ls')}
           chan={<><button type="button" className="bhq-nut phu" onClick={veApp}>Về app Sumi</button><button type="button" className="bhq-nut chinh" onClick={() => napThat()}>Tải lại</button></>}>
+          <ChonQuay chiNhanh={chiNhanh} dsQuay={CHI_NHANH} onDoi={setChiNhanh} />
           <p className="bhq-ghi">{chiNhanh} đang có ca {caMo.code} của <b>{caMo.opened_by_name}</b> (vào lúc {gio(new Date(caMo.opened_at).getTime())}).
             Mỗi người bán bằng ca của chính mình để doanh số tính đúng người — nhờ {caMo.opened_by_name} kết ca trước, rồi bấm Tải lại để vào ca của bạn.</p>
         </HopT>
@@ -1089,7 +1092,7 @@ export default function BanHangQuay() {
       {hop?.loai === 'doanh_so_nv' && that && <DoanhSoNv dsCuaHang={CHI_NHANH} duocLoai={quanLy} onDong={() => setHop(null)} />}
       {hop?.loai === 'xep_hang' && that && <XepHang onDong={() => setHop(null)} />}
       {that && !caMo && manHinh === 'ban' && !hop && !form && !banKhongCa && (
-        <MoCa chiNhanh={chiNhanh} nguoi={nguoi} onVeApp={veApp} onDong={() => moManHinh('ls')} onTaiLai={() => napThat()}
+        <MoCa chiNhanh={chiNhanh} dsQuay={CHI_NHANH} onDoiChiNhanh={setChiNhanh} nguoi={nguoi} onVeApp={veApp} onDong={() => moManHinh('ls')} onTaiLai={() => napThat()}
           onMo={(row) => { setCaMoDs((x) => ({ ...x, [chiNhanh]: row })); nhan(`Đã vào ca ${row.code} · đầu ca ${so(row.opening_cash)}`); }} />
       )}
       {hop?.loai === 'xin_duyet' && (
