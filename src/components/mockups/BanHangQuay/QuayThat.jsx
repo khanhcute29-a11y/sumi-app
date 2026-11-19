@@ -90,6 +90,20 @@ export function ChonQuay({ chiNhanh, dsQuay, onDoi }) {
   );
 }
 
+// Bản nháp "Vào ca" giữ trên máy: nhân viên nhập tiền + chụp ảnh rồi lỡ thoát ra (hoặc điện thoại yếu tự tải lại
+// app lúc mở camera) thì mở lại vẫn còn, chỉ việc bấm Vào ca. Giữ 8 giờ, theo từng quầy.
+const KHOA_NHAP_CA = 'bhq-nhap-vao-ca';
+function docNhapCa(store) {
+  try {
+    const d = JSON.parse(localStorage.getItem(KHOA_NHAP_CA) || 'null');
+    if (d && d.store === store && Date.now() - Number(d.luc || 0) < 8 * 3600000) return d;
+  } catch { /* trình duyệt chặn bộ nhớ: bỏ qua */ }
+  return null;
+}
+function ghiNhapCa(d) {
+  try { if (d) localStorage.setItem(KHOA_NHAP_CA, JSON.stringify({ ...d, luc: Date.now() })); else localStorage.removeItem(KHOA_NHAP_CA); } catch { /* bỏ qua */ }
+}
+
 export function MoCa({ chiNhanh, dsQuay, onDoiChiNhanh, nguoi, onMo, onVeApp, onDong, onTaiLai }) {
   const [tien, setTien] = useState('');
   const [lyDoChi, setLyDoChi] = useState(''); // két ít hơn ca trước vì đã chi tiền ra — ghi rõ chi gì
@@ -99,9 +113,16 @@ export function MoCa({ chiNhanh, dsQuay, onDoiChiNhanh, nguoi, onMo, onVeApp, on
   const [loi, setLoi] = useState('');
   // Két ca trước đã đếm — máy tính két theo số này (chống gõ khống tiền đầu ca để rút két).
   const [truoc, setTruoc] = useState(null);
+  const [hoiRoi, setHoiRoi] = useState(false); // đã nhập mà chưa bấm Vào ca, lại bấm thoát → nhắc 1 lần
+  const nhap = useRef({});
+  const oLoi = useRef(null);
+  const luuNhap = (p) => { nhap.current = { ...nhap.current, ...p, store: chiNhanh }; ghiNhapCa(nhap.current); setHoiRoi(false); };
+  useEffect(() => { if (loi) oLoi.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, [loi]);
   useEffect(() => {
     let huy = false;
-    setTruoc(null); setTien(''); setLoi(''); setLyDoChi(''); // đổi quầy → két ca trước là của quầy khác
+    const nh = docNhapCa(chiNhanh); // đổi quầy → két ca trước là của quầy khác; lấy lại bản nháp của quầy này nếu có
+    nhap.current = nh || { store: chiNhanh };
+    setTruoc(null); setTien(nh?.tien ?? ''); setAnh(nh?.anh || null); setLoi(''); setLyDoChi(nh?.lyDo || ''); setHoiRoi(false);
     goi('pos_tien_dau_ca', { p_store: chiNhanh }).then((r) => {
       if (huy || !r?.co) return;
       setTruoc(r); setTien((t) => (t === '' ? String(Math.round(Number(r.so) || 0)) : t));
@@ -111,8 +132,13 @@ export function MoCa({ chiNhanh, dsQuay, onDoiChiNhanh, nguoi, onMo, onVeApp, on
   const lech = truoc && tien !== '' ? Number(tien) - Number(truoc.so) : 0;
   const chonAnh = async (f) => {
     setDangAnh(true); setLoi('');
-    try { setAnh(await taiAnh(f, 'ket')); } catch (e) { setLoi(`Không tải được ảnh: ${chuLoi(e)}`); }
+    try { const a = await taiAnh(f, 'ket'); setAnh(a); luuNhap({ anh: a }); } catch (e) { setLoi(`Không tải được ảnh: ${chuLoi(e)}`); }
     setDangAnh(false);
+  };
+  // Thoát khi đã nhập mà chưa vào ca: nhắc 1 lần (bấm lần nữa mới thoát) — số tiền + ảnh vẫn giữ lại.
+  const roi = (fn) => () => {
+    if (!dang && (tien !== '' || anh) && !hoiRoi) { setHoiRoi(true); return; }
+    fn?.();
   };
   const mo = async () => {
     if (tien === '') { setLoi('Nhập số tiền mặt đang có trong két'); return; }
@@ -120,14 +146,14 @@ export function MoCa({ chiNhanh, dsQuay, onDoiChiNhanh, nguoi, onMo, onVeApp, on
     const ly = lech < 0 ? lyDoChi.trim() : '';
     if (ly && ly.length < 3) { setLoi('Ghi rõ đã chi tiền làm gì (ít nhất vài chữ)'); return; }
     setDang(true); setLoi('');
-    try { onMo(await vaoCa({ store: chiNhanh, tien, anh, lyDoChi: ly })); } catch (e) {
+    try { const r = await vaoCa({ store: chiNhanh, tien, anh, lyDoChi: ly }); ghiNhapCa(null); onMo(r); } catch (e) {
       const m = chuLoi(e); setLoi(m); setDang(false);
       if (/đang mở/.test(m)) onTaiLai?.(); // người khác vừa vào ca ở máy khác → tải lại để hiện ca của họ
     }
   };
   return (
-    <HopT tieuDe={`Vào ca · ${chiNhanh}`} onDong={onDong}
-      chan={<><button type="button" className="bhq-nut phu" onClick={onVeApp}>Về app Sumi</button><button type="button" className="bhq-nut chinh" disabled={dang || dangAnh} onClick={mo}>{dang ? 'Đang vào ca…' : 'Vào ca · bắt đầu bán'}</button></>}>
+    <HopT tieuDe={`Vào ca · ${chiNhanh}`} onDong={roi(onDong)}
+      chan={<><button type="button" className="bhq-nut phu" onClick={roi(onVeApp)}>{hoiRoi ? 'Vẫn thoát' : 'Về app Sumi'}</button><button type="button" className="bhq-nut chinh" disabled={dang || dangAnh} onClick={mo}>{dang ? 'Đang vào ca…' : 'Vào ca · bắt đầu bán'}</button></>}>
       <ChonQuay chiNhanh={chiNhanh} dsQuay={dsQuay} onDoi={dang ? null : onDoiChiNhanh} />
       <p className="bhq-ghi">Chào {nguoi}. Đếm lại tiền trong két, chụp 1 ảnh két tiền. Mọi hoá đơn trong ca tính doanh số cho bạn.</p>
       {truoc && <p className="bhq-ghi">Ca trước <b>{truoc.ca}</b>{truoc.ten ? ` (${truoc.ten})` : ''} kết ca lúc {ngayGio(truoc.luc)}, két còn <b>{so(truoc.so)}</b>. Máy tính két ca này theo số đó.</p>}
@@ -135,14 +161,15 @@ export function MoCa({ chiNhanh, dsQuay, onDoiChiNhanh, nguoi, onMo, onVeApp, on
       {lech < 0 && (
         <div className="mc-chi">
           <p><b>Két ít hơn ca trước {so(-lech)}.</b> Vẫn vào ca được. Nếu có người đã <b>chi tiền ra</b> lúc chưa ai vào ca (mua đồ, trả tiền ship…), ghi rõ ở đây — máy ghi thành phiếu chi {so(-lech)}, két ca bạn tính đúng {so(tien)}.</p>
-          <textarea className="bhq-o" rows={2} maxLength={300} value={lyDoChi} onChange={(e) => setLyDoChi(e.target.value)}
+          <textarea className="bhq-o" rows={2} maxLength={300} value={lyDoChi} onChange={(e) => { setLyDoChi(e.target.value); luuNhap({ lyDo: e.target.value }); }}
             placeholder="VD: tối qua chi 364k mua bột, trả tiền ship" aria-label="Đã chi tiền làm gì" />
           <small>{lyDoChi.trim() ? 'Giám đốc sẽ nhận báo phiếu chi này.' : 'Để trống: máy tính két theo ca trước, cuối ca sẽ thấy thiếu và báo Giám đốc.'}</small>
         </div>
       )}
-      <label className="bhq-nhan">Tiền mặt đầu ca<input className="bhq-o lon" autoFocus inputMode="numeric" value={tien ? so(tien) : tien} placeholder="0" onChange={(e) => setTien(soTien(e.target.value))} /></label>
+      <label className="bhq-nhan">Tiền mặt đầu ca<input className="bhq-o lon" autoFocus inputMode="numeric" value={tien ? so(tien) : tien} placeholder="0" onChange={(e) => { const v = soTien(e.target.value); setTien(v); luuNhap({ tien: v }); }} /></label>
       <ChupAnh path={anh} dang={dangAnh} onChon={chonAnh} chu="Chụp ảnh két tiền (bắt buộc)" />
-      <Loi chu={loi} />
+      <div ref={oLoi}><Loi chu={loi} /></div>
+      {hoiRoi && <p className="kv-loi mc-chua-vao" role="alert"><b>Bạn CHƯA vào ca.</b> Số tiền và ảnh đã giữ lại — bấm nút xanh <b>"Vào ca · bắt đầu bán"</b> để bắt đầu bán. Bấm "Vẫn thoát" nếu muốn ra ngoài.</p>}
     </HopT>
   );
 }

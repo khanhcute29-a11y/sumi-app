@@ -1333,3 +1333,4 @@ button.bcn-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pc-huy{display:flex;gap:6px;flex-wrap:wrap}
 .pc-huy .bhq-o{flex:1 1 180px}
 .pc-huy .bhq-nut.phu.do{color:var(--do);border-color:currentColor}
+.mc-chua-vao{margin:8px 0 0;font-size:14px;line-height:1.45}
