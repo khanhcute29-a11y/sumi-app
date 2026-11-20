@@ -1334,3 +1334,5 @@ button.bcn-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pc-huy .bhq-o{flex:1 1 180px}
 .pc-huy .bhq-nut.phu.do{color:var(--do);border-color:currentColor}
 .mc-chua-vao{margin:8px 0 0;font-size:14px;line-height:1.45}
+.bhq-chua-bat{position:fixed;left:12px;right:84px;bottom:calc(76px + env(safe-area-inset-bottom));z-index:60;background:#FFF1F0;border:1.5px solid #E5484D;color:#7A1F22;border-radius:12px;padding:10px 12px;font-size:14px;line-height:1.4;box-shadow:0 6px 18px rgba(122,31,34,.18);pointer-events:none}
+@media (min-width:900px){.bhq-chua-bat{left:auto;right:16px;bottom:56px;max-width:420px}}

@@ -132,6 +132,8 @@ export default function BanHangQuay() {
   const laChu = that ? that.cap === 'gd' : vaiTro === 'owner';
   const laGD = laChu && !xemNV;
   const [lyDoXemTruoc, setLyDoXemTruoc] = useState('');
+  // Đã đăng nhập nhưng tài khoản chưa được bật bán thật → đang ở bản xem trước: nói to, kẻo nhân viên nhập cả buổi mà không lưu.
+  const chuaBatThat = !that && /cờ pos_ban_hang_that đang tắt|tài khoản chưa được duyệt/.test(lyDoXemTruoc);
   const [laKT, setLaKT] = useState(false);
   const [caiDat, setCaiDat] = useState({});
   const [caMoDs, setCaMoDs] = useState({});
@@ -1046,7 +1048,7 @@ export default function BanHangQuay() {
       })()}
       {hop?.loai === 'them_hang' && (that
         ? <HangQuay cu={null} dsNhom={dsNhomQuay} onDong={() => setHop(null)} onXong={xongHangQuay} />
-        : <ThemHangHoa matHang={matHang} laGD={laGD} onDong={() => setHop(null)} onLuu={themHangMoi} />)}
+        : <ThemHangHoa matHang={matHang} laGD={laGD} chuaBat={chuaBatThat} onDong={() => setHop(null)} onLuu={themHangMoi} />)}
       {hop?.loai === 'sua_hang' && that && hop.cu && <HangQuay cu={hop.cu} dsNhom={dsNhomQuay} onDong={() => setHop(null)} onXong={xongHangQuay} />}
       {hop?.loai === 'thong_tin_hd' && (
         <Hop tieuDe="Thông tin hóa đơn" onDong={() => setHop(null)} chan={<button type="button" className="bhq-nut chinh" onClick={() => setHop(null)}>Xong</button>}>
@@ -1108,6 +1110,7 @@ export default function BanHangQuay() {
         <ViecCho viec={viec} cap={that.cap} laKT={laKT} onDong={() => setHop(null)}
           onTaiLai={async () => { const v = await taiViecCho(that.cap, laKT).catch(() => null); if (v) setViec(v); napThat(); }} />
       )}
+      {chuaBatThat && <div className="bhq-chua-bat" role="alert"><b>Tài khoản này CHƯA được bật bán thật.</b> Bán hàng, thêm hàng, vào ca ở đây đều KHÔNG được lưu — báo quản lý bật cho bạn rồi tắt app mở lại.</div>}
       {hop?.loai === 'chi_ket' && that && caMo && <ChiKet caMo={caMo} laQl={quanLy} uid={that.uid} onDong={() => setHop(null)} onXong={(m) => nhan(m)} />}
       {hop?.loai === 'thiet_lap_quay' && that && <ThietLapQuay chiNhanh={chiNhanh} caiDat={cd} matHang={matHang} bangGia={bangGia} hanDung={hanDung} onLuu={() => napThat()} onDong={() => setHop(null)} />}
       {hop?.loai === 'dat_coc' && that && (
@@ -1690,7 +1693,7 @@ function Hop({ tieuDe, onDong, children, chan }) {
 }
 
 // "Thêm hàng hóa" theo KiotViet: Mã hàng (tự sinh nếu để trống) · Tên · Nhóm · Giá bán · Giá vốn · Tồn kho.
-function ThemHangHoa({ matHang, laGD, onDong, onLuu }) {
+function ThemHangHoa({ matHang, laGD, chuaBat = false, onDong, onLuu }) {
   const [ma, setMa] = useState('');
   const [ten, setTen] = useState('');
   const [nhom, setNhom] = useState(DANH_MUC[0]?.value || 'khac');
@@ -1719,7 +1722,9 @@ function ThemHangHoa({ matHang, laGD, onDong, onLuu }) {
       <label className="bhq-nhan">Giá bán<input className="bhq-o" inputMode="numeric" value={gia ? so(Number(gia)) : ''} onChange={(e) => setGia(soTien(e.target.value))} placeholder="0" /></label>
       {laGD && <label className="bhq-nhan">Giá vốn<input className="bhq-o" inputMode="numeric" value={giaVon ? so(Number(giaVon)) : ''} onChange={(e) => setGiaVon(soTien(e.target.value))} placeholder="Để trống: tạm tính 35% giá bán" /></label>}
       <label className="bhq-nhan">Tồn kho<input className="bhq-o" inputMode="numeric" value={tonDau} onChange={(e) => setTonDau(e.target.value.replace(/\D/g, ''))} placeholder="0" /></label>
-      <p className="bhq-ghi">Bản xem thử: hàng mới chỉ có trong phiên này. Bản thật sẽ lưu vào danh mục Sản phẩm của app.</p>
+      {chuaBat
+        ? <p className="kv-loi" role="alert"><b>Không lưu được:</b> tài khoản của bạn chưa được bật bán thật nên món này chỉ có tạm trên máy, thoát ra là mất. Báo quản lý bật cho bạn.</p>
+        : <p className="bhq-ghi">Bản xem thử: hàng mới chỉ có trong phiên này. Bản thật sẽ lưu vào danh mục Sản phẩm của app.</p>}
     </Hop>
   );
 }
