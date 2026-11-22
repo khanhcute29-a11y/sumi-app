@@ -1427,3 +1427,16 @@ button.bcn-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   html.in-tem #bhq-tem.a4 .tem-trang{display:grid;grid-template-columns:repeat(5,38.1mm);grid-auto-rows:21.2mm;column-gap:2.5mm;padding:10.7mm 4.7mm;width:210mm;box-sizing:border-box;break-after:page;page-break-after:always}
   html.in-tem #bhq-tem .tem-trang:last-child{break-after:auto;page-break-after:auto}
 }
+/* Vào ca / Nhận ca — tiền đầu ca không bắt buộc (như KiotViet) */
+.mc-dau{background:#F7EFE2;border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;margin:4px 0}
+.mc-dau>div{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.mc-dau>div span{font-size:14px;color:#8C5A3C}
+.mc-dau>div b{font-size:20px;color:#2C1D11}
+.mc-dau small{font-size:13px;color:#8C5A3C;line-height:1.4}
+.mc-dem{align-self:flex-start;min-height:44px;padding:0 4px;background:none;border:0;color:#D96B43;font:inherit;font-size:14px;font-weight:600;text-decoration:underline;cursor:pointer}
+.mc-ket-thuong{width:100%;margin-top:8px}
+/* Báo cáo cuối ngày — chọn nhiều nhân viên như KiotViet */
+.bcn-dong{flex-wrap:wrap}
+.bcn-chips{flex-basis:100%;display:flex;flex-wrap:wrap;gap:6px;padding:0 0 10px}
+.bcn-chips i{font-style:normal;font-size:13px;padding:4px 10px;border-radius:14px;background:#EAF2FB;color:var(--xanh)}
+.bcn-tat-ca{margin-left:auto;min-height:44px;padding:0 10px;border:0;background:none;color:var(--xanh);font-size:15px;font-weight:600;white-space:nowrap}

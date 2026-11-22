@@ -20,7 +20,7 @@ import {
   LOAI_LEN_DB, phieuTuDb, lapBanDoHang, congNoTuDb, taiAnh, docAnhBan, taiAnhDaNen,
 } from './posThat';
 import {
-  HopT, MoCa, XinDuyet, ViecCho, QrChuyenKhoan, ThietLapQuay, DatCoc, LayBanhDat, NhanHang, ChupAnh, NhatKy, BaoCaoThat, KetCaThat, DoanhSoNv, XepHang, BaoCaoCuoiNgay, HangQuay, ChonQuay, ChiKet, SoQuy, KmChon, KhuyenMai, InTem,
+  HopT, MoCa, NhanCa, XinDuyet, ViecCho, QrChuyenKhoan, ThietLapQuay, DatCoc, LayBanhDat, NhanHang, ChupAnh, NhatKy, BaoCaoThat, KetCaThat, DoanhSoNv, XepHang, BaoCaoCuoiNgay, HangQuay, ChiKet, SoQuy, KmChon, KhuyenMai, InTem,
 } from './QuayThat';
 import './ban-hang-quay.css';
 
@@ -790,6 +790,8 @@ export default function BanHangQuay() {
   } : null;
   // Ca đang mở ở quầy này là của người khác → nhân viên không bán chen vào (database cũng chặn).
   const caNguoiKhac = !!(that && caMo && that.cap === 'nv' && caMo.opened_by && caMo.opened_by !== that.uid);
+  // Ca của chính mình mở từ hôm trước (quên kết) → mời nhận ca mới, không bán lẫn vào ca hôm qua.
+  const caCuCuaToi = !!(that && caMo && caMo.opened_by === that.uid && new Date(caMo.opened_at).toDateString() !== new Date().toDateString());
   const daBanCa = caMo ? daBan.filter((h) => h.that && h.caId === caMo.id && !h.daHuy && (!h.thuNganId || h.thuNganId === caMo.opened_by)).reduce((a, h) => a + Number(h.canTra || 0), 0) : 0;
   // Mục chỉ có khi chạy thật — dùng chung cho menu ☰ và màn "Nhiều hơn" của điện thoại.
   const mucThat = that ? [
@@ -1144,13 +1146,14 @@ export default function BanHangQuay() {
         </Hop>
       )}
 
-      {caNguoiKhac && manHinh === 'ban' && !hop && !form && (
-        <HopT tieuDe={`Ca của ${caMo.opened_by_name || 'người khác'} đang mở`} onDong={() => moManHinh('ls')}
-          chan={<><button type="button" className="bhq-nut phu" onClick={veApp}>Về app Sumi</button><button type="button" className="bhq-nut chinh" onClick={() => napThat()}>Tải lại</button></>}>
-          <ChonQuay chiNhanh={chiNhanh} dsQuay={CHI_NHANH} onDoi={setChiNhanh} />
-          <p className="bhq-ghi">{chiNhanh} đang có ca {caMo.code} của <b>{caMo.opened_by_name}</b> (vào lúc {gio(new Date(caMo.opened_at).getTime())}).
-            Mỗi người bán bằng ca của chính mình để doanh số tính đúng người — nhờ {caMo.opened_by_name} kết ca trước, rồi bấm Tải lại để vào ca của bạn.</p>
-        </HopT>
+      {(caNguoiKhac || caCuCuaToi) && manHinh === 'ban' && !hop && !form && (
+        <NhanCa chiNhanh={chiNhanh} dsQuay={CHI_NHANH} onDoiChiNhanh={setChiNhanh} caMo={caMo} cuaToi={caCuCuaToi} nguoi={nguoi}
+          onVeApp={veApp} onDong={() => moManHinh('ls')} onTaiLai={() => napThat()} onKetCa={() => setHop({ loai: 'ket_ca' })}
+          onNhan={(row) => {
+            setCaMoDs((x) => ({ ...x, [chiNhanh]: row }));
+            nhan(row.ca_cu ? `Đã nhận ca · máy đã kết hộ ca ${row.ca_cu}${row.ca_cu_cua ? ` của ${row.ca_cu_cua}` : ''} · ca bạn ${row.code}` : `Đã vào ca ${row.code}`);
+            napThat();
+          }} />
       )}
       {hop?.loai === 'doanh_so_nv' && that && <DoanhSoNv dsCuaHang={CHI_NHANH} duocLoai={quanLy} onDong={() => setHop(null)} />}
       {hop?.loai === 'xep_hang' && that && <XepHang onDong={() => setHop(null)} />}

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, RefreshCw, Camera, Search, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, ListFilter, Check } from 'lucide-react';
 import { supabase } from '../../../lib/supabaseClient';
-import { goi, chuLoi, anhVietQr, noiDungCk, NGAN_HANG, maMoi, tachId, linkAnh, linkAnhHoaDon, guiHangDoi, taiAnh, lapBanDoHang, themHangQuay, suaHangQuay, xoaHangQuay, vaoCa, lapPhieuQuy, huyChiKet, luuKm, batKm, thongKeKm } from './posThat';
+import { goi, chuLoi, anhVietQr, noiDungCk, NGAN_HANG, maMoi, tachId, linkAnh, linkAnhHoaDon, guiHangDoi, taiAnh, lapBanDoHang, themHangQuay, suaHangQuay, xoaHangQuay, vaoCa, nhanCa, lapPhieuQuy, huyChiKet, luuKm, batKm, thongKeKm } from './posThat';
 import { locXep, LOAI_KM, THU_KM, kmKhongChay, moTaKm, CHI_NHANH, maVachCode128, maInTem } from './banHangQuayLogic';
 
 // Các hộp thoại chỉ có ở chế độ CHẠY THẬT (ca, duyệt, chuyển khoản, thiết lập, đặt cọc, nhận hàng, báo cáo, nhật ký).
@@ -115,6 +115,7 @@ export function MoCa({ chiNhanh, dsQuay, onDoiChiNhanh, nguoi, onMo, onVeApp, on
   // Két ca trước đã đếm — máy tính két theo số này (chống gõ khống tiền đầu ca để rút két).
   const [truoc, setTruoc] = useState(null);
   const [hoiRoi, setHoiRoi] = useState(false); // đã nhập mà chưa bấm Vào ca, lại bấm thoát → nhắc 1 lần
+  const [demLai, setDemLai] = useState(false); // như KiotViet: không bắt nhập tiền đầu ca, muốn đếm lại thì mở ô nhập
   const nhap = useRef({});
   const oLoi = useRef(null);
   const luuNhap = (p) => { nhap.current = { ...nhap.current, ...p, store: chiNhanh }; ghiNhapCa(nhap.current); setHoiRoi(false); };
@@ -124,13 +125,11 @@ export function MoCa({ chiNhanh, dsQuay, onDoiChiNhanh, nguoi, onMo, onVeApp, on
     const nh = docNhapCa(chiNhanh); // đổi quầy → két ca trước là của quầy khác; lấy lại bản nháp của quầy này nếu có
     nhap.current = nh || { store: chiNhanh };
     setTruoc(null); setTien(nh?.tien ?? ''); setAnh(nh?.anh || null); setLoi(''); setLyDoChi(nh?.lyDo || ''); setHoiRoi(false);
-    goi('pos_tien_dau_ca', { p_store: chiNhanh }).then((r) => {
-      if (huy || !r?.co) return;
-      setTruoc(r); setTien((t) => (t === '' ? String(Math.round(Number(r.so) || 0)) : t));
-    }).catch(() => {});
+    setDemLai(!!(nh?.tien ?? ''));
+    goi('pos_tien_dau_ca', { p_store: chiNhanh }).then((r) => { if (!huy && r?.co) setTruoc(r); }).catch(() => {});
     return () => { huy = true; };
   }, [chiNhanh]);
-  const lech = truoc && tien !== '' ? Number(tien) - Number(truoc.so) : 0;
+  const lech = truoc && demLai && tien !== '' ? Number(tien) - Number(truoc.so) : 0;
   const chonAnh = async (f) => {
     setDangAnh(true); setLoi('');
     try { const a = await taiAnh(f, 'ket'); setAnh(a); luuNhap({ anh: a }); } catch (e) { setLoi(`Không tải được ảnh: ${chuLoi(e)}`); }
@@ -142,12 +141,11 @@ export function MoCa({ chiNhanh, dsQuay, onDoiChiNhanh, nguoi, onMo, onVeApp, on
     fn?.();
   };
   const mo = async () => {
-    if (tien === '') { setLoi('Nhập số tiền mặt đang có trong két'); return; }
     if (!anh) { setLoi('Chụp ảnh két tiền trước khi vào ca'); return; }
     const ly = lech < 0 ? lyDoChi.trim() : '';
     if (ly && ly.length < 3) { setLoi('Ghi rõ đã chi tiền làm gì (ít nhất vài chữ)'); return; }
     setDang(true); setLoi('');
-    try { const r = await vaoCa({ store: chiNhanh, tien, anh, lyDoChi: ly }); ghiNhapCa(null); onMo(r); } catch (e) {
+    try { const r = await vaoCa({ store: chiNhanh, tien: demLai ? tien : '', anh, lyDoChi: ly, duPhong: truoc?.so }); ghiNhapCa(null); onMo(r); } catch (e) {
       const m = chuLoi(e); setLoi(m); setDang(false);
       if (/đang mở/.test(m)) onTaiLai?.(); // người khác vừa vào ca ở máy khác → tải lại để hiện ca của họ
     }
@@ -156,8 +154,14 @@ export function MoCa({ chiNhanh, dsQuay, onDoiChiNhanh, nguoi, onMo, onVeApp, on
     <HopT tieuDe={`Vào ca · ${chiNhanh}`} onDong={roi(onDong)}
       chan={<><button type="button" className="bhq-nut phu" onClick={roi(onVeApp)}>{hoiRoi ? 'Vẫn thoát' : 'Về app Sumi'}</button><button type="button" className="bhq-nut chinh" disabled={dang || dangAnh} onClick={mo}>{dang ? 'Đang vào ca…' : 'Vào ca · bắt đầu bán'}</button></>}>
       <ChonQuay chiNhanh={chiNhanh} dsQuay={dsQuay} onDoi={dang ? null : onDoiChiNhanh} />
-      <p className="bhq-ghi">Chào {nguoi}. Đếm lại tiền trong két, chụp 1 ảnh két tiền. Mọi hoá đơn trong ca tính doanh số cho bạn.</p>
-      {truoc && <p className="bhq-ghi">Ca trước <b>{truoc.ca}</b>{truoc.ten ? ` (${truoc.ten})` : ''} kết ca lúc {ngayGio(truoc.luc)}, két còn <b>{so(truoc.so)}</b>. Máy tính két ca này theo số đó.</p>}
+      <p className="bhq-ghi">Chào {nguoi}. Chụp 1 ảnh két tiền là bán được. Mọi hoá đơn trong ca tính doanh số cho bạn.</p>
+      <div className="mc-dau">
+        <div><span>Tiền đầu ca</span><b>{so(truoc ? truoc.so : 0)}</b></div>
+        <small>{truoc
+          ? <>Két ca trước <b>{truoc.ca}</b>{truoc.ten ? ` (${truoc.ten})` : ''} để lại lúc {ngayGio(truoc.luc)}{truoc.chua_dem ? ' — chưa ai đếm két, máy tự tính' : ''}. Không cần nhập, máy tự lấy số này.</>
+          : 'Chưa có ca trước — máy tính két từ 0. Không cần nhập.'}</small>
+        {!demLai && <button type="button" className="mc-dem" onClick={() => setDemLai(true)}>Đếm lại két / nhập số khác</button>}
+      </div>
       {lech > 0 && <p className="kv-loi" role="alert">Bạn nhập nhiều hơn ca trước {so(lech)}. Vẫn vào ca được, nhưng máy giữ số ca trước và báo Giám đốc kiểm ảnh két.</p>}
       {lech < 0 && (
         <div className="mc-chi">
@@ -167,10 +171,56 @@ export function MoCa({ chiNhanh, dsQuay, onDoiChiNhanh, nguoi, onMo, onVeApp, on
           <small>{lyDoChi.trim() ? 'Giám đốc sẽ nhận báo phiếu chi này.' : 'Để trống: máy tính két theo ca trước, cuối ca sẽ thấy thiếu và báo Giám đốc.'}</small>
         </div>
       )}
-      <label className="bhq-nhan">Tiền mặt đầu ca<input className="bhq-o lon" autoFocus inputMode="numeric" value={tien ? so(tien) : tien} placeholder="0" onChange={(e) => { const v = soTien(e.target.value); setTien(v); luuNhap({ tien: v }); }} /></label>
+      {demLai && <label className="bhq-nhan">Tiền mặt đếm được trong két (không bắt buộc)<input className="bhq-o lon" autoFocus inputMode="numeric" value={tien ? so(tien) : tien} placeholder={truoc ? so(truoc.so) : '0'} onChange={(e) => { const v = soTien(e.target.value); setTien(v); luuNhap({ tien: v }); }} /></label>}
       <ChupAnh path={anh} dang={dangAnh} onChon={chonAnh} chu="Chụp ảnh két tiền (bắt buộc)" />
       <div ref={oLoi}><Loi chu={loi} /></div>
       {hoiRoi && <p className="kv-loi mc-chua-vao" role="alert"><b>Bạn CHƯA vào ca.</b> Số tiền và ảnh đã giữ lại — bấm nút xanh <b>"Vào ca · bắt đầu bán"</b> để bắt đầu bán. Bấm "Vẫn thoát" nếu muốn ra ngoài.</p>}
+    </HopT>
+  );
+}
+
+// ── Nhận ca: người trước quên kết ca → người sau bán tiếp ngay, không phải chờ ──
+// Máy kết hộ ca cũ (ghi "X không kết ca — Y nhận ca", báo Giám đốc) rồi mở ca của mình.
+// Đếm két là KHÔNG bắt buộc; có đếm thì ca cũ biết thiếu/dư bao nhiêu. Ảnh két bắt buộc (bằng chứng lúc nhận).
+export function NhanCa({ chiNhanh, dsQuay, onDoiChiNhanh, caMo, cuaToi = false, nguoi, onNhan, onKetCa, onVeApp, onDong, onTaiLai }) {
+  const [dem, setDem] = useState('');
+  const [moDem, setMoDem] = useState(false);
+  const [anh, setAnh] = useState(null);
+  const [dangAnh, setDangAnh] = useState(false);
+  const [dang, setDang] = useState(false);
+  const [loi, setLoi] = useState('');
+  const oLoi = useRef(null);
+  useEffect(() => { if (loi) oLoi.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, [loi]);
+  useEffect(() => { setDem(''); setMoDem(false); setAnh(null); setLoi(''); }, [caMo.id]);
+  const ten = caMo.opened_by_name || 'người trước';
+  const homQua = new Date(caMo.opened_at).toDateString() !== new Date().toDateString();
+  const chonAnh = async (f) => {
+    setDangAnh(true); setLoi('');
+    try { setAnh(await taiAnh(f, 'ket')); } catch (e) { setLoi(`Không tải được ảnh: ${chuLoi(e)}`); }
+    setDangAnh(false);
+  };
+  const nhan = async () => {
+    if (!anh) { setLoi('Chụp ảnh két tiền trước khi nhận ca'); return; }
+    setDang(true); setLoi('');
+    try { const r = await nhanCa({ store: chiNhanh, caId: caMo.id, dem: moDem ? dem : '', anh }); onNhan(r); } catch (e) {
+      const m = chuLoi(e); setLoi(m); setDang(false);
+      if (/vừa thay đổi/.test(m)) onTaiLai?.();
+    }
+  };
+  return (
+    <HopT tieuDe={cuaToi ? 'Ca hôm trước của bạn chưa kết' : `Ca của ${ten} chưa kết`} onDong={dang ? undefined : onDong}
+      chan={<><button type="button" className="bhq-nut phu" disabled={dang} onClick={onVeApp}>Về app Sumi</button><button type="button" className="bhq-nut chinh" disabled={dang || dangAnh} onClick={nhan}>{dang ? 'Đang nhận ca…' : 'Nhận ca · bán tiếp'}</button></>}>
+      <ChonQuay chiNhanh={chiNhanh} dsQuay={dsQuay} onDoi={dang ? null : onDoiChiNhanh} />
+      <p className="bhq-ghi">{chiNhanh} còn ca <b>{caMo.code}</b> của <b>{ten}</b> mở từ {ngayGio(caMo.opened_at)}{homQua ? ' (hôm trước)' : ''}.
+        {cuaToi ? ' Bấm Nhận ca để mở ca mới cho hôm nay.' : ` Không cần chờ ${ten} — bấm Nhận ca là bán được ngay.`}</p>
+      <div className="mc-dau">
+        <small>Máy sẽ <b>tự kết ca {caMo.code}</b> (vẫn giữ đủ hoá đơn, doanh số tính cho {cuaToi ? 'bạn' : ten}), báo Giám đốc, rồi mở ca mới cho {cuaToi ? 'bạn' : nguoi || 'bạn'}.</small>
+        {!moDem && <button type="button" className="mc-dem" onClick={() => setMoDem(true)}>Đếm két giúp ca cũ (không bắt buộc)</button>}
+      </div>
+      {moDem && <label className="bhq-nhan">Tiền mặt đếm được trong két<input className="bhq-o lon" autoFocus inputMode="numeric" value={dem ? so(dem) : dem} placeholder="Để trống nếu không đếm" onChange={(e) => setDem(soTien(e.target.value))} /></label>}
+      <ChupAnh path={anh} dang={dangAnh} onChon={chonAnh} chu="Chụp ảnh két tiền lúc nhận ca (bắt buộc)" />
+      {cuaToi && onKetCa && <button type="button" className="bhq-nut phu mc-ket-thuong" disabled={dang} onClick={onKetCa}>Hoặc kết ca {caMo.code} như thường (đếm két + bánh)</button>}
+      <div ref={oLoi}><Loi chu={loi} /></div>
     </HopT>
   );
 }
@@ -251,9 +301,9 @@ export function ViecCho({ viec, cap, laKT, onTaiLai, onDong }) {
         </>
       )}
       {tab === 'ca' && (viec.ca.length ? viec.ca.map((c) => (
-        <div key={c.id} className={`bhq-the ${Number(c.diff) < 0 ? 'no-do' : Number(c.diff) > 0 ? 'no-vang' : ''}`}>
+        <div key={c.id} className={`bhq-the ${Number(c.diff) < 0 ? 'no-do' : Number(c.diff) > 0 || c.counted_cash == null ? 'no-vang' : ''}`}>
           <div><b>{c.code}</b> · {c.store_location} · {c.closed_by_name} · đóng {ngayGio(c.closed_at)}</div>
-          <div>Hệ thống {so(c.expected_cash)} · đếm được {so(c.counted_cash)} · <b>{Number(c.diff) > 0 ? '+' : ''}{so(c.diff)}</b>{c.note ? ` · "${c.note}"` : ''}</div>
+          <div>Hệ thống {so(c.expected_cash)} · {c.counted_cash == null ? <b>chưa ai đếm két (máy kết hộ)</b> : <>đếm được {so(c.counted_cash)} · <b>{Number(c.diff) > 0 ? '+' : ''}{so(c.diff)}</b></>}{c.note ? ` · "${c.note}"` : ''}</div>
           <div className="hang"><span /><button type="button" className="bhq-nut chinh nho" disabled={!!dang} onClick={() => lam(c.id, 'pos_duyet_ca', { p_shift: c.id, p_note: null })}>Đã kiểm, duyệt ca</button></div>
         </div>
       )) : <p className="bhq-rong">Không còn ca nào chờ duyệt.</p>)}
@@ -1282,31 +1332,42 @@ export function BaoCaoCuoiNgay({ chiNhanh, onVe, onMoHoaDon }) {
     const nv = man === 'chon_nv';
     const ds = nv ? (bc?.ds_nhan_vien || []).map((t) => [t, t]) : (bc?.ds_nguoi_tao || []).map((x) => [x.id, x.ten]);
     const k = nv ? 'nhan_vien' : 'nguoi_tao';
+    const t = q.trim().toLowerCase();
+    const hien = ds.filter(([, ten]) => !t || String(ten).toLowerCase().includes(t));
+    const du = ds.length > 0 && ds.every(([id]) => nhap[k].includes(id));
     return (
       <div className="xhd bcn">
-        <header className="xhd-dau"><button type="button" aria-label="Quay lại" onClick={() => setMan(nhanh ? 'bc' : 'loc')}><ChevronLeft size={24} /></button><h1>{nv ? 'Nhân viên' : 'Người tạo'}</h1></header>
+        <header className="xhd-dau"><button type="button" aria-label="Quay lại" onClick={() => { setQ(''); setMan(nhanh ? 'bc' : 'loc'); }}><ChevronLeft size={24} /></button><h1>{nv ? 'Nhân viên' : 'Người tạo'}</h1>
+          {ds.length > 0 && <button type="button" className="bcn-tat-ca" onClick={() => setNhap((n) => ({ ...n, [k]: du ? [] : ds.map(([id]) => id) }))}>{du ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}</button>}</header>
+        {ds.length > 8 && <div className="xhd-tim-mo"><label className="o bcn-tim"><Search size={17} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm tên" /></label></div>}
         <div className="xhd-than"><section className="xhd-the">
-          {ds.map(([id, ten]) => <O key={id} chu={ten} on={nhap[k].includes(id)} onClick={() => doi(k, id)} />)}
+          {hien.map(([id, ten]) => <O key={id} chu={ten} on={nhap[k].includes(id)} onClick={() => doi(k, id)} />)}
           {!ds.length && <p className="bhq-ghi">Chưa có nhân viên nào được bán hàng.</p>}
+          {ds.length > 0 && !hien.length && <p className="bhq-ghi">Không có ai tên như vậy.</p>}
         </section></div>
         {nhanh
           ? <footer className="xhd-chan hai">
-            <button type="button" className="phu" onClick={() => setNhap((n) => ({ ...n, [k]: [] }))}>Tất cả</button>
-            <button type="button" className="chinh" onClick={() => { setLoc(nhap); setMan('bc'); }}>Áp dụng</button>
+            <button type="button" className="phu" onClick={() => setNhap((n) => ({ ...n, [k]: [] }))}>Đặt lại</button>
+            <button type="button" className="chinh" onClick={() => { setQ(''); setLoc(nhap); setMan('bc'); }}>Áp dụng</button>
           </footer>
-          : <footer className="xhd-chan"><button type="button" className="chinh" onClick={() => setMan('loc')}>Xong</button></footer>}
+          : <footer className="xhd-chan"><button type="button" className="chinh" onClick={() => { setQ(''); setMan('loc'); }}>Xong</button></footer>}
       </div>
     );
   }
   if (man === 'loc') {
-    const tenChon = (k, ds) => (nhap[k].length ? `${nhap[k].length} đã chọn` : (ds ? 'Tất cả' : ''));
+    const tenChon = (k) => (nhap[k].length ? `${nhap[k].length} đã chọn` : 'Tất cả');
+    // Tên người đã chọn hiện ngay dưới dòng (như KiotViet)
+    const chip = (k) => {
+      const ten = k === 'nhan_vien' ? nhap[k] : nhap[k].map((id) => (bc?.ds_nguoi_tao || []).find((x) => x.id === id)?.ten || '?');
+      return ten.length ? <span className="bcn-chips">{ten.map((x, i) => <i key={`${x}-${i}`}>{String(x).trim()}</i>)}</span> : null;
+    };
     return (
       <div className="xhd bcn">
         <header className="xhd-dau"><button type="button" aria-label="Quay lại" onClick={() => setMan('bc')}><ChevronLeft size={24} /></button><h1>Bộ lọc</h1></header>
         <div className="xhd-than bcn-loc">
           {!bc?.chi_cua_toi && <>
-            <button type="button" className="xhd-the bcn-dong" onClick={() => { setNhanh(false); setMan('chon_nv'); }}><span>Nhân viên</span><small>{tenChon('nhan_vien', true)}</small><ChevronRight size={18} /></button>
-            <button type="button" className="xhd-the bcn-dong" onClick={() => { setNhanh(false); setMan('chon_tao'); }}><span>Người tạo</span><small>{tenChon('nguoi_tao', true)}</small><ChevronRight size={18} /></button>
+            <button type="button" className="xhd-the bcn-dong" onClick={() => { setNhanh(false); setMan('chon_nv'); }}><span>Nhân viên</span><small>{tenChon('nhan_vien')}</small><ChevronRight size={18} />{chip('nhan_vien')}</button>
+            <button type="button" className="xhd-the bcn-dong" onClick={() => { setNhanh(false); setMan('chon_tao'); }}><span>Người tạo</span><small>{tenChon('nguoi_tao')}</small><ChevronRight size={18} />{chip('nguoi_tao')}</button>
           </>}
           <section className="xhd-the">
             <button type="button" className="bcn-nhom" onClick={() => setMoPt((v) => !v)}><span>Phương thức thanh toán</span>{moPt ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</button>

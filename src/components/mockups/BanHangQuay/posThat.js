@@ -45,12 +45,28 @@ export const xoaHangQuay = (pid) => goi('pos_an_hang', { p_id: pid, p_an: true }
 
 // Vào ca (migration 202611181020): khai "đã chi trước khi vào ca" khi két ít hơn ca trước.
 // Database chưa chạy SQL mới → dùng hàm cũ (vẫn vào ca được, chỉ chưa ghi được lý do).
-export async function vaoCa({ store, tien, anh, lyDoChi }) {
+// 202611221040: tiền đầu ca để trống được (máy lấy két ca trước để lại, như KiotViet) → gửi null.
+// Database chưa chạy SQL đó thì nó vẫn đòi số → gửi lại bằng số ca trước (duPhong).
+export async function vaoCa({ store, tien, anh, lyDoChi, duPhong = null }) {
+  const so = tien === '' || tien == null ? null : Number(tien) || 0;
   try {
-    return await goi('pos_vao_ca_v2', { p_store: store, p_opening_cash: Number(tien) || 0, p_photo_url: anh, p_ly_do_chi: lyDoChi || null });
+    return await goi('pos_vao_ca_v2', { p_store: store, p_opening_cash: so, p_photo_url: anh, p_ly_do_chi: lyDoChi || null });
   } catch (e) {
-    if (!/pos_vao_ca_v2|schema cache|Could not find the function/i.test(String(e?.message || ''))) throw e;
-    return goi('pos_vao_ca', { p_store: store, p_opening_cash: Number(tien) || 0, p_photo_url: anh });
+    const m = String(e?.message || '');
+    if (so == null && /Nhập số tiền mặt/.test(m)) return vaoCa({ store, tien: Math.round(Number(duPhong) || 0), anh, lyDoChi });
+    if (!/pos_vao_ca_v2|schema cache|Could not find the function/i.test(m)) throw e;
+    return goi('pos_vao_ca', { p_store: store, p_opening_cash: so ?? Math.round(Number(duPhong) || 0), p_photo_url: anh });
+  }
+}
+// Nhận ca khi người trước quên kết ca: máy kết hộ ca đó (báo Giám đốc) rồi vào ca cho mình — cùng 1 lần.
+export async function nhanCa({ store, caId, dem, anh }) {
+  try {
+    return await goi('pos_nhan_ca', { p_store: store, p_shift: caId, p_dem: dem === '' || dem == null ? null : Number(dem) || 0, p_photo_url: anh });
+  } catch (e) {
+    if (/pos_nhan_ca|schema cache|Could not find the function/i.test(String(e?.message || ''))) {
+      throw new Error('Máy chủ chưa cập nhật chức năng Nhận ca — nhờ người kia kết ca, hoặc gọi Quản lý kết ca giúp');
+    }
+    throw e;
   }
 }
 // Phiếu chi tiền từ két — p_id tạo trước để bấm 2 lần không ghi trùng.

@@ -201,7 +201,7 @@ if (process.argv.length > 7) {
   await chan('Kết ca chưa đếm bánh', ()=>ketCa(ca1,'ket.jpg','[]'),'Đếm nhanh');
   await as(NV2);
   await chan('Người khác kết ca của mình', ()=>ketCa(ca1),'chỉ người đó');
-  await chan('Vào ca khi ca người khác đang mở', ()=>q(`select public.pos_vao_ca('${S}',0,'ket.jpg')`),'phải kết ca');
+  await chan('Vào ca khi ca người khác đang mở', ()=>q(`select public.pos_vao_ca('${S}',0,'ket.jpg')`),process.argv.some((x)=>x.includes('nhan_ca_va_bao_cao'))?'Nhận ca':'phải kết ca');
   await chan('Bán trong ca của người khác', ()=>banB(),'Ca đang mở là của');
   await as(NV);
   await ok('Kết ca: lệch 1 món bánh → báo GĐ', async()=>{const r=await ketCa(ca1,'ket.jpg',await demBanh(-1)); return [r.closing_photo, r.summary.so_banh_lech, await v(`select (body like '%Bánh lệch: Món (máy%')::text from notifications where event_key like 'pos-dong-ca:${ca1}%' limit 1`)];},['ket.jpg',1,'true']);
@@ -333,9 +333,20 @@ if (process.argv.some((x)=>x.includes('bao_cao_cuoi_ngay'))) {
   await as(NV2);
   await q(`select public.pos_vao_ca('${S}',0,'kc.jpg')`);
   await ban({photo_url:'c1-'+id()+'.jpg'}); await ban({pay_method:'chuyen_khoan',photo_url:'c2-'+id()+'.jpg'});
+  const CA_NGAY=process.argv.some((x)=>x.includes('nhan_ca_va_bao_cao'));  // 202611221040: nhân viên xem cả cửa hàng như KiotViet
+  if (!CA_NGAY) {
   await ok('Nhân viên C: chỉ thấy 2 HĐ của mình, tổng thu 360k', async()=>{const r=await bc(); return [r.chi_cua_toi, r.hd.so, Number(r.tong_thu), Number(r.pttt.tien_mat), Number(r.pttt.chuyen_khoan)];},[true,2,360000,180000,180000]);
   await ok('Nhân viên gửi lọc người khác vẫn chỉ ra số của mình', async()=>{const r=await bc({nguoi_tao:[NV]}); return r.hd.so;},2);
   await ok('Nhân viên không thấy danh sách người để lọc', async()=>{const r=await bc(); return [r.ds_nhan_vien.length, r.ds_nguoi_tao.length];},[0,0]);
+  } else {
+  const soCh=await v(`select count(*) from pos_invoices where status='xong' and store_location='${S}' and created_at>='${tu}'`);
+  await ok('Nhân viên C: thấy CẢ cửa hàng (đủ số HĐ trong DB)', async()=>{const r=await bc(); return [r.chi_cua_toi, r.hd.so===soCh];},[false,true]);
+  await ok('Nhân viên C lọc Người tạo = mình → 2 HĐ, 360k', async()=>{const r=await bc({nguoi_tao:[NV2]}); return [r.hd.so, Number(r.tong_thu), Number(r.pttt.tien_mat), Number(r.pttt.chuyen_khoan)];},[2,360000,180000,180000]);
+  await ok('Nhân viên C lọc Nhân viên = người khác → ra số người đó', async()=>{const r=await bc({nguoi_tao:[NV]}); const that=await v(`select count(*) from pos_invoices where status='xong' and store_location='${S}' and created_at>='${tu}' and cashier_id='${NV}'`); return r.hd.so===that && that>0;},true);
+  await ok('Nhân viên C chọn 2 người → cộng gộp đúng', async()=>{const a=(await bc({nguoi_tao:[NV]})).hd.so, b=(await bc({nguoi_tao:[NV2]})).hd.so; return (await bc({nguoi_tao:[NV,NV2]})).hd.so===a+b;},true);
+  await ok('Nhân viên thấy danh sách người để lọc', async()=>{const r=await bc(); return r.ds_nhan_vien.length>0 && r.ds_nguoi_tao.length>0;},true);
+  await ok('Nhân viên không thấy giá vốn', async()=>{const r=await bc(); return r.gia_von===undefined || r.gia_von===null;},true);
+  }
   await as(GD);
   const tatCa=await bc();
   const soThat=await v(`select count(*) from pos_invoices where status='xong' and store_location='${S}' and created_at>='${tu}'`);
@@ -356,7 +367,7 @@ if (process.argv.some((x)=>x.includes('bao_cao_cuoi_ngay'))) {
     await ok('Người đã nghỉ không hiện', ()=>r.ds_nhan_vien.includes('Đã nghỉ'),false);
     await ok('Người tạo có người chưa bán, mỗi người 1 dòng', ()=>[r.ds_nguoi_tao.some((x)=>x.id===NV3), r.ds_nguoi_tao.filter((x)=>x.id===NV2).length],[true,1]);
     await ok('Lọc theo người chưa bán → 0 HĐ', async()=>(await bc({nhan_vien:['Sale mới chưa bán']})).hd.so,0);
-    await as(NV2); await ok('Nhân viên vẫn không thấy danh sách', async()=>{const x=await bc(); return [x.ds_nhan_vien.length, x.ds_nguoi_tao.length];},[0,0]); await as(GD);
+    await as(NV2); await ok(CA_NGAY?'Nhân viên thấy đủ danh sách như GĐ':'Nhân viên vẫn không thấy danh sách', async()=>{const x=await bc(); return CA_NGAY?[x.ds_nhan_vien.length===r.ds_nhan_vien.length, x.ds_nguoi_tao.length===r.ds_nguoi_tao.length]:[x.ds_nhan_vien.length, x.ds_nguoi_tao.length];},CA_NGAY?[true,true]:[0,0]); await as(GD);
   }
 }
 // ── 202611171010: báo điện thoại Giám đốc mỗi hoá đơn ──
@@ -660,5 +671,73 @@ if (await v(`select count(*)::int from pg_proc where proname='pos_luu_km'`)) {
   await ok('Thống kê: KM hoá đơn lớn 2 HĐ, giảm 35k', ()=>[tk[kmHd.id].so_hd, Number(tk[kmHd.id].tien)],[2,35000]);
   await as(NVk);
   await ok('Nhân viên không xem thống kê KM', ()=>v(`select public.pos_km_thong_ke()::text`),'{}');
+}
+// ── 202611221040: nhận ca khi người trước quên kết + đầu ca không bắt buộc + tự kết qua đêm ──
+if (await v(`select count(*)::int from pg_proc where proname='pos_nhan_ca'`)) {
+  const Q='Quầy nhận ca', A='00000000-0000-0000-0000-0000000000d1', B='00000000-0000-0000-0000-0000000000d2', P9='00000000-0000-0000-0000-0000000000b9';
+  await db.exec(`insert into pos_settings(store_location) values ('${Q}') on conflict do nothing; update pos_settings set bat_cham_cong=false where store_location='${Q}';
+    insert into products(id,name,category,price) values ('${P9}','Bánh cuộn','khac',50000);
+    insert into finished_goods_stock(product_id,size,branch,qty,store_location) values ('${P9}',null,'bakery',100,'${Q}');`);
+  await q(`insert into profiles values ('${A}','Chị Sáng','sale','{}',true,true),('${B}','Chị Chiều','sale','{}',true,true) on conflict do nothing`);
+  const banQ=(o={})=>v(`select public.pos_ban('${JSON.stringify({id:id(),store:Q,pay_method:'tien_mat',photo_url:'nc-'+id()+'.jpg',lines:[{product_id:P9,name:'Bánh cuộn',qty:1,list_price:50000,unit_price:50000}],...o})}'::jsonb)`);
+  const caMo=()=>q(`select * from pos_shifts where store_location='${Q}' and status='open'`).then((r)=>r[0]||null);
+  const ca=(i)=>q(`select * from pos_shifts where id='${i}'`).then((r)=>r[0]);
+  const ket=async(i,dem,anh)=>{const ton=await v(`select public.pos__ton('${Q}','${P9}',null)::int`); return q(`select public.pos_ket_ca('${i}',${dem},null,'${anh}','${JSON.stringify([{product_id:P9,name:'Bánh cuộn',dem:ton}])}'::jsonb)`);};
+  await as(A);
+  const s1=await v(`select public.pos_vao_ca_v2('${Q}',null,'a.jpg',null)`);
+  await ok('Vào ca KHÔNG nhập tiền đầu ca được (chưa có ca trước → két 0)', ()=>[Number(s1.opening_cash), s1.opening_cash_entered, s1.opened_by],[0,null,A]);
+  await chan('Vào ca vẫn phải chụp ảnh két', ()=>q(`select public.pos_vao_ca_v2('${Q}',null,'',null)`).then(async()=>{const c=await caMo(); if(c.opened_by!==A) return; throw new Error('x');}).then(()=>{throw new Error('ok');}),'');
+  await banQ(); await banQ();
+  await as(B);
+  await chan('Chị Chiều vào ca khi ca Chị Sáng còn mở → chỉ nút Nhận ca', ()=>q(`select public.pos_vao_ca_v2('${Q}',null,'b.jpg',null)`),'Nhận ca');
+  await chan('Chị Chiều chưa nhận ca thì chưa bán được', ()=>banQ(),'Chị Sáng');
+  await chan('Nhận ca sai mã ca (ca vừa đổi)', ()=>q(`select public.pos_nhan_ca('${Q}','${id()}',null,'b.jpg')`),'vừa thay đổi');
+  await chan('Nhận ca phải chụp ảnh két', ()=>q(`select public.pos_nhan_ca('${Q}','${s1.id}',null,'')`),'ảnh');
+  await db.exec(`update pos_settings set bat_cham_cong=true where store_location='${Q}'`);
+  await chan('Bật chấm công mà chưa chấm vào làm → nhận ca bị chặn', ()=>q(`select public.pos_nhan_ca('${Q}','${s1.id}',null,'b.jpg')`),'chấm công');
+  await ok('…và ca Chị Sáng vẫn mở nguyên (không kết dở)', async()=>(await caMo()).id,s1.id);
+  await db.exec(`update pos_settings set bat_cham_cong=false where store_location='${Q}'`);
+  const n1=await v(`select public.pos_nhan_ca('${Q}','${s1.id}',null,'b.jpg')`);
+  const c1=await ca(s1.id);
+  await ok('Nhận ca không đếm: ca cũ đóng, máy tính két 100k, chênh để trống', ()=>[c1.status, c1.auto_closed, Number(c1.expected_cash), c1.counted_cash, c1.diff, c1.closed_by, c1.closing_photo],['closed','nhan_ca',100000,null,null,B,'b.jpg']);
+  await ok('Ca cũ ghi rõ ai không kết, ai nhận', ()=>c1.note,'Chị Sáng không kết ca — Chị Chiều nhận ca');
+  await ok('Ca cũ vẫn lưu doanh số của Chị Sáng', ()=>[c1.summary.so_hoa_don, Number(c1.summary.doanh_so_tinh), c1.summary.tu_ket],[2,100000,'nhan_ca']);
+  await ok('Ca mới của Chị Chiều nhận két 100k từ ca cũ', ()=>[n1.opened_by, Number(n1.opening_cash), n1.opening_prev_shift, n1.ca_cu],[B,100000,s1.id,c1.code]);
+  await ok('Giám đốc được báo Chị Sáng không kết ca', ()=>v(`select count(*) from notifications where event_key='pos-dong-ca:${s1.id}:${GD}' and title like '%Chị Sáng không kết ca%'`),1);
+  await ok('Không báo lệch tiền đầu ca khi nhận ca', ()=>v(`select count(*) from notifications where event_key like 'pos-dau-ca:${n1.id}%'`),0);
+  await ok('Chị Chiều bán được ngay', async()=>Number((await banQ()).total),50000);
+  await chan('Ca của mình hôm nay thì phải Kết ca, không "nhận ca" được', ()=>q(`select public.pos_nhan_ca('${Q}','${n1.id}',null,'b.jpg')`),'Kết ca');
+  await as(A);
+  await chan('Chị Sáng quay lại kết ca cũ → báo ca đã đóng', ()=>q(`select public.pos_ket_ca('${s1.id}',100000,null,'a2.jpg','[]'::jsonb)`),'đã đóng');
+  await chan('Chị Sáng bán vào ca Chị Chiều → bị chặn', ()=>banQ(),'Chị Chiều');
+  // Chị Sáng nhận lại có đếm két: thiếu 10k → ca Chị Chiều chênh -10k
+  const n2=await v(`select public.pos_nhan_ca('${Q}','${n1.id}',140000,'a3.jpg')`);
+  const c2=await ca(n1.id);
+  await ok('Nhận ca CÓ đếm 140k (máy 150k) → ca cũ chênh -10k', ()=>[Number(c2.expected_cash), Number(c2.counted_cash), Number(c2.diff)],[150000,140000,-10000]);
+  await ok('Ca mới nhận đúng số đếm 140k', ()=>[Number(n2.opening_cash), Number(n2.opening_cash_entered)],[140000,140000]);
+  await ok('Báo GĐ có số THIẾU', ()=>v(`select count(*) from notifications where event_key='pos-dong-ca:${n1.id}:${GD}' and body like '%THIẾU 10.000đ%' or event_key='pos-dong-ca:${n1.id}:${GD}' and body like '%THIẾU 10,000đ%'`),1);
+  await ok('Tiền đầu ca gợi ý = số đếm ca trước', async()=>{await ket(n2.id,140000,'a4.jpg'); const r=await v(`select public.pos_tien_dau_ca('${Q}')`); return [Number(r.so), r.chua_dem];},[140000,false]);
+  // Quên kết ca qua đêm: 2 giờ sáng máy tự kết
+  const s3=await v(`select public.pos_vao_ca_v2('${Q}',null,'a5.jpg',null)`);
+  await ok('Không nhập đầu ca → lấy két ca trước 140k', ()=>[Number(s3.opening_cash), s3.opening_cash_entered],[140000,null]);
+  await banQ();
+  await db.exec(`update pos_shifts set opened_at=now()-interval '1 day' where id='${s3.id}'`);
+  await as('');  // cron chạy không có người đăng nhập
+  const soDong=await v(`select public.pos_tu_ket_ca_qua_dem()`);
+  const c3=await ca(s3.id);
+  await ok('2 giờ sáng: tự kết ca hôm qua còn mở', ()=>[soDong>=1, c3.status, c3.auto_closed, Number(c3.expected_cash), c3.counted_cash, c3.closed_by, c3.closed_by_name],[true,'closed','qua_dem',190000,null,null,'Máy tự kết ca']);
+  await ok('Ca mở hôm nay không bị tự kết', ()=>v(`select count(*) from pos_shifts where status='open' and (opened_at at time zone 'Asia/Ho_Chi_Minh')::date=(now() at time zone 'Asia/Ho_Chi_Minh')::date and auto_closed is not null`),0);
+  await ok('Ghi nhật ký kết hộ', ()=>v(`select count(*) from pos_audit_log where action='dong_ca_ho' and ref='${c3.code}'`),1);
+  await as(B);
+  const t3=await v(`select public.pos_tien_dau_ca('${Q}')`);
+  await ok('Ca trước chưa ai đếm → gợi ý số máy tính 190k, đánh dấu chưa đếm', ()=>[Number(t3.so), t3.chua_dem],[190000,true]);
+  const s4=await v(`select public.pos_vao_ca_v2('${Q}',180000,'b5.jpg',null)`);
+  await ok('Đếm lại thấy 180k (máy 190k) → vẫn báo GĐ như cũ', ()=>v(`select count(*) from notifications where event_key='pos-dau-ca:${s4.id}:${GD}' and body like '%máy tính két%'`),1);
+  // Ca của chính mình từ hôm qua: tự nhận lại được
+  await db.exec(`update pos_shifts set opened_at=now()-interval '1 day' where id='${s4.id}'`);
+  const n5=await v(`select public.pos_nhan_ca('${Q}','${s4.id}',null,'b6.jpg')`);
+  await ok('Ca hôm qua của chính mình → nhận ca mới được', async()=>[(await ca(s4.id)).auto_closed, n5.opened_by, Number(n5.opening_cash)],['nhan_ca',B,190000]);
+  await ok('Bản cũ pos_vao_ca (app chưa cập nhật) vẫn chạy', async()=>{await ket(n5.id,180000,'k.jpg'); const r=await v(`select public.pos_vao_ca('${Q}',180000,'k2.jpg')`); return Number(r.opening_cash);},180000);
+  await ok('Tài khoản đăng nhập không gọi được hàm kết hộ / tự kết', ()=>v(`select has_function_privilege('authenticated','public.pos__ket_ca_ho(uuid,numeric,text,text,text)','execute') or has_function_privilege('authenticated','public.pos_tu_ket_ca_qua_dem()','execute')`),false);
 }
 console.log(`\n${dem-loi}/${dem} đạt`); process.exit(loi?1:0);
