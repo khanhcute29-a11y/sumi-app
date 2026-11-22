@@ -1046,6 +1046,7 @@ export default function BanHangQuay() {
           matHang={matHang} ton={ton} onTao={() => moForm(MAN_LOAI[manHinh])} onMo={(p) => moForm(p.loai, p)}
           onSaoChep={(p) => moForm(p.loai, { dong: p.dong.map((d) => ({ ...d })), ghiChu: p.ghiChu, loaiXuat: p.loaiXuat, nguoiNhan: p.nguoiNhan })}
           onHuy={(p) => setHop({ loai: 'huy_phieu', phieu: p })} onIn={(p) => setBanIn({ phieu: p })}
+          huyDuoc={(p) => !that || p.loai !== 'giao' || p.trangThai === 'tam' || that.cap === 'gd'}
           onNhan={that ? (p) => setHop({ loai: 'nhan_hang', phieu: p }) : null} onVe={() => moManHinh('them')} />
       )}
       {form && dienThoai && form.loai === 'huy' && (
@@ -2277,7 +2278,7 @@ function khoangTg(k) {
   return [-Infinity, Infinity];
 }
 
-function QlPhieu({ loai, ds, matHang, ton, onTao, onMo, onSaoChep, onHuy, onIn, dienThoai, onNhan = null, onVe = null }) {
+function QlPhieu({ loai, ds, matHang, ton, onTao, onMo, onSaoChep, onHuy, onIn, dienThoai, onNhan = null, onVe = null, huyDuoc = () => true }) {
   const K = KIEU_PHIEU[loai];
   const [q, setQ] = useState('');
   const [loc, setLoc] = useState({ tam: true, cho: true, xong: true, huy: false });
@@ -2343,7 +2344,7 @@ function QlPhieu({ loai, ds, matHang, ton, onTao, onMo, onSaoChep, onHuy, onIn, 
                   {p.ghiChu && p.loai !== 'huy' && <span className="r3">{p.ghiChu}</span>}
                 </button>
                 )}
-                {mo === p.ma && <div className="kvm-phieu-ct"><ChiTietPhieu p={p} sl={sl} onMo={() => onMo(p)} onSaoChep={() => onSaoChep(p)} onHuy={() => onHuy(p)} onIn={() => onIn(p)} onNhan={onNhan && p.trangThai === 'cho' ? () => onNhan(p) : null} /></div>}
+                {mo === p.ma && <div className="kvm-phieu-ct"><ChiTietPhieu p={p} sl={sl} onMo={() => onMo(p)} onSaoChep={() => onSaoChep(p)} onHuy={huyDuoc(p) ? () => onHuy(p) : null} onIn={() => onIn(p)} onNhan={onNhan && p.trangThai === 'cho' ? () => onNhan(p) : null} /></div>}
               </React.Fragment>
             );
           })}
@@ -2407,7 +2408,7 @@ function QlPhieu({ loai, ds, matHang, ton, onTao, onMo, onSaoChep, onHuy, onIn, 
                       </tr>
                       {mo === p.ma && (
                         <tr className="kq-mo"><td colSpan={soCot}>
-                          <ChiTietPhieu p={p} sl={sl} onMo={() => onMo(p)} onSaoChep={() => onSaoChep(p)} onHuy={() => onHuy(p)} onIn={() => onIn(p)} onNhan={onNhan && p.trangThai === 'cho' ? () => onNhan(p) : null} />
+                          <ChiTietPhieu p={p} sl={sl} onMo={() => onMo(p)} onSaoChep={() => onSaoChep(p)} onHuy={huyDuoc(p) ? () => onHuy(p) : null} onIn={() => onIn(p)} onNhan={onNhan && p.trangThai === 'cho' ? () => onNhan(p) : null} />
                         </td></tr>
                       )}
                     </React.Fragment>
@@ -2472,7 +2473,7 @@ function ChiTietPhieu({ p, sl, onMo, onSaoChep, onHuy, onIn, onNhan = null }) {
         </div>
       </div>
       <div className="kq-ct-chan">
-        {p.trangThai !== 'huy' && !p.chuyen && <button type="button" onClick={onHuy}><Trash2 size={17} />Hủy</button>}
+        {p.trangThai !== 'huy' && !p.chuyen && (onHuy ? <button type="button" onClick={onHuy}><Trash2 size={17} />Hủy</button> : <span className="mo">Chỉ Giám đốc hủy được phiếu nhập</span>)}
         <button type="button" onClick={onSaoChep}><Copy size={17} />Sao chép</button>
         <span className="gian" />
         {p.trangThai === 'tam' && <button type="button" className="chinh" onClick={onMo}><SquarePen size={17} />Mở phiếu</button>}

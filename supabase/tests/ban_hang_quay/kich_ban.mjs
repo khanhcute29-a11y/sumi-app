@@ -831,4 +831,18 @@ if (await v(`select count(*)::int from pg_proc where proname='pos_tra_hang'`)) {
   await ok('Giám đốc được báo mỗi phiếu trả', ()=>v(`select count(*) from notifications where event_key like 'pos-tra-hang:%:${GD}'`),4);
   await ok('Không ai ghi thẳng được bảng trả hàng', ()=>v(`select has_table_privilege('authenticated','public.pos_returns','insert') or has_table_privilege('authenticated','public.pos_return_lines','update')`),false);
 }
+// ── 202611221047: phiếu nhập hàng đã nhập chỉ Giám đốc huỷ ──
+if (process.argv.some((x)=>x.includes('chi_gd_huy_phieu_nhap'))) {
+  const taoPn=async(nhan=true)=>{const d=id(); await as(QL); await q(`select public.pos_luu_phieu('{"id":"${d}","type":"bep_giao","store":"Vĩnh Phú 42","lines":[{"product_id":"${P1}","name":"Bánh bò","qty":3}]}')`); if(nhan) await q(`select public.pos_nhan_hang('${d}','{"${P1}:":3}')`); return d;};
+  const pn=await taoPn();
+  const truoc=await ton();
+  await as(QL); await chan('Quản lý không huỷ được phiếu nhập đã nhập', ()=>q(`select public.pos_huy_phieu('${pn}','x')`),'Chỉ Giám đốc');
+  await as(NV); await chan('Nhân viên không huỷ được phiếu nhập đã nhập', ()=>q(`select public.pos_huy_phieu('${pn}','x')`),'Chỉ Giám đốc');
+  await ok('Bị chặn thì tồn không đổi', ton, truoc);
+  await as(GD); await ok('Giám đốc huỷ được → tồn quầy bớt 3', async()=>{await q(`select public.pos_huy_phieu('${pn}','nhập nhầm')`); return [await v(`select status from pos_stock_docs where id='${pn}'`), truoc-await ton()];},['huy',3]);
+  const tam=await taoPn(false);
+  await as(QL); await chan('Phiếu chờ nhận: Quản lý cũng không huỷ được', ()=>q(`select public.pos_huy_phieu('${tam}','x')`),'Chỉ Giám đốc');
+  await as(GD); await ok('Phiếu chờ nhận: Giám đốc huỷ được', async()=>{await q(`select public.pos_huy_phieu('${tam}','x')`); return v(`select status from pos_stock_docs where id='${tam}'`);},'huy');
+  await as(NV);
+}
 console.log(`\n${dem-loi}/${dem} đạt`); process.exit(loi?1:0);
