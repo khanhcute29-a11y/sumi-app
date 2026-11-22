@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, RefreshCw, Camera, Search, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, ListFilter, Check } from 'lucide-react';
 import { supabase } from '../../../lib/supabaseClient';
 import { goi, chuLoi, anhVietQr, noiDungCk, NGAN_HANG, maMoi, tachId, linkAnh, linkAnhHoaDon, guiHangDoi, taiAnh, lapBanDoHang, themHangQuay, suaHangQuay, xoaHangQuay, vaoCa, lapPhieuQuy, huyChiKet, luuKm, batKm, thongKeKm } from './posThat';
-import { locXep, LOAI_KM, THU_KM, kmKhongChay, moTaKm, CHI_NHANH } from './banHangQuayLogic';
+import { locXep, LOAI_KM, THU_KM, kmKhongChay, moTaKm, CHI_NHANH, maVachCode128, maInTem } from './banHangQuayLogic';
 
 // Các hộp thoại chỉ có ở chế độ CHẠY THẬT (ca, duyệt, chuyển khoản, thiết lập, đặt cọc, nhận hàng, báo cáo, nhật ký).
 const so = (n) => Math.round(Number(n) || 0).toLocaleString('en-US');
@@ -1646,6 +1647,144 @@ export function KhuyenMai({ ds, matHang, chiNhanh, onDoi, onVe, nhan }) {
         </section>
       </div>
       {form && <FormKm km={form === 'moi' ? null : form} matHang={matHang} onDong={() => setForm(null)} onXong={(chu) => { setForm(null); nhan(chu); onDoi(); }} />}
+    </div>
+  );
+}
+
+// ===== IN TEM MÃ VẠCH (như "In tem mã" KiotViet) =====
+// Khổ tem: tem cuộn (máy in tem nhiệt, mỗi hàng tem = 1 trang) hoặc giấy A4 decal 65 tem.
+export const KHO_TEM = [
+  { id: '2c', ten: 'Tem cuộn 2 tem/hàng · 35×22mm', cot: 2, w: 35, h: 22, khe: 2 },
+  { id: '3c', ten: 'Tem cuộn 3 tem/hàng · 35×22mm', cot: 3, w: 35, h: 22, khe: 2 },
+  { id: '1c', ten: 'Tem cuộn 1 tem · 50×30mm', cot: 1, w: 50, h: 30, khe: 0 },
+  { id: 'a4', ten: 'Giấy A4 · 65 tem 38×21mm', cot: 5, w: 38.1, h: 21.2, khe: 2.5, a4: true },
+];
+function VachSvg({ ma }) {
+  const bit = maVachCode128(ma);
+  if (!bit) return null;
+  const vach = [];
+  for (let i = 0; i < bit.length;) {
+    if (bit[i] === '1') { let j = i; while (bit[j] === '1') j++; vach.push(<rect key={i} x={i + 10} y="0" width={j - i} height="1" />); i = j; } else i++;
+  }
+  // 10 mô-đun trắng 2 bên (vùng yên tĩnh) để máy quét bắt được.
+  return <svg className="tem-vach" viewBox={`0 0 ${bit.length + 20} 1`} preserveAspectRatio="none" shapeRendering="crispEdges" aria-label={`Mã vạch ${ma}`}>{vach}</svg>;
+}
+function MotTem({ m, gia, ma, kho, tenCH, hienCH, hienGia }) {
+  return (
+    <div className="tem" style={{ width: `${kho.w}mm`, height: `${kho.h}mm` }}>
+      {hienCH && <div className="tem-ch">{tenCH}</div>}
+      <div className="tem-ten">{m.ten}{m.size ? ` ${m.size}` : ''}</div>
+      <VachSvg ma={ma} />
+      <div className="tem-ma">{ma}</div>
+      {hienGia && <div className="tem-gia">{so(gia)}đ</div>}
+    </div>
+  );
+}
+const docLuuTem = (k, md) => { try { return localStorage.getItem(k) ?? md; } catch { return md; } };
+const ghiLuuTem = (k, v) => { try { localStorage.setItem(k, v); } catch { /* bỏ qua */ } };
+
+export function InTem({ matHang, tonCN = {}, chiNhanh, bangGia = [], onVe, nhan }) {
+  const [ds, setDs] = useState([]); // [{ ma, sl }]
+  const [q, setQ] = useState('');
+  const [kho, setKho] = useState(() => docLuuTem('bhq-tem-kho', '2c'));
+  const [bg, setBg] = useState('');
+  const [hienCH, setHienCH] = useState(() => docLuuTem('bhq-tem-ch', '1') === '1');
+  const [hienGia, setHienGia] = useState(() => docLuuTem('bhq-tem-gia', '1') === '1');
+  const [dangIn, setDangIn] = useState(false);
+  const k = KHO_TEM.find((x) => x.id === kho) || KHO_TEM[0];
+  const theoMa = useMemo(() => Object.fromEntries(matHang.map((m) => [m.ma, m])), [matHang]);
+  const giaCua = (m) => (bangGia.find((b) => b.id === bg)?.gia?.[m.ma]) || m.gia;
+  const t = q.trim().toLowerCase();
+  const goiY = t ? locXep(matHang, (m) => `${m.ma} ${m.ten} ${m.size} ${m.maVach || ''}`, t, 8) : [];
+  const them = (m, sl = 1) => { setDs((x) => (x.some((d) => d.ma === m.ma) ? x.map((d) => (d.ma === m.ma ? { ...d, sl: d.sl + sl } : d)) : [...x, { ma: m.ma, sl }])); setQ(''); };
+  const ton = tonCN[chiNhanh] || {};
+  const themConTon = () => {
+    const co = matHang.filter((m) => (ton[m.ma] || 0) > 0 && !m.dichVu);
+    if (!co.length) { nhan(`${chiNhanh} chưa có hàng còn tồn`); return; }
+    setDs(co.map((m) => ({ ma: m.ma, sl: Math.min(Math.floor(ton[m.ma]), 500) })));
+  };
+  const dong = ds.map((d) => ({ ...d, m: theoMa[d.ma] })).filter((d) => d.m).map((d) => ({ ...d, maIn: maInTem(d.m) }));
+  const inDuoc = dong.filter((d) => d.maIn && d.sl > 0);
+  const thieuMa = dong.filter((d) => !d.maIn);
+  const tong = inDuoc.reduce((s2, d) => s2 + d.sl, 0);
+  const tems = inDuoc.flatMap((d) => Array.from({ length: Math.min(d.sl, 500) }, (_, i) => ({ key: `${d.ma}-${i}`, d })));
+  const tenCH = `SUMI BAKERY${chiNhanh ? ` · ${chiNhanh}` : ''}`;
+  const tem = (x) => <MotTem key={x.key} m={x.d.m} gia={giaCua(x.d.m)} ma={x.d.maIn} kho={k} tenCH={tenCH} hienCH={hienCH} hienGia={hienGia} />;
+  // Tem cuộn: mỗi hàng tem = 1 trang giấy (máy in tem tự cắt theo khe). A4: 65 tem / trang.
+  const hang = [];
+  const moiTrang = k.a4 ? 65 : k.cot;
+  for (let i = 0; i < tems.length; i += moiTrang) hang.push(tems.slice(i, i + moiTrang));
+  const rongHang = k.cot * k.w + (k.cot - 1) * k.khe;
+  const inNgay = () => {
+    if (!tong) { nhan('Chọn hàng cần in tem trước'); return; }
+    if (tong > 2000) { nhan('In tối đa 2.000 tem mỗi lần — chia làm nhiều lần'); return; }
+    const st = document.createElement('style');
+    st.id = 'bhq-tem-trang';
+    st.textContent = `@media print{@page{size:${k.a4 ? 'A4' : `${rongHang}mm ${k.h}mm`};margin:0}}`;
+    document.head.appendChild(st);
+    document.documentElement.classList.add('in-tem');
+    setDangIn(true);
+    const xong = () => { document.documentElement.classList.remove('in-tem'); st.remove(); setDangIn(false); window.removeEventListener('afterprint', xong); };
+    window.addEventListener('afterprint', xong);
+    setTimeout(() => { window.print(); setTimeout(() => { if (document.getElementById('bhq-tem-trang')) xong(); }, 1500); }, 120);
+  };
+  return (
+    <div className="xhd bcn km tem-man">
+      <header className="xhd-dau"><button type="button" aria-label="Quay lại" onClick={onVe}><ChevronLeft size={24} /></button><h1>In tem mã</h1></header>
+      <div className="xhd-than">
+        <section className="xhd-the km-form">
+          <label className="km-o"><span>Khổ tem</span>
+            <select className="bhq-o" value={kho} onChange={(e) => { setKho(e.target.value); ghiLuuTem('bhq-tem-kho', e.target.value); }}>
+              {KHO_TEM.map((x) => <option key={x.id} value={x.id}>{x.ten}</option>)}
+            </select></label>
+          {bangGia.length > 0 && (
+            <label className="km-o"><span>Giá in trên tem</span>
+              <select className="bhq-o" value={bg} onChange={(e) => setBg(e.target.value)}>
+                <option value="">Bảng giá chung</option>{bangGia.map((b) => <option key={b.id} value={b.id}>{b.ten}</option>)}
+              </select></label>
+          )}
+          <label className="kv-cong-tac"><span>In tên cửa hàng</span><input type="checkbox" checked={hienCH} onChange={(e) => { setHienCH(e.target.checked); ghiLuuTem('bhq-tem-ch', e.target.checked ? '1' : '0'); }} /><i /></label>
+          <label className="kv-cong-tac"><span>In giá bán</span><input type="checkbox" checked={hienGia} onChange={(e) => { setHienGia(e.target.checked); ghiLuuTem('bhq-tem-gia', e.target.checked ? '1' : '0'); }} /><i /></label>
+        </section>
+        <section className="xhd-the km-form">
+          <div className="km-mon">
+            <span>Hàng cần in tem</span>
+            <label className="o bcn-tim"><Search size={16} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Gõ tên, mã hàng hoặc quét mã vạch"
+              onKeyDown={(e) => { if (e.key === 'Enter') { const m = matHang.find((x) => x.ma === q.trim().toUpperCase() || (x.maVach && x.maVach === q.trim())) || (goiY.length === 1 ? goiY[0] : null); if (m) them(m); } }} /></label>
+            {goiY.map((m) => <button key={m.id} type="button" className="km-mon-goi" onClick={() => them(m)}>{m.ten}{m.size ? ` ${m.size}` : ''}<small>{m.ma} · tồn {so(ton[m.ma] || 0)}</small></button>)}
+          </div>
+          <div className="tem-nut">
+            <button type="button" className="km-them" onClick={themConTon}>+ Tất cả hàng còn tồn ({chiNhanh})</button>
+            {ds.length > 0 && <button type="button" className="km-them" onClick={() => setDs([])}>Bỏ hết</button>}
+          </div>
+          {dong.map((d) => (
+            <div key={d.ma} className="bcn-phieu tem-dong">
+              <div><b>{d.m.ten}{d.m.size ? ` ${d.m.size}` : ''}</b>
+                <small>{d.maIn ? `Mã in: ${d.maIn}` : 'Chưa có mã cố định — vào Hàng hoá đặt Mã vạch cho món này'} · {so(giaCua(d.m))}đ</small></div>
+              <label className="tem-sl"><input inputMode="numeric" aria-label={`Số tem ${d.m.ten}`} value={d.sl}
+                onChange={(e) => { const v = Math.min(Number(soTien(e.target.value)) || 0, 500); setDs((x) => x.map((y) => (y.ma === d.ma ? { ...y, sl: v } : y))); }} /> tem</label>
+              <button type="button" className="km-bo" aria-label={`Bỏ ${d.m.ten}`} onClick={() => setDs((x) => x.filter((y) => y.ma !== d.ma))}><X size={16} /></button>
+            </div>
+          ))}
+          {!dong.length && <p className="bhq-ghi">Chưa chọn hàng. Gõ tên bánh ở ô trên, hoặc bấm "Tất cả hàng còn tồn".</p>}
+          {thieuMa.length > 0 && <p className="kv-loi">{thieuMa.length} món chưa có mã cố định nên không in được (mã SP… tự đánh sẽ đổi khi thêm món mới).</p>}
+        </section>
+        {inDuoc.length > 0 && (
+          <section className="xhd-the">
+            <span className="tem-xem-nhan">Xem trước ({so(tong)} tem)</span>
+            <div className="tem-xem">{tems.slice(0, k.a4 ? 10 : k.cot * 2).map(tem)}</div>
+          </section>
+        )}
+        <button type="button" className="bhq-nut chinh tem-in" disabled={!tong || dangIn} onClick={inNgay}>{dangIn ? 'Đang mở hộp in…' : `In ${so(tong)} tem`}</button>
+      </div>
+      {dangIn && createPortal(
+        <div id="bhq-tem" className={k.a4 ? 'a4' : 'cuon'}>
+          {hang.map((h, i) => (
+            <div key={i} className="tem-trang" style={k.a4 ? undefined : { width: `${rongHang}mm`, height: `${k.h}mm`, gap: `${k.khe}mm` }}>
+              {h.map(tem)}
+            </div>
+          ))}
+        </div>, document.body)}
     </div>
   );
 }

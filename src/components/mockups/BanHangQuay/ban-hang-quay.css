@@ -1399,3 +1399,31 @@ button.bcn-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .km-tag{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:6px;background:#FFF1E6;color:#D96B43;font-style:normal;font-size:12px;font-weight:600}
 .kvm-the>.km-dong{position:relative}
 .kvm-the>.km-dong .kv-gach{min-height:44px;color:var(--xanh);font-weight:600}
+
+/* ===== In tem mã vạch ===== */
+.tem-man .bhq-o{min-height:44px}
+.tem-nut{display:flex;gap:8px;flex-wrap:wrap}
+.tem-dong{align-items:center}
+.tem-dong>div{flex:1;min-width:0}
+.tem-sl{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chu-phu);flex:none}
+.tem-sl input{width:64px;min-height:44px;border:1px solid #E3D5C3;border-radius:10px;text-align:center;font-size:16px}
+.tem-xem-nhan{font-size:13px;color:#8C5A3C;font-weight:600}
+.tem-xem{display:flex;flex-wrap:wrap;gap:8px;padding:8px 0;zoom:1.6}
+.tem-xem .tem{outline:1px dashed #c7ccd3}
+.tem-in{width:100%;min-height:48px;margin:12px 0 calc(20px + env(safe-area-inset-bottom))}
+.tem{box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.3mm;padding:1mm 1.5mm;overflow:hidden;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif;text-align:center;flex:none}
+.tem-ch{font-size:5.5pt;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.tem-ten{font-size:6.5pt;font-weight:700;line-height:1.1;max-width:100%;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.tem-vach{width:100%;height:7mm;flex:none;fill:#000}
+.tem-ma{font-size:5.5pt;line-height:1;letter-spacing:.3px}
+.tem-gia{font-size:8pt;font-weight:700;line-height:1}
+#bhq-tem{display:none}
+@media print{
+  html.in-tem body *{visibility:hidden!important}
+  html.in-tem #bhq-in{display:none!important}
+  html.in-tem #bhq-tem,html.in-tem #bhq-tem *{visibility:visible!important}
+  html.in-tem #bhq-tem{display:block;position:absolute;left:0;top:0;margin:0;padding:0}
+  html.in-tem #bhq-tem.cuon .tem-trang{display:flex;break-after:page;page-break-after:always;overflow:hidden}
+  html.in-tem #bhq-tem.a4 .tem-trang{display:grid;grid-template-columns:repeat(5,38.1mm);grid-auto-rows:21.2mm;column-gap:2.5mm;padding:10.7mm 4.7mm;width:210mm;box-sizing:border-box;break-after:page;page-break-after:always}
+  html.in-tem #bhq-tem .tem-trang:last-child{break-after:auto;page-break-after:auto}
+}
