@@ -1337,3 +1337,12 @@ button.bcn-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mc-chua-vao{margin:8px 0 0;font-size:14px;line-height:1.45}
 .bhq-chua-bat{position:fixed;left:12px;right:84px;bottom:calc(76px + env(safe-area-inset-bottom));z-index:60;background:#FFF1F0;border:1.5px solid #E5484D;color:#7A1F22;border-radius:12px;padding:10px 12px;font-size:14px;line-height:1.4;box-shadow:0 6px 18px rgba(122,31,34,.18);pointer-events:none}
 @media (min-width:900px){.bhq-chua-bat{left:auto;right:16px;bottom:56px;max-width:420px}}
+
+/* Trả tiền kết hợp (như KiotViet): mỗi cách trả 1 ô số tiền */
+.kv-chia{display:flex;flex-direction:column;gap:6px;margin:6px 0 4px;padding:10px 12px;border-radius:12px;background:#F7EFE2}
+.kv-chia .r{display:flex;align-items:center;gap:8px;min-height:44px}
+.kv-chia .r>span{flex:1;font-size:14px;color:#2C1D11}
+.kv-chia .r input{width:120px;text-align:right}
+.kv-chia-phan{min-height:36px;padding:0 10px;border:1px dashed #8C5A3C;border-radius:8px;background:#fff;color:#8C5A3C;font-size:13px;font-weight:600}
+.kv-chia-con{font-size:13px;font-weight:600;color:#11883E;text-align:right}
+.kv-chia-con.thieu{color:#b42318}

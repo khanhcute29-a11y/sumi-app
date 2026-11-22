@@ -13,7 +13,7 @@ const veApp = () => { window.location.href = '/'; };
 import { supabase } from '../../../lib/supabaseClient';
 import {
   CHI_NHANH, DANH_MUC, THU_KHAC_GOI_Y, LOAI_PHIEU, LY_DO_HUY, LY_DO_HUY_HD, LOAI_NOI_BO, LUAN_CHUYEN,
-  taoMatHang, nhomCo, tenNhomHang, tonGia, tienDong, tinhHoaDon, tinhThanhToan, tinhKetCa, apPhieuKho, tinhCongNo, baoCaoNgay, khop, locXep, docSoTien,
+  taoMatHang, nhomCo, tenNhomHang, tonGia, tienDong, tinhHoaDon, tinhThanhToan, duaCua, tongChia, PT_CHIA, tinhKetCa, apPhieuKho, tinhCongNo, baoCaoNgay, khop, locXep, docSoTien,
 } from './banHangQuayLogic';
 import {
   kiemTraThat, taiDuLieu, taiLo, taiViecCho, laKeToan, goi, goiHoacXep, xepHang, dsCho, guiHangDoi, demCho, boViecLoi, guiLaiViecLoi, laLoiMang, chuLoi, maMoi, tachId,
@@ -43,8 +43,35 @@ const SP_MAU = [
 ];
 const KHACH_MAU = [{ id: 'k1', name: 'Khách mẫu A', phone: '0900000001' }, { id: 'k2', name: 'Khách mẫu B', phone: '0900000002' }];
 const KHACH_LE = { id: null, name: 'Khách lẻ', phone: '' };
-const PT = { tien_mat: 'Tiền mặt', chuyen_khoan: 'Chuyển khoản', the: 'Thẻ', vi: 'Ví' }; // như KiotViet (Ví = MoMo/ZaloPay…)
+const PT = { tien_mat: 'Tiền mặt', chuyen_khoan: 'Chuyển khoản', the: 'Thẻ', vi: 'Ví', ket_hop: 'Kết hợp' }; // như KiotViet (Ví = MoMo/ZaloPay…)
 const NGAY = 86400000;
+// Trả tiền kết hợp: chọn "Kết hợp" → mặc định cả số cần trả vào Tiền mặt, thu ngân chia lại cho từng cách.
+const chonPt = (k, hd, canTra) => (k === 'ket_hop'
+  ? { pt: k, dua: null, chia: hd.chia && tongChia(hd.chia) > 0 ? hd.chia : { tien_mat: canTra } }
+  : { pt: k, dua: null });
+const chiaGui = (chia) => Object.fromEntries(PT_CHIA.map((k) => [k, Math.max(Math.round(Number(chia?.[k]) || 0), 0)]).filter(([, v]) => v > 0));
+// Số thật lưu trên hoá đơn: phần tiền mặt trừ đi tiền thừa đã thối.
+const chiaThat = (chia, thua) => { const c = chiaGui(chia); if (thua > 0) c.tien_mat = (c.tien_mat || 0) - thua; return Object.fromEntries(Object.entries(c).filter(([, v]) => v > 0)); };
+const chuChia = (chia) => Object.entries(chia || {}).filter(([, v]) => Number(v) > 0).map(([k, v]) => `${PT[k]} ${so(v)}`).join(' + ');
+function ChiaTien({ hd, canTra, onSua }) {
+  const chia = hd.chia || {};
+  const tong = tongChia(chia);
+  const con = canTra - tong;
+  return (
+    <div className="kv-chia" role="group" aria-label="Chia tiền theo từng cách trả">
+      {PT_CHIA.map((k) => (
+        <label key={k} className="r">
+          <span>{PT[k]}</span>
+          <input className="kv-gach" inputMode="numeric" value={chia[k] ? so(chia[k]) : ''} placeholder="0" aria-label={`Trả bằng ${PT[k]}`}
+            onFocus={(e) => e.target.select()}
+            onChange={(e) => onSua({ chia: { ...chia, [k]: Number(soTien(e.target.value)) || 0 } })} />
+          {con > 0 && !chia[k] && <button type="button" className="kv-chia-phan" onClick={() => onSua({ chia: { ...chia, [k]: con } })}>+{so(con)}</button>}
+        </label>
+      ))}
+      <div className={`kv-chia-con ${con > 0 ? 'thieu' : ''}`}>{con > 0 ? `Còn thiếu ${so(con)}` : con < 0 ? `Dư ${so(-con)} (thối tiền mặt)` : 'Đủ số khách cần trả'}</div>
+    </div>
+  );
+}
 const MOI_TRANG = 15; // KiotViet: 15 hàng / trang ở chế độ Bán thường
 const MAU_ANH = ['#F9C6D3', '#C9DCF7', '#F8D9B5', '#CDE8D2', '#E3D3F5', '#F7E3A8'];
 // Thanh quản lý giống KiotViet: Hóa đơn · Hàng hóa ▾ (Danh sách hàng hóa | Kiểm kho · Xuất dùng nội bộ · Xuất hủy) · Nhập hàng · Công nợ · Báo cáo.
@@ -459,8 +486,8 @@ export default function BanHangQuay() {
   const hoanTatThat = async (duyetId = hd.duyetId) => {
     if (!hd.dong.length || dangBan) return;
     if (!caMo && !banKhongCa) { nhan('Chưa mở ca — nhập tiền đầu ca trước khi bán'); setManHinh('ban'); return; }
-    const dua = hd.dua == null ? tong.canTra : hd.dua;
-    const tt = tinhThanhToan({ canTra: tong.canTra, khachDua: dua, phuongThuc: hd.pt, laKhachLe: !hd.khach.id });
+    const dua = duaCua(hd, tong.canTra);
+    const tt = tinhThanhToan({ canTra: tong.canTra, khachDua: dua, phuongThuc: hd.pt, laKhachLe: !hd.khach.id, chia: hd.chia });
     if (tt.loi) { nhan(tt.loi); return; }
     const donGia = (d) => (d.sl ? Math.round(tienDong(d) / d.sl) : d.gia);
     const goc = hd.dong.reduce((a, d) => a + d.gia * d.sl, 0);
@@ -473,14 +500,15 @@ export default function BanHangQuay() {
     const p = {
       id: hd.id, store: chiNhanh, customer_id: hd.khach.id || null, price_list_id: hd.bangGia || null,
       lines: hd.dong.map((d) => { const t = tachId(d.id ? d : matHang.find((m) => m.ma === d.ma)); return { product_id: t.product_id, variant_id: t.variant_id, size: d.size || null, name: d.ten, qty: d.sl, list_price: d.gia, unit_price: donGia(d), eod: !!d.eod, note: d.ghiChu || null }; }),
-      invoice_discount: tong.giamHd, other_fees: hd.thuKhac, vat: !!hd.vat, points_used: diemDung, pay_method: hd.pt,
+      invoice_discount: tong.giamHd, other_fees: hd.thuKhac, vat: !!hd.vat, points_used: diemDung, pay_method: hd.pt, ...(hd.pt === 'ket_hop' ? { pay_parts: chiaGui(hd.chia) } : {}),
       received: Number(dua) || 0, note: hd.ghiChu || null, seller_name: hd.nguoiBan || nguoi, approval_id: duyetId || null,
       client_created_at: new Date().toISOString(), shift_id: caMo?.id || null, photo_url: null, photo_hash: anh.ma || null,
     };
     const banGhi = {
       id: hd.id, luc: Date.now(), chiNhanh, thuNgan: nguoi, nguoiBan: hd.nguoiBan || nguoi, khach: hd.khach, dong: hd.dong,
       thuKhacDong: hd.thuKhac, ghiChu: hd.ghiChu, ...tong, phuongThuc: hd.pt, khachDua: Number(dua) || 0, ...tt, daHuy: false, that: true, caId: caMo?.id || null,
-      bangGia: bgHd?.ten || null, ckTrangThai: hd.pt === 'chuyen_khoan' && tt.thucThu > 0 ? 'cho_xac_nhan' : 'khong',
+      chia: hd.pt === 'ket_hop' ? chiaThat(hd.chia, tt.thua) : null,
+      bangGia: bgHd?.ten || null, ckTrangThai: (hd.pt === 'chuyen_khoan' || (hd.pt === 'ket_hop' && Number(hd.chia?.chuyen_khoan) > 0)) && tt.thucThu > 0 ? 'cho_xac_nhan' : 'khong',
     };
     const boAnh = () => { try { URL.revokeObjectURL(anh.url); } catch { /* bỏ qua */ } setAnhBan((x) => { const y = { ...x }; delete y[hd.id]; return y; }); };
     setDangBan(true);
@@ -514,13 +542,14 @@ export default function BanHangQuay() {
   const hoanTat = () => {
     if (that) { hoanTatThat(); return; }
     if (!hd.dong.length) return;
-    const dua = hd.dua == null ? tong.canTra : hd.dua;
-    const tt = tinhThanhToan({ canTra: tong.canTra, khachDua: dua, phuongThuc: hd.pt, laKhachLe: !hd.khach.id });
+    const dua = duaCua(hd, tong.canTra);
+    const tt = tinhThanhToan({ canTra: tong.canTra, khachDua: dua, phuongThuc: hd.pt, laKhachLe: !hd.khach.id, chia: hd.chia });
     if (tt.loi) { nhan(tt.loi); return; }
     const ma = `HD${String(daBan.filter((h) => !h.mau).length + 1).padStart(6, '0')}`;
     const banGhi = {
       ma, luc: Date.now(), chiNhanh, thuNgan: nguoi, nguoiBan: hd.nguoiBan || nguoi, khach: hd.khach, dong: hd.dong,
       thuKhacDong: hd.thuKhac, ghiChu: hd.ghiChu, ...tong, phuongThuc: hd.pt, khachDua: Number(dua) || 0, ...tt, daHuy: false,
+      chia: hd.pt === 'ket_hop' ? chiaThat(hd.chia, tt.thua) : null,
     };
     setDaBan((ds) => [banGhi, ...ds]);
     ghiKho(chiNhanh, hd.dong.map((d) => ({ ma: d.ma, sl: -d.sl })), ma, 'Bán hàng');
@@ -573,7 +602,7 @@ export default function BanHangQuay() {
       setDaBan((ds) => ds.map((x) => (x.id === h.id ? { ...x, daHuy: true, lyDoHuy: lyDo, nguoiHuy: nguoi, lucHuy: Date.now() } : x)));
       ghiKho(h.chiNhanh, h.dong.map((d) => ({ ma: d.ma, sl: d.sl })), h.ma, 'Huỷ hoá đơn');
       if (h.no) napNo();
-      nhan(`Đã huỷ ${h.ma} — đã cộng lại tồn kho${h.phuongThuc === 'tien_mat' && h.thucThu ? `, trả khách ${so(h.thucThu)} tiền mặt` : ''}`);
+      nhan(`Đã huỷ ${h.ma} — đã cộng lại tồn kho${(h.chia ? Number(h.chia.tien_mat) || 0 : h.phuongThuc === 'tien_mat' ? h.thucThu : 0) > 0 ? `, trả khách ${so(h.chia ? h.chia.tien_mat : h.thucThu)} tiền mặt` : ''}`);
     } catch (e) {
       const m = chuLoi(e);
       if (/cần Quản lý/.test(m) && !duyetId) setHop({ loai: 'xin_duyet', kind: 'huy_hd', payload: { invoice_id: h.id, tien: h.canTra, mo_ta: `${nguoi} xin huỷ ${h.ma} (${so(h.canTra)}) — ${lyDo}` }, sau: { h, lyDo } });
@@ -717,6 +746,7 @@ export default function BanHangQuay() {
   const ext = that ? {
     qr: <QrChuyenKhoan caiDat={cd} tien={tong.canTra} hdId={hd.id} />,
     qrDt: <QrChuyenKhoan dt caiDat={cd} tien={tong.canTra} hdId={hd.id} />,
+    qrChia: (tien, dt = false) => <QrChuyenKhoan dt={dt} caiDat={cd} tien={tien} hdId={hd.id} />,
     bangGia: bangGia.length ? (
       <label className="kv-bang-gia"><Tag size={15} />
         <select value={hd.bangGia || ''} onChange={(e) => doiBangGia(e.target.value)} aria-label="Bảng giá">
@@ -1369,8 +1399,8 @@ function PopGia({ d, onSua, onDong }) {
 // mệnh giá · Tiền thừa trả khách / IN · THANH TOÁN.
 function KhungThanhToan({ hd, tong, bayGio, nguoiBanDs, khachNo, duaRef, onSua, oKhach, onThuKhac, onIn, onXong, onDong, ext }) {
   const [moGiam, setMoGiam] = useState(false);
-  const dua = hd.dua == null ? tong.canTra : hd.dua;
-  const tt = tinhThanhToan({ canTra: tong.canTra, khachDua: dua, phuongThuc: hd.pt, laKhachLe: !hd.khach.id });
+  const dua = duaCua(hd, tong.canTra);
+  const tt = tinhThanhToan({ canTra: tong.canTra, khachDua: dua, phuongThuc: hd.pt, laKhachLe: !hd.khach.id, chia: hd.chia });
   const c = tong.canTra;
   const goiY = [...new Set([Math.ceil(c / 1000) * 1000, Math.ceil(c / 10000) * 10000, Math.ceil(c / 50000) * 50000, Math.ceil(c / 100000) * 100000, Math.ceil(c / 200000) * 200000, Math.ceil(c / 500000) * 500000])]
     .filter((v) => v >= c && v > 0).slice(0, 6);
@@ -1413,19 +1443,21 @@ function KhungThanhToan({ hd, tong, bayGio, nguoiBanDs, khachNo, duaRef, onSua, 
         {ext?.truocCanTra}
         <div className="r dam"><span>Khách cần trả</span><b className="xanh">{so(tong.canTra)}</b></div>
         <div className="r dam"><span>Khách thanh toán</span>
-          <input ref={duaRef} className="kv-gach kv-dua" inputMode="numeric" value={so(dua)} aria-label="Khách thanh toán (F8)"
+          <input ref={duaRef} className="kv-gach kv-dua" inputMode="numeric" value={so(dua)} aria-label="Khách thanh toán (F8)" readOnly={hd.pt === 'ket_hop'}
             onChange={(e) => onSua({ dua: Number(soTien(e.target.value)) || 0 })} onFocus={(e) => e.target.select()} />
         </div>
         <div className="kv-pt" role="radiogroup" aria-label="Phương thức thanh toán">
           {Object.entries(PT).map(([k, l]) => (
             <label key={k} className={hd.pt === k ? 'on' : ''}>
-              <input type="radio" name={`pt-${hd.id}`} checked={hd.pt === k} onChange={() => onSua({ pt: k, dua: null })} /><i />{l}
+              <input type="radio" name={`pt-${hd.id}`} checked={hd.pt === k} onChange={() => onSua(chonPt(k, hd, tong.canTra))} /><i />{l}
             </label>
           ))}
         </div>
+        {hd.pt === 'ket_hop' && <ChiaTien hd={hd} canTra={tong.canTra} onSua={onSua} />}
         {hd.pt === 'tien_mat' && goiY.length > 0 && (
           <div className="kv-menh-gia">{goiY.map((v) => <button key={v} type="button" className={Number(dua) === v ? 'on' : ''} onClick={() => onSua({ dua: v })}>{so(v)}</button>)}</div>
         )}
+        {hd.pt === 'ket_hop' && Number(hd.chia?.chuyen_khoan) > 0 && ext?.qrChia?.(Number(hd.chia.chuyen_khoan))}
         {hd.pt === 'chuyen_khoan' && (ext?.qr || <div className="kv-qr">Mã VietQR {so(tong.canTra)}<small>Bản thật: QR theo tài khoản chi nhánh, có sẵn số tiền + mã hóa đơn để đối chiếu sao kê.</small></div>)}
         {tt.no > 0
           ? <div className="r no"><span>Tính vào công nợ</span><b>{so(tt.no)}</b></div>
@@ -1488,8 +1520,8 @@ function DienThoai({
   );
 
   if (dtMan === 'tt') {
-    const dua = hd.dua == null ? tong.canTra : hd.dua;
-    const tt = tinhThanhToan({ canTra: tong.canTra, khachDua: dua, phuongThuc: hd.pt, laKhachLe: !hd.khach.id });
+    const dua = duaCua(hd, tong.canTra);
+    const tt = tinhThanhToan({ canTra: tong.canTra, khachDua: dua, phuongThuc: hd.pt, laKhachLe: !hd.khach.id, chia: hd.chia });
     const laPt = hd.giamKieu === '%';
     // Như app KiotViet: ‹ Thanh toán [chia sẻ][in] · Xem hàng trong đơn › · thẻ tiền · thanh
     // phương thức · tài khoản + VietQR · nút xanh "Thanh toán".
@@ -1512,11 +1544,13 @@ function DienThoai({
             {ext?.truocCanTra}
             <div className="r"><span>Khách cần trả</span><b className="xanh">{so(tong.canTra)}</b></div>
             <div className="r"><span>Khách thanh toán</span>
-              <input className="kv-gach" inputMode="numeric" value={so(dua)} aria-label="Khách thanh toán" onFocus={(e) => e.target.select()}
+              <input className="kv-gach" inputMode="numeric" value={so(dua)} aria-label="Khách thanh toán" readOnly={hd.pt === 'ket_hop'} onFocus={(e) => e.target.select()}
                 onChange={(e) => sua({ dua: Number(soTien(e.target.value)) || 0 })} /></div>
             <div className="kvm-pt2" role="radiogroup" aria-label="Phương thức thanh toán">
-              {Object.entries(PT).map(([k, l]) => <button key={k} type="button" role="radio" aria-checked={hd.pt === k} className={hd.pt === k ? 'on' : ''} onClick={() => sua({ pt: k, dua: null })}>{l}</button>)}
+              {Object.entries(PT).map(([k, l]) => <button key={k} type="button" role="radio" aria-checked={hd.pt === k} className={hd.pt === k ? 'on' : ''} onClick={() => sua(chonPt(k, hd, tong.canTra))}>{l}</button>)}
             </div>
+            {hd.pt === 'ket_hop' && <ChiaTien hd={hd} canTra={tong.canTra} onSua={sua} />}
+            {hd.pt === 'ket_hop' && Number(hd.chia?.chuyen_khoan) > 0 && ext?.qrChia?.(Number(hd.chia.chuyen_khoan), true)}
             {hd.pt === 'chuyen_khoan' && (ext?.qrDt || ext?.qr)}
             {tt.no > 0 ? <div className="r no"><span>Tính vào công nợ</span><b>{so(tt.no)}</b></div>
               : tt.thua > 0 ? <div className="r"><span>Tiền thừa trả khách</span><b>{so(tt.thua)}</b></div> : null}
@@ -2942,7 +2976,7 @@ function ChiTietHd({ h, tra, huyDuoc, dienThoai, onIn, onHuy, onChiaSe, onSaoChe
         <div><small>Ngày bán:</small><span>{ngayDayDu(h.luc)}</span></div>
         <div><small>Khách hàng:</small><span className="xanh">{h.khach?.name || 'Khách lẻ'}</span></div>
         <div><small>Kênh bán:</small><span>Bán trực tiếp</span></div>
-        <div><small>Thanh toán:</small><span>{PT[h.phuongThuc]}</span></div>
+        <div><small>Thanh toán:</small><span>{h.chia ? chuChia(h.chia) : PT[h.phuongThuc]}</span></div>
       </div>
       {dienThoai && h.dong.length > 0 && (
         <ul className="kvm-hd-mon">
@@ -3059,7 +3093,8 @@ function ChiTietHdDt({ h, huyDuoc, onLui, onIn, onHuy, onChiaSe, onSaoChep }) {
           <div className="dam"><span>Khách cần trả</span><span>{so(h.canTra)}</span></div>
           <div className="dam"><span>Khách đã trả</span><span className="xanh lon">{so(daTra)}</span></div>
           <button type="button" className="pt" aria-expanded={moPt} onClick={() => setMoPt((v) => !v)}>{moPt ? <ChevronUp size={18} /> : <ChevronDown size={18} />}{PT[h.phuongThuc]}</button>
-          {moPt && <div className="pt-ct"><span>{PT[h.phuongThuc]}</span><span>{so(daTra)}</span></div>}
+          {moPt && (h.chia ? Object.entries(h.chia).filter(([, v]) => Number(v) > 0).map(([k, v]) => <div key={k} className="pt-ct"><span>{PT[k]}</span><span>{so(v)}</span></div>)
+            : <div className="pt-ct"><span>{PT[h.phuongThuc]}</span><span>{so(daTra)}</span></div>)}
           {h.ckTrangThai === 'cho_xac_nhan' && <div className="ck-cho"><span>Tiền chuyển khoản chờ Quản lý / Kế toán xác nhận đã về</span></div>}
           {h.choGui && !h.guiLoi && <div className="ck-cho"><span>Đang mất mạng — hoá đơn giữ trên máy, có mạng sẽ tự gửi lên</span></div>}
           {h.guiLoi && <div className="ck-cho"><span>Gửi lên không được: {h.guiLoi} — hoá đơn vẫn giữ trên máy, báo Quản lý</span></div>}
@@ -3109,7 +3144,7 @@ function QlHoaDon({ ds, traHangs, dienThoai, huyDuoc, onIn, onHuy, onChiaSe, onS
   const t = q.trim().toLowerCase();
   // Tắt cả hai nút trạng thái = xem tất cả (không để màn trống vì lỡ bấm tắt hết).
   const tatHet = !loc.xong && !loc.huy;
-  const hopKhac = ds.filter((h) => trongKy(h.luc, ky) && (!pt || h.phuongThuc === pt)
+  const hopKhac = ds.filter((h) => trongKy(h.luc, ky) && (!pt || h.phuongThuc === pt || Number(h.chia?.[pt]) > 0)
     && khop(`${h.ma} ${h.khach?.name || ''} ${h.khach?.phone || ''}`, t));
   const loc2 = hopKhac.filter((h) => tatHet || loc[h.daHuy ? 'huy' : 'xong']);
   // Đang ẩn hoá đơn Hoàn thành mà có hoá đơn để xem → nhắc + nút bật lại (nhân viên hay lỡ bấm tắt).

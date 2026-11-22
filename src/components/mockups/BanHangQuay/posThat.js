@@ -104,7 +104,7 @@ export function hoaDonTuDb(r, lines, bd) {
     dong, thuKhacDong: r.other_fee_detail || [], ghiChu: r.note || '',
     tongHang: Number(r.subtotal), giamHd: Number(r.invoice_discount), sauGiam, thuKhac: Number(r.other_fee), vat: Number(r.vat_amount),
     giaVon: 0, canTra: Number(r.total), soMon: dong.reduce((s, d) => s + d.sl, 0),
-    phuongThuc: r.pay_method, khachDua: Number(r.received_amount), thucThu: Number(r.paid_amount), thua: Number(r.change_amount), no: Number(r.debt_amount),
+    phuongThuc: r.pay_method, chia: r.pay_parts || null, khachDua: Number(r.received_amount), thucThu: Number(r.paid_amount), thua: Number(r.change_amount), no: Number(r.debt_amount),
     daHuy: r.status === 'huy', lyDoHuy: r.cancel_reason, nguoiHuy: r.cancelled_by_name, lucHuy: r.cancelled_at ? new Date(r.cancelled_at).getTime() : null,
     ckTrangThai: r.transfer_status, ckNguoi: r.transfer_checked_by_name, bangGia: r.price_list_name,
     diemDung: r.points_used, diemTien: Number(r.points_value), diemCong: r.points_earned, giamCuoiNgay: Number(r.eod_discount),

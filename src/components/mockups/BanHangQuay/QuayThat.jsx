@@ -8,7 +8,7 @@ import { locXep } from './banHangQuayLogic';
 const so = (n) => Math.round(Number(n) || 0).toLocaleString('en-US');
 const soTien = (v) => String(v).replace(/\D/g, '');
 const ngayGio = (t) => new Date(t).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
-const PT = { tien_mat: 'Tiền mặt', chuyen_khoan: 'Chuyển khoản', the: 'Thẻ', vi: 'Ví' };
+const PT = { tien_mat: 'Tiền mặt', chuyen_khoan: 'Chuyển khoản', the: 'Thẻ', vi: 'Ví', ket_hop: 'Kết hợp' };
 
 export function HopT({ tieuDe, onDong, children, chan, rong }) {
   return (

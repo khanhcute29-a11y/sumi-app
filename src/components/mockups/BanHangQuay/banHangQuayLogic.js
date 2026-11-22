@@ -118,14 +118,22 @@ export function tinhHoaDon(hd) {
 
 // Thanh toán: khách đưa >= cần trả -> tiền thừa (chỉ tiền mặt); đưa thiếu -> NỢ,
 // và chỉ khách có tên + SĐT mới được nợ.
-export function tinhThanhToan({ canTra, khachDua, phuongThuc, laKhachLe }) {
-  const dua = Math.max(Number(khachDua) || 0, 0);
-  const thua = phuongThuc === 'tien_mat' ? Math.max(dua - canTra, 0) : 0;
+// Kết hợp (như KiotViet): 1 hoá đơn trả nhiều cách — tiền thừa chỉ thối từ phần TIỀN MẶT.
+export function tinhThanhToan({ canTra, khachDua, phuongThuc, laKhachLe, chia = null }) {
+  const ketHop = phuongThuc === 'ket_hop';
+  const dua = ketHop ? tongChia(chia) : Math.max(Number(khachDua) || 0, 0);
+  const thua = phuongThuc === 'tien_mat' || ketHop ? Math.max(dua - canTra, 0) : 0;
   const thucThu = Math.min(dua, canTra);
   const no = Math.max(canTra - dua, 0);
-  const loi = no > 0 && laKhachLe ? 'Khách lẻ không được ghi nợ — chọn khách có tên + SĐT hoặc thu đủ tiền.' : '';
+  const loi = no > 0 && laKhachLe ? 'Khách lẻ không được ghi nợ — chọn khách có tên + SĐT hoặc thu đủ tiền.'
+    : ketHop && thua > (Number(chia?.tien_mat) || 0) ? 'Chỉ tiền mặt mới thối lại được — số chuyển khoản / thẻ / ví đang nhiều hơn tiền khách cần trả.'
+      : '';
   return { thucThu, thua, no, loi };
 }
+export const PT_CHIA = ['tien_mat', 'chuyen_khoan', 'the', 'vi'];
+export function tongChia(chia) { return PT_CHIA.reduce((s, k) => s + Math.max(Number(chia?.[k]) || 0, 0), 0); }
+// "Khách thanh toán": kết hợp = tổng các phần; còn lại null = bằng đúng số cần trả.
+export function duaCua(hd, canTra) { return hd.pt === 'ket_hop' ? tongChia(hd.chia) : hd.dua == null ? canTra : hd.dua; }
 
 // Trả hàng theo hoá đơn gốc: tiền trả lại = giá trị dòng (sau giảm dòng) × SL trả,
 // trừ phần giảm giá HĐ theo tỉ lệ, cộng VAT nếu HĐ gốc có VAT. Thu khác (ship…) không hoàn.

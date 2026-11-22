@@ -530,4 +530,41 @@ if (await v(`select count(*)::int from information_schema.columns where table_na
   await chan('Không nhận hàng bằng phiếu XD', ()=>q(`select public.pos_nhan_hang('${x1.id}','{}')`),'chờ nhận');
   await ok('Loại xuất không phải luân chuyển thì bỏ qua cửa hàng nhận', async()=>{const r=await luu({loai_xuat:'Xuất dùng cho khách',to_store:B}); return [r.to_store, r.ref_doc, await t4(A)];},[null,null,6]);
 }
+// ── 202611221010: trả tiền kết hợp (tiền mặt + chuyển khoản + …) ──
+if (await v(`select count(*)::int from information_schema.columns where table_name='pos_invoices' and column_name='pay_parts'`)) {
+  const Q='Quầy kết hợp', NV8='00000000-0000-0000-0000-0000000000ac', P5='00000000-0000-0000-0000-0000000000b5';
+  await db.exec(`insert into pos_settings(store_location) values ('${Q}') on conflict do nothing; update pos_settings set bat_cham_cong=false where store_location='${Q}';
+    insert into products(id,name,category,price) values ('${P5}','Bánh tart','khac',50000);
+    insert into finished_goods_stock(product_id,size,branch,qty,store_location) values ('${P5}',null,'bakery',50,'${Q}');`);
+  await q(`insert into profiles values ('${NV8}','Thu ngân K','sale','{}',true,true) on conflict do nothing`);
+  await as(NV8);
+  const ca=(await q(`select public.pos_vao_ca('${Q}',0,'k.jpg') r`))[0].r.id;
+  const banK=(sl,parts,o={})=>q(`select public.pos_ban('${JSON.stringify({id:id(),store:Q,pay_method:'ket_hop',photo_url:'a.jpg',pay_parts:parts,lines:[{product_id:P5,name:'Bánh tart',qty:sl,list_price:50000,unit_price:50000}],...o})}'::jsonb) r`).then((r)=>r[0].r);
+  const k1=await banK(5,{tien_mat:100000,chuyen_khoan:150000});
+  const h1=(await q(`select pay_method,pay_parts,paid_amount::int,change_amount::int,transfer_status from pos_invoices where id='${k1.id}'`))[0];
+  await ok('Kết hợp 100k TM + 150k CK cho HĐ 250k → ghi đủ 2 phần, CK chờ xác nhận', ()=>[h1.pay_method,h1.pay_parts,h1.paid_amount,h1.change_amount,h1.transfer_status],['ket_hop',{tien_mat:100000,chuyen_khoan:150000},250000,0,'cho_xac_nhan']);
+  const k2=await banK(1,{tien_mat:100000,the:20000});
+  const h2=(await q(`select pay_parts,change_amount::int,transfer_status from pos_invoices where id='${k2.id}'`))[0];
+  await ok('Kết hợp dư 70k → thối từ tiền mặt, phần TM lưu 30k (số thật vào két)', ()=>[h2.pay_parts,h2.change_amount,h2.transfer_status],[{the:20000,tien_mat:30000},70000,'khong']);
+  await chan('Chuyển khoản nhiều hơn cần trả → không thối được', ()=>banK(1,{tien_mat:10000,chuyen_khoan:60000}),'Chỉ tiền mặt');
+  await chan('Cách trả lạ bị chặn', ()=>banK(1,{bitcoin:50000}),'không hợp lệ');
+  const k3=await banK(1,{tien_mat:0,vi:50000});
+  await ok('Chỉ 1 cách có tiền → ghi như hoá đơn thường', async()=>(await q(`select pay_method,pay_parts from pos_invoices where id='${k3.id}'`))[0],{pay_method:'vi',pay_parts:null});
+  await chan('Khách lẻ trả thiếu kết hợp → không ghi nợ', ()=>banK(2,{tien_mat:30000,chuyen_khoan:20000}),'Khách lẻ');
+  const sl=await v(`select public.pos__so_lieu_ca('${ca}')`);
+  await ok('Két ca: tiền mặt = 100k + 30k, CK 150k, thẻ 20k, ví 50k', ()=>[Number(sl.ban.tien_mat),Number(sl.ban.chuyen_khoan),Number(sl.ban.the),Number(sl.ban.vi),Number(sl.tien_mat_trong_ca)],[130000,150000,20000,50000,130000]);
+  await as(GD);
+  const bc=await v(`select public.pos_bao_cao('${Q}', now()-interval '1 day', now()+interval '1 day')`);
+  await ok('Báo cáo GĐ chia đúng từng cách + CK chờ = phần CK', ()=>[Number(bc.tien_mat),Number(bc.chuyen_khoan),Number(bc.the),Number(bc.vi),Number(bc.ck_cho)],[130000,150000,20000,50000,150000]);
+  const cn=await v(`select public.pos_bao_cao_cuoi_ngay('${Q}', now()-interval '1 day', now()+interval '1 day', '{}'::jsonb)`);
+  await ok('Báo cáo cuối ngày: HĐ kết hợp tách thành từng dòng thu', ()=>[Number(cn.pttt.tien_mat),Number(cn.pttt.chuyen_khoan),Number(cn.tong_thu),cn.phieu.filter((x)=>x.ma===k1.code).length],[130000,150000,350000,2]);
+  const cnCk=await v(`select public.pos_bao_cao_cuoi_ngay('${Q}', now()-interval '1 day', now()+interval '1 day', '{"pttt":["chuyen_khoan"]}'::jsonb)`);
+  await ok('Lọc "Chuyển khoản" vẫn ra HĐ kết hợp có phần CK (chỉ tính phần CK)', ()=>[Number(cnCk.tong_thu), cnCk.hd.so],[150000,1]);
+  await as(KT);
+  await ok('Kế toán xác nhận CK của HĐ kết hợp', async()=>(await q(`select public.pos_xac_nhan_ck('${k1.id}',true) r`))[0].r.transfer_status,'da_ve');
+  await chan('HĐ kết hợp không có CK → không xác nhận CK', ()=>q(`select public.pos_xac_nhan_ck('${k2.id}',true)`),'Không phải');
+  await as(NV8);
+  await ok('Huỷ HĐ kết hợp trong ca → két bớt đúng phần tiền mặt 30k', async()=>{await q(`select public.pos_huy_hd('${k2.id}','nhầm')`); return Number((await v(`select public.pos__so_lieu_ca('${ca}')`)).tien_mat_trong_ca);},100000);
+  await ok('Hoá đơn 1 cách cũ (không gửi pay_parts) vẫn như trước', async()=>{const r=(await q(`select public.pos_ban('${JSON.stringify({id:id(),store:Q,pay_method:'tien_mat',received:60000,photo_url:'b.jpg',lines:[{product_id:P5,name:'Bánh tart',qty:1,list_price:50000,unit_price:50000}]})}'::jsonb) r`))[0].r; return [Number(r.change), r.pay_parts];},[10000,null]);
+}
 console.log(`\n${dem-loi}/${dem} đạt`); process.exit(loi?1:0);
