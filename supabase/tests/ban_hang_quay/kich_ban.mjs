@@ -17,6 +17,7 @@ const ok=async(ten,fn,mong)=>{dem++;try{const r=await fn(); if(mong!==undefined&
 const chan=async(ten,fn,chua)=>{dem++;try{await fn();loi++;console.log('✗',ten,'KHÔNG bị chặn');}catch(e){if(chua&&!e.message.includes(chua)){loi++;console.log('✗',ten,'chặn sai lý do:',e.message);}else console.log('✓',ten,'→',e.message.slice(0,80));}};
 const ton=(store='Vĩnh Phú 42')=>v(`select public.pos__ton(${store?`'${store}'`:'null'},'${P1}',null)`);
 const id=()=>crypto.randomUUID();
+const BO_ANH=process.argv.some((x)=>x.includes('bo_bat_anh_ket'));  // 202611221045: ảnh két không bắt buộc (như KiotViet)
 const ban=(o)=>v(`select public.pos_ban('${JSON.stringify({id:o.id||id(),store:'Vĩnh Phú 42',pay_method:'tien_mat',photo_url:'ban.jpg',lines:[{product_id:P1,name:'Bánh bò',qty:2,list_price:90000,unit_price:90000}],...o}).replace(/'/g,"''")}'::jsonb)`);
 
 await as(NV);
@@ -197,7 +198,7 @@ if (process.argv.length > 7) {
   await chan('Hàm mở ca cũ ngừng dùng', ()=>q(`select public.pos_mo_ca('${S}',0)`),'bản mới');
   const ca1=await caDangMo();
   await as(NV);
-  await chan('Kết ca thiếu ảnh két', ()=>ketCa(ca1,null),'ảnh két');
+  if (!BO_ANH) await chan('Kết ca thiếu ảnh két', ()=>ketCa(ca1,null),'ảnh két');
   await chan('Kết ca chưa đếm bánh', ()=>ketCa(ca1,'ket.jpg','[]'),'Đếm nhanh');
   await as(NV2);
   await chan('Người khác kết ca của mình', ()=>ketCa(ca1),'chỉ người đó');
@@ -207,7 +208,7 @@ if (process.argv.length > 7) {
   await ok('Kết ca: lệch 1 món bánh → báo GĐ', async()=>{const r=await ketCa(ca1,'ket.jpg',await demBanh(-1)); return [r.closing_photo, r.summary.so_banh_lech, await v(`select (body like '%Bánh lệch: Món (máy%')::text from notifications where event_key like 'pos-dong-ca:${ca1}%' limit 1`)];},['ket.jpg',1,'true']);
   await as(NV2);
   await chan('Bán khi chưa vào ca', ()=>banB(),'chưa vào ca');
-  await chan('Vào ca thiếu ảnh két', ()=>q(`select public.pos_vao_ca('${S}',200000,'')`),'ảnh két');
+  if (!BO_ANH) await chan('Vào ca thiếu ảnh két', ()=>q(`select public.pos_vao_ca('${S}',200000,'')`),'ảnh két');
   await ok('NV B vào ca 200k', ()=>v(`select (public.pos_vao_ca('${S}',200000,'ket2.jpg'))->>'opening_photo'`),'ket2.jpg');
   const ca2=await caDangMo();
   // Chấm công (cửa hàng Quốc Lộ 13)
@@ -686,13 +687,13 @@ if (await v(`select count(*)::int from pg_proc where proname='pos_nhan_ca'`)) {
   await as(A);
   const s1=await v(`select public.pos_vao_ca_v2('${Q}',null,'a.jpg',null)`);
   await ok('Vào ca KHÔNG nhập tiền đầu ca được (chưa có ca trước → két 0)', ()=>[Number(s1.opening_cash), s1.opening_cash_entered, s1.opened_by],[0,null,A]);
-  await chan('Vào ca vẫn phải chụp ảnh két', ()=>q(`select public.pos_vao_ca_v2('${Q}',null,'',null)`).then(async()=>{const c=await caMo(); if(c.opened_by!==A) return; throw new Error('x');}).then(()=>{throw new Error('ok');}),'');
+  if (!BO_ANH) await chan('Vào ca vẫn phải chụp ảnh két', ()=>q(`select public.pos_vao_ca_v2('${Q}',null,'',null)`).then(async()=>{const c=await caMo(); if(c.opened_by!==A) return; throw new Error('x');}).then(()=>{throw new Error('ok');}),'');
   await banQ(); await banQ();
   await as(B);
   await chan('Chị Chiều vào ca khi ca Chị Sáng còn mở → chỉ nút Nhận ca', ()=>q(`select public.pos_vao_ca_v2('${Q}',null,'b.jpg',null)`),'Nhận ca');
   await chan('Chị Chiều chưa nhận ca thì chưa bán được', ()=>banQ(),'Chị Sáng');
   await chan('Nhận ca sai mã ca (ca vừa đổi)', ()=>q(`select public.pos_nhan_ca('${Q}','${id()}',null,'b.jpg')`),'vừa thay đổi');
-  await chan('Nhận ca phải chụp ảnh két', ()=>q(`select public.pos_nhan_ca('${Q}','${s1.id}',null,'')`),'ảnh');
+  if (!BO_ANH) await chan('Nhận ca phải chụp ảnh két', ()=>q(`select public.pos_nhan_ca('${Q}','${s1.id}',null,'')`),'ảnh');
   await db.exec(`update pos_settings set bat_cham_cong=true where store_location='${Q}'`);
   await chan('Bật chấm công mà chưa chấm vào làm → nhận ca bị chặn', ()=>q(`select public.pos_nhan_ca('${Q}','${s1.id}',null,'b.jpg')`),'chấm công');
   await ok('…và ca Chị Sáng vẫn mở nguyên (không kết dở)', async()=>(await caMo()).id,s1.id);
@@ -739,5 +740,21 @@ if (await v(`select count(*)::int from pg_proc where proname='pos_nhan_ca'`)) {
   await ok('Ca hôm qua của chính mình → nhận ca mới được', async()=>[(await ca(s4.id)).auto_closed, n5.opened_by, Number(n5.opening_cash)],['nhan_ca',B,190000]);
   await ok('Bản cũ pos_vao_ca (app chưa cập nhật) vẫn chạy', async()=>{await ket(n5.id,180000,'k.jpg'); const r=await v(`select public.pos_vao_ca('${Q}',180000,'k2.jpg')`); return Number(r.opening_cash);},180000);
   await ok('Tài khoản đăng nhập không gọi được hàm kết hộ / tự kết', ()=>v(`select has_function_privilege('authenticated','public.pos__ket_ca_ho(uuid,numeric,text,text,text)','execute') or has_function_privilege('authenticated','public.pos_tu_ket_ca_qua_dem()','execute')`),false);
+}
+// ── 202611221045: không chụp ảnh két vẫn vào ca / nhận ca / kết ca được ──
+if (BO_ANH) {
+  const Q='Quầy không ảnh', A='00000000-0000-0000-0000-0000000000d3', B='00000000-0000-0000-0000-0000000000d4';
+  await db.exec(`insert into pos_settings(store_location) values ('${Q}') on conflict do nothing; update pos_settings set bat_cham_cong=false where store_location='${Q}';`);
+  await q(`insert into profiles values ('${A}','Thu ngân sáng','sale','{}',true,true),('${B}','Thu ngân chiều','sale','{}',true,true) on conflict do nothing`);
+  await as(A);
+  const s=await v(`select public.pos_vao_ca_v2('${Q}',null,null,null)`);
+  await ok('Vào ca không ảnh, không nhập tiền', ()=>[s.opened_by, s.opening_photo, Number(s.opening_cash)],[A,null,0]);
+  await as(B);
+  const n=await v(`select public.pos_nhan_ca('${Q}','${s.id}',null,'')`);
+  await ok('Nhận ca không ảnh', async()=>[n.opened_by, n.opening_photo, (await q(`select closing_photo, auto_closed from pos_shifts where id='${s.id}'`))[0]],[B,null,{closing_photo:null,auto_closed:'nhan_ca'}]);
+  const k=await v(`select public.pos_ket_ca('${n.id}',0,null,null,'[]'::jsonb)`);
+  await ok('Kết ca không ảnh (vẫn đếm tiền)', ()=>[k.status, k.closing_photo, Number(k.counted_cash)],['closed',null,0]);
+  const s2=await v(`select public.pos_vao_ca_v2('${Q}',5000,'',null)`);
+  await ok('Nhập lệch không ảnh → báo GĐ không nhắc xem ảnh', ()=>v(`select count(*) from notifications where event_key='pos-dau-ca:${s2.id}:${GD}' and body not like '%Xem ảnh%'`),1);
 }
 console.log(`\n${dem-loi}/${dem} đạt`); process.exit(loi?1:0);

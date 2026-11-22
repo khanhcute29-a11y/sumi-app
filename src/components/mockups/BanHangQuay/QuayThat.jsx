@@ -141,7 +141,6 @@ export function MoCa({ chiNhanh, dsQuay, onDoiChiNhanh, nguoi, onMo, onVeApp, on
     fn?.();
   };
   const mo = async () => {
-    if (!anh) { setLoi('Chụp ảnh két tiền trước khi vào ca'); return; }
     const ly = lech < 0 ? lyDoChi.trim() : '';
     if (ly && ly.length < 3) { setLoi('Ghi rõ đã chi tiền làm gì (ít nhất vài chữ)'); return; }
     setDang(true); setLoi('');
@@ -154,7 +153,7 @@ export function MoCa({ chiNhanh, dsQuay, onDoiChiNhanh, nguoi, onMo, onVeApp, on
     <HopT tieuDe={`Vào ca · ${chiNhanh}`} onDong={roi(onDong)}
       chan={<><button type="button" className="bhq-nut phu" onClick={roi(onVeApp)}>{hoiRoi ? 'Vẫn thoát' : 'Về app Sumi'}</button><button type="button" className="bhq-nut chinh" disabled={dang || dangAnh} onClick={mo}>{dang ? 'Đang vào ca…' : 'Vào ca · bắt đầu bán'}</button></>}>
       <ChonQuay chiNhanh={chiNhanh} dsQuay={dsQuay} onDoi={dang ? null : onDoiChiNhanh} />
-      <p className="bhq-ghi">Chào {nguoi}. Chụp 1 ảnh két tiền là bán được. Mọi hoá đơn trong ca tính doanh số cho bạn.</p>
+      <p className="bhq-ghi">Chào {nguoi}. Bấm Vào ca là bán được. Mọi hoá đơn trong ca tính doanh số cho bạn.</p>
       <div className="mc-dau">
         <div><span>Tiền đầu ca</span><b>{so(truoc ? truoc.so : 0)}</b></div>
         <small>{truoc
@@ -162,7 +161,7 @@ export function MoCa({ chiNhanh, dsQuay, onDoiChiNhanh, nguoi, onMo, onVeApp, on
           : 'Chưa có ca trước — máy tính két từ 0. Không cần nhập.'}</small>
         {!demLai && <button type="button" className="mc-dem" onClick={() => setDemLai(true)}>Đếm lại két / nhập số khác</button>}
       </div>
-      {lech > 0 && <p className="kv-loi" role="alert">Bạn nhập nhiều hơn ca trước {so(lech)}. Vẫn vào ca được, nhưng máy giữ số ca trước và báo Giám đốc kiểm ảnh két.</p>}
+      {lech > 0 && <p className="kv-loi" role="alert">Bạn nhập nhiều hơn ca trước {so(lech)}. Vẫn vào ca được, nhưng máy giữ số ca trước và báo Giám đốc kiểm lại.</p>}
       {lech < 0 && (
         <div className="mc-chi">
           <p><b>Két ít hơn ca trước {so(-lech)}.</b> Vẫn vào ca được. Nếu có người đã <b>chi tiền ra</b> lúc chưa ai vào ca (mua đồ, trả tiền ship…), ghi rõ ở đây — máy ghi thành phiếu chi {so(-lech)}, két ca bạn tính đúng {so(tien)}.</p>
@@ -172,7 +171,7 @@ export function MoCa({ chiNhanh, dsQuay, onDoiChiNhanh, nguoi, onMo, onVeApp, on
         </div>
       )}
       {demLai && <label className="bhq-nhan">Tiền mặt đếm được trong két (không bắt buộc)<input className="bhq-o lon" autoFocus inputMode="numeric" value={tien ? so(tien) : tien} placeholder={truoc ? so(truoc.so) : '0'} onChange={(e) => { const v = soTien(e.target.value); setTien(v); luuNhap({ tien: v }); }} /></label>}
-      <ChupAnh path={anh} dang={dangAnh} onChon={chonAnh} chu="Chụp ảnh két tiền (bắt buộc)" />
+      <ChupAnh path={anh} dang={dangAnh} onChon={chonAnh} chu="Chụp ảnh két tiền (không bắt buộc)" />
       <div ref={oLoi}><Loi chu={loi} /></div>
       {hoiRoi && <p className="kv-loi mc-chua-vao" role="alert"><b>Bạn CHƯA vào ca.</b> Số tiền và ảnh đã giữ lại — bấm nút xanh <b>"Vào ca · bắt đầu bán"</b> để bắt đầu bán. Bấm "Vẫn thoát" nếu muốn ra ngoài.</p>}
     </HopT>
@@ -181,7 +180,7 @@ export function MoCa({ chiNhanh, dsQuay, onDoiChiNhanh, nguoi, onMo, onVeApp, on
 
 // ── Nhận ca: người trước quên kết ca → người sau bán tiếp ngay, không phải chờ ──
 // Máy kết hộ ca cũ (ghi "X không kết ca — Y nhận ca", báo Giám đốc) rồi mở ca của mình.
-// Đếm két là KHÔNG bắt buộc; có đếm thì ca cũ biết thiếu/dư bao nhiêu. Ảnh két bắt buộc (bằng chứng lúc nhận).
+// Đếm két và ảnh két đều KHÔNG bắt buộc (như KiotViet); có đếm thì ca cũ biết thiếu/dư bao nhiêu.
 export function NhanCa({ chiNhanh, dsQuay, onDoiChiNhanh, caMo, cuaToi = false, nguoi, onNhan, onKetCa, onVeApp, onDong, onTaiLai }) {
   const [dem, setDem] = useState('');
   const [moDem, setMoDem] = useState(false);
@@ -200,7 +199,6 @@ export function NhanCa({ chiNhanh, dsQuay, onDoiChiNhanh, caMo, cuaToi = false, 
     setDangAnh(false);
   };
   const nhan = async () => {
-    if (!anh) { setLoi('Chụp ảnh két tiền trước khi nhận ca'); return; }
     setDang(true); setLoi('');
     try { const r = await nhanCa({ store: chiNhanh, caId: caMo.id, dem: moDem ? dem : '', anh }); onNhan(r); } catch (e) {
       const m = chuLoi(e); setLoi(m); setDang(false);
@@ -218,7 +216,7 @@ export function NhanCa({ chiNhanh, dsQuay, onDoiChiNhanh, caMo, cuaToi = false, 
         {!moDem && <button type="button" className="mc-dem" onClick={() => setMoDem(true)}>Đếm két giúp ca cũ (không bắt buộc)</button>}
       </div>
       {moDem && <label className="bhq-nhan">Tiền mặt đếm được trong két<input className="bhq-o lon" autoFocus inputMode="numeric" value={dem ? so(dem) : dem} placeholder="Để trống nếu không đếm" onChange={(e) => setDem(soTien(e.target.value))} /></label>}
-      <ChupAnh path={anh} dang={dangAnh} onChon={chonAnh} chu="Chụp ảnh két tiền lúc nhận ca (bắt buộc)" />
+      <ChupAnh path={anh} dang={dangAnh} onChon={chonAnh} chu="Chụp ảnh két tiền lúc nhận ca (không bắt buộc)" />
       {cuaToi && onKetCa && <button type="button" className="bhq-nut phu mc-ket-thuong" disabled={dang} onClick={onKetCa}>Hoặc kết ca {caMo.code} như thường (đếm két + bánh)</button>}
       <div ref={oLoi}><Loi chu={loi} /></div>
     </HopT>
@@ -978,7 +976,6 @@ export function KetCaThat({ caMo, chiNhanh, matHang = [], onDong, onKet }) {
   const dong = async () => {
     if (dem === '') { setLoi('Nhập số tiền mặt đếm được trong két'); return; }
     if (thieuBanh.length) { setLoi(`Còn ${thieuBanh.length} loại bánh chưa nhập số đếm (không còn cái nào thì nhập 0).`); return; }
-    if (!anh) { setLoi('Chụp ảnh két tiền trước khi kết ca'); return; }
     setDang(true); setLoi('');
     try {
       // Việc làm lúc mất mạng phải lên database TRƯỚC khi chốt két — không thì tiền của chúng rơi sang ca sau.
@@ -1044,7 +1041,7 @@ export function KetCaThat({ caMo, chiNhanh, matHang = [], onDong, onKet }) {
       </div>
       {phieuChi.length > 0 && <p className="bhq-ghi">{phieuChi.map((p) => `${p.code}${p.truoc_ca ? ' (trước khi vào ca)' : ''}: ${p.kind === 'thu' ? '+' : '-'}${so(p.amount)} — ${p.reason}`).join(' · ')}</p>}
       <label className="bhq-nhan">Tiền mặt đếm được trong két<input className="bhq-o lon" autoFocus inputMode="numeric" value={dem ? so(dem) : dem} onChange={(e) => setDem(soTien(e.target.value))} placeholder="Đếm hết rồi nhập" /></label>
-      <ChupAnh path={anh} dang={dangAnh} onChon={chonAnh} chu="Chụp ảnh két tiền (bắt buộc)" />
+      <ChupAnh path={anh} dang={dangAnh} onChon={chonAnh} chu="Chụp ảnh két tiền (không bắt buộc)" />
       <h4 className="kc-tieu">Đếm nhanh bánh trên kệ</h4>
       {banh == null ? <p className="bhq-ghi">Đang tải danh sách bánh…</p>
         : banh.length === 0 ? <p className="bhq-ghi">Máy ghi kệ đã hết bánh — không cần đếm.</p>
