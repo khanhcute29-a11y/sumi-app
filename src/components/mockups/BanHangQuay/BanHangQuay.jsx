@@ -195,7 +195,8 @@ export default function BanHangQuay() {
       const d = await taiDuLieu(mh);
       setCaiDat(d.caiDat); setCaMoDs(d.caMo); setDaBan(d.daBan); setPhieuKho(d.phieuKho); setNoDb(d.congNo);
       setTonCN(d.tonCN); setHsd(d.hsd); setLoCN(d.loCN || {}); setHanDung(d.hanDung || {}); setBangGia(d.bangGia); setKhuyenMai(d.khuyenMai || []); setTraHangs(d.traHangs || []); setCoTraHang(!!d.coTraHang); setNguonDl('dữ liệu thật');
-    } catch (e) { nhan(`Không tải được dữ liệu quầy: ${chuLoi(e)}`); }
+      return d;
+    } catch (e) { nhan(`Không tải được dữ liệu quầy: ${chuLoi(e)}`); return null; }
   };
   const napNo = async () => {
     const { data, error } = await supabase.from('pos_debt_entries').select('customer_id, amount, entry_type, note, created_at, customers(name, phone)').order('created_at').limit(10000);
@@ -615,7 +616,15 @@ export default function BanHangQuay() {
   // Chạy thật: database quyết (nhân viên huỷ ca cũ thì phải xin duyệt).
   const huyDuoc = (h) => h.chiNhanh === chiNhanh && (that ? !h.daHuy && !traHangs.some((x) => x.hdId === h.id) : (laGD || h.luc >= ca.moLuc));
   // Trả hàng: chỉ hoá đơn thật đã lên database (database đã chạy SQL trả hàng).
-  const traDuoc = (h) => !!(that && coTraHang && h.that && h.id && !h.daHuy && !h.choGui && h.dong.some((d) => d.lineId != null));
+  const traDuoc = (h) => !!(that && coTraHang && h.that && h.id && !h.daHuy && !h.choGui);
+  // Hoá đơn vừa bán xong trên máy chưa có mã dòng hàng của database → tải lại rồi mới mở màn trả hàng.
+  const moTraHang = async (h) => {
+    if (h.dong.some((d) => d.lineId != null)) { setHop({ loai: 'tra_hang', hoaDon: h }); return; }
+    const d = await napThat();
+    const moi = d?.daBan.find((x) => x.id === h.id);
+    if (moi && moi.dong.some((x) => x.lineId != null)) setHop({ loai: 'tra_hang', hoaDon: moi });
+    else nhan('Hoá đơn đang lưu lên máy chủ — thử lại sau vài giây');
+  };
   const huyHoaDonThat = async (h, lyDo, duyetId = null) => {
     if (h.choGui) { nhan('Hoá đơn này chưa gửi lên (đang mất mạng) — có mạng rồi mới huỷ được'); return; }
     try {
@@ -967,7 +976,7 @@ export default function BanHangQuay() {
 
       {manHinh === 'ban' && dienThoai && dtMan === 'xong' && (() => {
         const h = daBan.find((x) => x.ma === hdXong);
-        return h ? <ChiTietHdDt h={h} tra={traHangs.filter((x) => x.hdId === h.id)} onTra={traDuoc(h) ? () => setHop({ loai: 'tra_hang', hoaDon: h }) : null} huyDuoc={huyDuoc(h)} onLui={() => setDtMan('chon')} onIn={() => setHop({ loai: 'bien_lai', hoaDon: h })}
+        return h ? <ChiTietHdDt h={h} tra={traHangs.filter((x) => x.hdId === h.id)} onTra={traDuoc(h) ? () => moTraHang(h) : null} huyDuoc={huyDuoc(h)} onLui={() => setDtMan('chon')} onIn={() => setHop({ loai: 'bien_lai', hoaDon: h })}
           onHuy={() => setHop({ loai: 'huy_hd', hoaDon: h })} onChiaSe={() => chiaSe(h)} onSaoChep={() => saoChepHd(h)} /> : null;
       })()}
       {manHinh === 'ban' && dienThoai && dtMan !== 'xong' && (
@@ -1055,7 +1064,7 @@ export default function BanHangQuay() {
 
       {manHinh === 'ls' && (
         <QlHoaDon key={laGD ? 'gd' : 'nv'} laGD={laGD} ds={daBan.filter((h) => !h.mau && h.chiNhanh === chiNhanh)} traHangs={traHangs} dienThoai={dienThoai} huyDuoc={huyDuoc}
-          traDuoc={traDuoc} onTra={(h) => setHop({ loai: 'tra_hang', hoaDon: h })}
+          traDuoc={traDuoc} onTra={moTraHang}
           onIn={(h) => setHop({ loai: 'bien_lai', hoaDon: h })}
           onHuy={(h) => setHop({ loai: 'huy_hd', hoaDon: h })} onChiaSe={chiaSe} onSaoChep={saoChepHd} onBan={() => { moManHinh('ban'); setDtMan('chon'); }} />
       )}
@@ -1069,7 +1078,7 @@ export default function BanHangQuay() {
       {manHinh === 'km' && that && xemQl && <KhuyenMai ds={khuyenMai} matHang={matHang} chiNhanh={chiNhanh} nhan={nhan} onDoi={() => napThat()} onVe={() => moManHinh(dienThoai ? 'them' : 'ban')} />}
       {manHinh === 'sq' && that && xemQl && <SoQuy key={chiNhanh} chiNhanh={chiNhanh} onVe={() => moManHinh(dienThoai ? 'them' : 'ban')} />}
       {manHinh === 'th' && that && <TraHangDs chiNhanh={chiNhanh} traHangs={traHangs} hoaDons={daBan.filter((h) => traDuoc(h))}
-        onVe={() => moManHinh(dienThoai ? 'them' : 'ban')} onTra={(h) => setHop({ loai: 'tra_hang', hoaDon: h })} />}
+        onVe={() => moManHinh(dienThoai ? 'them' : 'ban')} onTra={moTraHang} />}
       {manHinh === 'cn' && that && <BaoCaoCuoiNgay key={chiNhanh} chiNhanh={chiNhanh} onVe={() => moManHinh(dienThoai ? 'them' : 'ban')} onMoHoaDon={() => moManHinh('ls')} />}
       {manHinh === 'ngay' && that && <BaoCaoThat chiNhanh={chiNhanh} laGD={that.cap === 'gd' && !xemNV} dienThoai={dienThoai} />}
       {manHinh === 'ngay' && !that && (

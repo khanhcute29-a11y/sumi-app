@@ -9,6 +9,7 @@ import { doiKhoThu } from '/src/components/mockups/BanHangQuay/posThat.js';
 
 const NHUNG = {
   pos_invoices: { pos_invoice_lines: ['nhieu', 'invoice_id'] },
+  pos_returns: { pos_return_lines: ['nhieu', 'return_id'] },
   pos_debt_entries: { customers: ['mot', 'customer_id'] },
   products: { product_variants: ['nhieu', 'product_id'] },
 };
