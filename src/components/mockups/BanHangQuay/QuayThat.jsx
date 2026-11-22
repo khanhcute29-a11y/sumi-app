@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, RefreshCw, Camera, Search, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, ListFilter, Check } from 'lucide-react';
 import { supabase } from '../../../lib/supabaseClient';
-import { goi, chuLoi, anhVietQr, noiDungCk, NGAN_HANG, maMoi, tachId, linkAnh, linkAnhHoaDon, guiHangDoi, taiAnh, lapBanDoHang, themHangQuay, suaHangQuay, xoaHangQuay, vaoCa, lapPhieuQuy, huyChiKet } from './posThat';
-import { locXep } from './banHangQuayLogic';
+import { goi, chuLoi, anhVietQr, noiDungCk, NGAN_HANG, maMoi, tachId, linkAnh, linkAnhHoaDon, guiHangDoi, taiAnh, lapBanDoHang, themHangQuay, suaHangQuay, xoaHangQuay, vaoCa, lapPhieuQuy, huyChiKet, luuKm, batKm, thongKeKm } from './posThat';
+import { locXep, LOAI_KM, THU_KM, kmKhongChay, moTaKm, CHI_NHANH } from './banHangQuayLogic';
 
 // Các hộp thoại chỉ có ở chế độ CHẠY THẬT (ca, duyệt, chuyển khoản, thiết lập, đặt cọc, nhận hàng, báo cáo, nhật ký).
 const so = (n) => Math.round(Number(n) || 0).toLocaleString('en-US');
@@ -1446,6 +1446,206 @@ export function SoQuy({ chiNhanh, onVe }) {
           </section>
         </>}
       </div>
+    </div>
+  );
+}
+
+// ===== KHUYẾN MẠI (như KiotViet) =====
+// Lúc thanh toán: dòng "Khuyến mại" — máy tự chọn chương trình lợi nhất, thu ngân bấm để đổi / bỏ.
+// ds = kết quả kmApDuoc (chương trình đang chạy, có duoc / tien / tang / thieu); chon = chương trình đang áp.
+export function KmChon({ ds, chon, tenTang, onChon }) {
+  const [mo, setMo] = useState(false);
+  if (!ds.length) return null;
+  const nhan = (x) => (x.tang ? `Tặng ${so(x.tang.sl)} ${tenTang(x.tang)}` : `−${so(x.tien)}`);
+  return (
+    <div className="r rel km-dong">
+      <span>Khuyến mại {chon ? <i className="pt">({chon.k.name})</i> : <i className="pt">({ds.filter((x) => x.duoc).length ? 'đang bỏ' : 'chưa đủ điều kiện'})</i>}</span>
+      <button type="button" className="kv-gach" onClick={() => setMo((v) => !v)}>{chon ? nhan(chon) : 'Chọn'}</button>
+      {mo && (
+        <div className="kv-pop km-pop" role="dialog" aria-label="Chọn khuyến mại">
+          <b>Chương trình khuyến mại</b>
+          {ds.map((x) => (
+            <button key={x.k.id} type="button" disabled={!x.duoc} className={chon?.k.id === x.k.id ? 'on' : ''}
+              onClick={() => { onChon(x.k.id); setMo(false); }}>
+              <span><b>{x.k.name}</b><small>{moTaKm(x.k)}</small>{!x.duoc && x.thieu && <small className="cam">{x.thieu}</small>}</span>
+              {x.duoc && <em>{nhan(x)}</em>}
+            </button>
+          ))}
+          <button type="button" className={!chon ? 'on' : ''} onClick={() => { onChon(null); setMo(false); }}><span><b>Không áp dụng khuyến mại</b></span></button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const KM_TRONG = { name: '', kind: 'hd_giam', active: true, from_date: '', to_date: '', days: [], time_from: '', time_to: '', stores: [], note: '',
+  rule: { muc: [{ tu: '', giam: '', kieu: 'tien', toi_da: '' }] } };
+const ruleMoi = (kind) => (kind === 'hd_giam' ? { muc: [{ tu: '', giam: '', kieu: 'tien', toi_da: '' }] }
+  : kind === 'hang_giam' ? { product_id: '', variant_id: null, ten: '', sl_tu: 2, kieu: 'tien', giam: '' }
+    : { mua: { product_id: '', variant_id: null, ten: '', sl: 2 }, tang: { product_id: '', variant_id: null, ten: '', sl: 1 } });
+const tenMh = (m) => `${m.ten}${m.size ? ` ${m.size}` : ''}`;
+
+// Chọn 1 món: gõ tên / mã → danh sách gọn (quầy có ~800 món, không dùng <select> dài).
+function ChonMon({ matHang, gia, onChon, nhan }) {
+  const [q, setQ] = useState('');
+  const t = q.trim().toLowerCase();
+  const ds = t ? matHang.filter((m) => `${tenMh(m)} ${m.ma}`.toLowerCase().includes(t)).slice(0, 8) : [];
+  return (
+    <div className="km-mon">
+      <span>{nhan}</span>
+      {gia.product_id ? (
+        <div className="km-mon-chon"><b>{gia.ten}</b><button type="button" onClick={() => onChon(null)}>Đổi</button></div>
+      ) : (
+        <>
+          <label className="o bcn-tim"><Search size={16} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Gõ tên hoặc mã hàng" /></label>
+          {ds.map((m) => <button key={m.id} type="button" className="km-mon-goi" onClick={() => { onChon(m); setQ(''); }}>{tenMh(m)}<small>{m.ma}</small></button>)}
+        </>
+      )}
+    </div>
+  );
+}
+
+function FormKm({ km, matHang, onDong, onXong }) {
+  const [f, setF] = useState(() => (km ? {
+    ...km, from_date: km.from_date || '', to_date: km.to_date || '', days: km.days || [], stores: km.stores || [],
+    time_from: km.time_from ? String(km.time_from).slice(0, 5) : '', time_to: km.time_to ? String(km.time_to).slice(0, 5) : '', note: km.note || '',
+    rule: JSON.parse(JSON.stringify(km.rule || {})),
+  } : { ...KM_TRONG, rule: ruleMoi('hd_giam') }));
+  const [loi, setLoi] = useState('');
+  const [dang, setDang] = useState(false);
+  const sua = (x) => setF((o) => ({ ...o, ...x }));
+  const suaR = (x) => setF((o) => ({ ...o, rule: { ...o.rule, ...x } }));
+  const monTu = (m) => (m ? (() => { const t = tachId(m); return { product_id: t.product_id, variant_id: t.variant_id, ten: tenMh(m) }; })() : { product_id: '', variant_id: null, ten: '' });
+  const bat = (ds, v) => (ds.includes(v) ? ds.filter((x) => x !== v) : [...ds, v]);
+  const r = f.rule;
+  const luu = async () => {
+    setLoi(''); setDang(true);
+    try {
+      const rule = f.kind === 'hd_giam'
+        ? { muc: (r.muc || []).map((m) => ({ tu: Number(soTien(m.tu)) || 0, giam: Number(String(m.giam).replace(/[^\d.]/g, '')) || 0, kieu: m.kieu, toi_da: Number(soTien(m.toi_da)) || 0 })) }
+        : f.kind === 'hang_giam' ? { ...r, sl_tu: Number(r.sl_tu) || 0, giam: Number(String(r.giam).replace(/[^\d.]/g, '')) || 0 }
+          : { mua: { ...r.mua, sl: Number(r.mua?.sl) || 0 }, tang: { ...r.tang, sl: Number(r.tang?.sl) || 0 } };
+      await luuKm({ id: km?.id || maMoi(), name: f.name, kind: f.kind, rule, active: f.active, from_date: f.from_date || null, to_date: f.to_date || null,
+        days: f.days, time_from: f.time_from || null, time_to: f.time_to || null, stores: f.stores, note: f.note });
+      onXong(km ? 'Đã lưu khuyến mại' : 'Đã tạo khuyến mại');
+    } catch (e) { setLoi(chuLoi(e)); } finally { setDang(false); }
+  };
+  const oSo = (v, on, ph = '0') => <input inputMode="numeric" value={v === '' || v == null ? '' : so(soTien(v))} placeholder={ph} onChange={(e) => on(soTien(e.target.value))} />;
+  return (
+    <HopT tieuDe={km ? `Sửa khuyến mại ${km.code}` : 'Tạo khuyến mại'} onDong={onDong} rong
+      chan={<><button type="button" className="bhq-nut phu" onClick={onDong}>Bỏ qua</button>
+        <button type="button" className="bhq-nut chinh" disabled={dang} onClick={luu}>{dang ? 'Đang lưu…' : 'Lưu'}</button></>}>
+      <div className="km-form">
+        <label className="km-o"><span>Tên chương trình</span><input value={f.name} onChange={(e) => sua({ name: e.target.value })} placeholder="VD: Mua 2 bánh mì tặng 1 bánh su" /></label>
+        <div className="km-o"><span>Hình thức</span>
+          <div className="sq-chip">{Object.entries(LOAI_KM).map(([k, l]) => (
+            <button key={k} type="button" className={f.kind === k ? 'on' : ''} onClick={() => f.kind !== k && sua({ kind: k, rule: ruleMoi(k) })}>{l}</button>))}</div></div>
+
+        {f.kind === 'hd_giam' && (
+          <div className="km-o"><span>Mức giảm theo tổng tiền hàng</span>
+            {(r.muc || []).map((m, i) => {
+              const doi = (x) => suaR({ muc: r.muc.map((y, j) => (j === i ? { ...y, ...x } : y)) });
+              return (
+                <div key={i} className="km-muc">
+                  <label>Từ {oSo(m.tu, (v) => doi({ tu: v }))}</label>
+                  <label>Giảm <input inputMode="decimal" value={m.giam} placeholder="0" onChange={(e) => doi({ giam: e.target.value.replace(/[^\d.]/g, '') })} /></label>
+                  <span className="kv-vnd"><button type="button" className={m.kieu !== 'pt' ? 'on' : ''} onClick={() => doi({ kieu: 'tien' })}>VND</button>
+                    <button type="button" className={m.kieu === 'pt' ? 'on' : ''} onClick={() => doi({ kieu: 'pt' })}>%</button></span>
+                  {m.kieu === 'pt' && <label>Tối đa {oSo(m.toi_da, (v) => doi({ toi_da: v }), 'không giới hạn')}</label>}
+                  {r.muc.length > 1 && <button type="button" className="km-bo" aria-label="Bỏ mức này" onClick={() => suaR({ muc: r.muc.filter((_, j) => j !== i) })}><X size={16} /></button>}
+                </div>
+              );
+            })}
+            {(r.muc || []).length < 10 && <button type="button" className="km-them" onClick={() => suaR({ muc: [...r.muc, { tu: '', giam: '', kieu: 'tien', toi_da: '' }] })}>+ Thêm mức</button>}
+          </div>
+        )}
+        {f.kind === 'hang_giam' && (
+          <div className="km-o">
+            <ChonMon nhan="Món được giảm" matHang={matHang} gia={r} onChon={(m) => suaR(monTu(m))} />
+            <div className="km-muc">
+              <label>Mua từ <input inputMode="numeric" value={r.sl_tu} onChange={(e) => suaR({ sl_tu: soTien(e.target.value) })} /> cái</label>
+              <span className="kv-vnd">{[['tien', 'Giảm đ'], ['pt', 'Giảm %'], ['gia', 'Đồng giá']].map(([k, l]) => (
+                <button key={k} type="button" className={r.kieu === k ? 'on' : ''} onClick={() => suaR({ kieu: k })}>{l}</button>))}</span>
+              <label>{r.kieu === 'gia' ? 'Giá mỗi cái' : r.kieu === 'pt' ? '% mỗi cái' : 'Giảm mỗi cái'}
+                <input inputMode="decimal" value={r.giam} placeholder="0" onChange={(e) => suaR({ giam: e.target.value.replace(/[^\d.]/g, '') })} /></label>
+            </div>
+          </div>
+        )}
+        {f.kind === 'tang_hang' && (
+          <div className="km-o">
+            <ChonMon nhan="Món khách mua" matHang={matHang} gia={r.mua} onChon={(m) => suaR({ mua: { ...monTu(m), sl: r.mua.sl } })} />
+            <label className="km-sl">Mua đủ <input inputMode="numeric" value={r.mua.sl} onChange={(e) => suaR({ mua: { ...r.mua, sl: soTien(e.target.value) } })} /> cái</label>
+            <ChonMon nhan="Món tặng" matHang={matHang} gia={r.tang} onChon={(m) => suaR({ tang: { ...monTu(m), sl: r.tang.sl } })} />
+            <label className="km-sl">Tặng <input inputMode="numeric" value={r.tang.sl} onChange={(e) => suaR({ tang: { ...r.tang, sl: soTien(e.target.value) } })} /> cái (mua gấp đôi thì tặng gấp đôi)</label>
+          </div>
+        )}
+
+        <div className="km-o"><span>Thời gian áp dụng (để trống = luôn luôn)</span>
+          <div className="km-muc"><label>Từ ngày <input type="date" value={f.from_date} onChange={(e) => sua({ from_date: e.target.value })} /></label>
+            <label>Đến ngày <input type="date" value={f.to_date} onChange={(e) => sua({ to_date: e.target.value })} /></label></div>
+          <div className="km-muc"><label>Từ giờ <input type="time" value={f.time_from} onChange={(e) => sua({ time_from: e.target.value })} /></label>
+            <label>Đến giờ <input type="time" value={f.time_to} onChange={(e) => sua({ time_to: e.target.value })} /></label></div>
+          <div className="sq-chip">{THU_KM.map(([n, l]) => <button key={n} type="button" className={f.days.includes(n) ? 'on' : ''} onClick={() => setF((o) => ({ ...o, days: bat(o.days, n) }))}>{l}</button>)}</div>
+          <small className="bhq-ghi">{f.days.length ? 'Chỉ các ngày đã chọn' : 'Không chọn ngày nào = mọi ngày trong tuần'}</small>
+        </div>
+        <div className="km-o"><span>Chi nhánh</span>
+          <div className="sq-chip">{CHI_NHANH.map((c) => <button key={c} type="button" className={f.stores.includes(c) ? 'on' : ''} onClick={() => setF((o) => ({ ...o, stores: bat(o.stores, c) }))}>{c}</button>)}</div>
+          <small className="bhq-ghi">{f.stores.length ? 'Chỉ các chi nhánh đã chọn' : 'Không chọn = cả 3 chi nhánh'}</small>
+        </div>
+        <label className="km-o"><span>Ghi chú</span><input value={f.note} onChange={(e) => sua({ note: e.target.value })} placeholder="Không bắt buộc" /></label>
+        <label className="kv-cong-tac"><span>Đang áp dụng</span><input type="checkbox" checked={!!f.active} onChange={(e) => sua({ active: e.target.checked })} /><i /></label>
+        <Loi chu={loi} />
+      </div>
+    </HopT>
+  );
+}
+
+// Màn "Khuyến mại": danh sách chương trình, bật/tắt nhanh, tạo / sửa (Quản lý / Giám đốc).
+export function KhuyenMai({ ds, matHang, chiNhanh, onDoi, onVe, nhan }) {
+  const [form, setForm] = useState(null); // null | 'moi' | chương trình
+  const [loc, setLoc] = useState('chay');
+  const [tk, setTk] = useState({});
+  const [loi, setLoi] = useState('');
+  useEffect(() => { thongKeKm().then((r) => setTk(r || {})).catch(() => {}); }, [ds]);
+  const ten = (k) => kmKhongChay(k, null);
+  const hien = ds.filter((k) => (loc === 'chay' ? !ten(k) : loc === 'tat' ? !!ten(k) : true));
+  const doiBat = async (k) => {
+    setLoi('');
+    try { await batKm(k.id, !k.active); nhan(k.active ? `Đã tắt "${k.name}"` : `Đã bật "${k.name}"`); onDoi(); } catch (e) { setLoi(chuLoi(e)); }
+  };
+  return (
+    <div className="xhd bcn km">
+      <header className="xhd-dau"><button type="button" aria-label="Quay lại" onClick={onVe}><ChevronLeft size={24} /></button><h1>Khuyến mại</h1>
+        <button type="button" className="km-tao" onClick={() => setForm('moi')}>+ Tạo</button></header>
+      <div className="xhd-than">
+        <div className="sq-chip">{[['chay', 'Đang chạy'], ['tat', 'Tắt / hết hạn'], ['het', 'Tất cả']].map(([k, l]) => (
+          <button key={k} type="button" className={loc === k ? 'on' : ''} onClick={() => setLoc(k)}>{l}</button>))}</div>
+        <Loi chu={loi} />
+        <section className="xhd-the">
+          {hien.map((k) => {
+            const ly = ten(k); const t = tk[k.id];
+            const noiCN = k.stores?.length && !k.stores.includes(chiNhanh);
+            return (
+              <div key={k.id} className="bcn-phieu km-the">
+                <button type="button" className="km-mo" onClick={() => setForm(k)}>
+                  <b>{k.name}</b>
+                  <small>{k.code} · {LOAI_KM[k.kind]}</small>
+                  <small>{moTaKm(k)}</small>
+                  <small>{[k.from_date || k.to_date ? `${k.from_date || '…'} → ${k.to_date || '…'}` : 'Không hạn',
+                    k.days?.length ? THU_KM.filter(([n]) => k.days.includes(n)).map(([, l]) => l).join(' ') : '',
+                    k.time_from ? `${String(k.time_from).slice(0, 5)}–${String(k.time_to).slice(0, 5)}` : '',
+                    k.stores?.length ? k.stores.join(', ') : 'Cả 3 chi nhánh'].filter(Boolean).join(' · ')}</small>
+                  {t && <small>Đã dùng {so(t.so_hd)} hoá đơn · giảm {so(t.tien)}đ</small>}
+                  <small className={ly ? 'cam' : 'xanh-la'}>{ly || (noiCN ? `Đang chạy (không áp ở ${chiNhanh})` : 'Đang chạy')}</small>
+                </button>
+                <label className="kv-cong-tac nho" aria-label={k.active ? 'Tắt chương trình' : 'Bật chương trình'}><input type="checkbox" checked={!!k.active} onChange={() => doiBat(k)} /><i /></label>
+              </div>
+            );
+          })}
+          {!hien.length && <p className="bhq-ghi">{ds.length ? 'Không có chương trình nào ở mục này.' : 'Chưa có chương trình khuyến mại nào — bấm "+ Tạo".'}</p>}
+        </section>
+      </div>
+      {form && <FormKm km={form === 'moi' ? null : form} matHang={matHang} onDong={() => setForm(null)} onXong={(chu) => { setForm(null); nhan(chu); onDoi(); }} />}
     </div>
   );
 }

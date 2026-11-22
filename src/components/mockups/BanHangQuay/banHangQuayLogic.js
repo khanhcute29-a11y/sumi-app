@@ -106,12 +106,14 @@ export function tinhHoaDon(hd) {
   const giamHd = hd.giamKieu === '%'
     ? tongHang * Math.min(Number(hd.giam) || 0, 100) / 100
     : Math.min(Number(hd.giam) || 0, tongHang);
-  const sauGiam = Math.max(Math.round(tongHang - giamHd), 0);
+  // Khuyến mại (giảm hoá đơn / giảm giá hàng) trừ sau giảm tay, trước VAT — như pos_ban.
+  const kmTien = Math.max(Math.round(Number(hd.kmTien) || 0), 0);
+  const sauGiam = Math.max(Math.round(tongHang - giamHd) - kmTien, 0);
   const thuKhac = (hd.thuKhac || []).reduce((s, t) => s + Math.max(Number(t.tien) || 0, 0), 0);
   const vat = hd.vat ? Math.round(sauGiam * THUE_VAT) : 0;
   const giaVon = hd.dong.reduce((s, d) => s + d.sl * (Number(d.giaVon) || 0), 0);
   return {
-    tongHang: Math.round(tongHang), giamHd: Math.round(giamHd), sauGiam, thuKhac, vat,
+    tongHang: Math.round(tongHang), giamHd: Math.round(giamHd), kmTien, sauGiam, thuKhac, vat,
     canTra: sauGiam + thuKhac + vat, giaVon, soMon: hd.dong.reduce((s, d) => s + d.sl, 0),
   };
 }
@@ -294,3 +296,69 @@ export const docSoTien = (tien) => {
   const s = `${ra.join(' ')} đồng chẵn`;
   return s[0].toUpperCase() + s.slice(1);
 };
+
+// ===== KHUYẾN MẠI (như KiotViet) — PHẢI tính giống hệt hàm pos__km_tinh trong database (migration 202611221030),
+// lệch 1đ là database không cho bán. Mỗi hoá đơn 1 chương trình; máy tự chọn chương trình lợi nhất.
+export const LOAI_KM = { hd_giam: 'Giảm giá hoá đơn', hang_giam: 'Giảm giá hàng', tang_hang: 'Mua hàng tặng hàng' };
+export const THU_KM = [[1, 'T2'], [2, 'T3'], [3, 'T4'], [4, 'T5'], [5, 'T6'], [6, 'T7'], [7, 'CN']];
+// Giờ Việt Nam của thời điểm luc → { ngay: 'YYYY-MM-DD', gio: 'HH:MM', thu: 1..7 (T2..CN) }.
+export function gioVn(luc = Date.now()) {
+  const d = new Date(luc + 7 * 3600000);
+  return { ngay: d.toISOString().slice(0, 10), gio: d.toISOString().slice(11, 16), thu: ((d.getUTCDay() + 6) % 7) + 1 };
+}
+// Lý do chương trình không chạy lúc này (null = đang chạy).
+export function kmKhongChay(k, chiNhanh, luc = Date.now()) {
+  const t = gioVn(luc);
+  if (!k.active) return 'Đang tắt';
+  if (k.from_date && t.ngay < k.from_date) return 'Chưa tới ngày';
+  if (k.to_date && t.ngay > k.to_date) return 'Đã hết hạn';
+  if (k.days?.length && !k.days.includes(t.thu)) return 'Không áp dụng hôm nay';
+  if ((k.time_from && t.gio < String(k.time_from).slice(0, 5)) || (k.time_to && t.gio >= String(k.time_to).slice(0, 5))) return 'Ngoài khung giờ';
+  if (k.stores?.length && chiNhanh && !k.stores.includes(chiNhanh)) return 'Không áp dụng chi nhánh này';
+  return null;
+}
+const khopMon = (d, x) => !!x && d.product_id === x.product_id && (!x.variant_id || d.variant_id === x.variant_id);
+// dong = [{ product_id, variant_id, sl, donGia, eod }] — các dòng đang bán (không gồm hàng tặng).
+// → { duoc, tien (giảm tiền), tang: {product_id, variant_id, sl} | null, thieu (chữ "mua thêm…") }
+export function tinhMotKm(k, dong) {
+  const r = k.rule || {};
+  if (k.kind === 'hd_giam') {
+    const sub = dong.reduce((s, d) => s + d.donGia * d.sl, 0);
+    const muc = [...(r.muc || [])].sort((a, b) => b.tu - a.tu).find((m) => sub >= Number(m.tu));
+    if (!muc) {
+      const min = Math.min(...(r.muc || []).map((m) => Number(m.tu)));
+      return { duoc: false, tien: 0, tang: null, thieu: Number.isFinite(min) ? `Mua thêm ${vnd(min - sub)}` : '' };
+    }
+    let tien = muc.kieu === 'pt' ? Math.round((sub * Number(muc.giam)) / 100) : Number(muc.giam);
+    if (muc.kieu === 'pt' && Number(muc.toi_da) > 0) tien = Math.min(tien, Number(muc.toi_da));
+    return { duoc: true, tien: Math.min(Math.max(tien, 0), sub), tang: null, thieu: '' };
+  }
+  if (k.kind === 'hang_giam') {
+    const ds = dong.filter((d) => !d.eod && khopMon(d, r));
+    const sl = ds.reduce((s, d) => s + d.sl, 0);
+    if (sl < Number(r.sl_tu || 1)) return { duoc: false, tien: 0, tang: null, thieu: `Mua thêm ${Number(r.sl_tu || 1) - sl} ${r.ten || 'cái'}` };
+    const g = Number(r.giam) || 0;
+    const tien = ds.reduce((s, d) => s + (r.kieu === 'pt' ? Math.round((d.donGia * g) / 100) * d.sl
+      : r.kieu === 'gia' ? Math.max(d.donGia - g, 0) * d.sl : Math.min(g, d.donGia) * d.sl), 0);
+    return { duoc: true, tien, tang: null, thieu: '' };
+  }
+  const sl = dong.filter((d) => khopMon(d, r.mua)).reduce((s, d) => s + d.sl, 0);
+  const lan = Math.floor(sl / Math.max(Number(r.mua?.sl) || 1, 1));
+  const tang = lan * (Number(r.tang?.sl) || 1);
+  if (!tang) return { duoc: false, tien: 0, tang: null, thieu: `Mua thêm ${Math.max(Number(r.mua?.sl) || 1, 1) - sl} ${r.mua?.ten || 'cái'}` };
+  return { duoc: true, tien: 0, tang: { product_id: r.tang.product_id, variant_id: r.tang.variant_id || null, sl: tang }, thieu: '' };
+}
+// Chương trình áp được cho giỏ hàng, sắp lợi nhất trước. giaTang(tang) = tiền hàng tặng (để so lợi).
+export function kmApDuoc(ds, dong, { chiNhanh, luc = Date.now(), giaTang = () => 0 } = {}) {
+  return (ds || []).filter((k) => !kmKhongChay(k, chiNhanh, luc))
+    .map((k) => { const kq = tinhMotKm(k, dong); return { k, ...kq, loi: kq.duoc ? kq.tien + (kq.tang ? giaTang(kq.tang) : 0) : 0 }; })
+    .sort((a, b) => Number(b.duoc) - Number(a.duoc) || b.loi - a.loi);
+}
+// Mô tả ngắn điều kiện (danh sách + hộp chọn).
+export function moTaKm(k) {
+  const r = k.rule || {};
+  const g = (kieu, giam) => (kieu === 'pt' ? `${giam}%` : kieu === 'gia' ? `đồng giá ${vnd(giam)}` : vnd(giam));
+  if (k.kind === 'hd_giam') return (r.muc || []).map((m) => `Từ ${vnd(m.tu)} giảm ${g(m.kieu, m.giam)}${m.kieu === 'pt' && Number(m.toi_da) > 0 ? ` (tối đa ${vnd(m.toi_da)})` : ''}`).join(' · ');
+  if (k.kind === 'hang_giam') return `Mua từ ${r.sl_tu} ${r.ten || ''} → ${r.kieu === 'gia' ? g('gia', r.giam) : `giảm ${g(r.kieu, r.giam)}/cái`}`;
+  return `Mua ${r.mua?.sl} ${r.mua?.ten || ''} tặng ${r.tang?.sl} ${r.tang?.ten || ''}`;
+}

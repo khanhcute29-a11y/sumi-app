@@ -59,6 +59,10 @@ export const chiKet = ({ id, caId, tien, lyDo, anh }) => goi('pos_chi_ket',
 // Phiếu thu / chi tiền mặt két có Loại + Người nộp/nhận (sổ quỹ như KiotViet).
 export const lapPhieuQuy = ({ id, caId, kind, tien, lyDo, loai, doiTuong, anh }) => goi('pos_lap_phieu_quy',
   { p: { id, shift_id: caId, kind, amount: Number(tien) || 0, reason: lyDo, loai: loai || null, doi_tuong: doiTuong || null, photo_url: anh || null } });
+// Khuyến mại (migration 202611221030): chỉ Quản lý / GĐ lưu — database kiểm quyền + điều kiện.
+export const luuKm = (p) => goi('pos_luu_km', { p });
+export const batKm = (id, bat) => goi('pos_bat_km', { p_id: id, p_bat: bat });
+export const thongKeKm = () => goi('pos_km_thong_ke');
 export const huyChiKet = (id, lyDo) => goi('pos_huy_chi_ket', { p_id: id, p_reason: lyDo });
 
 // ── Bật chạy thật? Cờ pos_ban_hang_that bật (hoặc tài khoản nằm trong danh sách thử) + đã đăng nhập + tài khoản đã duyệt.
@@ -96,7 +100,7 @@ export function hoaDonTuDb(r, lines, bd) {
     return {
       ma: m?.ma || `X-${String(l.product_id).slice(0, 6)}`, ten: l.name, size: l.size || '', gia: Number(l.list_price),
       sl: Number(l.qty), giam: Number(l.list_price) - Number(l.unit_price), giamKieu: 'vnd', eod: l.eod, ghiChu: l.note || '',
-      giaVon: 0, danhMuc: m?.danhMuc, anh: m?.anh || null,
+      giaVon: 0, danhMuc: m?.danhMuc, anh: m?.anh || null, tang: !!l.is_gift,
     };
   });
   const sauGiam = Number(r.subtotal) - Number(r.invoice_discount);
@@ -112,6 +116,7 @@ export function hoaDonTuDb(r, lines, bd) {
     ckTrangThai: r.transfer_status, ckNguoi: r.transfer_checked_by_name, bangGia: r.price_list_name,
     diemDung: r.points_used, diemTien: Number(r.points_value), diemCong: r.points_earned, giamCuoiNgay: Number(r.eod_discount),
     offline: r.offline, that: true, thuNganId: r.cashier_id, anhBan: r.photo_url || null,
+    kmTen: r.promo_name || null, kmGiam: Number(r.promo_discount || 0),
   };
 }
 
@@ -194,7 +199,7 @@ export async function taiLo(matHang) {
 export async function taiDuLieu(matHang, soNgay = 35) {
   const bd = lapBanDoHang(matHang);
   const tu = new Date(Date.now() - soNgay * 86400000).toISOString();
-  const [caiDat, caMo, hdR, phieuR, noR, tonR, bgR, bgItemR, loR, hanR] = await Promise.all([
+  const [caiDat, caMo, hdR, phieuR, noR, tonR, bgR, bgItemR, loR, hanR, kmR] = await Promise.all([
     supabase.from('pos_settings').select('*'),
     supabase.from('pos_shifts').select('*').eq('status', 'open'),
     supabase.from('pos_invoices').select('*, pos_invoice_lines(*)').gte('created_at', tu).order('created_at', { ascending: false }).limit(3000),
@@ -205,6 +210,8 @@ export async function taiDuLieu(matHang, soNgay = 35) {
     supabase.from('pos_price_list_items').select('*'),
     chonLo(),
     supabase.from('pos_shelf_life').select('product_id, days'),
+    // Chưa chạy SQL khuyến mại → bảng chưa có, coi như không có chương trình nào.
+    supabase.from('pos_promotions').select('*').order('created_at', { ascending: false }).limit(300),
   ]);
   for (const r of [caiDat, caMo, hdR, phieuR, noR, tonR]) if (r.error) throw new Error(r.error.message);
   const tonCN = {}; const hsd = {};
@@ -229,7 +236,7 @@ export async function taiDuLieu(matHang, soNgay = 35) {
     daBan: (hdR.data || []).map((r) => hoaDonTuDb(r, r.pos_invoice_lines, bd)),
     phieuKho: (phieuR.data || []).map((r) => phieuTuDb(r, bd)),
     congNo: congNoTuDb(noR.data || []),
-    tonCN, hsd, bangGia, loCN, hanDung,
+    tonCN, hsd, bangGia, loCN, hanDung, khuyenMai: kmR.error ? [] : kmR.data || [],
   };
 }
 
