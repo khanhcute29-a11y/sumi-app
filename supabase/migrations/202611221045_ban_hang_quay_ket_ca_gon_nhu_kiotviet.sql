@@ -1,6 +1,7 @@
--- Bán tại quầy — bỏ bắt chụp ảnh két (như KiotViet), sếp đồng ý 22/11.
--- Vào ca / Nhận ca / Kết ca: ảnh két giờ không bắt buộc. Ai chụp thì vẫn lưu và Giám đốc xem được như cũ.
--- Đếm tiền "mù" lúc kết ca + đếm bánh vẫn giữ nguyên. Chạy sau 202611221040. Chỉ thay hàm, không xoá gì.
+-- Bán tại quầy — kết ca gọn như KiotViet, sếp đồng ý 22/11:
+-- • Vào ca / Nhận ca / Kết ca: ảnh két không bắt buộc. Ai chụp thì vẫn lưu và Giám đốc xem được như cũ.
+-- • Kết ca: đếm bánh trên kệ không bắt buộc. Món nào có đếm thì vẫn so với máy, lệch thì báo Giám đốc.
+-- • Đếm tiền két lúc kết ca vẫn giữ. Chạy sau 202611221040. Chỉ thay hàm, không xoá gì.
 begin;
 set local lock_timeout = '10s';
 
@@ -102,10 +103,6 @@ begin
   end if;
   if p_counted is null or p_counted < 0 then raise exception 'Nhập số tiền mặt đếm được trong két'; end if;
   if jsonb_typeof(coalesce(p_stock, '[]'::jsonb)) <> 'array' then raise exception 'Danh sách đếm bánh không hợp lệ'; end if;
-  if jsonb_array_length(coalesce(p_stock, '[]'::jsonb)) = 0 and exists (
-      select 1 from public.finished_goods_stock where store_location = v_s.store_location and is_semi_finished = false and qty > 0) then
-    raise exception 'Đếm nhanh bánh trên kệ trước khi kết ca';
-  end if;
   for v_l in select value from jsonb_array_elements(coalesce(p_stock, '[]'::jsonb)) loop
     v_dem := nullif(v_l->>'dem', '')::numeric;
     if v_dem is null or v_dem < 0 then raise exception 'Nhập số đếm được của "%"', coalesce(v_l->>'name', 'bánh'); end if;
@@ -151,8 +148,8 @@ revoke all on function public.pos_ket_ca(uuid, numeric, text, text, jsonb) from 
 grant execute on function public.pos_ket_ca(uuid, numeric, text, text, jsonb) to authenticated;
 
 insert into public.migration_runs(migration_key, status, finished_at, notes)
-values ('202611221045_ban_hang_quay_bo_bat_anh_ket', 'completed', now(),
-  'Bán tại quầy: ảnh két không bắt buộc ở vào ca / nhận ca / kết ca (như KiotViet).')
+values ('202611221045_ban_hang_quay_ket_ca_gon_nhu_kiotviet', 'completed', now(),
+  'Bán tại quầy: ảnh két không bắt buộc ở vào ca / nhận ca / kết ca; đếm bánh lúc kết ca không bắt buộc (như KiotViet).')
 on conflict (migration_key) do update set status = 'completed', finished_at = now(), notes = excluded.notes;
 
 commit;

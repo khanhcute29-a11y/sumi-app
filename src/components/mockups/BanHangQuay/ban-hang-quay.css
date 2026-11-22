@@ -1440,3 +1440,5 @@ button.bcn-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bcn-chips{flex-basis:100%;display:flex;flex-wrap:wrap;gap:6px;padding:0 0 10px}
 .bcn-chips i{font-style:normal;font-size:13px;padding:4px 10px;border-radius:14px;background:#EAF2FB;color:var(--xanh)}
 .bcn-tat-ca{margin-left:auto;min-height:44px;padding:0 10px;border:0;background:none;color:var(--xanh);font-size:15px;font-weight:600;white-space:nowrap}
+.kc-mo{width:100%;min-height:44px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 12px;border:1px solid #E6DCCB;border-radius:10px;background:#F7EFE2;font-weight:600;text-align:left;cursor:pointer}
+.kc-mo small{font-weight:400;color:#8C5A3C}

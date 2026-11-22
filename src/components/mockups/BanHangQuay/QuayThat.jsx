@@ -938,6 +938,7 @@ export function KetCaThat({ caMo, chiNhanh, matHang = [], onDong, onKet }) {
   const [dangAnh, setDangAnh] = useState(false);
   const [banh, setBanh] = useState(null); // [{ khoa, product_id, size, name }] — bánh máy đang ghi còn trên kệ
   const [demBanh, setDemBanh] = useState({});
+  const [moBanh, setMoBanh] = useState(false); // như KiotViet: đếm bánh không bắt buộc — bấm mới mở
   const [dang, setDang] = useState(false);
   const [loi, setLoi] = useState('');
   const [xong, setXong] = useState(null);
@@ -972,10 +973,9 @@ export function KetCaThat({ caMo, chiNhanh, matHang = [], onDong, onKet }) {
     try { setAnh(await taiAnh(f, 'ket')); } catch (e) { setLoi(`Không tải được ảnh: ${chuLoi(e)}`); }
     setDangAnh(false);
   };
-  const thieuBanh = (banh || []).filter((b) => demBanh[b.khoa] == null || demBanh[b.khoa] === '');
+  const daDem = (banh || []).filter((b) => demBanh[b.khoa] != null && demBanh[b.khoa] !== '');
   const dong = async () => {
     if (dem === '') { setLoi('Nhập số tiền mặt đếm được trong két'); return; }
-    if (thieuBanh.length) { setLoi(`Còn ${thieuBanh.length} loại bánh chưa nhập số đếm (không còn cái nào thì nhập 0).`); return; }
     setDang(true); setLoi('');
     try {
       // Việc làm lúc mất mạng phải lên database TRƯỚC khi chốt két — không thì tiền của chúng rơi sang ca sau.
@@ -984,7 +984,7 @@ export function KetCaThat({ caMo, chiNhanh, matHang = [], onDong, onKet }) {
         setLoi(`Còn ${conLai} việc làm lúc mất mạng chưa gửi lên được. Đợi có mạng (thanh đỏ trên cùng biến mất) rồi bấm Kết ca lại.`);
         setDang(false); return;
       }
-      const stock = (banh || []).map((b) => ({ product_id: b.product_id, size: b.size, name: b.name, dem: Number(demBanh[b.khoa]) || 0 }));
+      const stock = daDem.map((b) => ({ product_id: b.product_id, size: b.size, name: b.name, dem: Number(demBanh[b.khoa]) || 0 }));
       const s = await goi('pos_ket_ca', { p_shift: caMo.id, p_counted: Number(dem) || 0, p_note: ghi.trim() || null, p_photo_url: anh, p_stock: stock });
       const sl = s.summary || {};
       setXong({
@@ -1031,7 +1031,7 @@ export function KetCaThat({ caMo, chiNhanh, matHang = [], onDong, onKet }) {
   }
   return (
     <HopT tieuDe="Kết ca" onDong={onDong}
-      chan={<><button type="button" className="bhq-nut phu" onClick={onDong}>Bỏ qua</button><button type="button" className="bhq-nut chinh" disabled={dang || dangAnh || banh == null} onClick={dong}>{dang ? 'Đang kết ca…' : 'Kết ca'}</button></>}>
+      chan={<><button type="button" className="bhq-nut phu" onClick={onDong}>Bỏ qua</button><button type="button" className="bhq-nut chinh" disabled={dang || dangAnh} onClick={dong}>{dang ? 'Đang kết ca…' : 'Kết ca'}</button></>}>
       <div className="bhq-bang">
         <div><span>Ca</span><b>{caMo.code}</b></div>
         <div><span>Vào ca lúc</span><b>{ngayGio(caMo.opened_at)} · {caMo.opened_by_name}</b></div>
@@ -1042,8 +1042,10 @@ export function KetCaThat({ caMo, chiNhanh, matHang = [], onDong, onKet }) {
       {phieuChi.length > 0 && <p className="bhq-ghi">{phieuChi.map((p) => `${p.code}${p.truoc_ca ? ' (trước khi vào ca)' : ''}: ${p.kind === 'thu' ? '+' : '-'}${so(p.amount)} — ${p.reason}`).join(' · ')}</p>}
       <label className="bhq-nhan">Tiền mặt đếm được trong két<input className="bhq-o lon" autoFocus inputMode="numeric" value={dem ? so(dem) : dem} onChange={(e) => setDem(soTien(e.target.value))} placeholder="Đếm hết rồi nhập" /></label>
       <ChupAnh path={anh} dang={dangAnh} onChon={chonAnh} chu="Chụp ảnh két tiền (không bắt buộc)" />
-      <h4 className="kc-tieu">Đếm nhanh bánh trên kệ</h4>
-      {banh == null ? <p className="bhq-ghi">Đang tải danh sách bánh…</p>
+      <button type="button" className="kc-tieu kc-mo" onClick={() => setMoBanh((v) => !v)} aria-expanded={moBanh}>
+        <span>Đếm bánh trên kệ <small>(không bắt buộc{daDem.length ? ` · đã đếm ${daDem.length} món` : ''})</small></span>{moBanh ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+      </button>
+      {!moBanh ? null : banh == null ? <p className="bhq-ghi">Đang tải danh sách bánh…</p>
         : banh.length === 0 ? <p className="bhq-ghi">Máy ghi kệ đã hết bánh — không cần đếm.</p>
           : (
             <div className="kc-banh">

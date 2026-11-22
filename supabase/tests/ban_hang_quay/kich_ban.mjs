@@ -17,7 +17,7 @@ const ok=async(ten,fn,mong)=>{dem++;try{const r=await fn(); if(mong!==undefined&
 const chan=async(ten,fn,chua)=>{dem++;try{await fn();loi++;console.log('✗',ten,'KHÔNG bị chặn');}catch(e){if(chua&&!e.message.includes(chua)){loi++;console.log('✗',ten,'chặn sai lý do:',e.message);}else console.log('✓',ten,'→',e.message.slice(0,80));}};
 const ton=(store='Vĩnh Phú 42')=>v(`select public.pos__ton(${store?`'${store}'`:'null'},'${P1}',null)`);
 const id=()=>crypto.randomUUID();
-const BO_ANH=process.argv.some((x)=>x.includes('bo_bat_anh_ket'));  // 202611221045: ảnh két không bắt buộc (như KiotViet)
+const BO_ANH=process.argv.some((x)=>x.includes('ket_ca_gon_nhu_kiotviet'));  // 202611221045: ảnh két không bắt buộc (như KiotViet)
 const ban=(o)=>v(`select public.pos_ban('${JSON.stringify({id:o.id||id(),store:'Vĩnh Phú 42',pay_method:'tien_mat',photo_url:'ban.jpg',lines:[{product_id:P1,name:'Bánh bò',qty:2,list_price:90000,unit_price:90000}],...o}).replace(/'/g,"''")}'::jsonb)`);
 
 await as(NV);
@@ -199,7 +199,7 @@ if (process.argv.length > 7) {
   const ca1=await caDangMo();
   await as(NV);
   if (!BO_ANH) await chan('Kết ca thiếu ảnh két', ()=>ketCa(ca1,null),'ảnh két');
-  await chan('Kết ca chưa đếm bánh', ()=>ketCa(ca1,'ket.jpg','[]'),'Đếm nhanh');
+  if (!BO_ANH) await chan('Kết ca chưa đếm bánh', ()=>ketCa(ca1,'ket.jpg','[]'),'Đếm nhanh');
   await as(NV2);
   await chan('Người khác kết ca của mình', ()=>ketCa(ca1),'chỉ người đó');
   await chan('Vào ca khi ca người khác đang mở', ()=>q(`select public.pos_vao_ca('${S}',0,'ket.jpg')`),process.argv.some((x)=>x.includes('nhan_ca_va_bao_cao'))?'Nhận ca':'phải kết ca');
@@ -756,5 +756,11 @@ if (BO_ANH) {
   await ok('Kết ca không ảnh (vẫn đếm tiền)', ()=>[k.status, k.closing_photo, Number(k.counted_cash)],['closed',null,0]);
   const s2=await v(`select public.pos_vao_ca_v2('${Q}',5000,'',null)`);
   await ok('Nhập lệch không ảnh → báo GĐ không nhắc xem ảnh', ()=>v(`select count(*) from notifications where event_key='pos-dau-ca:${s2.id}:${GD}' and body not like '%Xem ảnh%'`),1);
+  await as(A);
+  const s3=await v(`select public.pos_nhan_ca('${Q}','${s2.id}',null,null)`);
+  await db.exec(`insert into products(id,name,category,price) values ('00000000-0000-0000-0000-0000000000ba','Bánh tart','khac',10000) on conflict do nothing;
+    insert into finished_goods_stock(product_id,size,branch,qty,store_location) values ('00000000-0000-0000-0000-0000000000ba',null,'bakery',5,'${Q}');`);
+  const k3=await v(`select public.pos_ket_ca('${s3.id}',5000,null,null,'[]'::jsonb)`);
+  await ok('Kệ còn bánh mà không đếm → vẫn kết ca được', ()=>[k3.status, k3.stock_check],['closed',[]]);
 }
 console.log(`\n${dem-loi}/${dem} đạt`); process.exit(loi?1:0);
