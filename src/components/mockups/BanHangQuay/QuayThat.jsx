@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, RefreshCw, Camera, Search, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, ListFilter, Check } from 'lucide-react';
 import { supabase } from '../../../lib/supabaseClient';
-import { goi, chuLoi, anhVietQr, noiDungCk, NGAN_HANG, maMoi, tachId, linkAnh, linkAnhHoaDon, guiHangDoi, taiAnh, lapBanDoHang, themHangQuay, suaHangQuay, xoaHangQuay, vaoCa, chiKet, huyChiKet } from './posThat';
+import { goi, chuLoi, anhVietQr, noiDungCk, NGAN_HANG, maMoi, tachId, linkAnh, linkAnhHoaDon, guiHangDoi, taiAnh, lapBanDoHang, themHangQuay, suaHangQuay, xoaHangQuay, vaoCa, lapPhieuQuy, huyChiKet } from './posThat';
 import { locXep } from './banHangQuayLogic';
 
 // Các hộp thoại chỉ có ở chế độ CHẠY THẬT (ca, duyệt, chuyển khoản, thiết lập, đặt cọc, nhận hàng, báo cáo, nhật ký).
@@ -793,8 +793,14 @@ export function BaoCaoThat({ chiNhanh, laGD, dienThoai }) {
 // ── Kết ca thật: đếm tiền "mù" + đếm nhanh bánh trên kệ + ảnh két → database tự so, báo GĐ nếu lệch ──
 // ── Phiếu chi tiền từ két (như KiotViet): lấy tiền mặt trong két ra trả/mua gì → ghi ở đây để máy trừ vào két phải có.
 // Người đang giữ ca hoặc Quản lý ghi; báo Giám đốc mỗi phiếu. Ghi nhầm thì huỷ (khi ca còn mở).
+// Như KiotViet "Lập phiếu thu / Lập phiếu chi" (quỹ tiền mặt két).
+export const LOAI_PHIEU_CHI = ['Chi phí nguyên vật liệu', 'Chi tiền mua hàng', 'Chi trả lương, ứng lương', 'Chi phí vận chuyển, ship', 'Chi tiền điện nước, mặt bằng', 'Chi nộp tiền về công ty', 'Chi phí khác'];
+export const LOAI_PHIEU_THU = ['Thu tiền nộp thêm vào két', 'Thu tiền khách trả', 'Thu tiền hoàn ứng', 'Thu khác'];
 export function ChiKet({ caMo, laQl = false, uid, onDong, onXong }) {
   const [ds, setDs] = useState(null);
+  const [kind, setKind] = useState('chi');
+  const [loai, setLoai] = useState('');
+  const [doiTuong, setDoiTuong] = useState('');
   const [tien, setTien] = useState('');
   const [lyDo, setLyDo] = useState('');
   const [anh, setAnh] = useState(null);
@@ -804,7 +810,7 @@ export function ChiKet({ caMo, laQl = false, uid, onDong, onXong }) {
   const [huy, setHuy] = useState(null); // { id, lyDo }
   const maPhieu = useRef(maMoi());
   const tai = async () => {
-    const { data, error } = await supabase.from('pos_cash_outs').select('id, code, amount, reason, truoc_ca, status, created_by, created_by_name, created_at, cancel_reason')
+    const { data, error } = await supabase.from('pos_cash_outs').select('*')
       .eq('shift_id', caMo.id).order('created_at', { ascending: false });
     setDs(error ? [] : data || []);
   };
@@ -815,13 +821,14 @@ export function ChiKet({ caMo, laQl = false, uid, onDong, onXong }) {
     setDangAnh(false);
   };
   const luu = async () => {
-    if (!(Number(tien) > 0)) { setLoi('Nhập số tiền đã chi'); return; }
-    if (lyDo.trim().length < 3) { setLoi('Ghi rõ chi tiền làm gì'); return; }
+    const thu = kind === 'thu';
+    if (!(Number(tien) > 0)) { setLoi(thu ? 'Nhập số tiền thu vào két' : 'Nhập số tiền đã chi'); return; }
+    if (lyDo.trim().length < 3) { setLoi(thu ? 'Ghi rõ thu tiền gì' : 'Ghi rõ chi tiền làm gì'); return; }
     setDang(true); setLoi('');
     try {
-      const p = await chiKet({ id: maPhieu.current, caId: caMo.id, tien, lyDo: lyDo.trim(), anh });
-      maPhieu.current = maMoi(); setTien(''); setLyDo(''); setAnh(null);
-      await tai(); onXong?.(`Đã ghi phiếu chi ${p.code}: ${so(p.amount)}`);
+      const p = await lapPhieuQuy({ id: maPhieu.current, caId: caMo.id, kind, tien, lyDo: lyDo.trim(), loai, doiTuong: doiTuong.trim(), anh });
+      maPhieu.current = maMoi(); setTien(''); setLyDo(''); setAnh(null); setLoai(''); setDoiTuong('');
+      await tai(); onXong?.(`Đã ghi phiếu ${thu ? 'thu' : 'chi'} ${p.code}: ${so(p.amount)}`);
     } catch (e) { setLoi(chuLoi(e)); }
     setDang(false);
   };
@@ -831,24 +838,36 @@ export function ChiKet({ caMo, laQl = false, uid, onDong, onXong }) {
     try { await huyChiKet(huy.id, huy.lyDo.trim()); setHuy(null); await tai(); } catch (e) { setLoi(chuLoi(e)); }
     setDang(false);
   };
+  const thu = kind === 'thu';
   const conHieuLuc = (ds || []).filter((p) => p.status === 'xong');
-  const tong = conHieuLuc.reduce((a, p) => a + Number(p.amount), 0);
+  const tongChi = conHieuLuc.filter((p) => (p.kind || 'chi') === 'chi').reduce((a, p) => a + Number(p.amount), 0);
+  const tongThu = conHieuLuc.filter((p) => p.kind === 'thu').reduce((a, p) => a + Number(p.amount), 0);
   return (
-    <HopT tieuDe={`Chi tiền từ két · ${caMo.code}`} onDong={dang ? undefined : onDong}
+    <HopT tieuDe={`Thu / chi tiền két · ${caMo.code}`} onDong={dang ? undefined : onDong}
       chan={<><button type="button" className="bhq-nut phu" disabled={dang} onClick={onDong}>Đóng</button>
-        <button type="button" className="bhq-nut chinh" disabled={dang || dangAnh} onClick={luu}>{dang ? 'Đang lưu…' : 'Ghi phiếu chi'}</button></>}>
-      <p className="bhq-ghi">Lấy tiền mặt trong két ra trả/mua gì thì ghi ở đây — máy trừ vào két phải có lúc kết ca. Giám đốc nhận báo từng phiếu.</p>
-      <label className="bhq-nhan">Số tiền chi<input className="bhq-o lon" inputMode="numeric" value={tien ? so(tien) : ''} onChange={(e) => setTien(soTien(e.target.value).slice(0, 9))} placeholder="0" /></label>
-      <label className="bhq-nhan">Chi làm gì<textarea className="bhq-o" rows={2} maxLength={300} value={lyDo} onChange={(e) => setLyDo(e.target.value)} placeholder="VD: mua đá viên, trả tiền ship, ứng lương…" /></label>
-      <ChupAnh path={anh} dang={dangAnh} onChon={chonAnh} chu="Chụp hoá đơn / biên nhận (nên có)" />
+        <button type="button" className="bhq-nut chinh" disabled={dang || dangAnh} onClick={luu}>{dang ? 'Đang lưu…' : thu ? 'Ghi phiếu thu' : 'Ghi phiếu chi'}</button></>}>
+      <div className="bhq-goi pq-loai" role="radiogroup" aria-label="Loại phiếu">
+        {[['chi', 'Phiếu chi (lấy tiền ra)'], ['thu', 'Phiếu thu (bỏ tiền vào)']].map(([k, l]) => (
+          <button key={k} type="button" role="radio" aria-checked={kind === k} className={kind === k ? 'on' : ''} onClick={() => { setKind(k); setLoai(''); setLoi(''); }}>{l}</button>))}
+      </div>
+      <p className="bhq-ghi">{thu ? 'Bỏ thêm tiền mặt vào két (VD: chủ tiệm nộp tiền lẻ) thì ghi ở đây — máy cộng vào két phải có lúc kết ca.'
+        : 'Lấy tiền mặt trong két ra trả/mua gì thì ghi ở đây — máy trừ vào két phải có lúc kết ca.'} Giám đốc nhận báo từng phiếu.</p>
+      <label className="bhq-nhan">{thu ? 'Số tiền thu' : 'Số tiền chi'}<input className="bhq-o lon" inputMode="numeric" value={tien ? so(tien) : ''} onChange={(e) => setTien(soTien(e.target.value).slice(0, 9))} placeholder="0" /></label>
+      <label className="bhq-nhan">{thu ? 'Loại thu' : 'Loại chi'}
+        <select className="bhq-o" value={loai} onChange={(e) => setLoai(e.target.value)}>
+          <option value="">{thu ? 'Chọn loại thu' : 'Chọn loại chi'}</option>{(thu ? LOAI_PHIEU_THU : LOAI_PHIEU_CHI).map((l) => <option key={l}>{l}</option>)}
+        </select></label>
+      <label className="bhq-nhan">{thu ? 'Người nộp' : 'Người nhận'}<input className="bhq-o" maxLength={120} value={doiTuong} onChange={(e) => setDoiTuong(e.target.value)} placeholder={thu ? 'VD: chủ tiệm' : 'VD: anh giao đá'} /></label>
+      <label className="bhq-nhan">{thu ? 'Thu tiền gì' : 'Chi làm gì'}<textarea className="bhq-o" rows={2} maxLength={300} value={lyDo} onChange={(e) => setLyDo(e.target.value)} placeholder={thu ? 'VD: nộp thêm tiền lẻ để thối' : 'VD: mua đá viên, trả tiền ship, ứng lương…'} /></label>
+      <ChupAnh path={anh} dang={dangAnh} onChon={chonAnh} chu={thu ? 'Chụp ảnh tiền (nên có)' : 'Chụp hoá đơn / biên nhận (nên có)'} />
       <Loi chu={loi} />
-      <h4 className="kc-tieu">Phiếu chi ca này{conHieuLuc.length ? ` · tổng ${so(tong)}` : ''}</h4>
-      {ds == null ? <p className="bhq-ghi">Đang tải…</p> : !ds.length ? <p className="bhq-ghi">Chưa có phiếu chi nào.</p> : (
+      <h4 className="kc-tieu">Phiếu ca này{tongThu ? ` · thu ${so(tongThu)}` : ''}{tongChi ? ` · chi ${so(tongChi)}` : ''}</h4>
+      {ds == null ? <p className="bhq-ghi">Đang tải…</p> : !ds.length ? <p className="bhq-ghi">Chưa có phiếu nào.</p> : (
         <div className="pc-ds">
           {ds.map((p) => (
             <div key={p.id} className={`pc-dong ${p.status === 'huy' ? 'huy' : ''}`}>
-              <div className="r"><b>{p.code}{p.truoc_ca ? ' · trước khi vào ca' : ''}</b><b className={p.status === 'huy' ? '' : 'do'}>{p.status === 'huy' ? 'Đã huỷ' : `-${so(p.amount)}`}</b></div>
-              <div className="mo">{p.reason} · {p.created_by_name} · {ngayGio(p.created_at)}</div>
+              <div className="r"><b>{p.code}{p.truoc_ca ? ' · trước khi vào ca' : ''}</b><b className={p.status === 'huy' ? '' : p.kind === 'thu' ? 'xanh-la' : 'do'}>{p.status === 'huy' ? 'Đã huỷ' : `${p.kind === 'thu' ? '+' : '-'}${so(p.amount)}`}</b></div>
+              <div className="mo">{[p.loai, p.reason, p.doi_tuong && `${p.kind === 'thu' ? 'nộp' : 'nhận'}: ${p.doi_tuong}`, p.created_by_name, ngayGio(p.created_at)].filter(Boolean).join(' · ')}</div>
               {p.status === 'huy' && p.cancel_reason && <div className="mo">Lý do huỷ: {p.cancel_reason}</div>}
               {p.status === 'xong' && (laQl || p.created_by === uid) && (huy?.id === p.id
                 ? <div className="pc-huy"><input className="bhq-o" autoFocus value={huy.lyDo} onChange={(e) => setHuy({ id: p.id, lyDo: e.target.value })} placeholder="Lý do huỷ (vd: ghi nhầm số)" />
@@ -876,7 +895,7 @@ export function KetCaThat({ caMo, chiNhanh, matHang = [], onDong, onKet }) {
   const [phieuChi, setPhieuChi] = useState([]); // phiếu chi từ két của ca này (đã trừ vào két phải có)
   useEffect(() => {
     let h = false;
-    supabase.from('pos_cash_outs').select('code, amount, reason, truoc_ca, created_by_name').eq('shift_id', caMo.id).eq('status', 'xong').order('created_at')
+    supabase.from('pos_cash_outs').select('*').eq('shift_id', caMo.id).eq('status', 'xong').order('created_at')
       .then(({ data, error }) => { if (!h && !error) setPhieuChi(data || []); });
     return () => { h = true; };
   }, [caMo.id]);
@@ -925,7 +944,7 @@ export function KetCaThat({ caMo, chiNhanh, matHang = [], onDong, onKet }) {
         dauCa: Number(s.opening_cash), banGiao: Number(s.counted_cash), ghiChu: s.note || '',
         ban: sl.ban || {}, thu: sl.thu_no || {}, donDat: sl.don_dat || {}, ghiNo: Number(sl.ban?.ghi_no || 0), soHoaDon: sl.so_hoa_don,
         hoanTien: Number(sl.hoan_tien_huy || 0), tienMatTrongCa: Number(sl.tien_mat_trong_ca || 0), cuoiCa: Number(s.expected_cash), chenh: Number(s.diff),
-        chiKet: Number(sl.chi_ket || 0), phieuChi: sl.phieu_chi || [],
+        chiKet: Number(sl.chi_ket || 0), phieuChi: sl.phieu_chi || [], thuKet: Number(sl.thu_ket || 0), phieuThu: sl.phieu_thu || [],
         ckCho: Number(sl.ck_chua_xac_nhan || 0),
         doanhSo: Number(sl.doanh_so_tinh || 0), dsCkCho: Number(sl.ck_cho || 0), dsNo: Number(sl.no_chua_tra || 0),
         banhLech: (s.stock_check || []).filter((k) => Number(k.lech) !== 0),
@@ -943,9 +962,10 @@ export function KetCaThat({ caMo, chiNhanh, matHang = [], onDong, onKet }) {
           {xong.dsNo > 0 && <div><span>Khách còn nợ (tính khi trả)</span><b>{so(xong.dsNo)}</b></div>}
           <div><span>Số hoá đơn</span><b>{xong.soHoaDon}</b></div>
           <div><span>Tiền mặt đầu ca</span><b>{so(xong.dauCa)}</b></div>
-          {xong.chiKet > 0 && <div><span>Thu tiền mặt trong ca</span><b>{so(xong.tienMatTrongCa + xong.chiKet)}</b></div>}
+          {(xong.chiKet > 0 || xong.thuKet > 0) && <div><span>Thu tiền mặt bán hàng trong ca</span><b>{so(xong.tienMatTrongCa + xong.chiKet - xong.thuKet)}</b></div>}
+          {xong.thuKet > 0 && <div><span>Phiếu thu vào két ({xong.phieuThu.length} phiếu)</span><b className="xanh-la">+{so(xong.thuKet)}</b></div>}
           {xong.chiKet > 0 && <div><span>Chi từ két ({xong.phieuChi.length} phiếu)</span><b className="do">-{so(xong.chiKet)}</b></div>}
-          <div><span>Tiền mặt trong ca{xong.chiKet > 0 ? ' (sau chi)' : ''}</span><b>{so(xong.tienMatTrongCa)}</b></div>
+          <div><span>Tiền mặt trong ca{xong.chiKet > 0 || xong.thuKet > 0 ? ' (sau thu/chi)' : ''}</span><b>{so(xong.tienMatTrongCa)}</b></div>
           <div><span>Tiền mặt cuối ca (hệ thống)</span><b>{so(xong.cuoiCa)}</b></div>
           <div><span>Đếm được</span><b>{so(xong.banGiao)}</b></div>
           <div className="lon"><span>Chênh lệch két</span><b className={xong.chenh < 0 ? 'do' : xong.chenh > 0 ? 'cam' : 'xanh-la'}>{xong.chenh > 0 ? '+' : ''}{so(xong.chenh)}</b></div>
@@ -968,9 +988,10 @@ export function KetCaThat({ caMo, chiNhanh, matHang = [], onDong, onKet }) {
         <div><span>Ca</span><b>{caMo.code}</b></div>
         <div><span>Vào ca lúc</span><b>{ngayGio(caMo.opened_at)} · {caMo.opened_by_name}</b></div>
         <div><span>Tiền đầu ca</span><b>{so(caMo.opening_cash)}</b></div>
-        {phieuChi.length > 0 && <div><span>Phiếu chi từ két ({phieuChi.length})</span><b className="do">-{so(phieuChi.reduce((a, p) => a + Number(p.amount), 0))}</b></div>}
+        {phieuChi.some((p) => p.kind === 'thu') && <div><span>Phiếu thu vào két ({phieuChi.filter((p) => p.kind === 'thu').length})</span><b className="xanh-la">+{so(phieuChi.filter((p) => p.kind === 'thu').reduce((a, p) => a + Number(p.amount), 0))}</b></div>}
+        {phieuChi.some((p) => (p.kind || 'chi') === 'chi') && <div><span>Phiếu chi từ két ({phieuChi.filter((p) => (p.kind || 'chi') === 'chi').length})</span><b className="do">-{so(phieuChi.filter((p) => (p.kind || 'chi') === 'chi').reduce((a, p) => a + Number(p.amount), 0))}</b></div>}
       </div>
-      {phieuChi.length > 0 && <p className="bhq-ghi">{phieuChi.map((p) => `${p.code}${p.truoc_ca ? ' (trước khi vào ca)' : ''}: ${so(p.amount)} — ${p.reason}`).join(' · ')}</p>}
+      {phieuChi.length > 0 && <p className="bhq-ghi">{phieuChi.map((p) => `${p.code}${p.truoc_ca ? ' (trước khi vào ca)' : ''}: ${p.kind === 'thu' ? '+' : '-'}${so(p.amount)} — ${p.reason}`).join(' · ')}</p>}
       <label className="bhq-nhan">Tiền mặt đếm được trong két<input className="bhq-o lon" autoFocus inputMode="numeric" value={dem ? so(dem) : dem} onChange={(e) => setDem(soTien(e.target.value))} placeholder="Đếm hết rồi nhập" /></label>
       <ChupAnh path={anh} dang={dangAnh} onChon={chonAnh} chu="Chụp ảnh két tiền (bắt buộc)" />
       <h4 className="kc-tieu">Đếm nhanh bánh trên kệ</h4>
@@ -1365,6 +1386,63 @@ export function BaoCaoCuoiNgay({ chiNhanh, onVe, onMoHoaDon }) {
             <h4>ĐẶT HÀNG · CÔNG NỢ</h4>
             <R t={`Thu đơn đặt (${so(bc.dat?.so)} phiếu)`} v={so(bc.dat?.tien)} />
             <R t="Thu nợ khách" v={so(bc.thu_no)} />
+          </section>
+        </>}
+      </div>
+    </div>
+  );
+}
+
+// ── Sổ quỹ (như KiotViet): mọi khoản thu / chi theo quỹ Tiền mặt · Ngân hàng · Ví ──
+const TEN_QUY = [['tong', 'Tổng quỹ'], ['tien_mat', 'Tiền mặt'], ['ngan_hang', 'Ngân hàng'], ['vi', 'Ví']];
+const LOAI_SQ = { ban_hang: 'Thu tiền bán hàng', thu_no: 'Thu nợ khách', thu_coc: 'Thu cọc đơn đặt', lay_banh: 'Thu khi lấy bánh đặt', phieu_thu: 'Phiếu thu', phieu_chi: 'Phiếu chi' };
+export function SoQuy({ chiNhanh, onVe }) {
+  const [ky, setKy] = useState('hom_nay');
+  const [quy, setQuy] = useState('tong');
+  const [loc, setLoc] = useState(''); // '' | thu | chi
+  const [q, setQ] = useState('');
+  const [tatCa, setTatCa] = useState(false);
+  const [sq, setSq] = useState(null);
+  const [loi, setLoi] = useState('');
+  useEffect(() => {
+    let huy = false;
+    setSq(null); setLoi('');
+    const [a, b] = khoangKy(ky);
+    goi('pos_so_quy', { p_store: tatCa ? null : chiNhanh, p_from: new Date(a).toISOString(), p_to: new Date(b).toISOString() })
+      .then((r) => { if (!huy) setSq(r); }).catch((e) => { if (!huy) setLoi(chuLoi(e)); });
+    return () => { huy = true; };
+  }, [ky, chiNhanh, tatCa]);
+  const so4 = sq?.quy?.[quy] || { dau_ky: 0, thu: 0, chi: 0 };
+  const ton = Number(so4.dau_ky) + Number(so4.thu) - Number(so4.chi);
+  const t = q.trim().toLowerCase();
+  const ds = (sq?.dong || []).filter((d) => (quy === 'tong' || d.quy === quy) && (!loc || (loc === 'thu' ? Number(d.thu) > 0 : Number(d.chi) > 0))
+    && (!t || `${d.ma} ${d.doi_tuong || ''} ${d.nguoi || ''} ${d.ghi_chu || ''}`.toLowerCase().includes(t)));
+  return (
+    <div className="xhd bcn sq">
+      <header className="xhd-dau"><button type="button" aria-label="Quay lại" onClick={onVe}><ChevronLeft size={24} /></button><h1>Sổ quỹ</h1></header>
+      <div className="xhd-than">
+        <div className="sq-chip">{KY.filter(([k]) => k !== 'tuy_chinh').map(([k, l]) => <button key={k} type="button" className={ky === k ? 'on' : ''} onClick={() => setKy(k)}>{l}</button>)}
+          <button type="button" className={tatCa ? 'on' : ''} onClick={() => setTatCa((v) => !v)}>{tatCa ? 'Mọi cửa hàng' : chiNhanh}</button></div>
+        <div className="sq-chip quy" role="tablist">{TEN_QUY.map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={quy === k} className={quy === k ? 'on' : ''} onClick={() => setQuy(k)}>{l}</button>)}</div>
+        {loi ? <p className="kv-loi">{loi}</p> : !sq ? <p className="bhq-ghi">Đang tải sổ quỹ…</p> : <>
+          <section className="xhd-the sq-tong">
+            <div><span>Quỹ đầu kỳ</span><b>{so(so4.dau_ky)}</b></div>
+            <button type="button" className={loc === 'thu' ? 'on' : ''} onClick={() => setLoc((x) => (x === 'thu' ? '' : 'thu'))}><span>Tổng thu</span><b className="xanh-la">{so(so4.thu)}</b></button>
+            <button type="button" className={loc === 'chi' ? 'on' : ''} onClick={() => setLoc((x) => (x === 'chi' ? '' : 'chi'))}><span>Tổng chi</span><b className="do">{Number(so4.chi) ? `-${so(so4.chi)}` : '0'}</b></button>
+            <div className="lon"><span>Tồn quỹ</span><b className="xanh">{so(ton)}</b></div>
+          </section>
+          <div className="xhd-tim-mo"><label className="o bcn-tim"><Search size={17} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Mã phiếu, người nộp / nhận, ghi chú" /></label></div>
+          <section className="xhd-the">
+            {ds.map((d, i) => (
+              <div key={`${d.ma}-${d.pt}-${i}`} className="bcn-phieu">
+                <div><b>{LOAI_SQ[d.loai] || d.loai}{d.ma ? ` · ${d.ma}` : ''}</b>
+                  <small>{ngayGio(d.luc)} · {PT[d.pt] || d.pt}{d.doi_tuong ? ` · ${d.doi_tuong}` : ''}{d.nguoi ? ` · ${d.nguoi}` : ''}{tatCa && d.cn ? ` · ${d.cn}` : ''}</small>
+                  {d.ghi_chu && <small>{d.ghi_chu}</small>}</div>
+                <b className={Number(d.chi) > 0 ? 'do' : 'xanh'}>{Number(d.chi) > 0 ? `-${so(d.chi)}` : so(d.thu)}</b>
+              </div>
+            ))}
+            {!ds.length && <p className="bhq-ghi">Không có phiếu thu / chi nào trong kỳ này.</p>}
+            {sq.so_dong > (sq.dong || []).length && <p className="bhq-ghi">Đang hiện {(sq.dong || []).length} / {sq.so_dong} dòng mới nhất — chọn kỳ ngắn hơn để xem hết.</p>}
           </section>
         </>}
       </div>

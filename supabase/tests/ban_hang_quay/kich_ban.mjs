@@ -567,4 +567,35 @@ if (await v(`select count(*)::int from information_schema.columns where table_na
   await ok('Huỷ HĐ kết hợp trong ca → két bớt đúng phần tiền mặt 30k', async()=>{await q(`select public.pos_huy_hd('${k2.id}','nhầm')`); return Number((await v(`select public.pos__so_lieu_ca('${ca}')`)).tien_mat_trong_ca);},100000);
   await ok('Hoá đơn 1 cách cũ (không gửi pay_parts) vẫn như trước', async()=>{const r=(await q(`select public.pos_ban('${JSON.stringify({id:id(),store:Q,pay_method:'tien_mat',received:60000,photo_url:'b.jpg',lines:[{product_id:P5,name:'Bánh tart',qty:1,list_price:50000,unit_price:50000}]})}'::jsonb) r`))[0].r; return [Number(r.change), r.pay_parts];},[10000,null]);
 }
+// ── 202611221020: sổ quỹ + phiếu thu tiền vào két ──
+if (await v(`select count(*)::int from pg_proc where proname='pos_so_quy'`)) {
+  const Q='Quầy sổ quỹ', NV9='00000000-0000-0000-0000-0000000000ad', P6='00000000-0000-0000-0000-0000000000b6';
+  await db.exec(`insert into pos_settings(store_location) values ('${Q}') on conflict do nothing; update pos_settings set bat_cham_cong=false where store_location='${Q}';
+    insert into products(id,name,category,price) values ('${P6}','Bánh flan','khac',20000);
+    insert into finished_goods_stock(product_id,size,branch,qty,store_location) values ('${P6}',null,'bakery',50,'${Q}');`);
+  await q(`insert into profiles values ('${NV9}','Thu ngân S','sale','{}',true,true) on conflict do nothing`);
+  await as(NV9);
+  const ca=(await q(`select public.pos_vao_ca('${Q}',0,'k.jpg') r`))[0].r.id;
+  const banS=(sl,o)=>q(`select public.pos_ban('${JSON.stringify({id:id(),store:Q,photo_url:'s.jpg',lines:[{product_id:P6,name:'Bánh flan',qty:sl,list_price:20000,unit_price:20000}],...o})}'::jsonb) r`).then((r)=>r[0].r);
+  await banS(5,{pay_method:'tien_mat',received:100000});
+  await banS(3,{pay_method:'ket_hop',pay_parts:{tien_mat:20000,chuyen_khoan:40000}});
+  await banS(1,{pay_method:'vi',received:20000});
+  const lap=(o)=>q(`select public.pos_lap_phieu_quy('${JSON.stringify({id:id(),shift_id:ca,...o})}'::jsonb) r`).then((r)=>r[0].r);
+  const pt1=await lap({kind:'thu',amount:200000,reason:'chủ tiệm nộp tiền lẻ',loai:'Thu khác',doi_tuong:'Chủ tiệm'});
+  await ok('Phiếu thu → mã PT…, lưu loại + người nộp', ()=>[/^PT\d{6}$/.test(pt1.code), pt1.kind, pt1.loai, pt1.doi_tuong],[true,'thu','Thu khác','Chủ tiệm']);
+  const pc1=await lap({kind:'chi',amount:50000,reason:'mua đá viên',loai:'Chi phí khác',doi_tuong:'Cửa hàng đá'});
+  await ok('Phiếu chi qua hàm mới → mã PC…, có loại', ()=>[/^PC\d{6}$/.test(pc1.code), pc1.kind, pc1.loai],[true,'chi','Chi phí khác']);
+  await chan('Phiếu thu số 0 bị chặn', ()=>lap({kind:'thu',amount:0,reason:'abc'}),'không hợp lệ');
+  await chan('Phiếu thu thiếu lý do', ()=>lap({kind:'thu',amount:1000,reason:' '}),'thu tiền gì');
+  const sl=await v(`select public.pos__so_lieu_ca('${ca}')`);
+  await ok('Két ca: TM bán 120k + thu 200k − chi 50k = 270k; phiếu chi không lẫn phiếu thu', ()=>[Number(sl.thu_ket),Number(sl.chi_ket),sl.so_phieu_chi,sl.phieu_thu.length,Number(sl.tien_mat_trong_ca)],[200000,50000,1,1,270000]);
+  await chan('Nhân viên không xem sổ quỹ', ()=>q(`select public.pos_so_quy('${Q}', now()-interval '1 day', now()+interval '1 day')`),'Chỉ Quản lý');
+  await as(KT);
+  const sq=await v(`select public.pos_so_quy('${Q}', now()-interval '1 day', now()+interval '1 day')`);
+  await ok('Sổ quỹ: tiền mặt thu 320k chi 50k · ngân hàng 40k · ví 20k · tổng tồn 330k', ()=>[Number(sq.quy.tien_mat.thu),Number(sq.quy.tien_mat.chi),Number(sq.quy.ngan_hang.thu),Number(sq.quy.vi.thu),Number(sq.quy.tong.thu)-Number(sq.quy.tong.chi),sq.so_dong],[320000,50000,40000,20000,330000,6]);
+  const sq2=await v(`select public.pos_so_quy('${Q}', now()+interval '1 hour', now()+interval '2 days')`);
+  await ok('Kỳ sau: quỹ đầu kỳ = tồn kỳ trước, không có dòng', ()=>[Number(sq2.quy.tien_mat.dau_ky),Number(sq2.quy.tong.dau_ky),sq2.so_dong],[270000,330000,0]);
+  await as(NV9);
+  await ok('Huỷ phiếu thu → két bớt lại 200k', async()=>{await q(`select public.pos_huy_chi_ket('${pt1.id}','ghi nhầm')`); return Number((await v(`select public.pos__so_lieu_ca('${ca}')`)).tien_mat_trong_ca);},70000);
+}
 console.log(`\n${dem-loi}/${dem} đạt`); process.exit(loi?1:0);

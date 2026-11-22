@@ -20,7 +20,7 @@ import {
   LOAI_LEN_DB, phieuTuDb, lapBanDoHang, congNoTuDb, taiAnh, docAnhBan, taiAnhDaNen,
 } from './posThat';
 import {
-  HopT, MoCa, XinDuyet, ViecCho, QrChuyenKhoan, ThietLapQuay, DatCoc, LayBanhDat, NhanHang, ChupAnh, NhatKy, BaoCaoThat, KetCaThat, DoanhSoNv, XepHang, BaoCaoCuoiNgay, HangQuay, ChonQuay, ChiKet,
+  HopT, MoCa, XinDuyet, ViecCho, QrChuyenKhoan, ThietLapQuay, DatCoc, LayBanhDat, NhanHang, ChupAnh, NhatKy, BaoCaoThat, KetCaThat, DoanhSoNv, XepHang, BaoCaoCuoiNgay, HangQuay, ChonQuay, ChiKet, SoQuy,
 } from './QuayThat';
 import './ban-hang-quay.css';
 
@@ -77,7 +77,7 @@ const MAU_ANH = ['#F9C6D3', '#C9DCF7', '#F8D9B5', '#CDE8D2', '#E3D3F5', '#F7E3A8
 // Thanh quản lý giống KiotViet: Hóa đơn · Hàng hóa ▾ (Danh sách hàng hóa | Kiểm kho · Xuất dùng nội bộ · Xuất hủy) · Nhập hàng · Công nợ · Báo cáo.
 const TEN_DT = { ls: 'Hóa đơn', hh: 'Hàng hóa', pn: 'Nhập hàng', xh: 'Xuất hủy', xd: 'Xuất dùng nội bộ', kk: 'Kiểm kho', ch: 'Chuyển hàng', kh: 'Khách hàng', no: 'Công nợ', ngay: 'Báo cáo cuối ngày', cn: 'Báo cáo cuối ngày', them: 'Nhiều hơn' };
 // Các màn con mở từ "Nhiều hơn" (có nút ← quay lại).
-const MAN_CON = ['pn', 'xh', 'xd', 'kk', 'ch', 'kh', 'no', 'cn'];
+const MAN_CON = ['pn', 'xh', 'xd', 'kk', 'ch', 'kh', 'no', 'cn', 'sq'];
 const MENU_HH = [['hh', 'Danh sách hàng hóa'], ['kk', 'Kiểm kho'], ['ch', 'Chuyển hàng'], ['xd', 'Xuất dùng nội bộ'], ['xh', 'Xuất hủy']];
 const gio = (t) => new Date(t).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 const ngayDayDu = (t) => { const d = new Date(t); const p = (n) => String(n).padStart(2, '0'); return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`; };
@@ -721,7 +721,7 @@ export default function BanHangQuay() {
   const khachNo = noCua(hd.khach);
   const nguoiBanDs = [...new Set([hd.nguoiBan || nguoi, nguoi, ...(that ? [] : ['Nhân viên quầy 2 (mẫu)'])])];
   const moManHinh = (m) => { setManHinh(m); setMenuMo(false); setTtMo(false); setMoHH(false); };
-  useEffect(() => { if (!xemQl && (['ngay', 'no'].includes(manHinh) || (!that && manHinh === 'xd'))) setManHinh('ban'); }, [xemQl, manHinh, that]);
+  useEffect(() => { if (!xemQl && (['ngay', 'no', 'sq'].includes(manHinh) || (!that && manHinh === 'xd'))) setManHinh('ban'); }, [xemQl, manHinh, that]);
   const chiaSe = async (h) => {
     const text = vanBanHd(h);
     try {
@@ -777,7 +777,7 @@ export default function BanHangQuay() {
     (quanLy || laKT) && ['viec_cho', `Việc chờ${soViec ? ` (${soViec})` : ''}`, Bell],
     ['dat_coc', 'Đặt bánh · lấy cọc', ShoppingCart],
     ['lay_banh', 'Khách lấy bánh đặt', Package],
-    caMo && (quanLy || caMo.opened_by === that.uid) && ['chi_ket', 'Chi tiền từ két', Banknote],
+    caMo && (quanLy || caMo.opened_by === that.uid) && ['chi_ket', 'Thu / chi tiền két', Banknote],
     xemQl && !laGD && ['bao_cao', 'Báo cáo', ChartColumn],
     xemQl && ['nhat_ky', 'Nhật ký thao tác', FileClock],
     ((quanLy && !xemNV) || laKT) && ['doanh_so_nv', 'Doanh số nhân viên', ChartColumn],
@@ -829,7 +829,7 @@ export default function BanHangQuay() {
 
   return (
     <div className={`bhq kv ${dienThoai ? 'dt' : ''} ${laGD ? '' : 'nv'}`}>
-      {manHinh !== 'ban' && dienThoai && !['ls', 'hh', 'them', 'ngay', 'tb', 'toi', 'xh', 'cn'].includes(manHinh) && (
+      {manHinh !== 'ban' && dienThoai && !['ls', 'hh', 'them', 'ngay', 'tb', 'toi', 'xh', 'cn', 'sq'].includes(manHinh) && (
         <header className="kvm-dau kvm-dau-ql">
           {MAN_CON.includes(manHinh) && <button type="button" aria-label="Quay lại" onClick={() => moManHinh('them')}><ChevronLeft size={22} /></button>}
           <h1>{TEN_DT[manHinh]}</h1>{nutMenu}
@@ -956,7 +956,7 @@ export default function BanHangQuay() {
           hds={hds} onChonHd={(id) => { setHdId(id); const h = hds.find((x) => x.id === id); setDtMan(h && h.dong.length ? 'gio' : 'chon'); }} />
       )}
 
-      {dienThoai && !form && !['xh', 'cn'].includes(manHinh) && !(manHinh === 'ban' && dtMan !== 'chon') && (
+      {dienThoai && !form && !['xh', 'cn', 'sq'].includes(manHinh) && !(manHinh === 'ban' && dtMan !== 'chon') && (
         <nav className="kvm-nav" aria-label="Điều hướng">
           {(laGD
             ? [['ngay', 'Tổng quan', ChartArea], ['hh', 'Hàng hoá', Box], ['ban', 'Bán hàng', ShoppingBag], ['ls', 'Hoá đơn', FileText], ['them', 'Khác', Menu]]
@@ -987,6 +987,7 @@ export default function BanHangQuay() {
             <button type="button" onClick={() => moHop({ loai: 'ket_ca' })}><Clock size={18} /> Kết ca</button>
             {that && !laGD && <button type="button" onClick={() => moManHinh('toi')}><ChartArea size={18} /> Doanh số của tôi</button>}
             {that && <button type="button" onClick={() => moManHinh('cn')}><FileText size={18} /> Báo cáo cuối ngày</button>}
+            {that && xemQl && <button type="button" onClick={() => moManHinh('sq')}><Banknote size={18} /> Sổ quỹ</button>}
             {mucThat.map(([k, l, Ic]) => <button key={k} type="button" onClick={() => moMucThat(k)}><Ic size={18} /> {l}</button>)}
             <hr />
             <label className="kv-menu-cn">Chi nhánh
@@ -1031,11 +1032,12 @@ export default function BanHangQuay() {
           onHuy={(h) => setHop({ loai: 'huy_hd', hoaDon: h })} onChiaSe={chiaSe} onSaoChep={saoChepHd} onBan={() => { moManHinh('ban'); setDtMan('chon'); }} />
       )}
       {manHinh === 'them' && <NhieuHon congNo={congNo.length} chiNhanh={chiNhanh} setChiNhanh={setChiNhanh} onMo={(k) => { moManHinh(k); if (k === 'ban') setDtMan('chon'); }} onHop={setHop}
-        laGD={laGD} laChu={laChu} xemNV={xemNV} setXemNV={setXemNV} onDatHang={datHang} mucThat={mucThat} onMucThat={moMucThat} anChuyen={!!that} />}
+        laGD={laGD} laChu={laChu} xemNV={xemNV} setXemNV={setXemNV} onDatHang={datHang} mucThat={mucThat} onMucThat={moMucThat} anChuyen={!!that} soQuy={!!that && xemQl} />}
 
       {manHinh === 'no' && <CongNo ds={congNo} du={that ? noDb.du : null} onThu={(k) => setHop({ loai: 'thu_no', no: k })} />}
 
       {manHinh === 'toi' && that && <TongQuanCuaToi dienThoai={dienThoai} soTb={tbChuaDoc} onMo={(k) => { moManHinh(k); if (k === 'ban') setDtMan('chon'); }} />}
+      {manHinh === 'sq' && that && xemQl && <SoQuy key={chiNhanh} chiNhanh={chiNhanh} onVe={() => moManHinh(dienThoai ? 'them' : 'ban')} />}
       {manHinh === 'cn' && that && <BaoCaoCuoiNgay key={chiNhanh} chiNhanh={chiNhanh} onVe={() => moManHinh(dienThoai ? 'them' : 'ban')} onMoHoaDon={() => moManHinh('ls')} />}
       {manHinh === 'ngay' && that && <BaoCaoThat chiNhanh={chiNhanh} laGD={that.cap === 'gd' && !xemNV} dienThoai={dienThoai} />}
       {manHinh === 'ngay' && !that && (
@@ -3270,7 +3272,7 @@ function QlHoaDon({ ds, traHangs, dienThoai, huyDuoc, onIn, onHuy, onChiaSe, onS
 // "Khác" (Giám đốc) / "Nhiều hơn" (nhân viên) trên điện thoại — như app KiotViet: thẻ cửa hàng + lưới
 // Giao dịch / Hàng hoá / Đối tác. Nhân viên không thấy Công nợ, Báo cáo, Xuất dùng nội bộ (giống KiotViet);
 // riêng Kiểm kho + Đóng ca vẫn giữ cho nhân viên vì tiệm cần đếm bánh và bàn giao tiền cuối ca.
-function NhieuHon({ congNo, chiNhanh, setChiNhanh, onMo, onHop, laGD, laChu, xemNV, setXemNV, onDatHang, mucThat = [], onMucThat, anChuyen = false }) {
+function NhieuHon({ congNo, chiNhanh, setChiNhanh, onMo, onHop, laGD, laChu, xemNV, setXemNV, onDatHang, mucThat = [], onMucThat, anChuyen = false, soQuy = false }) {
   const nhom = laGD ? [
     ['Giao dịch', [['ban', 'Bán hàng', ShoppingBag, 'xanh'], ['ls', 'Hóa đơn', FileText, 'xanh'], ['dat', 'Đặt hàng', ShoppingCart, 'xanh'],
       ['no', 'Công nợ', ReceiptText, 'cam'], ['ket_ca', 'Kết ca', Clock, 'xanh'], ['ngay', 'Báo cáo cuối ngày', ChartArea, 'la']]],
@@ -3286,7 +3288,8 @@ function NhieuHon({ congNo, chiNhanh, setChiNhanh, onMo, onHop, laGD, laChu, xem
   ];
   const bam = (k) => (k === 'ket_ca' ? onHop({ loai: 'ket_ca' }) : k === 'dat' ? onDatHang() : onMo(k));
   // Chạy thật: nhóm "Báo cáo" như KiotViet (Phân tích = báo cáo GĐ · Cuối ngày = báo cáo cuối ngày, nhân viên thấy số của mình).
-  const nhomBc = anChuyen ? [['Báo cáo', laGD ? [['ngay', 'Phân tích', ChartArea, 'la'], ['cn', 'Cuối ngày', FileText, 'xanh']] : [['cn', 'Cuối ngày', FileText, 'xanh']]]] : [];
+  const nhomBc = anChuyen ? [['Báo cáo', [...(laGD ? [['ngay', 'Phân tích', ChartArea, 'la']] : []), ['cn', 'Cuối ngày', FileText, 'xanh'],
+    ...(soQuy ? [['sq', 'Sổ quỹ', Banknote, 'cam']] : [])]]] : [];
   const nhomHien = [
     ...nhom.map(([ten, ds]) => [ten, ds.filter(([k]) => !(anChuyen && (k === 'ch' || k === 'ngay')))]),
     ...nhomBc,
@@ -3542,6 +3545,7 @@ function NoiDungBanGiao({ p }) {
       <b>Thu nợ</b>{r('Tiền mặt', p.thu.tien_mat)}{r('Chuyển khoản', p.thu.chuyen_khoan)}
       {p.donDat && (Number(p.donDat.tien_mat) || Number(p.donDat.chuyen_khoan)) ? <><b>Đơn đặt (cọc + lấy bánh)</b>{r('Tiền mặt', p.donDat.tien_mat)}{r('Chuyển khoản', p.donDat.chuyen_khoan)}</> : null}
       {p.hoanTien ? r('Trả lại khách (huỷ HĐ ca trước)', -p.hoanTien) : null}
+      {p.thuKet ? <><b>Thu vào két</b>{(p.phieuThu || []).map((c) => <div key={c.code} className="bl-h"><span>{c.code} {c.ly_do}</span><span>{so(c.so_tien)}</span></div>)}{r('Tổng thu', p.thuKet)}</> : null}
       {p.chiKet ? <><b>Chi từ két</b>{(p.phieuChi || []).map((c) => <div key={c.code} className="bl-h"><span>{c.code} {c.ly_do}</span><span>{so(-c.so_tien)}</span></div>)}{r('Tổng chi', -p.chiKet)}</> : null}
       <hr />
       {r('Tiền mặt đầu ca', p.dauCa)}{r('Tiền mặt trong ca', p.tienMatTrongCa)}{r('Tiền mặt cuối ca', p.cuoiCa)}{r('Bàn giao thực tế', p.banGiao)}

@@ -1346,3 +1346,14 @@ button.bcn-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .kv-chia-phan{min-height:36px;padding:0 10px;border:1px dashed #8C5A3C;border-radius:8px;background:#fff;color:#8C5A3C;font-size:13px;font-weight:600}
 .kv-chia-con{font-size:13px;font-weight:600;color:#11883E;text-align:right}
 .kv-chia-con.thieu{color:#b42318}
+
+/* Sổ quỹ */
+.sq .sq-chip{display:flex;gap:8px;overflow-x:auto;padding:8px 12px 0}
+.sq .sq-chip button{flex:none;min-height:40px;padding:0 14px;border:1px solid #E3D5C3;border-radius:20px;background:#fff;color:#2C1D11;font-size:14px}
+.sq .sq-chip button.on{background:#D96B43;border-color:#D96B43;color:#fff;font-weight:600}
+.sq .sq-chip.quy button.on{background:#2C1D11;border-color:#2C1D11}
+.sq .sq-tong{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.sq .sq-tong>*{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-height:60px;padding:10px 12px;border:1px solid #EFE4D6;border-radius:12px;background:#FDFBF7;font-size:13px;color:#8C5A3C;text-align:left}
+.sq .sq-tong>* b{font-size:17px;color:#2C1D11}
+.sq .sq-tong>button.on{border-color:#D96B43;box-shadow:0 0 0 2px rgba(217,107,67,.2)}
+.sq .sq-tong .lon b{font-size:19px}

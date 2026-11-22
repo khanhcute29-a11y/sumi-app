@@ -56,6 +56,9 @@ export async function vaoCa({ store, tien, anh, lyDoChi }) {
 // Phiếu chi tiền từ két — p_id tạo trước để bấm 2 lần không ghi trùng.
 export const chiKet = ({ id, caId, tien, lyDo, anh }) => goi('pos_chi_ket',
   { p_id: id, p_shift: caId, p_amount: Number(tien) || 0, p_reason: lyDo, p_photo_url: anh || null });
+// Phiếu thu / chi tiền mặt két có Loại + Người nộp/nhận (sổ quỹ như KiotViet).
+export const lapPhieuQuy = ({ id, caId, kind, tien, lyDo, loai, doiTuong, anh }) => goi('pos_lap_phieu_quy',
+  { p: { id, shift_id: caId, kind, amount: Number(tien) || 0, reason: lyDo, loai: loai || null, doi_tuong: doiTuong || null, photo_url: anh || null } });
 export const huyChiKet = (id, lyDo) => goi('pos_huy_chi_ket', { p_id: id, p_reason: lyDo });
 
 // ── Bật chạy thật? Cờ pos_ban_hang_that bật (hoặc tài khoản nằm trong danh sách thử) + đã đăng nhập + tài khoản đã duyệt.
