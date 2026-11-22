@@ -640,9 +640,9 @@ export function NhanHang({ phieu, matHang, onNhan, onDong }) {
   return (
     <HopT tieuDe={`Nhận hàng ${phieu.ma}`} onDong={onDong}
       chan={<button type="button" className="bhq-nut chinh" disabled={dang} onClick={xong}>{dang ? 'Đang lưu…' : lech.length ? `Nhận (lệch ${lech.length} món — báo GĐ)` : 'Đã nhận đủ'}</button>}>
-      <p className="bhq-ghi">{phieu.nguoi} ghi giao lúc {ngayGio(phieu.luc)}. Đếm bánh thật rồi sửa số nếu thiếu. Lệch số → Giám đốc được báo.</p>
+      <p className="bhq-ghi">{phieu.chuyen ? <><b>{phieu.tuCN || 'Cửa hàng khác'}</b> ({phieu.nguoi}) chuyển sang lúc {ngayGio(phieu.luc)}.</> : <>{phieu.nguoi} ghi giao lúc {ngayGio(phieu.luc)}.</>} Đếm bánh thật rồi sửa số nếu thiếu. Lệch số → Giám đốc được báo.</p>
       {phieu.dong.map((d) => { const m = matHang.find((x) => x.ma === d.ma); return (
-        <div key={d.ma} className="tlq-dong"><span>{m ? `${m.ten}${m.size ? ` - ${m.size}` : ''}` : d.ma}<small>Bếp ghi giao {so(d.sl)}</small></span>
+        <div key={d.ma} className="tlq-dong"><span>{m ? `${m.ten}${m.size ? ` - ${m.size}` : ''}` : d.ma}<small>{phieu.chuyen ? 'Bên gửi ghi' : 'Bếp ghi giao'} {so(d.sl)}</small></span>
           <input className={`bhq-o ${Number(nhan[d.ma]) !== d.sl ? 'lech' : ''}`} inputMode="numeric" value={nhan[d.ma]} onChange={(e) => setNhan((x) => ({ ...x, [d.ma]: soTien(e.target.value) }))} /></div>
       ); })}
       <Loi chu={loi} />

@@ -112,7 +112,7 @@ export function hoaDonTuDb(r, lines, bd) {
   };
 }
 
-const LOAI_TU_DB = { bep_giao: 'giao', xuat_huy: 'huy', kiem_kho: 'kiem', noi_bo: 'noibo' };
+const LOAI_TU_DB = { bep_giao: 'giao', xuat_huy: 'huy', kiem_kho: 'kiem', noi_bo: 'noibo', nhan_chuyen: 'giao' }; // nhận chuyển = phiếu chờ nhận ở mục Nhập hàng
 export const LOAI_LEN_DB = { giao: 'bep_giao', huy: 'xuat_huy', kiem: 'kiem_kho', noibo: 'noi_bo' };
 const TT_TU_DB = { tam: 'tam', cho_nhan: 'cho', xong: 'xong', huy: 'huy' };
 
@@ -125,9 +125,14 @@ export function phieuTuDb(r, bd) {
     id: r.id, ma: r.code, loai: LOAI_TU_DB[r.doc_type], chiNhanh: r.store_location, nguoi: r.created_by_name, nguoiThucHien: r.done_by_name,
     luc: new Date(r.created_at).getTime(), lucXong: r.done_at ? new Date(r.done_at).getTime() : null,
     lucHuy: r.cancelled_at ? new Date(r.cancelled_at).getTime() : null, nguoiHuy: r.cancelled_by_name,
-    trangThai: TT_TU_DB[r.status], ghiChu: r.reason || r.note || '', anh: r.photo_url, dong,
-    lech: Object.fromEntries(dong.filter((d) => d.delta != null).map((d) => [d.ma, Number(d.delta)])),
-    nguon: r.doc_type === 'bep_giao' ? 'Bếp' : '', loaiXuat: r.doc_type === 'noi_bo' ? (r.note || '') : '', that: true,
+    trangThai: TT_TU_DB[r.status], anh: r.photo_url, dong,
+    // Xuất dùng nội bộ: phiếu mới có cột loai_xuat (reason = người nhận, note = ghi chú); phiếu cũ ghi "loại · người nhận" vào note.
+    ...(r.doc_type === 'noi_bo'
+      ? (r.loai_xuat != null ? { loaiXuat: r.loai_xuat, nguoiNhan: r.reason || '', ghiChu: r.note || '' } : { loaiXuat: r.note || '', nguoiNhan: '', ghiChu: '' })
+      : { loaiXuat: '', ghiChu: r.reason || r.note || '' }),
+    denCN: r.doc_type === 'noi_bo' ? r.to_store || null : null, tuCN: r.from_store || null, chuyen: r.doc_type === 'nhan_chuyen',
+    lech: r.doc_type === 'nhan_chuyen' ? {} : Object.fromEntries(dong.filter((d) => d.delta != null).map((d) => [d.ma, Number(d.delta)])),
+    nguon: r.doc_type === 'bep_giao' ? 'Bếp' : r.doc_type === 'nhan_chuyen' ? `${r.from_store || 'Cửa hàng khác'} chuyển sang` : '', that: true,
   };
 }
 

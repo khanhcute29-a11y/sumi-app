@@ -490,4 +490,44 @@ if (await v(`select count(*)::int from pg_proc where proname='pos_chi_ket'`)) {
   await chan('Khai lý do quá ngắn bị chặn', ()=>vao(100000,'x'),'Ghi rõ');
   await ok('Không ai gọi thẳng hàm ghi phiếu nội bộ', ()=>v(`select has_function_privilege('authenticated','public.pos__ghi_chi_ket(uuid,public.pos_shifts,numeric,text,text,boolean)','execute')`),false);
 }
+// ── 202611221000: xuất dùng nội bộ (XD, loại xuất KiotViet) + luân chuyển bánh giữa cửa hàng ──
+if (await v(`select count(*)::int from information_schema.columns where table_name='pos_stock_docs' and column_name='to_store'`)) {
+  const P4='00000000-0000-0000-0000-0000000000b4', A='Vĩnh Phú 42', B='Quốc Lộ 13', LC='Luân chuyển bánh giữa các cửa hàng';
+  await db.exec(`insert into products(id,name,category,price) values ('${P4}','Bánh mì que','khac',10000);
+    insert into finished_goods_stock(product_id,size,branch,qty,store_location) values ('${P4}',null,'bakery',100,null);
+    insert into pos_shelf_life(product_id,days) values ('${P4}',2) on conflict (product_id) do update set days=2;`);
+  const t4=(s)=>v(`select public.pos__ton('${s}','${P4}',null)::int`);
+  const luu=(o)=>q(`select public.pos_luu_phieu('${JSON.stringify({id:id(),type:'noi_bo',store:A,lines:[{product_id:P4,name:'Bánh mì que',qty:3}],...o}).replace(/'/g,"''")}'::jsonb) r`).then((r)=>r[0].r);
+  await as(NV);
+  // nhập 20 vào A (có hạn 2 ngày)
+  { const d=id(); await q(`select public.pos_luu_phieu('{"id":"${d}","type":"bep_giao","store":"${A}","lines":[{"product_id":"${P4}","name":"Bánh mì que","qty":20}]}')`); await q(`select public.pos_nhan_hang('${d}','{"${P4}:":20}')`); }
+  await ok('Chuẩn bị: A có 20 bánh mì que, B 0', async()=>[await t4(A), await t4(B)],[20,0]);
+  const x1=await luu({loai_xuat:'Xuất cho nhân viên dùng',note:'ăn sáng'});
+  await ok('Xuất dùng nội bộ → mã XD…, lưu loại xuất, trừ tồn A', async()=>[/^XD\d{6}$/.test(x1.code), x1.loai_xuat, x1.status, x1.to_store, await t4(A)],[true,'Xuất cho nhân viên dùng','xong',null,17]);
+  await chan('Thiếu loại xuất bị chặn', ()=>luu({loai_xuat:'  '}),'loại xuất');
+  await ok('Bản cũ (không gửi loai_xuat) vẫn chạy như trước', async()=>(await luu({note:'Xuất cho nhân viên dùng'})).status,'xong');
+  await chan('Luân chuyển chưa chọn cửa hàng nhận', ()=>luu({loai_xuat:LC}),'cửa hàng nhận');
+  await chan('Luân chuyển sang chính mình', ()=>luu({loai_xuat:LC,to_store:A}),'phải khác');
+  await chan('Luân chuyển sang cửa hàng không có', ()=>luu({loai_xuat:LC,to_store:'Quầy ma'}),'không hợp lệ');
+  await ok('Tồn A vẫn 14 sau các lần bị chặn', ()=>t4(A),14);
+  const xtam=id();
+  await ok('Lưu tạm luân chuyển không đụng tồn, chưa tạo phiếu nhận', async()=>{await q(`select public.pos_luu_phieu('${JSON.stringify({id:xtam,type:'noi_bo',store:A,status:'tam',loai_xuat:LC,to_store:B,lines:[{product_id:P4,name:'Bánh mì que',qty:5}]})}'::jsonb)`); return [await t4(A), await v(`select count(*)::int from pos_stock_docs where doc_type='nhan_chuyen'`)];},[14,0]);
+  const xc=(await q(`select public.pos_luu_phieu('${JSON.stringify({id:xtam,type:'noi_bo',store:A,loai_xuat:LC,to_store:B,note:'gửi qua ship',lines:[{product_id:P4,name:'Bánh mì que',qty:5}]})}'::jsonb) r`))[0].r;
+  const nc=(await q(`select * from pos_stock_docs where id='${xc.ref_doc}'`))[0];
+  await ok('Chốt luân chuyển 5: A trừ 5, B CHƯA cộng, có phiếu NC chờ nhận ở B', async()=>[await t4(A), await t4(B), /^NC\d{6}$/.test(nc.code), nc.doc_type, nc.store_location, nc.status, nc.from_store, nc.ref_doc===xc.id, nc.lines[0].qty],[9,0,true,'nhan_chuyen',B,'cho_nhan',A,true,5]);
+  await ok('Báo quản lý có phiếu chuyển bánh', ()=>v(`select count(*)::int from notifications where event_key like 'pos-chuyen-banh:${nc.id}%'`),2);
+  await ok('Gửi lại cùng mã (mất mạng) không tạo phiếu nhận thứ 2, không trừ thêm', async()=>{await q(`select public.pos_luu_phieu('${JSON.stringify({id:xtam,type:'noi_bo',store:A,loai_xuat:LC,to_store:B,lines:[{product_id:P4,name:'Bánh mì que',qty:5}]})}'::jsonb)`); return [await t4(A), await v(`select count(*)::int from pos_stock_docs where doc_type='nhan_chuyen'`)];},[9,1]);
+  await chan('Phiếu NC không huỷ riêng', ()=>q(`select public.pos_huy_phieu('${nc.id}','x')`),'không huỷ riêng');
+  await ok('B nhận thực tế 4 (lệch 1) → B cộng 4, kho bếp không bị trừ, báo GĐ lệch', async()=>{const bep=await v(`select public.pos__ton(null,'${P4}',null)::int`); await q(`select public.pos_nhan_hang('${nc.id}','{"${P4}:":4}')`); return [await t4(B), await v(`select public.pos__ton(null,'${P4}',null)::int`)-bep, await v(`select count(*)::int from notifications where event_key like 'pos-lech-giao:${nc.id}%'`)>0];},[4,0,true]);
+  await ok('Lô ở B mang hạn dùng của bánh bên A (không tính lại từ đầu)', async()=>v(`select (select min(expiry_at) from pos_stock_lots where ref_code='${nc.code}') = (select min(expiry_at) from pos_stock_lots where store_location='${A}' and product_id='${P4}')`),true);
+  await ok('Nhận lần 2 không cộng thêm', async()=>{await q(`select public.pos_nhan_hang('${nc.id}','{"${P4}:":4}')`); return t4(B);},4);
+  await chan('B đã nhận → A không huỷ được phiếu XD', ()=>q(`select public.pos_huy_phieu('${xc.id}','nhầm')`),'đã nhận bánh');
+  // huỷ khi bên nhận chưa nhận
+  const x3=await luu({loai_xuat:LC,to_store:B,lines:[{product_id:P4,name:'Bánh mì que',qty:2}]});
+  await ok('Chuyển tiếp 2 → A còn 7', ()=>t4(A),7);
+  await ok('A huỷ khi B chưa nhận → A hoàn 2, phiếu NC cũng huỷ, B không đổi', async()=>{await q(`select public.pos_huy_phieu('${x3.id}','chuyển nhầm')`); return [await t4(A), await t4(B), await v(`select status from pos_stock_docs where id='${x3.ref_doc}'`)];},[9,4,'huy']);
+  await ok('B bấm nhận phiếu đã huỷ → không cộng', async()=>{await q(`select public.pos_nhan_hang('${x3.ref_doc}','{}')`); return t4(B);},4);
+  await chan('Không nhận hàng bằng phiếu XD', ()=>q(`select public.pos_nhan_hang('${x1.id}','{}')`),'chờ nhận');
+  await ok('Loại xuất không phải luân chuyển thì bỏ qua cửa hàng nhận', async()=>{const r=await luu({loai_xuat:'Xuất dùng cho khách',to_store:B}); return [r.to_store, r.ref_doc, await t4(A)];},[null,null,6]);
+}
 console.log(`\n${dem-loi}/${dem} đạt`); process.exit(loi?1:0);
