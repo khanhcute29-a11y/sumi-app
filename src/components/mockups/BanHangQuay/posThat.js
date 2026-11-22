@@ -117,6 +117,7 @@ export function hoaDonTuDb(r, lines, bd) {
       ma: m?.ma || `X-${String(l.product_id).slice(0, 6)}`, ten: l.name, size: l.size || '', gia: Number(l.list_price),
       sl: Number(l.qty), giam: Number(l.list_price) - Number(l.unit_price), giamKieu: 'vnd', eod: l.eod, ghiChu: l.note || '',
       giaVon: 0, danhMuc: m?.danhMuc, anh: m?.anh || null, tang: !!l.is_gift,
+      lineId: l.id, giaBan: Number(l.unit_price), // trả hàng: chọn đúng dòng + giá khách đã mua
     };
   });
   const sauGiam = Number(r.subtotal) - Number(r.invoice_discount);
@@ -133,8 +134,25 @@ export function hoaDonTuDb(r, lines, bd) {
     diemDung: r.points_used, diemTien: Number(r.points_value), diemCong: r.points_earned, giamCuoiNgay: Number(r.eod_discount),
     offline: r.offline, that: true, thuNganId: r.cashier_id, anhBan: r.photo_url || null,
     kmTen: r.promo_name || null, kmGiam: Number(r.promo_discount || 0),
+    // Giá khách thực trả 1 cái = giá dòng × tyTra (đã trừ giảm giá hoá đơn / khuyến mại / điểm) — trần giá trả hàng.
+    tyTra: Number(r.subtotal) > 0 ? Math.max(Number(r.subtotal) - Number(r.invoice_discount) - Number(r.points_value || 0), 0) / Number(r.subtotal) : 0,
   };
 }
+
+// Phiếu trả hàng (migration 202611221046) → dạng app đang dùng (traHangs).
+export function traHangTuDb(r, bd) {
+  const dong = (r.pos_return_lines || []).map((l) => {
+    const m = bd.theoVariant(l.product_id, l.variant_id) || bd.theoSize(l.product_id, l.size);
+    return { ma: m?.ma || `X-${String(l.product_id).slice(0, 6)}`, ten: l.name, size: l.size || '', sl: Number(l.qty), gia: Number(l.unit_price), lineId: l.invoice_line_id, tang: !!l.is_gift };
+  });
+  return {
+    id: r.id, ma: r.code, hdGoc: r.invoice_code, hdId: r.invoice_id, chiNhanh: r.store_location, caId: r.shift_id,
+    luc: new Date(r.created_at).getTime(), nguoi: r.created_by_name, khach: r.customer_name || 'Khách lẻ',
+    dong, tienHang: Number(r.goods_value), phi: Number(r.fee), truNo: Number(r.debt_offset), hoan: Number(r.refund),
+    tienTra: Number(r.goods_value) - Number(r.fee), phuongThuc: r.pay_method, lyDo: r.note || '', diem: r.points_back,
+  };
+}
+export const traHangThat = (p) => goi('pos_tra_hang', { p });
 
 const LOAI_TU_DB = { bep_giao: 'giao', xuat_huy: 'huy', kiem_kho: 'kiem', noi_bo: 'noibo', nhan_chuyen: 'giao' }; // nhận chuyển = phiếu chờ nhận ở mục Nhập hàng
 export const LOAI_LEN_DB = { giao: 'bep_giao', huy: 'xuat_huy', kiem: 'kiem_kho', noibo: 'noi_bo' };
@@ -215,7 +233,7 @@ export async function taiLo(matHang) {
 export async function taiDuLieu(matHang, soNgay = 35) {
   const bd = lapBanDoHang(matHang);
   const tu = new Date(Date.now() - soNgay * 86400000).toISOString();
-  const [caiDat, caMo, hdR, phieuR, noR, tonR, bgR, bgItemR, loR, hanR, kmR] = await Promise.all([
+  const [caiDat, caMo, hdR, phieuR, noR, tonR, bgR, bgItemR, loR, hanR, kmR, thR] = await Promise.all([
     supabase.from('pos_settings').select('*'),
     supabase.from('pos_shifts').select('*').eq('status', 'open'),
     supabase.from('pos_invoices').select('*, pos_invoice_lines(*)').gte('created_at', tu).order('created_at', { ascending: false }).limit(3000),
@@ -228,6 +246,8 @@ export async function taiDuLieu(matHang, soNgay = 35) {
     supabase.from('pos_shelf_life').select('product_id, days'),
     // Chưa chạy SQL khuyến mại → bảng chưa có, coi như không có chương trình nào.
     supabase.from('pos_promotions').select('*').order('created_at', { ascending: false }).limit(300),
+    // Chưa chạy SQL trả hàng → bảng chưa có, coi như chưa có phiếu trả nào.
+    supabase.from('pos_returns').select('*, pos_return_lines(*)').eq('status', 'xong').gte('created_at', tu).order('created_at', { ascending: false }).limit(1000),
   ]);
   for (const r of [caiDat, caMo, hdR, phieuR, noR, tonR]) if (r.error) throw new Error(r.error.message);
   const tonCN = {}; const hsd = {};
@@ -253,6 +273,7 @@ export async function taiDuLieu(matHang, soNgay = 35) {
     phieuKho: (phieuR.data || []).map((r) => phieuTuDb(r, bd)),
     congNo: congNoTuDb(noR.data || []),
     tonCN, hsd, bangGia, loCN, hanDung, khuyenMai: kmR.error ? [] : kmR.data || [],
+    traHangs: thR.error ? [] : (thR.data || []).map((x) => traHangTuDb(x, bd)), coTraHang: !thR.error,
   };
 }
 

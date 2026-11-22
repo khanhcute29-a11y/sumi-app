@@ -1442,3 +1442,27 @@ button.bcn-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bcn-tat-ca{margin-left:auto;min-height:44px;padding:0 10px;border:0;background:none;color:var(--xanh);font-size:15px;font-weight:600;white-space:nowrap}
 .kc-mo{width:100%;min-height:44px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 12px;border:1px solid #E6DCCB;border-radius:10px;background:#F7EFE2;font-weight:600;text-align:left;cursor:pointer}
 .kc-mo small{font-weight:400;color:#8C5A3C}
+
+/* Trả hàng (giống KiotViet) */
+.th-ds{display:flex;flex-direction:column;gap:8px;margin:6px 0 10px}
+.th-dau{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px;color:#8C5A3C;font-weight:600}
+.th-dau button{min-height:44px;padding:0 14px;border:1px solid #D96B43;border-radius:10px;background:#fff;color:#D96B43;font-weight:600;cursor:pointer}
+.th-mon{display:grid;grid-template-columns:1fr auto;gap:8px 10px;align-items:center;padding:10px 12px;border:1px solid #E6DCCB;border-radius:12px;background:#fff}
+.th-mon.on{border-color:#D96B43;background:#FFF6F1}
+.th-mon.het{opacity:.6}
+.th-mon .ten{display:flex;flex-direction:column;gap:2px;min-width:0}
+.th-mon .ten b{color:#2C1D11;font-size:15px;overflow-wrap:anywhere}
+.th-mon .ten small{color:#8C5A3C;font-size:13px}
+.th-sl{display:flex;align-items:center;gap:4px}
+.th-sl button{width:44px;height:44px;border:1px solid #E6DCCB;border-radius:10px;background:#F7EFE2;color:#2C1D11;font-size:20px;font-weight:700;cursor:pointer}
+.th-sl button:disabled{opacity:.4;cursor:default}
+.th-sl input{width:52px;height:44px;border:1px solid #E6DCCB;border-radius:10px;text-align:center;font-size:16px;font-weight:700;color:#2C1D11;background:#fff}
+.th-het{font-size:13px;color:#8C5A3C}
+.th-gia{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;color:#8C5A3C}
+.th-gia input{max-width:140px;text-align:right}
+.th-phi{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.th-phi input{max-width:140px;text-align:right}
+.th-pt{display:flex;gap:8px;margin:10px 0}
+.th-pt button{flex:1;min-height:44px;border:1px solid #E6DCCB;border-radius:10px;background:#fff;color:#2C1D11;font-weight:600;cursor:pointer}
+.th-pt button.on{border-color:#D96B43;background:#D96B43;color:#fff}
+.th-chon{width:100%;text-align:left;cursor:pointer;background:none;border:none;font:inherit;color:inherit}

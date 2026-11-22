@@ -763,4 +763,72 @@ if (BO_ANH) {
   const k3=await v(`select public.pos_ket_ca('${s3.id}',5000,null,null,'[]'::jsonb)`);
   await ok('Kệ còn bánh mà không đếm → vẫn kết ca được', ()=>[k3.status, k3.stock_check],['closed',[]]);
 }
+// ── 202611221046: Trả hàng như KiotViet ──
+if (await v(`select count(*)::int from pg_proc where proname='pos_tra_hang'`)) {
+  const Q='Quầy trả hàng', N='00000000-0000-0000-0000-0000000000d5', N2='00000000-0000-0000-0000-0000000000d6', K='00000000-0000-0000-0000-0000000000d7';
+  const PA='00000000-0000-0000-0000-0000000000bb', PB='00000000-0000-0000-0000-0000000000bc';
+  await db.exec(`insert into pos_settings(store_location) values ('${Q}') on conflict do nothing; update pos_settings set bat_cham_cong=false where store_location='${Q}';
+    insert into products(id,name,category,price) values ('${PA}','Bánh A','khac',50000),('${PB}','Bánh B','khac',30000) on conflict do nothing;
+    insert into customers(id,name,phone) values ('${K}','Khách quen','0900000999') on conflict do nothing;
+    select public.pos__ton_cong('${Q}','${PA}',null,'Bánh A',20,'nhan_hang','PN-TH1'); select public.pos__ton_cong('${Q}','${PB}',null,'Bánh B',20,'nhan_hang','PN-TH1');`);
+  await q(`insert into profiles values ('${N}','Thu ngân trả','sale','{}',true,true),('${N2}','Thu ngân khác','sale','{}',true,true) on conflict do nothing`);
+  const banT=(o)=>v(`select public.pos_ban('${JSON.stringify({id:id(),store:Q,pay_method:'tien_mat',photo_url:'th-'+id()+'.jpg',...o})}'::jsonb)`);
+  const tra=(o)=>v(`select public.pos_tra_hang('${JSON.stringify({id:id(),store:Q,pay_method:'tien_mat',...o}).replace(/'/g,"''")}'::jsonb)`);
+  const dong=(hd)=>q(`select id::int id, product_id, qty::int qty from pos_invoice_lines where invoice_id='${hd}' order by line_no`);
+  const ton=(pid)=>v(`select public.pos__ton('${Q}','${pid}',null)::int`);
+  const lo=(pid)=>q(`select count(*)::int n, sum(qty)::int sl from pos_stock_lots where store_location='${Q}' and product_id='${pid}'`).then((r)=>r[0]);
+  await as(N);
+  await chan('Chưa vào ca thì chưa trả hàng được', ()=>tra({invoice_id:id(),lines:[]}),'');
+  const ca=await v(`select public.pos_vao_ca_v2('${Q}',null,null,null)`);
+  const h1=await banT({customer_id:K,invoice_discount:20000,lines:[{product_id:PA,name:'Bánh A',qty:3,list_price:50000,unit_price:50000},{product_id:PB,name:'Bánh B',qty:2,list_price:30000,unit_price:30000}]});
+  const [dA,dB]=await dong(h1.id);
+  const maxA=Math.round(50000*190000/210000), maxB=Math.round(30000*190000/210000);
+  const tA0=await ton(PA), lo0=await lo(PA);
+  const t1=await tra({invoice_id:h1.id,lines:[{line_id:dA.id,qty:1}],note:'Khách đổi ý'});
+  await ok('Trả 1 bánh A: giá trả = giá khách thực mua (đã trừ giảm giá HĐ), trả tiền mặt', ()=>[/^TH\d{6}$/.test(t1.code), Number(t1.goods_value), Number(t1.refund), Number(t1.debt_offset), t1.shift_id, t1.invoice_code],[true,maxA,maxA,0,ca.id,h1.code]);
+  await ok('Tồn bánh A cộng lại 1', async()=>(await ton(PA))-tA0,1);
+  await ok('Trả về đúng lô cũ (không tạo lô mới, còn hạn dùng)', async()=>{const l=await lo(PA); return [l.n===lo0.n, l.sl-lo0.sl];},[true,1]);
+  await ok('Sổ tồn ghi "tra_hang" theo mã phiếu', ()=>v(`select count(*) from pos_stock_ledger where ref_type='tra_hang' and ref_code='${t1.code}'`),1);
+  await ok('Bấm 2 lần cùng phiếu → không trả 2 lần', async()=>{const x=await v(`select public.pos_tra_hang('${JSON.stringify({id:t1.id,store:Q,invoice_id:h1.id,lines:[{line_id:dA.id,qty:1}]})}'::jsonb)`); return [x.da_co, (await ton(PA))-tA0];},[true,1]);
+  await chan('Giá trả cao hơn giá khách mua', ()=>tra({invoice_id:h1.id,lines:[{line_id:dA.id,qty:1,unit_price:maxA+1}]}),'không được cao hơn');
+  await chan('Trả quá số khách mua', ()=>tra({invoice_id:h1.id,lines:[{line_id:dA.id,qty:3}]}),'chỉ còn trả được 2');
+  await chan('Phí trả hàng lớn hơn tiền hàng', ()=>tra({invoice_id:h1.id,lines:[{line_id:dB.id,qty:1}],fee:999999}),'Phí trả hàng');
+  await chan('Món không thuộc hoá đơn', ()=>tra({invoice_id:h1.id,lines:[{line_id:999999,qty:1}]}),'không thuộc');
+  const t2=await tra({invoice_id:h1.id,lines:[{line_id:dA.id,qty:2,unit_price:40000},{line_id:dB.id,qty:1}],fee:10000,pay_method:'chuyen_khoan'});
+  await ok('Trả 2 A giá hạ 40k + 1 B, phí 10k, chuyển khoản', ()=>[Number(t2.goods_value), Number(t2.fee), Number(t2.refund), t2.pay_method, t2.lines.length],[80000+maxB,10000,70000+maxB,'chuyen_khoan',2]);
+  await chan('Bánh A đã trả hết', ()=>tra({invoice_id:h1.id,lines:[{line_id:dA.id,qty:1}]}),'chỉ còn trả được 0');
+  await chan('Hoá đơn đã trả hàng thì không huỷ', ()=>q(`select public.pos_huy_hd('${h1.id}','thử',null)`),'đã có phiếu trả hàng');
+  const slc=await v(`select public.pos__so_lieu_ca('${ca.id}')`);
+  await ok('Két ca trừ tiền mặt trả khách, CK không trừ', ()=>[slc.tra_hang.so, Number(slc.tra_hang.tien_mat), Number(slc.tra_hang.chuyen_khoan), Number(slc.tien_mat_trong_ca)],[2,maxA,70000+maxB,190000-maxA]);
+  // Hoá đơn còn nợ: trả hàng trừ nợ trước
+  const h2=await banT({customer_id:K,received:20000,lines:[{product_id:PB,name:'Bánh B',qty:1,list_price:30000,unit_price:30000},{product_id:PA,name:'Bánh A',qty:1,list_price:50000,unit_price:50000}]});
+  const no0=await v(`select public.pos__no_cua('${K}')::int`);
+  const d2=await dong(h2.id);
+  const t3=await tra({invoice_id:h2.id,lines:d2.map((d)=>({line_id:d.id,qty:d.qty}))});
+  await ok('HĐ nợ 60k, trả hết 80k → trừ nợ 60k, trả khách 20k', async()=>[Number(h2.debt), Number(t3.debt_offset), Number(t3.refund), no0-(await v(`select public.pos__no_cua('${K}')::int`))],[60000,60000,20000,60000]);
+  const dsh=(hd)=>q(`select tinh::int, no_chua_tra::int, gia_tri::int from public.pos__ds_hd(now()-interval '1 hour', now()+interval '1 hour') where invoice_id='${hd}'`).then((r)=>r[0]);
+  await ok('Doanh số HĐ trả hết = 0, không còn nợ', ()=>dsh(h2.id),{tinh:0,no_chua_tra:0,gia_tri:0});
+  await ok('Doanh số HĐ trả 1 phần = phần khách giữ lại', async()=>(await dsh(h1.id)).tinh,190000-maxA-(70000+maxB));
+  // Quyền
+  await as(N2);
+  await chan('Nhân viên khác trả hàng trong ca người khác', ()=>tra({invoice_id:h1.id,lines:[{line_id:dB.id,qty:1}]}),'Nhận ca');
+  await as(N);
+  await db.exec(`update pos_invoices set created_at=now()-interval '8 days' where id='${h1.id}'`);
+  await chan('Nhân viên trả hoá đơn quá 7 ngày', ()=>tra({invoice_id:h1.id,lines:[{line_id:dB.id,qty:1}]}),'quá 7 ngày');
+  await as(QL);
+  const t4=await tra({invoice_id:h1.id,lines:[{line_id:dB.id,qty:1}]});
+  await ok('Quản lý trả hoá đơn cũ được', ()=>Number(t4.refund),maxB);
+  await db.exec(`update pos_invoices set created_at=now() where id='${h1.id}'`);
+  // Báo cáo
+  const tu=new Date(Date.now()-3600000).toISOString(), den=new Date(Date.now()+3600000).toISOString();
+  const bc=await v(`select public.pos_bao_cao_cuoi_ngay('${Q}','${tu}','${den}','{}'::jsonb)`);
+  const tienTra=maxA+70000+maxB+20000+maxB;
+  await ok('Báo cáo cuối ngày: Tổng chi = tiền trả khách, mục Trả hàng', ()=>[Number(bc.tong_chi), bc.tra_hang.so, Number(bc.tra_hang.tru_no), bc.phieu.filter((x)=>x.loai==='tra_hang').length],[tienTra,4,60000,4]);
+  await ok('Báo cáo cuối ngày: tiền mặt / CK đã trừ phần trả', ()=>[Number(bc.pttt.tien_mat), Number(bc.pttt.chuyen_khoan)],[190000+20000-maxA-20000-maxB,-(70000+maxB)]);
+  const sq=await v(`select public.pos_so_quy('${Q}','${tu}','${den}')`);
+  await ok('Sổ quỹ có 4 phiếu chi trả hàng', ()=>[sq.dong.filter((x)=>x.loai==='tra_hang').length, Number(sq.quy.tong.chi)],[4,tienTra]);
+  await ok('Báo cáo GĐ có số trả hàng', async()=>(await v(`select public.pos_bao_cao('${Q}','${tu}','${den}')`)).tra_hang.so,4);
+  await ok('Giám đốc được báo mỗi phiếu trả', ()=>v(`select count(*) from notifications where event_key like 'pos-tra-hang:%:${GD}'`),4);
+  await ok('Không ai ghi thẳng được bảng trả hàng', ()=>v(`select has_table_privilege('authenticated','public.pos_returns','insert') or has_table_privilege('authenticated','public.pos_return_lines','update')`),false);
+}
 console.log(`\n${dem-loi}/${dem} đạt`); process.exit(loi?1:0);
