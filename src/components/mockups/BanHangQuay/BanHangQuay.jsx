@@ -113,6 +113,12 @@ export default function BanHangQuay() {
   // Nhớ quầy theo từng máy (mỗi quầy thường dùng máy riêng) — mở app lần sau vẫn đúng quầy, không nhảy về Vĩnh Phú 42.
   const [chiNhanh, setChiNhanh] = useState(() => { const c = docLuu('bhq-chi-nhanh', ''); return CHI_NHANH.includes(c) ? c : CHI_NHANH[0]; });
   useEffect(() => { ghiLuu('bhq-chi-nhanh', chiNhanh); }, [chiNhanh]);
+  // Xem quầy khác (chỉ xem): danh sách hoá đơn / phiếu kho / hàng hoá lọc theo quầy chọn ở đây,
+  // KHÔNG đổi quầy đang bán. Đổi quầy đang bán thì quay về xem quầy mình.
+  const [cnXemChon, setCnXem] = useState(null);
+  useEffect(() => { setCnXem(null); }, [chiNhanh]);
+  const cnXem = cnXemChon === 'tat_ca' || CHI_NHANH.includes(cnXemChon) ? cnXemChon : chiNhanh;
+  const xemCn = (cn) => cnXem === 'tat_ca' || cn === cnXem;
   const [manHinh, setManHinh] = useState('ban');
   const [cheDo, setCheDo] = useState(() => docLuu('bhq-che-do', 'thuong'));
   const [inTuDong, setInTuDong] = useState(() => docLuu('bhq-in-tu-dong', '1') === '1');
@@ -631,7 +637,7 @@ export default function BanHangQuay() {
   // Chạy thật: database quyết (nhân viên huỷ ca cũ thì phải xin duyệt).
   const huyDuoc = (h) => h.chiNhanh === chiNhanh && (that ? !h.daHuy && !traHangs.some((x) => x.hdId === h.id) : (laGD || h.luc >= ca.moLuc));
   // Trả hàng: chỉ hoá đơn thật đã lên database (database đã chạy SQL trả hàng).
-  const traDuoc = (h) => !!(that && coTraHang && h.that && h.id && !h.daHuy && !h.choGui);
+  const traDuoc = (h) => !!(that && coTraHang && h.that && h.id && !h.daHuy && !h.choGui && h.chiNhanh === chiNhanh);
   // Hoá đơn vừa bán xong trên máy chưa có mã dòng hàng của database → tải lại rồi mới mở màn trả hàng.
   const moTraHang = async (h) => {
     if (h.dong.some((d) => d.lineId != null)) { setHop({ loai: 'tra_hang', hoaDon: h }); return; }
@@ -1053,11 +1059,13 @@ export default function BanHangQuay() {
         </div>
       )}
 
-      {manHinh === 'hh' && <QlHangHoa that={!!that} matHang={matHang} tonCN={tonCN} chiNhanh={chiNhanh} theKho={theKho.filter((t) => t.chiNhanh === chiNhanh)} dienThoai={dienThoai} laGD={laGD} onThem={() => setHop({ loai: 'them_hang' })} onSua={that ? (m) => setHop({ loai: 'sua_hang', cu: m }) : null} onMoMan={moManHinh} />}
+      {['hh', 'ls', ...Object.keys(MAN_LOAI)].includes(manHinh) && <XemQuay chiNhanh={chiNhanh} cnXem={cnXem} onDoi={(cn) => setCnXem(cn === chiNhanh ? null : cn)} />}
+      {manHinh === 'hh' && <QlHangHoa that={!!that} matHang={matHang} tonCN={cnXem === 'tat_ca' ? { ...tonCN, tat_ca: congTon(tonCN) } : tonCN} chiNhanh={cnXem} theKho={theKho.filter((t) => xemCn(t.chiNhanh))} dienThoai={dienThoai} laGD={laGD} onThem={() => setHop({ loai: 'them_hang' })} onSua={that ? (m) => setHop({ loai: 'sua_hang', cu: m }) : null} onMoMan={moManHinh} />}
       {manHinh === 'kh' && <KhachHang ds={khachDs} hoaDons={daBan.filter((h) => !h.mau)} noCua={noCua} dienThoai={dienThoai} />}
       {manHinh === 'tb' && <ThongBao ds={thongBao} daDoc={daDoc} onDoc={(id) => setDaDoc((x) => new Set(x).add(id))} onDocHet={() => setDaDoc(new Set(thongBao.map((t) => t.id)))} />}
       {MAN_LOAI[manHinh] && (
-        <QlPhieu key={manHinh} loai={MAN_LOAI[manHinh]} dienThoai={dienThoai} ds={phieuKho.filter((p) => (p.chiNhanh === chiNhanh || (p.loai === 'chuyen' && p.denCN === chiNhanh)) && p.loai === MAN_LOAI[manHinh])}
+        <QlPhieu key={manHinh} loai={MAN_LOAI[manHinh]} dienThoai={dienThoai} ds={phieuKho.filter((p) => (xemCn(p.chiNhanh) || (p.loai === 'chuyen' && xemCn(p.denCN))) && p.loai === MAN_LOAI[manHinh])}
+          cuaMinh={(p) => p.chiNhanh === chiNhanh || (p.loai === 'chuyen' && p.denCN === chiNhanh)}
           matHang={matHang} ton={ton} onTao={() => moForm(MAN_LOAI[manHinh])} onMo={(p) => moForm(p.loai, p)}
           onSaoChep={(p) => moForm(p.loai, { dong: p.dong.map((d) => ({ ...d })), ghiChu: p.ghiChu, loaiXuat: p.loaiXuat, nguoiNhan: p.nguoiNhan })}
           onHuy={(p) => setHop({ loai: 'huy_phieu', phieu: p })} onIn={(p) => setBanIn({ phieu: p })}
@@ -1079,7 +1087,7 @@ export default function BanHangQuay() {
       )}
 
       {manHinh === 'ls' && (
-        <QlHoaDon key={laGD ? 'gd' : 'nv'} laGD={laGD} ds={daBan.filter((h) => !h.mau && h.chiNhanh === chiNhanh)} traHangs={traHangs} dienThoai={dienThoai} huyDuoc={huyDuoc}
+        <QlHoaDon key={laGD ? 'gd' : 'nv'} laGD={laGD} cnMinh={chiNhanh} ds={daBan.filter((h) => !h.mau && xemCn(h.chiNhanh))} traHangs={traHangs} dienThoai={dienThoai} huyDuoc={huyDuoc}
           traDuoc={traDuoc} onTra={moTraHang}
           onIn={(h) => setHop({ loai: 'bien_lai', hoaDon: h })}
           onHuy={(h) => setHop({ loai: 'huy_hd', hoaDon: h })} onChiaSe={chiaSe} onSaoChep={saoChepHd} onBan={() => { moManHinh('ban'); setDtMan('chon'); }} />
@@ -2021,7 +2029,8 @@ function useTheKhoDb(m, chiNhanh, bat) {
     setDs([]);
     const t = tachId(m);
     let q = supabase.from('pos_stock_ledger').select('at, delta, balance_after, ref_type, ref_code, actor_name')
-      .eq('store_location', chiNhanh).eq('product_id', t.product_id);
+      .eq('product_id', t.product_id);
+    if (chiNhanh !== 'tat_ca') q = q.eq('store_location', chiNhanh);
     q = t.size ? q.eq('size', t.size) : q.is('size', null);
     q.order('at', { ascending: false }).limit(200).then(({ data, error }) => {
       if (huy) return;
@@ -2293,7 +2302,30 @@ function khoangTg(k) {
   return [-Infinity, Infinity];
 }
 
-function QlPhieu({ loai, ds, matHang, ton, onTao, onMo, onSaoChep, onHuy, onIn, dienThoai, onNhan = null, onVe = null, huyDuoc = () => true }) {
+// Tồn cộng mọi quầy (lựa chọn "Tất cả quầy").
+function congTon(tonCN) {
+  const t = {};
+  for (const cn of CHI_NHANH) for (const [ma, sl] of Object.entries(tonCN[cn] || {})) t[ma] = (t[ma] || 0) + Number(sl || 0);
+  return t;
+}
+
+// Chọn quầy để XEM (hoá đơn, phiếu kho, hàng hoá) — không đổi quầy đang bán.
+function XemQuay({ chiNhanh, cnXem, onDoi }) {
+  return (
+    <div className="xem-quay" role="group" aria-label="Xem quầy">
+      <span>Xem</span>
+      {[...CHI_NHANH, 'tat_ca'].map((cn) => (
+        <button key={cn} type="button" className={cnXem === cn ? 'on' : ''} aria-pressed={cnXem === cn} onClick={() => onDoi(cn)}>
+          {cn === 'tat_ca' ? 'Tất cả quầy' : cn}{cn === chiNhanh ? ' · quầy mình' : ''}
+        </button>
+      ))}
+      {cnXem !== chiNhanh && <small>Chỉ xem · bán hàng vẫn ở {chiNhanh}</small>}
+    </div>
+  );
+}
+
+function QlPhieu({ loai, ds, matHang, ton, onTao, onMo, onSaoChep, onHuy, onIn, dienThoai, onNhan = null, onVe = null, huyDuoc = () => true, cuaMinh = () => true }) {
+  const tenCn = (p) => (cuaMinh(p) ? '' : ` • ${p.chiNhanh}`);
   const K = KIEU_PHIEU[loai];
   const [q, setQ] = useState('');
   const [loc, setLoc] = useState({ tam: true, cho: true, xong: true, huy: false });
@@ -2347,19 +2379,19 @@ function QlPhieu({ loai, ds, matHang, ton, onTao, onMo, onSaoChep, onHuy, onIn, 
                 {kiem ? (
                   <button type="button" className={`kvm-hd-dong kvm-phieu-the ${p.trangThai === 'huy' ? 'huy' : ''}`} onClick={() => setMo(mo === p.ma ? null : p.ma)}>
                     <span className="r1"><b>{xem.length} mặt hàng - Số lượng: {so(sl.tongSl)}</b><span className={`kq-tt ${p.trangThai}`}>{trangThaiCua(p)}</span></span>
-                    <span className="r2"><span>{p.ma}{p.nguoi ? ` • ${p.nguoi}` : ''}</span>{p.trangThai !== 'tam' && <span>{ngayDayDu(p.lucXong || p.luc)}</span>}</span>
+                    <span className="r2"><span>{p.ma}{tenCn(p)}{p.nguoi ? ` • ${p.nguoi}` : ''}</span>{p.trangThai !== 'tam' && <span>{ngayDayDu(p.lucXong || p.luc)}</span>}</span>
                     {xem.length > 0 && <span className="r3 xem">{xem.map((d) => `${tenHang(d.m)} x${so(Number(d.sl) || 0)}`).join(', ')}</span>}
                   </button>
                 ) : (
                 <button type="button" className={`kvm-hd-dong kvm-phieu-the ${p.trangThai === 'huy' ? 'huy' : ''}`} onClick={() => setMo(mo === p.ma ? null : p.ma)}>
                   <span className="r1"><b>{nguon}</b><span className={`kq-tt ${p.trangThai}`}>{trangThaiCua(p)}</span></span>
-                  <span className="r2"><span>{ngayDayDu(p.luc)} • {p.ma}{p.nguoi ? ` • ${p.nguoi}` : ''}</span></span>
+                  <span className="r2"><span>{ngayDayDu(p.luc)} • {p.ma}{tenCn(p)}{p.nguoi ? ` • ${p.nguoi}` : ''}</span></span>
                   <span className="r2"><span>{xem.length} mặt hàng • {kiem ? `Lệch: ${so(sl.tang - sl.giam)}` : `Số lượng: ${so(sl.tongSl)}`}</span></span>
                   {xem.length > 0 && <span className="r3 xem">{xem.map((d) => `${tenHang(d.m)} x${d.sl == null || d.sl === '' ? '?' : so(d.sl)}`).join(', ')}</span>}
                   {p.ghiChu && p.loai !== 'huy' && <span className="r3">{p.ghiChu}</span>}
                 </button>
                 )}
-                {mo === p.ma && <div className="kvm-phieu-ct"><ChiTietPhieu p={p} sl={sl} onMo={() => onMo(p)} onSaoChep={() => onSaoChep(p)} onHuy={huyDuoc(p) ? () => onHuy(p) : null} onIn={() => onIn(p)} onNhan={onNhan && p.trangThai === 'cho' ? () => onNhan(p) : null} /></div>}
+                {mo === p.ma && <div className="kvm-phieu-ct"><ChiTietPhieu p={p} sl={sl} onMo={() => onMo(p)} onSaoChep={() => onSaoChep(p)} onHuy={huyDuoc(p) ? () => onHuy(p) : null} onIn={() => onIn(p)} onNhan={onNhan && p.trangThai === 'cho' ? () => onNhan(p) : null} xemThoi={!cuaMinh(p)} /></div>}
               </React.Fragment>
             );
           })}
@@ -2412,7 +2444,7 @@ function QlPhieu({ loai, ds, matHang, ton, onTao, onMo, onSaoChep, onHuy, onIn, 
                   return (
                     <React.Fragment key={p.ma}>
                       <tr className={`${mo === p.ma ? 'dang-mo' : ''} ${p.trangThai === 'huy' ? 'da-huy' : ''}`} onClick={() => setMo(mo === p.ma ? null : p.ma)}>
-                        <td>{p.ma}</td>
+                        <td>{p.ma}{!cuaMinh(p) && <small className="xq-cn">{p.chiNhanh}</small>}</td>
                         {loai === 'noibo' && <td>{p.loaiXuat}{p.denCN ? ` → ${p.denCN}` : ''}</td>}
                         {loai === 'kiem' ? <><td>{ngayDayDu(p.luc)}</td><td className="so">{so(sl.tongSl)}</td><td className="so gv">{so(sl.tongGt)}</td><td className="so">{so(sl.tang)}</td><td className="so">{so(sl.giam)}</td></>
                           : loai === 'giao' ? <><td>{ngayDayDu(p.luc)}</td><td>{p.nguon || 'Bếp'}</td><td className="so">{so(sl.tongSl)}</td></>
@@ -2423,7 +2455,7 @@ function QlPhieu({ loai, ds, matHang, ton, onTao, onMo, onSaoChep, onHuy, onIn, 
                       </tr>
                       {mo === p.ma && (
                         <tr className="kq-mo"><td colSpan={soCot}>
-                          <ChiTietPhieu p={p} sl={sl} onMo={() => onMo(p)} onSaoChep={() => onSaoChep(p)} onHuy={huyDuoc(p) ? () => onHuy(p) : null} onIn={() => onIn(p)} onNhan={onNhan && p.trangThai === 'cho' ? () => onNhan(p) : null} />
+                          <ChiTietPhieu p={p} sl={sl} onMo={() => onMo(p)} onSaoChep={() => onSaoChep(p)} onHuy={huyDuoc(p) ? () => onHuy(p) : null} onIn={() => onIn(p)} onNhan={onNhan && p.trangThai === 'cho' ? () => onNhan(p) : null} xemThoi={!cuaMinh(p)} />
                         </td></tr>
                       )}
                     </React.Fragment>
@@ -2440,7 +2472,7 @@ function QlPhieu({ loai, ds, matHang, ton, onTao, onMo, onSaoChep, onHuy, onIn, 
   );
 }
 
-function ChiTietPhieu({ p, sl, onMo, onSaoChep, onHuy, onIn, onNhan = null }) {
+function ChiTietPhieu({ p, sl, onMo, onSaoChep, onHuy, onIn, onNhan = null, xemThoi = false }) {
   const K = KIEU_PHIEU[p.loai];
   const kiem = p.loai === 'kiem';
   // Quầy nhận lệch số bếp ghi → hiện thêm cột Thực nhận (số thật đã cộng vào kho quầy).
@@ -2488,11 +2520,12 @@ function ChiTietPhieu({ p, sl, onMo, onSaoChep, onHuy, onIn, onNhan = null }) {
         </div>
       </div>
       <div className="kq-ct-chan">
-        {p.trangThai !== 'huy' && !p.chuyen && (onHuy ? <button type="button" onClick={onHuy}><Trash2 size={17} />Hủy</button> : <span className="mo">Chỉ Giám đốc hủy được phiếu nhập</span>)}
+        {xemThoi && <span className="mo">Phiếu của {p.chiNhanh} — chỉ xem</span>}
+        {!xemThoi && p.trangThai !== 'huy' && !p.chuyen && (onHuy ? <button type="button" onClick={onHuy}><Trash2 size={17} />Hủy</button> : <span className="mo">Chỉ Giám đốc hủy được phiếu nhập</span>)}
         <button type="button" onClick={onSaoChep}><Copy size={17} />Sao chép</button>
         <span className="gian" />
-        {p.trangThai === 'tam' && <button type="button" className="chinh" onClick={onMo}><SquarePen size={17} />Mở phiếu</button>}
-        {onNhan && <button type="button" className="chinh" onClick={onNhan}><ClipboardCheck size={17} />Nhận hàng</button>}
+        {!xemThoi && p.trangThai === 'tam' && <button type="button" className="chinh" onClick={onMo}><SquarePen size={17} />Mở phiếu</button>}
+        {!xemThoi && onNhan && <button type="button" className="chinh" onClick={onNhan}><ClipboardCheck size={17} />Nhận hàng</button>}
         <button type="button" onClick={onIn}><Printer size={17} />In</button>
       </div>
     </div>
@@ -3205,7 +3238,7 @@ function nhanNgay(luc) {
   return `${THU[d.getDay()]} ${ngay}`;
 }
 
-function QlHoaDon({ ds, traHangs, dienThoai, huyDuoc, traDuoc = () => false, onTra, onIn, onHuy, onChiaSe, onSaoChep, onBan, laGD }) {
+function QlHoaDon({ ds, traHangs, dienThoai, huyDuoc, traDuoc = () => false, onTra, onIn, onHuy, onChiaSe, onSaoChep, onBan, laGD, cnMinh = null }) {
   const [q, setQ] = useState('');
   const [ky, setKy] = useState(!laGD ? 'hom_nay' : dienThoai ? 'tat_ca' : 'thang');
   const [timMo, setTimMo] = useState(false);
@@ -3281,7 +3314,7 @@ function QlHoaDon({ ds, traHangs, dienThoai, huyDuoc, traDuoc = () => false, onT
               {list.map((h) => (
                 <button key={h.ma} type="button" className={`kvm-hd-dong ${h.daHuy ? 'huy' : ''}`} onClick={() => setMo(h.ma)}>
                   <span className="r1"><b>{h.khach?.name || 'Khách lẻ'}</b><b>{so(h.canTra)}</b></span>
-                  <span className="r2"><span>{ngayDayDu(h.luc)} • {h.ma}</span>
+                  <span className="r2"><span>{ngayDayDu(h.luc)} • {h.ma}{cnMinh && h.chiNhanh !== cnMinh ? ` • ${h.chiNhanh}` : ''}</span>
                     <span className={h.daHuy || h.no > 0 ? 'do' : ''}>{h.daHuy ? 'Đã hủy' : h.no > 0 ? `Nợ ${so(h.no)}` : PT[h.phuongThuc]}</span></span>
                   {h.dong[0] && <span className="r3">{tenHang(h.dong[0])} <b>x{h.dong[0].sl}</b></span>}
                   {h.dong.length > 1 && <span className="r3">+{h.dong.length - 1} mặt hàng khác</span>}
@@ -3322,7 +3355,7 @@ function QlHoaDon({ ds, traHangs, dienThoai, huyDuoc, traDuoc = () => false, onT
                 {loc2.slice(tr * MOI_TRANG_QL, (tr + 1) * MOI_TRANG_QL).map((h) => (
                   <React.Fragment key={h.ma}>
                     <tr className={`${mo === h.ma ? 'dang-mo' : ''} ${h.daHuy ? 'da-huy' : ''}`} onClick={() => setMo(mo === h.ma ? null : h.ma)}>
-                      <td>{h.ma}</td><td>{ngayDayDu(h.luc)}</td><td>{h.khach?.name || 'Khách lẻ'}</td><td className="so">{so(h.tongHang)}</td><td className="so">{so(h.giamHd)}</td>
+                      <td>{h.ma}{cnMinh && h.chiNhanh !== cnMinh && <small className="xq-cn">{h.chiNhanh}</small>}</td><td>{ngayDayDu(h.luc)}</td><td>{h.khach?.name || 'Khách lẻ'}</td><td className="so">{so(h.tongHang)}</td><td className="so">{so(h.giamHd)}</td>
                       <td className="so">{so(h.canTra)}</td><td className="so">{so(h.thucThu ?? h.canTra - h.no)}</td>
                       <td><span className={`kq-tt ${h.daHuy ? 'huy' : 'xong'}`}>{h.daHuy ? 'Đã hủy' : 'Hoàn thành'}</span></td>
                     </tr>

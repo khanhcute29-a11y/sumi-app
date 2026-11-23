@@ -1466,3 +1466,12 @@ button.bcn-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .th-pt button{flex:1;min-height:44px;border:1px solid #E6DCCB;border-radius:10px;background:#fff;color:#2C1D11;font-weight:600;cursor:pointer}
 .th-pt button.on{border-color:#D96B43;background:#D96B43;color:#fff}
 .th-chon{width:100%;text-align:left;cursor:pointer;background:none;border:none;font:inherit;color:inherit}
+
+/* Xem quầy khác (chỉ xem) — đầu danh sách hoá đơn / phiếu kho / hàng hoá */
+.xem-quay{flex:none;display:flex;align-items:center;gap:6px;overflow-x:auto;padding:6px 12px;background:#FDFBF7;border-bottom:1px solid #EADFCF;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.xem-quay::-webkit-scrollbar{display:none}
+.xem-quay>span{font-size:13px;color:#8C5A3C;font-weight:600;flex:none}
+.xem-quay button{flex:none;min-height:44px;padding:0 14px;border-radius:22px;border:1px solid #E3D3BD;background:#fff;color:#2C1D11;font-size:14px;white-space:nowrap;cursor:pointer}
+.xem-quay button.on{background:#D96B43;border-color:#D96B43;color:#fff;font-weight:600}
+.xem-quay small{flex:none;font-size:12px;color:#B4532A;white-space:nowrap}
+.xq-cn{display:block;font-size:11px;color:#8C5A3C}
