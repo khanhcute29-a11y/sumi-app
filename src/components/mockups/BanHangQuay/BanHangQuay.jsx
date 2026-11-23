@@ -270,6 +270,21 @@ export default function BanHangQuay() {
     });
   }, [matHang, that]);
 
+  // Hộp Kết ca đang mở thì giữ nguyên ca đó — máy tự kết vì hết giờ cũng không làm mất số đang đếm dở.
+  const [caDangKet, setCaDangKet] = useState(null);
+  useEffect(() => {
+    if (hop?.loai === 'ket_ca') { if (caMo && !caDangKet) setCaDangKet(caMo); } else if (caDangKet) setCaDangKet(null);
+  }, [hop, caMo, caDangKet]);
+  const caKet = caDangKet || caMo;
+  // Hết giờ ca: máy tự kết (mỗi phút) → tải lại để hiện màn Vào ca cho người ca sau.
+  useEffect(() => {
+    if (!that || !caMo?.ends_at) return undefined;
+    const con = new Date(caMo.ends_at).getTime() + 75000 - Date.now();
+    if (con > 6 * 3600000) return undefined;
+    const t = setTimeout(() => napThat(), Math.max(con, 5000));
+    return () => clearTimeout(t);
+  }, [that, caMo?.id, caMo?.ends_at]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Chạy thật: ca hiện tại lấy từ database.
   useEffect(() => {
     if (!that) return;
@@ -969,7 +984,7 @@ export default function BanHangQuay() {
               : <span className="kv-nguon">Bản xem trước · không lưu · {nguonDl}{lyDoXemTruoc ? ` · ${lyDoXemTruoc}` : ''}</span>}
             {that && !caMo
               ? (banKhongCa ? null : <span className="kv-ca">Chưa vào ca</span>) // Giám đốc như KiotViet: không có dòng ca
-              : <button type="button" className="kv-ca" onClick={() => setHop({ loai: 'ket_ca' })}>Ca {that && caMo ? caMo.opened_by_name || nguoi : nguoi} · từ {gio(ca.moLuc)}{that && caMo ? ` · đã bán ${so(daBanCa)}` : ''} · <b>Kết ca</b></button>}
+              : <button type="button" className="kv-ca" onClick={() => setHop({ loai: 'ket_ca' })}>Ca {that && caMo ? caMo.opened_by_name || nguoi : nguoi} · từ {gio(ca.moLuc)}{that && caMo?.ends_at ? ` → ${gio(caMo.ends_at)}` : ''}{that && caMo ? ` · đã bán ${so(daBanCa)}` : ''} · <b>Kết ca</b></button>}
           </footer>
         </>
       )}
@@ -1094,8 +1109,8 @@ export default function BanHangQuay() {
           })} />
       )}
 
-      {hop?.loai === 'ket_ca' && that && (caMo
-        ? <KetCaThat caMo={caMo} chiNhanh={chiNhanh} matHang={matHang} onDong={() => setHop(null)}
+      {hop?.loai === 'ket_ca' && that && (caKet
+        ? <KetCaThat caMo={caKet} chiNhanh={chiNhanh} matHang={matHang} onDong={() => setHop(null)}
           onKet={(phieu) => { setCaMoDs((x) => ({ ...x, [chiNhanh]: null })); setHop(null); setBanIn({ banGiao: phieu }); nhan(`Đã đóng ca ${phieu.ma} — đã in phiếu bàn giao`); napThat(); }} />
         : <HopT tieuDe="Kết ca" onDong={() => setHop(null)}><p className="bhq-ghi">{chiNhanh} chưa mở ca nào.</p></HopT>)}
       {hop?.loai === 'ket_ca' && !that && (

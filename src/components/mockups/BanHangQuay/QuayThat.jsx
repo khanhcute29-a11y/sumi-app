@@ -370,6 +370,15 @@ export function ThietLapQuay({ chiNhanh, caiDat, matHang, bangGia, hanDung = {},
     try { await goi('pos_bat_cham_cong', { p_store: chiNhanh, p_bat: bat }); setChamCong(bat); setOk(bat ? 'Đã bật: phải chấm công mới vào ca' : 'Đã tắt yêu cầu chấm công'); await onLuu(); } catch (e) { setLoi(chuLoi(e)); }
     setDangCc(false);
   };
+  const KHUNG_MAC_DINH = [{ ten: 'Ca 1', tu: '05:30', den: '13:30' }, { ten: 'Ca 2', tu: '13:30', den: '21:30' }];
+  const [khung, setKhung] = useState(() => (Array.isArray(c.khung_ca) && c.khung_ca.length ? c.khung_ca : KHUNG_MAC_DINH).map((k) => ({ ...k })));
+  const [dangKhung, setDangKhung] = useState(false);
+  const datKhung = (i, k) => (e) => setKhung((ds) => ds.map((x, j) => (j === i ? { ...x, [k]: e.target.value } : x)));
+  const luuKhung = async () => {
+    setDangKhung(true); setLoi(''); setOk('');
+    try { const v = await goi('pos_luu_khung_ca', { p: khung }); setKhung(v); setOk('Đã lưu giờ ca cho mọi quầy'); await onLuu(); } catch (e) { setLoi(chuLoi(e)); }
+    setDangKhung(false);
+  };
   const luuChung = async () => {
     setDang(true); setLoi(''); setOk('');
     try {
@@ -388,6 +397,15 @@ export function ThietLapQuay({ chiNhanh, caiDat, matHang, bangGia, hanDung = {},
           <h4>Vào ca</h4>
           <label className="kv-cong-tac"><span>Phải chấm công ở {chiNhanh} mới được vào ca</span><input type="checkbox" checked={chamCong} disabled={dangCc} onChange={(e) => doiChamCong(e.target.checked)} /><i /></label>
           <p className="bhq-ghi">Bật lên: nhân viên chưa chấm công vào (hoặc chấm ở cửa hàng khác) sẽ không vào ca bán được. Giám đốc / Quản lý không bị chặn. Bật / tắt có hiệu lực ngay.</p>
+          <h4>Giờ ca (dùng chung mọi quầy)</h4>
+          {khung.map((k, i) => (
+            <div className="tlq-2" key={i}>
+              <label className="bhq-nhan">{k.ten || `Ca ${i + 1}`} bắt đầu<input className="bhq-o" type="time" value={k.tu} onChange={datKhung(i, 'tu')} /></label>
+              <label className="bhq-nhan">Hết ca — máy tự kết<input className="bhq-o" type="time" value={k.den} onChange={datKhung(i, 'den')} /></label>
+            </div>
+          ))}
+          <p className="bhq-ghi">Hết giờ ca máy tự kết ca (giữ đủ hoá đơn, báo Giám đốc) để người ca sau vào ca bán luôn. Vào sớm 30 phút trước giờ ca sau thì tính là ca sau.</p>
+          <button type="button" className="bhq-nut phu" disabled={dangKhung} onClick={luuKhung}>{dangKhung ? 'Đang lưu…' : 'Lưu giờ ca'}</button>
           <h4>Giảm giá</h4>
           <label className="bhq-nhan">Nhân viên được tự giảm tối đa (%)<input className="bhq-o" inputMode="decimal" value={f.staff_discount_pct} onChange={dat('staff_discount_pct')} /></label>
           <p className="bhq-ghi">Giảm quá mức này thì máy bắt "Xin duyệt" — Quản lý / Giám đốc bấm Đồng ý trên điện thoại.</p>
@@ -1033,8 +1051,9 @@ export function KetCaThat({ caMo, chiNhanh, matHang = [], onDong, onKet }) {
     <HopT tieuDe="Kết ca" onDong={onDong}
       chan={<><button type="button" className="bhq-nut phu" onClick={onDong}>Bỏ qua</button><button type="button" className="bhq-nut chinh" disabled={dang || dangAnh} onClick={dong}>{dang ? 'Đang kết ca…' : 'Kết ca'}</button></>}>
       <div className="bhq-bang">
-        <div><span>Ca</span><b>{caMo.code}</b></div>
+        <div><span>Ca</span><b>{caMo.code}{caMo.khung_ten ? ` · ${caMo.khung_ten}` : ''}</b></div>
         <div><span>Vào ca lúc</span><b>{ngayGio(caMo.opened_at)} · {caMo.opened_by_name}</b></div>
+        {caMo.ends_at && <div><span>Hết giờ ca</span><b>{gioPhut(caMo.ends_at)}{new Date(caMo.ends_at).getTime() <= Date.now() ? ' · đã hết giờ — vẫn kết ca được' : ' · máy tự kết ca'}</b></div>}
         <div><span>Tiền đầu ca</span><b>{so(caMo.opening_cash)}</b></div>
         {phieuChi.some((p) => p.kind === 'thu') && <div><span>Phiếu thu vào két ({phieuChi.filter((p) => p.kind === 'thu').length})</span><b className="xanh-la">+{so(phieuChi.filter((p) => p.kind === 'thu').reduce((a, p) => a + Number(p.amount), 0))}</b></div>}
         {phieuChi.some((p) => (p.kind || 'chi') === 'chi') && <div><span>Phiếu chi từ két ({phieuChi.filter((p) => (p.kind || 'chi') === 'chi').length})</span><b className="do">-{so(phieuChi.filter((p) => (p.kind || 'chi') === 'chi').reduce((a, p) => a + Number(p.amount), 0))}</b></div>}

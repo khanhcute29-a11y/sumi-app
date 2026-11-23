@@ -845,4 +845,49 @@ if (process.argv.some((x)=>x.includes('chi_gd_huy_phieu_nhap'))) {
   await as(GD); await ok('Phiếu chờ nhận: Giám đốc huỷ được', async()=>{await q(`select public.pos_huy_phieu('${tam}','x')`); return v(`select status from pos_stock_docs where id='${tam}'`);},'huy');
   await as(NV);
 }
+// ── 202611231000: giờ ca — hết giờ máy tự kết ca ──
+if (process.argv.some((x)=>x.includes('khung_gio_ca'))) {
+  const V='Vĩnh Phú 42';
+  const kc=async(t)=>{const r=(await q(`select ten, to_char(het at time zone 'Asia/Ho_Chi_Minh','HH24:MI') het from public.pos__khung_cua('${t}+07', (select khung_ca from pos_settings where store_location='${V}'))`))[0]; return [r.ten,r.het];};
+  await ok('Giờ ca mặc định 2 quầy giống nhau', ()=>v(`select count(distinct khung_ca::text)::int from pos_settings`),1);
+  await ok('Vào 05:20 → Ca 1, hết 13:30', ()=>kc('2026-11-23 05:20'),['Ca 1','13:30']);
+  await ok('Vào 04:00 (trước giờ ca đầu) → Ca 1', ()=>kc('2026-11-23 04:00'),['Ca 1','13:30']);
+  await ok('Vào 12:59 → vẫn Ca 1', ()=>kc('2026-11-23 12:59'),['Ca 1','13:30']);
+  await ok('Vào sớm 13:00 → Ca 2, hết 21:30', ()=>kc('2026-11-23 13:00'),['Ca 2','21:30']);
+  await ok('Vào 21:00 → Ca 2, hết 21:30', ()=>kc('2026-11-23 21:00'),['Ca 2','21:30']);
+  await ok('Vào 21:45 (sau giờ ca cuối) → không tự kết theo giờ', ()=>kc('2026-11-23 21:45'),[null,null]);
+  await db.exec(`update pos_shifts set status='closed', closed_at=now() where status='open'`);
+  const mo=async(luc)=>(await q(`insert into pos_shifts(code,store_location,opened_by,opened_by_name,opening_cash,opened_at) values ('T'||floor(random()*1e9)::text,'${V}','${NV}','Thu ngân A',100000,'${luc}+07') returning id, khung_ten, to_char(ends_at at time zone 'Asia/Ho_Chi_Minh','DD/MM HH24:MI') het`))[0];
+  const c1=await mo('2026-11-20 06:00');
+  await ok('Ca mới tự ghi giờ hết ca', ()=>[c1.khung_ten,c1.het],['Ca 1','20/11 13:30']);
+  await as(NV);
+  const h=await ban({received:180000});
+  await ok('Bán trong ca chưa tới giờ kết', ()=>v(`select shift_id from pos_invoices where id='${h.id}'`),c1.id);
+  await ok('Máy kết 1 ca hết giờ', ()=>v(`select public.pos_tu_ket_ca_het_gio()`),1);
+  await ok('Chạy lại không kết thêm', ()=>v(`select public.pos_tu_ket_ca_het_gio()`),0);
+  const k1=(await q(`select * from pos_shifts where id='${c1.id}'`))[0];
+  await ok('Ca hết giờ: đóng, kiểu het_gio, chưa đếm, giữ hoá đơn', ()=>[k1.status,k1.auto_closed,k1.counted_cash,k1.note,k1.summary.so_hoa_don,k1.expected_cash!==null],['closed','het_gio',null,'Hết giờ Ca 1 (13:30) — máy tự kết ca',1,true]);
+  await ok('Báo Giám đốc ca tự kết', ()=>v(`select count(*)::int from notifications where event_key='pos-dong-ca:${c1.id}:${GD}' and body like '%Hết giờ Ca 1%'`),1);
+  await chan('Hết ca rồi thì bán bị chặn (phải vào ca mới)', ()=>ban({}),'chưa vào ca');
+  const kq=await v(`select public.pos_ket_ca('${c1.id}',270000,null,null,'[]'::jsonb)`);
+  await ok('Đang đếm dở vẫn Kết ca được sau khi máy tự kết → ghi số đếm thật', ()=>[kq.status,kq.auto_closed,Number(kq.counted_cash),Number(kq.diff),new Date(kq.closed_at).getTime()===new Date(k1.closed_at).getTime()],['closed',null,270000,270000-Number(k1.expected_cash),true]);
+  await ok('Báo Giám đốc số đếm trễ (thông báo riêng)', ()=>v(`select count(*)::int from notifications where event_key='pos-dong-ca:${c1.id}:dem:${GD}'`),1);
+  await chan('Kết ca lần 2 bị chặn', ()=>q(`select public.pos_ket_ca('${c1.id}',1,null,null,'[]'::jsonb)`),'đã đóng');
+  const c2=await mo('2026-11-20 14:00');
+  await ok('Ca 2 cũng tự kết', ()=>v(`select public.pos_tu_ket_ca_het_gio()`),1);
+  await db.exec(`update pos_shifts set closed_at=now()-interval '4 hours' where id='${c2.id}'`);
+  await chan('Quá 3 tiếng thì không kết lại được', ()=>q(`select public.pos_ket_ca('${c2.id}',1,null,null,'[]'::jsonb)`),'đã đóng');
+  const ca=await v(`select public.pos_vao_ca_v2('${V}',null,null,null)`);
+  await ok('Vào ca mới được ngay', ()=>ca.status,'open');
+  const KH=`[{"ten":"Sáng","tu":"06:00","den":"14:00"},{"ten":"Chiều","tu":"14:00","den":"22:00"}]`;
+  await as(QL); await chan('Quản lý không đổi được giờ ca', ()=>q(`select public.pos_luu_khung_ca('${KH}'::jsonb)`),'Chỉ Giám đốc');
+  await as(GD);
+  await chan('Giờ hết trước giờ bắt đầu', ()=>q(`select public.pos_luu_khung_ca('[{"tu":"14:00","den":"06:00"}]'::jsonb)`),'hết sau');
+  await chan('Ca chồng nhau', ()=>q(`select public.pos_luu_khung_ca('[{"tu":"06:00","den":"14:00"},{"tu":"13:00","den":"22:00"}]'::jsonb)`),'chồng');
+  await chan('Giờ sai định dạng', ()=>q(`select public.pos_luu_khung_ca('[{"tu":"6h","den":"14:00"}]'::jsonb)`),'chưa đúng');
+  await ok('Giám đốc đổi giờ ca → áp cho mọi quầy', async()=>{await q(`select public.pos_luu_khung_ca('${KH}'::jsonb)`); return v(`select count(*)::int from pos_settings where khung_ca='${KH}'::jsonb`);}, await v(`select count(*)::int from pos_settings`));
+  await ok('Ca đang mở tính lại giờ hết (chừa ≥15 phút)', ()=>v(`select ends_at is null or ends_at >= now()+interval '14 minutes' from pos_shifts where id='${ca.id}'`),true);
+  await q(`select public.pos_luu_khung_ca('[{"ten":"Ca 1","tu":"05:30","den":"13:30"},{"ten":"Ca 2","tu":"13:30","den":"21:30"}]'::jsonb)`);
+  await as(NV);
+}
 console.log(`\n${dem-loi}/${dem} đạt`); process.exit(loi?1:0);
